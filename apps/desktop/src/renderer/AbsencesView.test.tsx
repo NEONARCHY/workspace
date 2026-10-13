@@ -1,10 +1,22 @@
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { FluentProvider } from "@fluentui/react-components";
 import { afterEach, expect, it, vi } from "vitest";
 import { AbsencesView } from "./AbsencesView";
 import { workspaceTheme } from "./workspace-theme";
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+it("keeps the absence draft and shows an error inside the form on failure", async () => {
+  const create = vi.fn().mockRejectedValue(new Error("Временная ошибка"));
+  render(<FluentProvider theme={workspaceTheme}><AbsencesView currentUserId="self" people={[]} requests={[]} summary={[]} canAdmin={false}
+    onCreate={create} onAction={vi.fn()} onUploadDocument={vi.fn()} /></FluentProvider>);
+  fireEvent.click(screen.getByRole("button", { name: "Сообщить об отсутствии" }));
+  const dialog = screen.getByRole("dialog");
+  fireEvent.change(within(dialog).getByRole("textbox", { name: "Причина" }), { target: { value: "Сохранить основание" } });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Отправить руководителю" }));
+  expect(await within(dialog).findByRole("alert")).toHaveTextContent("Временная ошибка");
+  expect(within(dialog).getByRole("textbox", { name: "Причина" })).toHaveValue("Сохранить основание");
+  expect(within(dialog).getByRole("button", { name: "Отправить руководителю" })).toBeEnabled();
+});
 const view = (canAdmin: boolean) => render(<FluentProvider theme={workspaceTheme}><AbsencesView
   currentUserId="test" people={[]} requests={[]} summary={[]} canAdmin={canAdmin}
   onCreate={vi.fn()} onAction={vi.fn()} onUploadDocument={vi.fn()}

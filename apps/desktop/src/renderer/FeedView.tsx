@@ -13,6 +13,7 @@ import {
   Add24Regular,
   ArrowReply24Regular,
   ArrowForward24Regular,
+  MoreHorizontal24Regular,
 } from "@fluentui/react-icons";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import { ConfirmActionDialog } from "./ConfirmActionDialog";
@@ -67,7 +68,7 @@ function commentThreadRootId(comment: FeedComment, comments: readonly FeedCommen
 export function FeedReactions({ reactions, disabled, currentUserId, onToggle, people = [], token = "" }: { readonly reactions: readonly MessageReaction[]; readonly disabled: boolean; readonly currentUserId: string; readonly onToggle: (emoji: string, reacted: boolean) => void; readonly people?: readonly WorkspacePerson[]; readonly token?: string }) {
   const [details, setDetails] = useState<ReactionDetailsTarget>();
   return <div className="feed-reactions" aria-label="Реакции">
-    {reactions.map((reaction) => <Button key={reaction.emoji} size="small" appearance={reaction.reactedByCurrentUser ? "primary" : "subtle"} disabled={disabled}
+    {reactions.map((reaction) => <span className="feed-reaction-pair" key={reaction.emoji}><Button size="small" appearance={reaction.reactedByCurrentUser ? "primary" : "subtle"} disabled={disabled}
       aria-haspopup="dialog" onContextMenu={(event) => {
         event.preventDefault(); event.stopPropagation();
         setDetails({ emoji: reaction.emoji, x: event.clientX, y: event.clientY, anchor: event.currentTarget });
@@ -76,7 +77,11 @@ export function FeedReactions({ reactions, disabled, currentUserId, onToggle, pe
         event.preventDefault(); event.stopPropagation();
         const rect = event.currentTarget.getBoundingClientRect();
         setDetails({ emoji: reaction.emoji, x: rect.left, y: rect.bottom, anchor: event.currentTarget });
-      }} onClick={() => { setDetails(undefined); onToggle(reaction.emoji, !reaction.reactedByCurrentUser); }}>{reaction.emoji} {reaction.count}</Button>)}
+      }} onClick={() => { setDetails(undefined); onToggle(reaction.emoji, !reaction.reactedByCurrentUser); }}>{reaction.emoji} {reaction.count}</Button>
+      <Button className="browser-feed-reaction-menu" size="small" appearance="subtle" icon={<MoreHorizontal24Regular />} aria-label={`Кто поставил реакцию ${reaction.emoji}`} aria-haspopup="dialog" onClick={(event) => {
+        const rect = event.currentTarget.getBoundingClientRect();
+        setDetails({ emoji: reaction.emoji, x: rect.left, y: rect.bottom, anchor: event.currentTarget });
+      }} /></span>)}
     <ReactionPicker userId={currentUserId} disabled={disabled} className="feed-reaction-trigger"
       active={reactions.filter((item) => item.reactedByCurrentUser).map((item) => item.emoji)}
       onSelect={(emoji) => onToggle(emoji, !reactions.some((item) => item.emoji === emoji && item.reactedByCurrentUser))} />
@@ -88,6 +93,7 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
   const deleteFocusTarget = useRestoreFocusTarget();
   const [title, setTitle] = useState(assistantDraft?.kind === "feed" ? assistantDraft.fields.title ?? "" : "");
   const [body, setBody] = useState(assistantDraft?.kind === "feed" ? assistantDraft.fields.body ?? "" : "");
+  const [actionError, setActionError] = useState("");
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [forwarding, setForwarding] = useState<FeedPost>();
@@ -129,6 +135,8 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
         setGreetingText("");
         setGreetingError("");
       }
+    } catch (error) {
+      setGreetingError(error instanceof Error ? error.message : "Не удалось опубликовать поздравление.");
     } finally { setGreetingBusy(false); }
   };
 
@@ -140,14 +148,17 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
   };
 
   const create = async () => {
-    if (!title.trim() || !body.trim()) return;
+    if (busy || !title.trim() || !body.trim()) return;
     setBusy(true);
+    setActionError("");
     try {
       if (await onCreate(title.trim(), body.trim())) {
         setTitle("");
         setBody("");
         setComposerOpen(false);
-      }
+      } else setActionError("Объявление не опубликовано. Проверьте подключение и повторите.");
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Не удалось опубликовать объявление.");
     } finally {
       setBusy(false);
     }
@@ -155,13 +166,16 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
 
   const comment = async (post: FeedPost) => {
     const value = commentDrafts[post.id]?.trim();
-    if (!value) return;
+    if (busy || !value) return;
     setBusy(true);
+    setActionError("");
     try {
       if (await onComment(post, value, replying[post.id]?.id)) {
         setCommentDrafts((current) => ({ ...current, [post.id]: "" }));
         setReplying((current) => ({ ...current, [post.id]: undefined }));
-      }
+      } else setActionError("Комментарий не отправлен. Черновик сохранён — попробуйте снова.");
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Не удалось отправить комментарий.");
     } finally {
       setBusy(false);
     }
@@ -176,8 +190,10 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
     if (!pendingDelete) return;
     setBusy(true);
     try {
-      if (pendingDelete.commentId) await onDeleteComment(pendingDelete.post, pendingDelete.commentId);
-      else await onDelete(pendingDelete.post);
+      const deleted = pendingDelete.commentId
+        ? await onDeleteComment(pendingDelete.post, pendingDelete.commentId)
+        : await onDelete(pendingDelete.post);
+      if (!deleted) throw new Error("Удаление не подтверждено. Попробуйте снова.");
       setPendingDelete(undefined);
     } finally {
       setBusy(false);
@@ -193,6 +209,7 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
           </div>
         </WorkspaceSectionHeader>
       <div className="feed-main">
+        {actionError ? <p className="feed-action-error" role="alert">{actionError}</p> : null}
         <div className="feed-list">
           {focusPostId && !posts.some(post => post.id === focusPostId) && <p className="feed-focus-notice" role="status">Объявление удалено или недоступно</p>}
           {posts.map((post) => {
@@ -214,7 +231,7 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
                       size="small"
                       icon={post.isPinned ? <Pin24Filled /> : <Pin24Regular />}
                       aria-label={post.isPinned ? "Открепить публикацию" : "Закрепить публикацию"}
-                      onClick={() => void onPin(post, !post.isPinned)}
+                      onClick={() => { setActionError(""); void Promise.resolve(onPin(post, !post.isPinned)).catch(error => setActionError(error instanceof Error ? error.message : "Не удалось изменить закрепление.")); }}
                     />
                   ) : null}
                   {post.canDelete ? (
@@ -234,7 +251,7 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
                 <div className="feed-actions">
                   {onForwardContent && <Button appearance="subtle" size="small" icon={<ArrowForward24Regular />} aria-label={`Переслать объявление: ${post.title}`}
                     onClick={() => setForwarding(post)}>Переслать</Button>}
-                  <FeedReactions reactions={post.reactions ?? []} people={people} token={token} disabled={busy} currentUserId={currentUserId} onToggle={(emoji, reacted) => void onReact(post, emoji, reacted)} />
+                  <FeedReactions reactions={post.reactions ?? []} people={people} token={token} disabled={busy} currentUserId={currentUserId} onToggle={(emoji, reacted) => { setActionError(""); void Promise.resolve(onReact(post, emoji, reacted)).catch(error => setActionError(error instanceof Error ? error.message : "Не удалось изменить реакцию.")); }} />
                   <span><Comment24Regular /> {post.comments.length}</span>
                 </div>
                 {canUseAssistant && post.systemKind === "birthday" && post.birthdayUserId !== currentUserId && <div className="feed-birthday-greeting">
@@ -278,7 +295,7 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
                             <span className="feed-comment-meta">
                               <small>{dateLabel(item.createdAt)}</small>
                               <Button size="small" appearance="subtle" icon={<ArrowReply24Regular />} onClick={() => beginReply(post.id, item)}>Ответить</Button>
-                              <FeedReactions reactions={item.reactions ?? []} people={people} token={token} disabled={busy} currentUserId={currentUserId} onToggle={(emoji, reacted) => void onReact(post, emoji, reacted, item.id)} />
+                              <FeedReactions reactions={item.reactions ?? []} people={people} token={token} disabled={busy} currentUserId={currentUserId} onToggle={(emoji, reacted) => { setActionError(""); void Promise.resolve(onReact(post, emoji, reacted, item.id)).catch(error => setActionError(error instanceof Error ? error.message : "Не удалось изменить реакцию.")); }} />
                               {item.canDelete ? <Button {...deleteFocusTarget} className="feed-comment-delete" size="small" appearance="subtle" icon={<Delete24Regular />} aria-label="Удалить комментарий" disabled={busy} onClick={() => setPendingDelete({ post, commentId: item.id })} /> : null}
                             </span>
                           </span>
@@ -329,6 +346,7 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
           <DialogBody>
             <DialogTitle>Новое объявление</DialogTitle>
             <DialogContent className="feed-composer">
+              {actionError ? <p className="feed-action-error" role="alert">{actionError}</p> : null}
               <Input autoFocus aria-label="Заголовок публикации" placeholder="Заголовок" value={title} onChange={(_event, data) => setTitle(data.value)} />
               <Textarea aria-label="Текст публикации" placeholder="Поделитесь новостью с командой" resize="vertical" value={body} onChange={(_event, data) => setBody(data.value)} />
             </DialogContent>

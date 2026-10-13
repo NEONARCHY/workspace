@@ -22,6 +22,17 @@ function mount() {
 afterEach(cleanup);
 beforeEach(() => { vi.clearAllMocks(); vi.mocked(loadSidebarVisibility).mockResolvedValue(base); });
 describe("employee sidebar settings", () => {
+  it("restores save focus after a failure so keyboard closing and retry stay available", async () => {
+    vi.mocked(saveSidebarVisibility).mockRejectedValue(new Error("Нет соединения"));
+    mount();
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Задачи" }));
+    const save = screen.getByRole("button", { name: "Сохранить меню" });
+    save.focus(); fireEvent.click(save);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Нет соединения");
+    await waitFor(() => expect(save).toHaveFocus());
+    expect(save).toBeEnabled();
+    expect(screen.getByRole("checkbox", { name: "Задачи" })).not.toBeChecked();
+  });
   it("loads saved visibility and saves only after confirmation, including payments", async () => {
     vi.mocked(saveSidebarVisibility).mockResolvedValue({ ...base, hiddenKeys: ["feed", "payment_requests"], revision: 4 });
     mount();

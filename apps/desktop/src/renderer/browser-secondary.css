@@ -1,0 +1,228 @@
+/* Browser completion: layout and touch access only. Domain palettes stay owned
+   by their existing styles. Keep this layer last, including lazy-loaded pages. */
+.browser-feed-reaction-menu { display: none; }
+.feed-reaction-pair { display: inline-flex; align-items: center; }
+.feed-action-error { padding: 12px; border: 1px solid var(--ws-line); border-radius: 12px; color: var(--ws-danger); background: var(--ws-surface); }
+.hr-editor-scrim { position: fixed; inset: 0; z-index: 45; display: grid; place-items: center; padding: 16px; background: rgb(21 38 46 / 35%); }
+.hr-editor-scrim .hr-editor { position: static; inset: auto; transform: none; width: min(650px, 100%); padding: 0; overflow: hidden; }
+.hr-editor-body { display: grid; gap: 16px; max-height: calc(100dvh - 32px); overflow-y: auto; padding: 24px; }
+.hr-editor-body > footer { position: sticky; bottom: -24px; margin: 0 -24px -24px; padding: 16px 24px; background: var(--ws-surface); border-top: 1px solid var(--ws-line); }
+@media (max-width: 1023px), (max-width: 1366px) and (any-pointer: coarse) {
+  .web-platform body:has(.app-content > :is(.ai-referent-view, .ai-hisobot-view)) .app-shell.browser-compact {
+    padding-inline: max(12px, env(safe-area-inset-left)) max(12px, env(safe-area-inset-right));
+  }
+  .web-platform .app-content > :is(.feed-view.workspace-view, .notifications-view, .hr-view, .members-view, .zoom-view, .absences-view, .telegram-access-view, .edo-incoming, .ai-hisobot-view, .employees-view, .tasks-view) {
+    min-width: 0; margin-inline: 0; padding-inline: 0; scrollbar-gutter: stable;
+  }
+  .web-platform .app-content > .ai-referent-view { min-width: 0; min-height: 0; margin-inline: 0; width: 100%; }
+  .web-platform .feed-view.workspace-view { grid-template-columns: minmax(0, 1fr); align-content: start; gap: 16px; }
+  .web-platform .feed-side { grid-row: 2; }
+  .web-platform .feed-main { min-width: 0; }
+  .web-platform .feed-card { padding: 16px; overflow-wrap: anywhere; }
+  .web-platform .feed-comments { min-width: 0; }
+  .web-platform .feed-comment-meta { flex-wrap: wrap; gap: 4px 8px; }
+  .web-platform .feed-comment-composer { grid-template-columns: minmax(0, 1fr) auto; }
+  .web-platform .feed-actions { flex-wrap: wrap; }
+  .web-platform .notifications-view { display: flex; flex-direction: column; overflow-y: auto; }
+  .web-platform .notifications-view > * { flex: none; }
+  .web-platform .notifications-view .notification-layout { grid-template-columns: minmax(0, 1fr); }
+  .web-platform .notifications-view .notification-head-actions { display: flex; flex-wrap: wrap; min-width: 0; }
+  .web-platform .notifications-view .notification-head-actions > span { width: 100%; min-width: 0; }
+  .web-platform .notification-stream-shell { grid-template-rows: auto minmax(0, 1fr); overflow: hidden; }
+  .web-platform .notifications-view .notification-stream { max-height: clamp(360px, 65dvh, 700px); overflow-y: auto; }
+  .web-platform .notifications-view .notification-settings { overflow: visible; }
+  .web-platform .notifications-view .notification-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .web-platform .notifications-view .notification-progress-card { grid-column: auto; }
+  .web-platform .notifications-view .notification-stream-toolbar > div:first-child { white-space: normal; flex-wrap: wrap; }
+  .web-platform .notifications-view .notification-kind-filters { scrollbar-width: thin; }
+  .web-platform .notifications-view .notification-kind-filters::-webkit-scrollbar { display: block; height: 8px; }
+  .web-platform .hr-view > :not(.section-toolbar) { margin-inline: 0; }
+  .web-platform .hr-view { grid-template-columns: minmax(0, 1fr); grid-auto-rows: max-content; overflow-x: hidden; }
+  .web-platform .hr-view > * { min-width: 0; }
+  .web-platform .hr-view > .fui-TabList { max-width: 100%; min-height: 56px; overflow-x: auto; }
+  .web-platform .hr-hiring-toolbar > div:last-child { flex-wrap: wrap; }
+  .web-platform .hr-hiring .fui-Button { white-space: normal; overflow-wrap: anywhere; }
+  .web-platform .hr-table-wrap { max-width: 100%; overscroll-behavior-inline: contain; }
+  .web-platform .hr-hiring-layout { grid-template-columns: minmax(0, 1fr); }
+  .web-platform .hr-hiring-layout > aside { max-height: 260px; overflow-y: auto; }
+  .web-platform .hr-hiring :is(input, textarea, select) { min-width: 0; max-width: 100%; }
+  .web-platform .hr-hiring-preview iframe { max-width: 100%; }
+  .web-platform .members-view { overflow-y: auto; }
+  .web-platform .members-view > * { flex-shrink: 0; }
+  .web-platform .members-summary { flex-wrap: wrap; padding-inline: 0; }
+  .web-platform .members-summary > div { flex: 1 1 140px; min-width: 0; }
+  .web-platform .members-regional-ranking { margin-inline: 0; padding: 16px; }
+  .web-platform .members-controls { padding-inline: 0; }
+  .web-platform :is(.employees-view, .tasks-view):has(.record-table-frame) { display: flex; flex-direction: column; overflow-y: auto; }
+  .web-platform :is(.employees-view, .tasks-view):has(.record-table-frame) > * { flex-shrink: 0; }
+  .web-platform :is(.employees-view, .tasks-view) .record-table-frame { flex: none; height: clamp(360px, 55dvh, 560px); }
+  .web-platform .members-content { flex: none; display: flex; flex-direction: column; overflow: visible; }
+  .web-platform .members-records { height: 500px; flex: none; }
+  .web-platform .member-inspector { width: auto; margin: 0; max-height: none; overflow: visible; }
+  .web-platform .zoom-view { display: flex; flex-direction: column; overflow-y: auto; gap: 12px; }
+  .web-platform .zoom-view > * { flex-shrink: 0; margin-inline: 0; }
+  .web-platform .zoom-split { grid-template-columns: minmax(0, 1fr); overflow: visible; }
+  .web-platform .zoom-list { max-height: 500px; }
+  .web-platform .zoom-side { min-width: 0; overflow: visible; border-left: 0; border-top: 1px solid var(--ws-line); }
+  .web-platform .absence-canvas { grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: visible; }
+  .web-platform .absence-column { min-width: 0; }
+  .web-platform .absence-summary { flex-wrap: wrap; }
+  .web-platform .telegram-access-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .web-platform .telegram-access-header { flex-wrap: wrap; }
+  .web-platform .telegram-access-view { overflow-y: auto; }
+  .web-platform .telegram-access-view > * { flex-shrink: 0; }
+  .web-platform .telegram-access-header { flex-direction: row; }
+  .web-platform .telegram-access-overview { flex-wrap: wrap; }
+  .web-platform .telegram-access-bots { grid-column: 1 / -1; }
+  .web-platform .edo-incoming { display: flex; flex-direction: column; overflow-y: auto; }
+  .web-platform .edo-incoming > * { flex-shrink: 0; }
+  .web-platform .edo-incoming-layout { grid-template-columns: minmax(0, 1fr); }
+  .web-platform .edo-incoming-list { max-height: 460px; }
+  .web-platform .edo-incoming-detail { overflow: visible; }
+  .web-platform .edo-incoming :is(.edo-incoming-header, .edo-access-intro) { flex-wrap: wrap; }
+  .web-platform .edo-incoming-controls label { min-width: 0; max-width: 100%; }
+  .web-platform .ai-referent-view :is(.ai-referent-register-bar, .ai-referent-toolbar, .ai-referent-toolbar-actions, .ai-referent-register-actions) { flex-wrap: wrap; min-width: 0; }
+  .web-platform .ai-referent-register-tabs { max-width: 100%; overflow-x: auto; }
+  .web-platform .ai-hisobot-view .hisobot-tabs { max-width: 100%; overflow-x: auto; }
+  .web-platform .ai-hisobot-view .hisobot-report-grid { grid-template-columns: repeat(auto-fill, minmax(min(325px, 100%), 1fr)); }
+  .web-platform .hisobot-panel-heading { flex-wrap: wrap; }
+  .web-platform .hisobot-panel-heading strong { flex: none; }
+  .web-platform .hisobot-filters { flex-wrap: wrap; }
+  .web-platform .hisobot-help-overlay { top: var(--ws-browser-top, 0px); bottom: auto; height: var(--ws-browser-height, 100dvh); }
+  .web-platform .account-scrim.account-settings-redesigned,
+  .web-platform .hr-editor-scrim,
+  .web-platform .absence-drawer-scrim {
+    top: var(--ws-browser-top, 0px); bottom: auto; height: var(--ws-browser-height, 100dvh);
+    padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+  }
+  .web-platform .account-scrim.account-settings-redesigned .account-panel { width: min(1080px, 100%); height: 100%; max-height: 100%; }
+  .web-platform .account-settings-redesigned .account-settings-layout { min-height: 0; }
+  .web-platform .hr-editor-scrim .hr-editor { max-height: 100%; width: min(650px, 100%); }
+  .web-platform .hr-editor-body { max-height: calc(var(--ws-browser-height, 100dvh) - 16px); scroll-padding-block: 16px 90px; padding: 16px; }
+  .web-platform .hr-editor-body > footer { bottom: -16px; margin: 0 -16px -16px; padding: 12px 16px; flex-wrap: wrap; }
+  .web-platform .absence-drawer { width: min(560px, 100%); max-height: 100%; overflow-y: auto; }
+  .web-platform .fui-DialogSurface:is(.employee-profile-dialog, .feed-composer-dialog, .ai-referent-form-dialog, .ai-referent-detail-dialog, .absence-form-dialog) {
+    position: fixed; inset: calc(var(--ws-browser-top, 0px) + max(8px, env(safe-area-inset-top))) auto auto max(8px, env(safe-area-inset-left));
+    width: calc(100vw - max(8px, env(safe-area-inset-left)) - max(8px, env(safe-area-inset-right)));
+    height: calc(var(--ws-browser-height, 100dvh) - max(8px, env(safe-area-inset-top)) - max(8px, env(safe-area-inset-bottom)));
+    max-width: none; max-height: none; margin: 0; min-height: 0; overflow: hidden;
+  }
+  .web-platform .fui-DialogSurface.employee-profile-dialog.employee-profile-dialog { width: calc(100vw - max(8px, env(safe-area-inset-left)) - max(8px, env(safe-area-inset-right))); height: calc(var(--ws-browser-height, 100dvh) - max(8px, env(safe-area-inset-top)) - max(8px, env(safe-area-inset-bottom))); }
+  .web-platform :is(.feed-composer-dialog, .ai-referent-form-dialog, .ai-referent-detail-dialog, .absence-form-dialog) > .fui-DialogBody { height: 100%; min-height: 0; grid-template-rows: auto minmax(0, 1fr) auto; }
+  .web-platform :is(.feed-composer-dialog, .ai-referent-form-dialog, .ai-referent-detail-dialog, .absence-form-dialog) .fui-DialogContent { min-height: 0; overflow-y: auto; overflow-x: hidden; scroll-padding-block: 16px; }
+  .web-platform :is(.feed-composer-dialog, .ai-referent-form-dialog, .absence-form-dialog) .fui-DialogActions { flex-wrap: wrap; }
+  .web-platform .fui-DialogSurface:is(.absence-decision-dialog, .recognition-guide-dialog, .reward-history-dialog) { max-width: calc(100vw - 16px); max-height: calc(var(--ws-browser-height, 100dvh) - 16px); overflow-y: auto; }
+  .web-platform .employee-profile-dialog .employee-profile-sticky { position: static; }
+  .web-platform .employee-profile-dialog .fui-DialogContent { scroll-padding-top: 16px; }
+  .web-platform .assistant-panel,
+  .web-platform .assistant-panel.is-expanded { max-height: none; }
+  .web-platform .assistant-presets-surface { max-width: calc(100vw - max(8px, env(safe-area-inset-left)) - max(8px, env(safe-area-inset-right))); }
+  .web-platform .assistant-panel .assistant-panel-content { min-width: 0; min-height: 0; }
+  .web-platform .assistant-panel .assistant-composer-area { max-height: 55%; }
+  .web-platform .fui-DialogSurface:is(.directory-record-dialog, .directory-management-dialog, .admin-chat-dialog, .sidebar-visibility-dialog, .file-viewer-surface, .support-dialog, .task-record-dialog, .project-dialog.context-record-dialog) {
+    position: fixed; inset: calc(var(--ws-browser-top, 0px) + max(8px, env(safe-area-inset-top))) auto auto max(8px, env(safe-area-inset-left));
+    width: calc(100vw - max(8px, env(safe-area-inset-left)) - max(8px, env(safe-area-inset-right)));
+    height: calc(var(--ws-browser-height, 100dvh) - max(8px, env(safe-area-inset-top)) - max(8px, env(safe-area-inset-bottom)));
+    max-width: none; max-height: none; min-height: 0; margin: 0; overflow-y: auto;
+  }
+  .web-platform .fui-DialogSurface.support-dialog.support-dialog { height: calc(var(--ws-browser-height, 100dvh) - max(8px, env(safe-area-inset-top)) - max(8px, env(safe-area-inset-bottom))); }
+  .web-platform .task-record-dialog .task-record-workspace,
+  .web-platform .project-dialog.context-record-dialog .context-record-workspace { grid-template-columns: minmax(0, 1fr); height: auto; overflow: visible; }
+  .web-platform .task-record-dialog .task-detail,
+  .web-platform .project-dialog.context-record-dialog .project-detail { overflow: visible; min-width: 0; }
+  .web-platform :is(.task-record-dialog, .project-dialog.context-record-dialog) .embedded-conversation { height: 480px; min-width: 0; }
+  .web-platform .sidebar-visibility-management { height: 100%; max-height: 100%; }
+  .web-platform .sidebar-visibility-scroll { flex: 1; }
+  .web-platform .support-workspace { grid-template-columns: minmax(0, 1fr); overflow-y: auto; }
+  .web-platform .support-request-list { max-height: 190px; }
+  .web-platform .support-main { overflow: visible; }
+  .web-platform .support-dialog .support-category-picker { grid-template-columns: minmax(0, 1fr); }
+  .web-platform .fui-DialogSurface.file-viewer-surface { padding: 12px; overflow: hidden; }
+  .web-platform .file-viewer-surface :is(.file-viewer-toolbar, .file-viewer-tools, .file-viewer-footer) { flex-wrap: wrap; }
+  .web-platform .fui-DialogSurface:is(.employee-status-dialog, .employee-bulk-dialog, .reward-issue-dialog, .workday-schedule-dialog, .chat-settings-dialog, .chat-avatar-picker, .message-reaction-dialog, .chat-deletion-choice, .forward-dialog, .confirm-action-dialog, .release-history-dialog) { max-width: calc(100vw - 16px); max-height: calc(var(--ws-browser-height, 100dvh) - 16px); overflow-y: auto; }
+}
+@media (any-pointer: coarse) {
+  .web-platform :is(.task-record-dialog, .project-dialog.context-record-dialog, .tasks-view) :is(.fui-Button, .view-switch button, .task-subtask-row, .task-detail-tabs button) { min-width: 48px; min-height: 48px; }
+  .web-platform :is(.task-record-dialog, .project-dialog.context-record-dialog) :is(input, textarea, select) { font-size: 16px; }
+  .web-platform .hr-hiring :is(input, textarea, select) { font-size: 16px; }
+  .web-platform :is(.directory-record-dialog, .directory-management-dialog, .admin-chat-dialog, .sidebar-visibility-dialog, .file-viewer-surface, .support-dialog, .employee-status-dialog, .employee-bulk-dialog, .chat-settings-dialog) :is(.fui-Button, button, .fui-Checkbox, .fui-Tab) { min-height: 48px; min-width: 48px; }
+  .web-platform :is(.directory-record-dialog, .directory-management-dialog, .admin-chat-dialog, .sidebar-visibility-dialog, .file-viewer-surface, .support-dialog, .employee-status-dialog, .employee-bulk-dialog) :is(input, textarea, select) { font-size: 16px; }
+  /* Fluent portals inherit the theme, not the app-provider class. */
+  .web-platform :is(.feed-composer-dialog, .employee-profile-dialog, .hr-editor, .absence-form-dialog, .absence-decision-dialog, .absence-drawer, .ai-referent-form-dialog, .ai-referent-detail-dialog, .reward-history-dialog, .recognition-guide-dialog) .fui-Button:not(.icon-button, .participant-remove, .micro-action, .task-result-link, .task-item-open, .message-drag, .workspace-identity-menu) { min-width: 48px; min-height: 48px; }
+  .web-platform :is(.personal-efficiency .workspace-select, .personal-eff-task-list button, .personal-eff-method summary, .hisobot-compose-footer button, .hisobot-help > header button) { min-height: 48px; }
+  .web-platform .browser-feed-reaction-menu { display: inline-flex; }
+  .web-platform .app-provider :is(.feed-view, .feed-composer-dialog, .notifications-view, .account-panel, .employee-profile-dialog, .absence-view, .absences-view, .absence-form-dialog, .absence-drawer, .hr-view, .hr-editor, .zoom-view, .members-view, .telegram-access-view, .edo-incoming, .ai-referent-view, .ai-referent-form-dialog, .ai-referent-detail-dialog, .ai-hisobot-view) :is(.fui-Button, .fui-Tab) { min-width: 48px; min-height: 48px; }
+  .web-platform .app-provider :is(.feed-view, .notifications-view, .account-panel, .employee-profile-dialog, .hr-editor, .zoom-view, .members-view, .ai-referent-view, .ai-hisobot-view) .fui-Button:not(.icon-button, .participant-remove, .micro-action, .task-result-link, .task-item-open, .message-drag, .workspace-identity-menu) { min-width: 48px; min-height: 48px; }
+  .web-platform :is(.hr-editor, .account-panel, .absence-form-dialog, .ai-referent-form-dialog, .ai-referent-detail-dialog, .feed-composer-dialog, .edo-incoming, .ai-hisobot-view, .ai-referent-view, .telegram-access-view, .zoom-view, .notifications-view, .feed-view) :is(input, textarea, select) { font-size: 16px; }
+  .web-platform :is(.hr-form-grid input, .hr-form-grid textarea, .telegram-access-primary, .telegram-access-secondary, .telegram-access-bot, .telegram-access-hisobot-check, .notification-kind-filters button, .absence-summary button, .absence-card, .zoom-row, .zoom-buckets button, .hr-hiring button, .hisobot-tabs button, .hisobot-help-button, .ai-referent-register-tabs button, .ai-referent-filters button, .employee-profile-tabs button, .record-open) { min-height: 48px; }
+  .web-platform .telegram-access-hisobot select { min-height: 48px; }
+  .web-platform .notifications-view .notification-open-label { max-height: none; opacity: 1; transform: none; }
+  .web-platform .notifications-view .notification-read-action { min-width: 48px; min-height: 48px; }
+  .web-platform .feed-comment-delete { opacity: 1; pointer-events: auto; }
+  .web-platform .app-provider .voice-recorder .fui-Button { min-width: 48px; min-height: 48px; }
+  .web-platform .voice-player :is(button, input[type="range"]) { min-width: 48px; min-height: 48px; }
+  .web-platform .voice-player { --ws-media-control-size: 48px; grid-template-columns: 48px minmax(0, 1fr) 48px; }
+  .web-platform .voice-player.has-speed { grid-template-columns: 48px minmax(0, 1fr) 48px 48px; }
+  .web-platform .voice-player .voice-player-play { --media-play-size: 48px; }
+  .web-platform .media-volume-control { --ws-volume-control-size: 48px; }
+  .web-platform .voice-player-track { grid-template-rows: 36px 14px; }
+  .web-platform .voice-player-time { font-size: 12px; }
+  .web-platform .assistant-panel :is(button, .assistant-model-button) { min-width: 48px; min-height: 48px; }
+  .web-platform .assistant-panel .assistant-editor,
+  .web-platform .assistant-panel .assistant-editor:focus-visible { font-size: 16px; }
+}
+@media (max-width: 700px) {
+  .web-platform .feed-card > header { flex-wrap: wrap; }
+  .web-platform .feed-comment.is-reply { margin-left: 12px; }
+  .web-platform .feed-comment-meta > time { flex-basis: 100%; }
+  .web-platform .notifications-view .notification-row { grid-template-columns: 36px minmax(0, 1fr); gap: 8px; padding: 12px; }
+  .web-platform .notifications-view .notification-kind { width: 36px; height: 36px; }
+  .web-platform .notifications-view .notification-row-tail { grid-column: 2; min-width: 0; flex-direction: row; flex-wrap: wrap; justify-content: flex-start; }
+  .web-platform .notifications-view .notification-row-meta { flex-wrap: wrap; }
+  .web-platform .hr-form-grid, .web-platform .hr-hiring-grid { grid-template-columns: minmax(0, 1fr); }
+  .web-platform .hr-preview-list div { flex-wrap: wrap; }
+  .web-platform .hr-hiring :is(.hr-hiring-toolbar, .hr-hiring-signature, .hr-hiring-footer, .hr-hiring-buttons) { flex-wrap: wrap; }
+  .web-platform .hr-summary { grid-template-columns: minmax(0, 1fr); }
+  .web-platform .directory-record-dialog .directory-form-grid { grid-template-columns: minmax(0, 1fr); }
+  .web-platform .directory-record-dialog .directory-heading { flex-wrap: wrap; }
+  .web-platform .directory-record-dialog .directory-heading h2 { overflow-wrap: anywhere; }
+  .web-platform .zoom-header { flex-wrap: wrap; }
+  .web-platform .zoom-header-actions { flex-wrap: wrap; }
+  .web-platform .zoom-row { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .web-platform .zoom-row-body strong { white-space: normal; overflow-wrap: anywhere; }
+  .web-platform .zoom-list, .web-platform .zoom-side { padding: 16px; }
+  .web-platform .absence-canvas { grid-template-columns: minmax(0, 1fr); }
+  .web-platform .telegram-access-row { grid-template-columns: minmax(0, 1fr); padding: 16px; }
+  .web-platform .telegram-access-person { padding-top: 0; }
+  .web-platform .telegram-access-bots { grid-column: auto; }
+  .web-platform .telegram-access-row-footer { flex-wrap: wrap; }
+  .web-platform .telegram-access-hisobot select { min-width: 0; max-width: 100%; }
+  .web-platform .ai-referent-view { padding: 12px; }
+  .web-platform .ai-referent-view .ai-referent-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .web-platform .ai-referent-toolbar > .fui-Input { width: 100%; min-width: 0; }
+  .web-platform .ai-referent-form-dialog :is(.ai-referent-form-grid, .ai-referent-detail-grid) { grid-template-columns: minmax(0, 1fr); }
+  .web-platform .employee-profile-hero { grid-template-columns: auto minmax(0, 1fr); padding: 16px; }
+  .web-platform .employee-profile-hero-stat { grid-column: 1 / -1; width: 100%; }
+  .web-platform .employee-profile-hero h2 { font-size: 22px; overflow-wrap: anywhere; }
+  .web-platform .employee-profile-overview { grid-template-columns: minmax(0, 1fr); }
+  .web-platform .employee-profile-tabs button { white-space: normal; }
+  .web-platform .voice-player { min-width: 0; max-width: 100%; }
+  .web-platform .voice-recorder { grid-template-columns: minmax(0, 1fr); min-width: 0; padding: 12px; max-height: 65%; overflow-y: auto; }
+  .web-platform .voice-recorder-ready .voice-recorder-state { grid-column: 1; grid-row: 1; }
+  .web-platform .voice-recorder-ready .voice-preview { grid-column: 1; grid-row: 2; }
+  .web-platform .voice-recorder-state { min-width: 0; flex: 1 1 160px; }
+  .web-platform .voice-recorder-state small { overflow-wrap: anywhere; }
+  .web-platform .voice-recorder-actions { flex-wrap: wrap; }
+  .web-platform .voice-preview { width: 100%; min-width: 0; }
+  .web-platform .voice-player-volume { max-width: 100%; }
+}
+@media (max-height: 560px) {
+  .web-platform .account-settings-redesigned .account-profile { grid-template-columns: 48px minmax(0, 1fr) auto; padding: 8px; margin-block: 0 8px; }
+  .web-platform .account-settings-redesigned .account-profile .fui-Avatar { width: 48px; height: 48px; }
+  .web-platform .account-settings-redesigned .account-avatar-action { grid-column: auto; width: auto; }
+  .web-platform .account-settings-redesigned .account-window-header { min-height: 48px; padding-block: 4px; }
+}
+@media (forced-colors: active) {
+  .web-platform .hr-editor-scrim { background: Canvas; }
+  .web-platform .hr-editor-body > footer { border-color: CanvasText; }
+}

@@ -59,7 +59,7 @@ import { UndoActionsToast, useUndoActions } from "./UndoActions";
 import { WorkspaceDialog } from "./WorkspaceDialog";
 import { defaultPersonalPreferences } from "./personal-organization";
 import { TaskComposer } from "./TaskComposer";
-import { VoiceMessagePlayer, VoiceRecorder } from "./VoiceMessage";
+import { sendMessengerRecording, VoiceMessagePlayer, VoiceRecorder } from "./VoiceMessage";
 import { workspacePlatform } from "./platform-adapter";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { ReactionPicker } from "./ReactionPicker";
@@ -1107,13 +1107,19 @@ function Conversation({
           )}
           {voiceOpen ? (
             <VoiceRecorder
+              allowMp4
               disabled={busy}
               onClose={() => setVoiceOpen(false)}
               onSend={async (file, durationMs) => {
-                const message = await onSendVoiceMessage(chat.id, file, durationMs, {
+                const options: MessageOptions = {
                   replyToMessageId: reply?.id,
                   mentionUserIds: mentions.filter((id) => activeMemberIds.has(id)),
-                });
+                };
+                // Older Safari records AAC/MP4. Send it as an ordinary playable
+                // audio attachment, never mislabel it as the server's WebM/Opus voice.
+                const message = await sendMessengerRecording(file, durationMs,
+                  audio => onSendMessage(chat.id, "Голосовая запись", [audio], options),
+                  (voice, duration) => onSendVoiceMessage(chat.id, voice, duration, options));
                 if (!message) return false;
                 setReply(undefined);
                 setMentions([]);

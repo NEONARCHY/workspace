@@ -23,6 +23,21 @@ function view(canUseAssistant: boolean) {
 }
 
 describe("birthday greeting access", () => {
+  it("keeps publication fields on a rejected save and permits retry", async () => {
+    const create = vi.fn().mockRejectedValue(new Error("Временная ошибка"));
+    render(<FluentProvider theme={webLightTheme}><FeedView posts={[]} people={[]} token="token" currentUserId="employee-1"
+      onCreate={create} onComment={vi.fn()} onReact={vi.fn()} onDeleteComment={vi.fn()} onPin={vi.fn()} onDelete={vi.fn()} /></FluentProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Новое объявление" }));
+    const dialog = screen.getByRole("dialog", { name: "Новое объявление" });
+    fireEvent.change(within(dialog).getByLabelText("Заголовок публикации"), { target: { value: "Черновик" } });
+    fireEvent.change(within(dialog).getByLabelText("Текст публикации"), { target: { value: "Не потерять текст" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Опубликовать" }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Временная ошибка");
+    expect(within(dialog).getByLabelText("Заголовок публикации")).toHaveValue("Черновик");
+    expect(within(dialog).getByLabelText("Текст публикации")).toHaveValue("Не потерять текст");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Опубликовать" }));
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(2));
+  });
   afterEach(cleanup);
 
   it("forwards a publication by its real ID instead of copying its text", async () => {
@@ -106,6 +121,12 @@ describe("birthday greeting access", () => {
       onCreate={vi.fn()} onComment={vi.fn()} onReact={onReact} onDeleteComment={vi.fn()} onPin={vi.fn()} onDelete={vi.fn()}
     /></FluentProvider>);
     const postReaction = screen.getByRole("button", { name: "👍 1" });
+    const touchDetails = screen.getByRole("button", { name: "Кто поставил реакцию 👍" });
+    fireEvent.click(touchDetails);
+    expect(screen.getByRole("dialog", { name: "Кто поставил реакцию" })).toHaveTextContent("Азиза Каримова");
+    expect(onReact).not.toHaveBeenCalled();
+    fireEvent.keyDown(screen.getByRole("dialog", { name: "Кто поставил реакцию" }), { key: "Escape" });
+    expect(touchDetails).toHaveFocus();
     fireEvent.contextMenu(postReaction, { clientX: 900, clientY: 600 });
     let details = screen.getByRole("dialog", { name: "Кто поставил реакцию" });
     expect(details).toHaveTextContent("Азиза Каримова");
