@@ -24,7 +24,7 @@ function MediaAttachment({attachment, onLoad, onOpen}: {
   readonly onOpen: (attachment: WorkspaceAttachment) => void | Promise<void>;
 }) {
   const ref = useRef<HTMLElement>(null);
-  const [visibility, setVisibility] = useState({visible:typeof IntersectionObserver === "undefined", epoch:0});
+  const [visibility, setVisibility] = useState({visible:false, epoch:0});
   const [resource, setResource] = useState({epoch:-1, url:"", failed:false});
   useEffect(() => {
     if (!ref.current || typeof IntersectionObserver === "undefined") return;
