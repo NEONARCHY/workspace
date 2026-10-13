@@ -11,6 +11,7 @@ import type {
   TaskReturnReason,
   TaskStatus,
   TaskProjectOption,
+  TaskPlan,
   WorkspaceAttachment,
   WorkspacePerson,
   WorkspaceDepartment,
@@ -47,13 +48,15 @@ import { TaskCalendarView } from "./TaskCalendarView";
 import { TaskComposer } from "./TaskComposer";
 import { SpatialBoard, SpatialCard, SpatialLane } from "./SpatialBoard";
 import { TaskRecords } from "./TaskRecords";
+import { TaskPlansView } from "./TaskPlansView";
+import { tasksForPlan } from "./task-plan-filter";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import { WorkspaceSelect } from "./WorkspaceSelect";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
 import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
 import { employeeScope, type EmployeeScope } from "./employee-scope";
-import { loadTaskProjectOptions } from "./workspace-api";
+import { createTaskPlan, loadTaskPlans, loadTaskProjectOptions, setTaskPlanLink } from "./workspace-api";
 import { isTaskOverdue, taskDeadlineLabel } from "./task-deadline";
 import { useTaskDeadlineClock } from "./useTaskDeadlineClock";
 
@@ -158,7 +161,7 @@ function TaskSectionHeading({ title, help, meta }: {
 
 const kanbanStatuses = ["new", "in_progress", "awaiting_review", "overdue", "completed"] as const;
 type TaskFilter = "active" | "mine" | "review" | "overdue" | "completed";
-type TaskMode = "list" | "kanban" | "calendar" | "efficiency";
+type TaskMode = "list" | "kanban" | "calendar" | "efficiency" | "plans";
 
 const taskFilterLabels: Readonly<Record<TaskFilter, string>> = {
   active: "Активные",
@@ -258,6 +261,10 @@ export function TasksView(props: TasksViewProps) {
   const [filter, setFilter] = useState<TaskFilter>("active");
   const [query, setQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
+  const [planFilter, setPlanFilter] = useState("");
+  const [planChoice, setPlanChoice] = useState("");
+  const [planLinkBusy, setPlanLinkBusy] = useState(false);
+  const [planLinkError, setPlanLinkError] = useState("");
   const [selectedId, updateSelectedId] = useState(focusTaskId ?? tasks[0]?.id ?? "");
   const [detailOpen, setDetailOpen] = useState(Boolean(focusTaskId));
   const [sourceNoticeTaskId, setSourceNoticeTaskId] = useState<string | null>(() => {
@@ -293,6 +300,12 @@ export function TasksView(props: TasksViewProps) {
     readonly error: string;
   }>({ key: "", options: [], error: "" });
   const [projectsRevision, setProjectsRevision] = useState(0);
+  const [plansRevision, setPlansRevision] = useState(0);
+  const [plansState, setPlansState] = useState<{
+    readonly key: string;
+    readonly plans: readonly TaskPlan[];
+    readonly error: string;
+  }>({ key: "", plans: [], error: "" });
   const [editAssigneeId, setEditAssigneeId] = useState("");
   const [editAssigneeScope, setEditAssigneeScope] = useState<EmployeeScope>("central");
   const [editPriority, setEditPriority] = useState<WorkspaceTask["priority"]>("normal");
@@ -350,11 +363,55 @@ export function TasksView(props: TasksViewProps) {
     return () => { active = false; };
   }, [props.token, projectRequestKey]);
 
+  const plansRequestKey = `${props.token}:${plansRevision}`;
+  const plansLoading = Boolean(props.token) && plansState.key !== plansRequestKey;
+  const plans = useMemo(() => plansState.key === plansRequestKey ? plansState.plans : [], [plansState, plansRequestKey]);
+  const plansError = plansState.key === plansRequestKey ? plansState.error : "";
+  useEffect(() => {
+    if (!props.token) return;
+    let active = true;
+    void loadTaskPlans(props.token).then((result) => {
+      if (active) setPlansState({ key: plansRequestKey, plans: result, error: "" });
+    }).catch(() => {
+      if (active) setPlansState({ key: plansRequestKey, plans: [], error: "Не удалось загрузить планы." });
+    });
+    return () => { active = false; };
+  }, [props.token, plansRequestKey]);
+
+  async function createPlan(payload: Parameters<typeof createTaskPlan>[1]) {
+    if (!props.token) throw new Error("Необходима авторизация");
+    const created = await createTaskPlan(props.token, payload);
+    setPlansState((current) => current.key === plansRequestKey
+      ? { ...current, plans: [created, ...current.plans] } : current);
+  }
+
+  async function changePlanLink(planId: string, taskId: string, linked: boolean) {
+    if (!props.token || planLinkBusy) return;
+    setPlanLinkBusy(true);
+    setPlanLinkError("");
+    try {
+      await setTaskPlanLink(props.token, planId, taskId, linked);
+      setPlansState((current) => current.key === plansRequestKey ? {
+        ...current,
+        plans: current.plans.map((plan) => plan.id === planId ? {
+          ...plan,
+          taskIds: linked ? [...new Set([...plan.taskIds, taskId])] : plan.taskIds.filter((id) => id !== taskId),
+        } : plan),
+      } : current);
+      setPlanChoice("");
+    } catch {
+      setPlanLinkError("Не удалось изменить связь с планом. Повторите попытку.");
+    } finally {
+      setPlanLinkBusy(false);
+    }
+  }
+
   const deadlineNow = useTaskDeadlineClock(tasks);
+  const planTasks = useMemo(() => tasksForPlan(tasks, plans, planFilter), [tasks, plans, planFilter]);
   const visibleTasks = useMemo(() => {
     const search = query.trim().toLocaleLowerCase("ru");
     const names = new Map(people.map((person) => [person.id, person.name]));
-    return tasks.filter((task) => {
+    return planTasks.filter((task) => {
       const matchesFilter = filter === "mine" ? task.assigneeId === currentUserId
         : filter === "review" ? task.status === "awaiting_review"
           && (task.authorId === currentUserId || ["manager", "admin", "superadmin"].includes(people.find((person) => person.id === currentUserId)?.role ?? ""))
@@ -367,16 +424,16 @@ export function TasksView(props: TasksViewProps) {
       const participantNames = task.participants.map((item) => names.get(item.userId) ?? "").join(" ");
       return matchesFilter && matchesRole && (!search || `${task.title} ${task.project} ${names.get(task.assigneeId) ?? ""} ${names.get(task.authorId) ?? ""} ${participantNames}`.toLocaleLowerCase("ru").includes(search));
     });
-  }, [currentUserId, filter, tasks, query, people, roleFilter, deadlineNow]);
+  }, [currentUserId, filter, planTasks, query, people, roleFilter, deadlineNow]);
 
   const taskCounts = useMemo(() => ({
-    active: tasks.filter((task) => !["completed", "cancelled"].includes(task.status)).length,
-    mine: tasks.filter((task) => task.assigneeId === currentUserId).length,
-    overdue: tasks.filter((task) => isTaskOverdue(task, deadlineNow)).length,
-    completed: tasks.filter((task) => task.status === "completed").length,
-    review: tasks.filter((task) => task.status === "awaiting_review"
+    active: planTasks.filter((task) => !["completed", "cancelled"].includes(task.status)).length,
+    mine: planTasks.filter((task) => task.assigneeId === currentUserId).length,
+    overdue: planTasks.filter((task) => isTaskOverdue(task, deadlineNow)).length,
+    completed: planTasks.filter((task) => task.status === "completed").length,
+    review: planTasks.filter((task) => task.status === "awaiting_review"
       && (task.authorId === currentUserId || ["manager", "admin", "superadmin"].includes(people.find((person) => person.id === currentUserId)?.role ?? ""))).length,
-  }), [currentUserId, people, tasks, deadlineNow]);
+  }), [currentUserId, people, planTasks, deadlineNow]);
 
   const selectedTask = tasks.find((task) => task.id === selectedId)
     ?? visibleTasks[0];
@@ -629,13 +686,14 @@ export function TasksView(props: TasksViewProps) {
     <button className={mode === "list" ? "active" : ""} aria-pressed={mode === "list"} onClick={() => setMode("list")} type="button">Список</button>
     <button className={mode === "kanban" ? "active" : ""} aria-pressed={mode === "kanban"} onClick={() => setMode("kanban")} type="button">Kanban</button>
     <button className={mode === "calendar" ? "active" : ""} aria-pressed={mode === "calendar"} onClick={() => setMode("calendar")} type="button">Календарь</button>
+    <button className={mode === "plans" ? "active" : ""} aria-pressed={mode === "plans"} onClick={() => { setMode("plans"); setDetailOpen(false); }} type="button">Планы</button>
     <button className={mode === "efficiency" ? "active" : ""} aria-pressed={mode === "efficiency"} onClick={() => { setMode("efficiency"); if (efficiency === undefined && !efficiencyLoading) void onLoadEfficiency(); }} type="button">Эффективность</button>
   </SlidingSegmented>;
   const newTaskButton = <Button {...newTaskFocusTarget} className="ws-section-header-primary" appearance="primary" icon={<Add24Regular />} onClick={() => { setAssistantTaskFields({}); setCreating(true); }}>Новая задача</Button>;
   const [calendarToolbarTarget, setCalendarToolbarTarget] = useState<HTMLDivElement | null>(null);
 
   return (
-    <section className={`workspace-view tasks-view bp5-tasks ${mode === "calendar" ? "calendar-mode" : ""} ${mode === "efficiency" ? "efficiency-mode" : ""} ${detailOpen && selectedTask && mode !== "efficiency" ? "detail-open" : ""}`} aria-label="Задачи">
+    <section className={`workspace-view tasks-view bp5-tasks ${mode === "calendar" ? "calendar-mode" : ""} ${mode === "efficiency" ? "efficiency-mode" : ""} ${detailOpen && selectedTask && mode !== "efficiency" && mode !== "plans" ? "detail-open" : ""}`} aria-label="Задачи">
       <div className="tasks-main">
         <WorkspaceSectionHeader motif="tasks" className="section-toolbar">
           <div><h1>Задачи</h1><p>Карточки, команда, сроки и зависимости</p></div>
@@ -646,23 +704,26 @@ export function TasksView(props: TasksViewProps) {
           </div>
         </WorkspaceSectionHeader>
 
-        {!(["calendar", "efficiency"] as TaskMode[]).includes(mode) ? <div className="task-workbench-summary" aria-label="Сводка задач">
+        {!(["calendar", "efficiency", "plans"] as TaskMode[]).includes(mode) ? <div className="task-workbench-summary" aria-label="Сводка задач">
           <div className="task-focus-object review"><span>Ждут решения</span><strong>{taskCounts.review}</strong><small>результатов на проверке</small></div>
           <div className="task-focus-object mine"><span>Моя работа</span><strong>{taskCounts.mine}</strong><small>задач назначено вам</small></div>
           <div className="task-focus-object overdue"><span>Риск срока</span><strong>{taskCounts.overdue}</strong><small>{taskCounts.overdue ? "нужно обратить внимание" : "всё идёт по плану"}</small></div>
         </div> : null}
 
-        {!(["calendar", "efficiency"] as TaskMode[]).includes(mode) ? <div className="task-filters">
+        {!(["calendar", "efficiency", "plans"] as TaskMode[]).includes(mode) ? <div className="task-filters">
           <SlidingSegmented className="task-filter-tabs" role="group" aria-label="Фильтры задач">
           {(Object.keys(taskFilterLabels) as TaskFilter[]).map((key) => (
             <button className={filter === key ? "active" : ""} aria-label={taskFilterLabels[key]} aria-pressed={filter === key} key={key} onClick={() => setFilter(key)} type="button"><span>{taskFilterLabels[key]}</span><b aria-hidden="true">{taskCounts[key]}</b></button>
           ))}
           </SlidingSegmented>
           <WorkspaceSelect className="task-role-filter" aria-label="Моя роль в задаче" value={roleFilter} onChange={event => setRoleFilter(event.target.value)}><option value="all">Все роли</option><option value="author">Я постановщик</option><option value="assignee">Я исполнитель</option><option value="co_assignee">Я соисполнитель</option><option value="observer">Я наблюдатель</option></WorkspaceSelect>
+          <WorkspaceSelect className="task-role-filter" aria-label="Фильтр по плану" value={planFilter} onChange={(event) => setPlanFilter(event.target.value)} disabled={plansLoading || Boolean(plansError)}><option value="">Все планы</option>{plans.map((plan) => <option key={plan.id} value={plan.id}>{plan.title}</option>)}</WorkspaceSelect>
           <Input className="task-search" aria-label="Поиск задач" contentBefore={<Search20Regular />} placeholder="Название, проект, исполнитель" value={query} onChange={(_, data) => setQuery(data.value)} />
         </div> : null}
 
-        {mode === "efficiency" ? <EfficiencyView token={props.token} overview={efficiency} loading={efficiencyLoading} error={efficiencyError} onPeriodChange={onLoadEfficiency} /> : mode === "list" ? <TaskRecords tasks={visibleTasks} people={people} token={props.token} currentUserId={currentUserId} selectedId={detailOpen ? selectedTask?.id : undefined} filterKey={`${filter}:${query}:${roleFilter}`} onSelect={setSelectedId} /> : mode === "calendar" ? <TaskCalendarView tasks={visibleTasks} onSelect={setSelectedId} toolbarTarget={calendarToolbarTarget} /> : (
+        {mode !== "plans" && plansError ? <div className="task-plan-error" role="alert">{plansError} <Button appearance="secondary" onClick={() => setPlansRevision((revision) => revision + 1)}>Повторить</Button></div> : null}
+
+        {mode === "efficiency" ? <EfficiencyView token={props.token} overview={efficiency} loading={efficiencyLoading} error={efficiencyError} onPeriodChange={onLoadEfficiency} /> : mode === "plans" ? <TaskPlansView plans={plans} tasks={tasks} loading={plansLoading} error={plansError} onRetry={() => setPlansRevision((revision) => revision + 1)} onCreate={createPlan} onSelect={(planId) => { setPlanFilter(planId); setFilter("active"); setMode("list"); }} /> : mode === "list" ? <TaskRecords tasks={visibleTasks} people={people} token={props.token} currentUserId={currentUserId} selectedId={detailOpen ? selectedTask?.id : undefined} filterKey={`${filter}:${query}:${roleFilter}:${planFilter}`} onSelect={setSelectedId} /> : mode === "calendar" ? <TaskCalendarView tasks={visibleTasks} onSelect={setSelectedId} toolbarTarget={calendarToolbarTarget} /> : (
           <SpatialBoard canDrop={(id, status) => { const task = visibleTasks.find(item => item.id === id); return !!task && canEditTask(task) && !["awaiting_review", "completed", "cancelled"].includes(task.status) && ["new", "in_progress"].includes(status) && task.status !== status; }} onMove={(id, status) => onChangeStatus(id, status as TaskStatus)}>
           <div className="task-kanban" role="region" tabIndex={0} aria-label="Kanban задач: горизонтальная прокрутка">
             {kanbanStatuses.map((status) => {
@@ -700,7 +761,7 @@ export function TasksView(props: TasksViewProps) {
         onSubmit={createTask}
       /> : null}
 
-      {!(["dashboard", "efficiency"] as TaskMode[]).includes(mode) && selectedTask !== undefined ? <Dialog open={detailOpen} onOpenChange={(_, data) => { if (!data.open) setDetailOpen(false); }}>
+      {mode !== "efficiency" && mode !== "plans" && selectedTask !== undefined ? <Dialog open={detailOpen} onOpenChange={(_, data) => { if (!data.open) setDetailOpen(false); }}>
       <DialogSurface className="task-record-dialog" aria-label={selectedTask.title}><div className="task-record-workspace"><aside className="task-detail task-card-full">
         <div className="task-detail-sticky-header">
         <Button className="task-detail-close" appearance="subtle" icon={<Dismiss24Regular />} aria-label="Закрыть задачу" onClick={() => setDetailOpen(false)} />
@@ -769,6 +830,15 @@ export function TasksView(props: TasksViewProps) {
           <ParticipantChip person={personById(selectedTask.assigneeId)} label="Ответственный" />
           {selectedTask.participants.map((participant) => <ParticipantChip key={`${participant.userId}-${participant.role}`} person={personById(participant.userId)} label={participant.role === "co_assignee" ? "Соисполнитель" : "Наблюдатель"} onRemove={canManageParticipants ? () => void onRemoveParticipant(selectedTask, participant.userId) : undefined} />)}
         </div>{canManageParticipants ? <div className="inline-task-form">{departments ? <EmployeeScopeSwitch value={participantScope} onChange={(next) => { setParticipantScope(next); setParticipantId(""); }} label="Группа новых участников" /> : null}<WorkspaceSelect aria-label="Новый участник" value={participantId} onChange={(event) => setParticipantId(event.target.value)}><option value="">Выберите сотрудника</option>{people.filter((person) => inEmployeeScope(person, participantScope) && person.id !== selectedTask.assigneeId && !selectedTask.participants.some((item) => item.userId === person.id)).map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</WorkspaceSelect><WorkspaceSelect aria-label="Роль участника" value={participantRole} onChange={(event) => setParticipantRole(event.target.value as TaskParticipantRole)}><option value="co_assignee">Соисполнитель</option><option value="observer">Наблюдатель</option></WorkspaceSelect><Button appearance="secondary" onClick={() => void addParticipant()} disabled={!participantId}>Добавить</Button></div> : null}</div>
+
+        <div className="detail-section task-plan-links"><TaskSectionHeading title="Планы" help="Задача может входить в несколько планов. Связи меняет постановщик или уполномоченный сотрудник." meta={plans.filter((plan) => plan.taskIds.includes(selectedTask.id)).length} />
+          {plansLoading ? <p role="status">Загружаем планы…</p> : plansError ? <p className="task-plan-error" role="alert">{plansError}</p> : <>
+            <ul>{plans.filter((plan) => plan.taskIds.includes(selectedTask.id)).map((plan) => <li key={plan.id}><span>{plan.title}</span>{canManageParticipants ? <Button appearance="subtle" size="small" disabled={planLinkBusy} aria-label={`Убрать задачу из плана ${plan.title}`} onClick={() => void changePlanLink(plan.id, selectedTask.id, false)}>Убрать</Button> : null}</li>)}</ul>
+            {canManageParticipants && plans.some((plan) => !plan.taskIds.includes(selectedTask.id)) ? <div className="inline-task-form"><WorkspaceSelect aria-label="Добавить задачу в план" value={planChoice} onChange={(event) => setPlanChoice(event.target.value)}><option value="">Выберите план</option>{plans.filter((plan) => !plan.taskIds.includes(selectedTask.id)).map((plan) => <option key={plan.id} value={plan.id}>{plan.title}</option>)}</WorkspaceSelect><Button appearance="secondary" disabled={!planChoice || planLinkBusy} onClick={() => void changePlanLink(planChoice, selectedTask.id, true)}>Привязать</Button></div> : null}
+            {!plans.some((plan) => plan.taskIds.includes(selectedTask.id)) ? <p className="task-section-empty">План пока не назначен.</p> : null}
+          </>}
+          {planLinkError ? <p className="task-plan-error" role="alert">{planLinkError}</p> : null}
+        </div>
 
         <AttachmentPanel attachments={attachments.filter((attachment) => attachment.ownerType === "task" && attachment.ownerId === selectedTask.id)} canUpload={canEdit} dropzone headingAccessory={<TaskHelp title="Вложения">Откройте файл нажатием. Свой файл можно удалить; администратор может удалить любой файл задачи. Количество не ограничено, до 25 МБ на обычный файл.</TaskHelp>} onUpload={(files) => onUploadAttachments(selectedTask, files)} onDownload={onDownloadAttachment}
           canDelete={attachment => attachment.uploadedByUserId === currentUserId || ["admin", "superadmin"].includes(people.find(person => person.id === currentUserId)?.role ?? "")}

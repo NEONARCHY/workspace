@@ -188,6 +188,7 @@ def request_module_action(path: str, method: str) -> tuple[str, ModuleAction] | 
         (("/survey-analyses",), "survey_analytics"),
         (("/messenger/", "/chats/", "/messages/"), "messenger"),
         (("/tasks",), "tasks"),
+        (("/task-plans",), "tasks"),
         (("/approval-templates",), "payment_requests"),
         (("/approval-requests",), "payment_requests"),
         (("/ai-referent",), "ai_referent"),
@@ -230,6 +231,7 @@ def request_module_action(path: str, method: str) -> tuple[str, ModuleAction] | 
     collection_paths = {
         "/survey-analyses",
         "/tasks",
+        "/task-plans",
         "/approval-requests",
         "/ai-referent/letters",
         "/projects",
