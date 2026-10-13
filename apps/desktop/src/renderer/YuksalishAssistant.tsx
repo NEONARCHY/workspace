@@ -884,7 +884,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
                   }
                 }} />
               <div className="assistant-composer-toolbar">
-                <AssistantModelControl value={model} onChange={setModel} disabled={busy || chatBusy || confirmClear || preparingAction} />
+                <AssistantModelControl value={model} onChange={setModel} mountNode={panelRef.current} disabled={busy || chatBusy || confirmClear || preparingAction} />
                 <div className="assistant-composer-actions">
                   <input ref={fileInputRef} type="file" className="assistant-file-input" tabIndex={-1}
                     accept=".docx,.pdf,.png,.jpg,.jpeg,.webp,.txt,.webm" aria-label="Выбрать вложение"
