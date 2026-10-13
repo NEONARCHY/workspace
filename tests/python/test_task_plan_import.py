@@ -9,7 +9,7 @@ from reportlab.pdfgen.canvas import Canvas
 
 from yuksalish_api.access_control import request_module_action
 from yuksalish_api.task_plan_import import preview_plan_document
-from yuksalish_api.task_plan_schemas import TaskPlanImportConfirm
+from yuksalish_api.task_plan_schemas import MAX_PLAN_IMPORT_ITEMS, TaskPlanImportConfirm
 
 
 def test_import_routes_require_task_creation_permission() -> None:
@@ -63,6 +63,44 @@ def test_docx_preview_and_invalid_or_oversized_files() -> None:
         preview_plan_document("plan.txt", b"x" * (10 * 1024 * 1024 + 1))
 
 
+def test_docx_weekly_table_extracts_all_bullets_without_metadata() -> None:
+    def cell(*lines: str) -> str:
+        return "<w:tc>" + "".join(
+            f"<w:p><w:r><w:t>{line.replace(chr(10), '</w:t><w:br/><w:t>')}</w:t>"
+            "</w:r></w:p>" for line in lines
+        ) + "</w:tc>"
+
+    header = "<w:tr>" + "".join(cell(value) for value in (
+        "№", "Ҳафта / муддат", "Раҳбар", "Мутахассис", "Ҳамижрочилар", "Натижа/KPI",
+    )) + "</w:tr>"
+    weeks = []
+    for week in range(15):
+        first = [f"• Task {week}-{item} for manager" for item in range(5)]
+        second = [f"• Task {week}-{item} for specialist" for item in range(5)]
+        if week == 0:
+            first[0] = "•Task 0-0 for manager"  # Some Word files omit space after bullet.
+            first[1] = "• Multi-line\nsecond part of task"
+        weeks.append("<w:tr>" + "".join((
+            cell(str(week + 1)), cell(f"Week {week + 1}"), cell(*first), cell(*second),
+            cell("Co-executor name"), cell("KPI report text"),
+        )) + "</w:tr>")
+    document = ("<w:document xmlns:w=\"http://schemas.openxmlformats.org/"
+                "wordprocessingml/2006/main\"><w:body><w:p><w:r>"
+                "<w:t>Weekly plan heading</w:t></w:r></w:p><w:tbl>"
+                + header + "".join(weeks) + "</w:tbl></w:body></w:document>")
+    buffer = BytesIO()
+    with ZipFile(buffer, "w") as archive:
+        archive.writestr("word/document.xml", document)
+
+    preview = preview_plan_document("weekly.docx", buffer.getvalue())
+    assert len(preview.rows) == 150
+    assert preview.rows[0].title == "Task 0-0 for manager"
+    assert preview.rows[1].title == "Multi-line second part of task"
+    assert preview.rows[0].source == "DOCX, таблица 1, строка 2, столбец 3"
+    assert preview.rows[-1].source == "DOCX, таблица 1, строка 16, столбец 4"
+    assert not any("KPI" in row.title or "Co-executor" in row.title for row in preview.rows)
+
+
 def test_pdf_text_preview_and_candidate_limit() -> None:
     stream = BytesIO()
     canvas = Canvas(stream)
@@ -70,9 +108,9 @@ def test_pdf_text_preview_and_candidate_limit() -> None:
     canvas.save()
     preview = preview_plan_document("plan.pdf", stream.getvalue())
     assert preview.rows[0].source == "PDF, стр. 1, строка 1"
-    with pytest.raises(ValueError, match="100"):
+    with pytest.raises(ValueError, match=str(MAX_PLAN_IMPORT_ITEMS)):
         preview_plan_document("plan.txt", "\n".join(
-            f"Task number {index}: conduct forum" for index in range(101)
+            f"Task number {index}: conduct forum" for index in range(MAX_PLAN_IMPORT_ITEMS + 1)
         ).encode())
 
 
@@ -87,3 +125,8 @@ def test_confirm_payload_requires_link_target_and_nonblank_title() -> None:
         TaskPlanImportConfirm.model_validate({**valid, "items": [{
             "title": "  ", "source": "TXT, строка 1", "mode": "create",
         }]})
+    items = [{"title": f"Task {index}", "source": "DOCX, таблица 1",
+              "mode": "create"} for index in range(150)]
+    assert len(TaskPlanImportConfirm.model_validate({**valid, "items": items}).items) == 150
+    with pytest.raises(ValueError):
+        TaskPlanImportConfirm.model_validate({**valid, "items": items * 2})

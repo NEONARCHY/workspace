@@ -161,3 +161,43 @@ async def test_import_confirm_is_atomic_idempotent_and_checks_links() -> None:
                 await transaction.rollback()
     finally:
         await engine.dispose()
+
+
+@pytest.mark.anyio
+@pytest.mark.postgres
+async def test_import_confirm_accepts_large_weekly_plan_without_duplicates() -> None:
+    database_url = os.environ.get("YUKSALISH_TEST_DATABASE_URL")
+    if not database_url:
+        pytest.skip("YUKSALISH_TEST_DATABASE_URL is not configured")
+    engine = create_async_engine(database_url)
+    manager_id = uuid4()
+    try:
+        async with engine.connect() as connection:
+            transaction = await connection.begin()
+            try:
+                await connection.execute(insert(users).values(
+                    id=manager_id, username=f"weekly-plan-{manager_id.hex[:12]}",
+                    full_name="Weekly Plan", role="manager", status="active",
+                    created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
+                ))
+                payload = TaskPlanImportConfirm.model_validate({
+                    "operationId": str(uuid4()), "plan": {"title": "Weekly plan"},
+                    "items": [{"title": f"Weekly task {index}",
+                               "source": f"DOCX, таблица 1, строка {index + 2}",
+                               "mode": "create", "assigneeId": str(manager_id)}
+                              for index in range(150)],
+                })
+                manager = actor(manager_id, "manager")
+                created = await confirm_import(connection, manager, payload)
+                assert len(created.task_ids) == 150
+                assert len(set(created.task_ids)) == 150
+                assert (await confirm_import(connection, manager, payload)).task_ids == (
+                    created.task_ids
+                )
+                assert len((await connection.execute(select(tasks.c.id).where(
+                    tasks.c.id.in_(UUID(task_id) for task_id in created.task_ids),
+                ))).all()) == 150
+            finally:
+                await transaction.rollback()
+    finally:
+        await engine.dispose()

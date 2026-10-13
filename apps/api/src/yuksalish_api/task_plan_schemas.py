@@ -9,6 +9,7 @@ from pydantic import Field, model_validator
 from .workspace_schemas import ApiModel
 
 PlanKind = Literal["work", "regional", "other"]
+MAX_PLAN_IMPORT_ITEMS = 250
 
 
 class TaskPlanWrite(ApiModel):
@@ -69,4 +70,4 @@ class TaskPlanImportItem(ApiModel):
 class TaskPlanImportConfirm(ApiModel):
     operation_id: UUID
     plan: TaskPlanWrite
-    items: list[TaskPlanImportItem] = Field(min_length=1, max_length=100)
+    items: list[TaskPlanImportItem] = Field(min_length=1, max_length=MAX_PLAN_IMPORT_ITEMS)
