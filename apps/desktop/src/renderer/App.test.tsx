@@ -946,6 +946,9 @@ function mockServer(
     if (url.endsWith("/tasks/project-options")) {
       return response([{ id: "hub-routes", code: "MR", title: "Маршруты" }]);
     }
+    if (url.endsWith("/task-plans") && (!options?.method || options.method === "GET")) {
+      return response([]);
+    }
     if (url.endsWith("/project-hub/payment-targets") || url.endsWith("/project-hub/calendar-targets")) {
       return response({ projects: [
         { id: "hub-project-1", code: "WS-26", title: "Workspace" },

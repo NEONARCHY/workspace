@@ -109,6 +109,8 @@ import type {
   TaskReturnReason,
   TaskStatus,
   TaskProjectOption,
+  TaskPlan,
+  TaskPlanWrite,
   TripAction,
   TripStage,
   TripRequest,
@@ -1612,6 +1614,25 @@ export function createWorkspaceTask(
 
 export function loadTaskProjectOptions(token: string): Promise<readonly TaskProjectOption[]> {
   return apiRequest<readonly TaskProjectOption[]>("/tasks/project-options", {}, token);
+}
+
+export function loadTaskPlans(token: string): Promise<readonly TaskPlan[]> {
+  return apiRequest<readonly TaskPlan[]>("/task-plans", {}, token);
+}
+
+export function createTaskPlan(token: string, payload: TaskPlanWrite): Promise<TaskPlan> {
+  return apiRequest<TaskPlan>("/task-plans", {
+    method: "POST", body: JSON.stringify(payload),
+  }, token);
+}
+
+export function setTaskPlanLink(
+  token: string, planId: string, taskId: string, linked: boolean,
+): Promise<void> {
+  return apiRequest<void>(
+    `/task-plans/${encodeURIComponent(planId)}/tasks/${encodeURIComponent(taskId)}`,
+    { method: linked ? "PUT" : "DELETE" }, token,
+  );
 }
 
 export function updateWorkspaceTask(

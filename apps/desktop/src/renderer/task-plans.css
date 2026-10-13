@@ -1,0 +1,25 @@
+.task-plans-workspace { padding: 20px 26px 32px; overflow: auto; }
+.task-plans-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-bottom: 22px; }
+.task-plans-heading h2 { margin: 0 0 5px; color: var(--ws-text); font-size: 22px; }
+.task-plans-heading p { margin: 0; color: var(--ws-muted); }
+.task-plans-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.task-plan-form { display: grid; grid-template-columns: minmax(200px, 2fr) repeat(3, minmax(130px, 1fr)); gap: 14px; padding: 18px; margin-bottom: 20px; border: 1px solid var(--ws-line); border-radius: 18px; background: var(--ws-surface); }
+.task-plan-form label { display: grid; gap: 7px; color: var(--ws-text); font-weight: 600; }
+.task-plan-form input[type="date"] { min-height: 34px; border: 1px solid var(--ws-line); border-radius: 8px; background: var(--ws-surface); color: var(--ws-text); padding: 0 8px; font: inherit; }
+.task-plan-form > .task-plans-actions, .task-plan-form > .task-plan-error { grid-column: 1 / -1; }
+.task-plan-error { color: #a4262c; }
+.task-plan-empty { padding: 30px; border: 1px dashed var(--ws-line); border-radius: 16px; color: var(--ws-muted); }
+.task-plan-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.task-plan-card { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 18px; border: 1px solid var(--ws-line); border-radius: 17px; background: var(--ws-surface); }
+.task-plan-card h3, .task-plan-card p { margin: 0; }
+.task-plan-card h3 { color: var(--ws-text); font-size: 17px; }
+.task-plan-card p, .task-plan-card > span:not(.task-plan-kind) { color: var(--ws-muted); font-size: 13px; }
+.task-plan-card ul { margin: 0; padding-left: 19px; color: var(--ws-muted); }
+.task-plan-card .task-plan-kind { align-self: flex-start; color: var(--ws-link); font-size: 12px; font-weight: 700; }
+.task-plan-card button { align-self: flex-start; margin-top: auto; }
+.task-plan-links { display: grid; gap: 8px; }
+.task-plan-links ul { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.task-plan-links li { display: flex; gap: 6px; align-items: center; padding: 5px 8px; border: 1px solid var(--ws-line); border-radius: 9px; }
+.task-plan-links .inline-task-form { margin: 0; }
+@media (max-width: 900px) { .task-plan-form { grid-template-columns: 1fr 1fr; } .task-plans-heading { flex-direction: column; } }
+@media (max-width: 600px) { .task-plan-form { grid-template-columns: 1fr; } .task-plans-workspace { padding: 16px; } }

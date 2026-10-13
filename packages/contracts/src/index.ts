@@ -1583,6 +1583,25 @@ export interface TaskProjectOption {
   readonly title: string;
 }
 
+export interface TaskPlan {
+  readonly id: string;
+  readonly title: string;
+  readonly kind: "work" | "regional" | "other";
+  readonly periodStart: string | null;
+  readonly periodEnd: string | null;
+  readonly createdByUserId: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly taskIds: readonly string[];
+}
+
+export interface TaskPlanWrite {
+  readonly title: string;
+  readonly kind: TaskPlan["kind"];
+  readonly periodStart?: string | null;
+  readonly periodEnd?: string | null;
+}
+
 export type EfficiencyHistoryCompleteness = "complete" | "partial" | "unavailable";
 
 export interface EfficiencyHistoryPoint {
