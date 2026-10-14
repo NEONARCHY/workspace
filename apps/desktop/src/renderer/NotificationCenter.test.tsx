@@ -127,7 +127,7 @@ it("saves volume explicitly and reports failure without claiming success", async
 it("previews the selected sound volume from an explicit action", async () => {
   const preview = vi.spyOn(workspaceSounds, "preview").mockResolvedValue();
   render(center([]));
-  fireEvent.click(screen.getByRole("button", { name: "Проверить звук" }));
+  fireEvent.click(screen.getByRole("button", { name: "Прослушать звук" }));
   await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Звук воспроизведён"));
   expect(preview).toHaveBeenCalledWith(100);
   preview.mockRestore();

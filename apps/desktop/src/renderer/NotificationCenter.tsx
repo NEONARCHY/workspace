@@ -368,7 +368,7 @@ export function NotificationCenter({
                 setSoundStatus({ message: "Громкость сохранена", error: false });
               }).catch((failure: unknown) => setSoundStatus({ message: failure instanceof Error ? failure.message : "Не удалось сохранить громкость", error: true }))
                 .finally(() => setSavingPreferences(false));
-            }}>{savingPreferences ? "Сохраняем…" : "Сохранить"}</Button><Button size="small" aria-label="Проверить звук" onClick={() => {
+            }}>{savingPreferences ? "Сохраняем…" : "Сохранить"}</Button><Button size="small" aria-label="Прослушать звук" onClick={() => {
               void workspaceSounds.preview(volume).then(() => setSoundStatus({ message: "Звук воспроизведён", error: false }))
                 .catch((failure: unknown) => setSoundStatus({ message: failure instanceof Error ? failure.message : "Не удалось воспроизвести звук", error: true }));
             }}>Прослушать</Button></div>
