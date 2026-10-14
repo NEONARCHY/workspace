@@ -291,7 +291,8 @@ async def issue_order(
         )
         .returning(trip_order_counters.c.last_sequence)
     )
-    assert sequence is not None
+    if sequence is None:
+        raise Error(500, "Сбой регистрации приказа")
     number = f"{sequence:03d}-WS"
     content = await run_in_threadpool(
         order_pdf,

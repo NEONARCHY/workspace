@@ -3,7 +3,7 @@
 import asyncio
 from datetime import date
 from io import BytesIO
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
@@ -119,3 +119,34 @@ def test_non_chair_cannot_issue_order_before_number_is_allocated(
     with pytest.raises(WorkspaceRepositoryError, match="только назначенный председатель"):
         asyncio.run(trip_document_service.issue_order(connection, user, AsyncMock(), uuid4()))
     assert connection.execute.await_count == 0
+
+
+def test_order_is_not_generated_without_registered_number(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    chair_id = uuid4()
+    user = AuthenticatedUser(chair_id, "chair", "Chair", None, None, "employee")
+    monkeypatch.setattr(trip_document_service, "_row", AsyncMock(return_value={
+        "workflow_version": 2,
+        "stage": "manager_approval",
+        "signed_brief_key": "brief.pdf",
+        "signed_brief_sha256": "brief-hash",
+        "requester_user_id": uuid4(),
+    }))
+    monkeypatch.setattr(trip_document_service, "_appointed_chair", AsyncMock(
+        return_value=chair_id,
+    ))
+    monkeypatch.setattr(trip_document_service, "_verified", AsyncMock(return_value=b"image"))
+    monkeypatch.setattr(trip_document_service, "_people", AsyncMock(return_value=[]))
+    connection = AsyncMock()
+    connection.execute.return_value = MagicMock()
+    connection.execute.return_value.mappings.return_value.first.return_value = {
+        "storage_key": "signature.png", "sha256": "signature-hash",
+    }
+    connection.scalar.side_effect = ["Requester", "Chair", None]
+    storage = AsyncMock()
+
+    with pytest.raises(WorkspaceRepositoryError, match="Сбой регистрации приказа"):
+        asyncio.run(trip_document_service.issue_order(connection, user, storage, uuid4()))
+
+    storage.put.assert_not_awaited()
