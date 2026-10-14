@@ -351,6 +351,7 @@ messages = sa.Table(
     sa.Column("mention_user_ids", postgresql.JSONB()),
     sa.Column("body", sa.Text()),
     sa.Column("forwarded", postgresql.JSONB()),
+    sa.Column("zoom_meeting_id", uuid_type),
     sa.Column("created_at", sa.DateTime(timezone=True)),
     sa.Column("edited_at", sa.DateTime(timezone=True)),
     sa.Column("deleted_at", sa.DateTime(timezone=True)),
@@ -1184,6 +1185,7 @@ zoom_meetings = sa.Table(
     sa.Column("status", sa.String(24)),
     sa.Column("source", sa.String(16)),
     sa.Column("reminders_enabled", sa.Boolean()),
+    sa.Column("messenger_invitations_enabled", sa.Boolean()),
     sa.Column("technical_error", sa.String(120)),
     sa.Column("created_at", sa.DateTime(timezone=True)),
     sa.Column("updated_at", sa.DateTime(timezone=True)),
@@ -1194,6 +1196,8 @@ zoom_meeting_participants = sa.Table(
     metadata,
     sa.Column("meeting_id", uuid_type, primary_key=True),
     sa.Column("user_id", uuid_type, primary_key=True),
+    sa.Column("response", sa.String(16)),
+    sa.Column("invitation_message_id", uuid_type),
 )
 
 ai_referent_letters = sa.Table(

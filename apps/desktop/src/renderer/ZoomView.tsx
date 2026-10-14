@@ -529,6 +529,7 @@ export function ZoomView({
               </label>
               <fieldset className="zoom-participants">
                 <legend>Кого пригласить · выбрано {draft.participantIds.length}</legend>
+                <p className="zoom-invite-hint">После сохранения каждому выбранному сотруднику придёт личное приглашение от организатора в мессенджере.</p>
                 {departments ? <EmployeeScopeSwitch value={participantScope} onChange={setParticipantScope} label="Группа участников Zoom" /> : null}
                 <div className="zoom-participant-list">
                   {people

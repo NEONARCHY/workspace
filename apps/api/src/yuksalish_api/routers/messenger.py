@@ -3,6 +3,7 @@ from uuid import UUID
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from yuksalish_api import messenger_service as service
@@ -12,6 +13,7 @@ from yuksalish_api.errors import WorkspaceRepositoryError
 from yuksalish_api.events import WorkspaceEventBus
 from yuksalish_api.forward_service import forward_message
 from yuksalish_api.link_preview import UnsafePreviewUrl, load_link_preview
+from yuksalish_api.tables import messages
 from yuksalish_api.workspace_schemas import (
     AddChatMembersRequest,
     ChatMessageResponse,
@@ -27,7 +29,9 @@ from yuksalish_api.workspace_schemas import (
     TransferChatOwnerRequest,
     UpdateChatAvatarRequest,
     UpdateChatRequest,
+    ZoomInvitationReplyRequest,
 )
+from yuksalish_api.zoom_invitations import reply_to_zoom_invitation
 
 router = APIRouter(tags=["messenger"])
 User = Annotated[AuthenticatedUser, Depends(require_user)]
@@ -61,6 +65,29 @@ async def changed(connection: AsyncConnection, request: Request) -> None:
     await cast(WorkspaceEventBus, request.app.state.event_bus).publish(
         {"type": "messenger.changed"}
     )
+
+
+@router.post("/messages/{message_id}/zoom-response", response_model=ChatMessageResponse)
+async def zoom_response(
+    message_id: UUID, payload: ZoomInvitationReplyRequest, user: User,
+    connection: Connection, request: Request,
+) -> ChatMessageResponse:
+    try:
+        row = (await connection.execute(select(messages).where(
+            messages.c.id == message_id, messages.c.deleted_at.is_(None),
+        ))).mappings().first()
+        if row is None or not row["zoom_meeting_id"]:
+            raise WorkspaceRepositoryError(404, "Приглашение недоступно")
+        chat, member = await service.chat_access(connection, user, row["chat_id"])
+        if not service.message_visible_to_member(row, member):
+            raise WorkspaceRepositoryError(404, "Приглашение недоступно")
+        await reply_to_zoom_invitation(connection, user, row["zoom_meeting_id"], payload.response)
+        result = await service.message_with_details(connection, user, row, chat, member)
+    except WorkspaceRepositoryError as error:
+        raise HTTPException(error.status_code, error.detail) from error
+    await changed(connection, request)
+    await request.app.state.event_bus.publish({"type": "zoom.updated"})
+    return result
 
 
 @router.post("/chats/{chat_id}/forwards", response_model=ChatMessageResponse, status_code=201)

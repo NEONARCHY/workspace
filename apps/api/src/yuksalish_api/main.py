@@ -58,6 +58,7 @@ from .seed import seed_demo_data
 from .settings import Settings, get_settings
 from .workday_service import close_overdue_sessions
 from .zoom_client import ZoomClient
+from .zoom_invitations import deliver_zoom_invitations
 from .zoom_service import materialize_zoom_reminders, recover_zoom_meetings
 
 
@@ -95,6 +96,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         created += await materialize_sick_document_notifications(connection)
                         created += await materialize_previous_month_register(connection)
                         created += await materialize_zoom_reminders(connection, runtime_settings)
+                        zoom_invitations = await deliver_zoom_invitations(connection)
+                        created += zoom_invitations
                         created += await materialize_project_reminders(connection)
                         created += await materialize_hisobot_reminders(connection)
                         created += await materialize_birthdays(connection)
@@ -108,6 +111,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         await lifespan_app.state.event_bus.publish(
                             {"type": "notifications.created", "count": created}
                         )
+                    if zoom_invitations:
+                        await lifespan_app.state.event_bus.publish({"type": "messenger.changed"})
                 except Exception:
                     logger.exception("notification_scheduler_failed")
                 await asyncio.sleep(20)

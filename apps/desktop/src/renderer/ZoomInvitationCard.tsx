@@ -1,0 +1,92 @@
+import { useEffect, useId, useState } from "react";
+import type { WorkspacePerson, ZoomInvitation } from "@yuksalish/contracts";
+import { Check, ChevronDown, Clock3, ExternalLink, Video, X } from "lucide-react";
+import { ProfileAvatar } from "./ProfileAvatar";
+import { EmployeeProfileLink } from "./EmployeeProfileLink";
+import { respondToZoomInvitation } from "./workspace-api";
+import { useContextMotion } from "./useContextMotion";
+import "./zoom-invitation.css";
+
+export function ZoomInvitationCard({ messageId, invitation, people, token }: {
+  readonly messageId: string; readonly invitation: ZoomInvitation;
+  readonly people: readonly WorkspacePerson[]; readonly token: string;
+}) {
+  const panelId = useId();
+  const [expanded, setExpanded] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [now, setNow] = useState(() => Date.now());
+  const [saved, setSaved] = useState<{ source: string; value: ZoomInvitation }>();
+  const source = JSON.stringify(invitation);
+  const card = saved?.source === source ? saved.value : invitation;
+  const panelRef = useContextMotion(String(expanded));
+  const start = new Date(card.startsAt), end = new Date(card.endsAt);
+  const format = (options: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat("ru-RU", { ...options, timeZone: card.timezone });
+  useEffect(() => {
+    const remaining = new Date(card.endsAt).getTime() - Date.now();
+    if (remaining <= 0 && now >= new Date(card.endsAt).getTime()) return;
+    const timer = window.setTimeout(() => setNow(Date.now()), Math.max(0, Math.min(remaining + 1, 2_147_000_000)));
+    return () => window.clearTimeout(timer);
+  }, [card.endsAt, now]);
+  const finished = end.getTime() <= now;
+  const scheduled = card.available && card.status === "scheduled" && !finished;
+  const joinUrl = card.joinUrl && /^https:\/\/(?:[\w-]+\.)?zoom\.(?:us|com)\//i.test(card.joinUrl) ? card.joinUrl : null;
+  const canReply = scheduled && card.canRespond;
+  const members = [...(card.organizerId ? [{ userId: card.organizerId, response: "organizer" }] : []), ...card.participants.filter(p => p.userId !== card.organizerId)];
+  async function reply(response: "accepted" | "declined") {
+    if (busy) return;
+    setBusy(true); setError("");
+    try {
+      const result = await respondToZoomInvitation(token, messageId, response);
+      if (!result.zoomInvitation) throw new Error("Сервер не подтвердил ответ. Обновите чат.");
+      setSaved({ source, value: result.zoomInvitation });
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Не удалось ответить. Попробуйте ещё раз.");
+    } finally { setBusy(false); }
+  }
+  return <section className="zoom-invitation" aria-label={`Приглашение на Zoom: ${card.topic}`}>
+    <div className="zoom-invitation-banner"><span><Video size={18} aria-hidden="true" /> Zoom-конференция</span>
+      <Video className="zoom-invitation-art" size={88} strokeWidth={.9} aria-hidden="true" /></div>
+    <div className="zoom-invitation-content">
+      <div className="zoom-invitation-date" aria-hidden="true"><span>{format({ month: "short" }).format(start).replace(".", "")}</span><strong>{format({ day: "numeric" }).format(start)}</strong></div>
+      <h3>{card.topic}</h3>
+      <p className="zoom-invitation-meta"><Clock3 size={16} aria-hidden="true" /><span>
+        <time dateTime={card.startsAt}>{format({ weekday: "short", day: "numeric", month: "long" }).format(start)} · {format({ hour: "2-digit", minute: "2-digit" }).format(start)}</time>
+        {" — "}<time dateTime={card.endsAt}>{format({ hour: "2-digit", minute: "2-digit" }).format(end)}</time>
+        <small>{card.timezone.replaceAll("_", " ")}</small></span></p>
+      {!card.available ? <p className="zoom-invitation-status">Вы больше не приглашены на эту встречу.</p>
+        : card.status !== "scheduled" ? <p className="zoom-invitation-status">Конференция отменена или недоступна.</p>
+        : finished ? <p className="zoom-invitation-status">Конференция завершилась.</p> : null}
+      {card.available && <>
+        <button type="button" className="zoom-invitation-disclosure" aria-expanded={expanded} aria-controls={panelId} onClick={() => setExpanded(!expanded)}>
+          <span>Участники</span><span>{members.length}</span><ChevronDown size={16} aria-hidden="true" /></button>
+        <div id={panelId} ref={panelRef} hidden={!expanded} className="zoom-invitation-people" tabIndex={0} role="region" aria-label="Список участников">
+          {members.map(member => {
+            const person = people.find(p => p.id === member.userId);
+            return <div key={member.userId} className="zoom-invitation-person">
+              <ProfileAvatar person={person ?? { id: member.userId, name: "Сотрудник" }} token={token} size={28} aria-hidden />
+              <span>{person ? <EmployeeProfileLink userId={person.id} personName={person.name}>{person.name}</EmployeeProfileLink> : "Сотрудник"}
+                <small>{member.response === "organizer" ? "Организатор" : member.response === "accepted" ? "Участвует" : member.response === "declined" ? "Отказался" : "Приглашён"}</small></span></div>;
+          })}
+        </div>
+        {!expanded && <div className="zoom-invitation-avatar-stack" aria-hidden="true">{members.slice(0, 5).map(member => {
+          const person = people.find(p => p.id === member.userId);
+          return <ProfileAvatar key={member.userId} person={person ?? { id: member.userId, name: "Сотрудник" }} token={token} size={24} aria-hidden />;
+        })}<span>{members.length > 5 ? `+${members.length - 5}` : "Ваша команда"}</span></div>}
+      </>}
+      {scheduled && <>
+        <div className="zoom-invitation-actions">
+          {canReply && card.response !== "accepted" ? <button type="button" className="zoom-invitation-primary" disabled={busy} onClick={() => void reply("accepted")}>
+            <Check size={16} aria-hidden="true" />{busy ? "Сохраняем…" : "Принять"}</button>
+            : joinUrl ? <a className="zoom-invitation-primary" href={joinUrl} target="_blank" rel="noopener noreferrer"><Video size={16} aria-hidden="true" />Войти в Zoom</a> : null}
+          {canReply && <button type="button" className="zoom-invitation-decline" data-declined={card.response === "declined"} disabled={busy || card.response === "declined"} onClick={() => void reply("declined")}>
+            <X size={16} aria-hidden="true" />{card.response === "declined" ? "Отказались" : "Отказаться"}</button>}
+        </div>
+        {card.response === "accepted" && <p className="zoom-invitation-response" role="status"><Check size={14} aria-hidden="true" />Вы участвуете</p>}
+        {joinUrl && <a className="zoom-invitation-link" href={joinUrl} target="_blank" rel="noopener noreferrer">Ссылка на конференцию <ExternalLink size={14} aria-hidden="true" /></a>}
+        {card.passcode && <p className="zoom-invitation-passcode">Код доступа: <strong>{card.passcode}</strong></p>}
+      </>}
+      {error && <p className="zoom-invitation-error" role="alert">{error}</p>}
+    </div>
+  </section>;
+}

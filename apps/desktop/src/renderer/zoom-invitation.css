@@ -1,0 +1,69 @@
+.zoom-invitation {
+  width: 320px; max-width: 100%; margin: 8px 0; overflow: hidden; border-radius: 20px;
+  border: 1px solid var(--ws-theme-line, #d8e4e8); background: var(--ws-theme-surface, #fff);
+  color: var(--ws-theme-ink, #293a55); box-sizing: border-box; container-type: inline-size;
+}
+.message-content:has(> .message-body > .zoom-invitation) { width: min(380px, calc(100% - 44px)); max-width: min(380px, calc(100% - 44px)); }
+.message.own .message-content:has(> .message-body > .zoom-invitation) { width: min(380px, 100%); max-width: min(380px, 100%); }
+.message-content .message-body:has(> .zoom-invitation) { width: 100%; padding-inline: 10px; }
+.message-body .zoom-invitation p { white-space: normal; }
+.zoom-invitation .zoom-invitation-meta { font-size: 12px; line-height: 1.5; color: var(--ws-theme-muted, #617489); }
+.message-body .zoom-invitation time { display: inline; font-size: inherit; color: inherit; text-align: left; }
+.zoom-invitation .zoom-invitation-passcode { font-size: 11px; color: var(--ws-theme-muted, #617489); }
+.zoom-invitation .zoom-invitation-passcode strong { display: inline; margin: 0; font-size: inherit; color: inherit; }
+.zoom-invitation-banner { position: relative; height: 84px; padding: 16px 20px; box-sizing: border-box; overflow: hidden; background: linear-gradient(110deg, var(--ws-theme-wash-teal, #dceff0), var(--ws-theme-wash-blue, #e9eff8)); color: var(--ws-theme-ink-teal, #006779); }
+.zoom-invitation-banner > span { display: inline-flex; gap: 7px; align-items: center; font-size: 12px; font-weight: 600; }
+.zoom-invitation-art { position: absolute; right: 18px; bottom: -17px; opacity: .12; transform: rotate(-14deg); pointer-events: none; }
+.zoom-invitation-content { padding: 0 20px 18px; }
+.zoom-invitation-date { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 54px; height: 56px; margin-top: -22px; border: 1px solid var(--ws-theme-line, #d8e4e8); border-radius: 12px; background: var(--ws-theme-surface, #fff); box-shadow: var(--ws-shadow-card); }
+.zoom-invitation-date span { color: var(--ws-link); font-size: 11px; text-transform: uppercase; font-weight: 600; }
+.zoom-invitation .zoom-invitation-date strong { margin: 0; color: var(--ws-theme-ink, #293a55); font-size: 27px; font-weight: 600; line-height: 30px; font-variant-numeric: tabular-nums; }
+.zoom-invitation h3 { margin: 12px 0 10px; font-size: 20px; line-height: 1.3; text-wrap: balance; overflow-wrap: anywhere; }
+.zoom-invitation-meta { display: flex; align-items: flex-start; gap: 8px; margin: 0; color: var(--ws-theme-muted, #617489); font-size: 12px; line-height: 1.5; }
+.zoom-invitation-meta > svg { flex: none; margin-top: 2px; }
+.zoom-invitation-meta small { display: block; margin-top: 2px; font-size: 11px; }
+.zoom-invitation-disclosure { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 40px; margin-top: 14px; padding: 8px 0; border: 0; border-top: 1px solid var(--ws-theme-line, #d8e4e8); background: transparent; color: inherit; font: inherit; font-size: 13px; cursor: pointer; }
+.zoom-invitation-disclosure > span:first-child { margin-right: auto; font-weight: 600; }
+.zoom-invitation-disclosure > span:nth-child(2) { color: var(--ws-theme-muted, #617489); font-variant-numeric: tabular-nums; }
+.zoom-invitation-disclosure > svg { transition: transform var(--ws-motion-normal, 220ms) var(--ws-ease, ease-out); }
+.zoom-invitation-disclosure[aria-expanded="true"] > svg { transform: rotate(180deg); }
+.zoom-invitation-people { max-height: 192px; overflow: auto; scrollbar-gutter: stable; }
+.zoom-invitation-person { display: flex; align-items: center; gap: 9px; padding: 6px 0; font-size: 12px; }
+.zoom-invitation-person > span { min-width: 0; overflow-wrap: anywhere; }
+.zoom-invitation-person small { display: block; margin-top: 2px; color: var(--ws-theme-muted, #617489); font-size: 11px; }
+.zoom-invitation-avatar-stack { display: flex; align-items: center; padding: 4px 0; }
+.zoom-invitation-avatar-stack > .fui-Avatar + .fui-Avatar { margin-left: -5px; }
+.zoom-invitation-avatar-stack > .fui-Avatar { outline: 2px solid var(--ws-theme-surface, #fff); }
+.zoom-invitation-avatar-stack > span:last-child:not(.fui-Avatar) { margin-left: 10px; font-size: 11px; color: var(--ws-theme-muted, #617489); }
+.zoom-invitation-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.zoom-invitation-actions > :is(button, a) { display: inline-flex; justify-content: center; align-items: center; gap: 6px; min-height: 38px; min-width: max-content; white-space: nowrap; padding: 8px 12px; border: 0; border-radius: 12px; font: inherit; font-size: 12px; font-weight: 600; text-decoration: none; cursor: pointer; box-sizing: border-box; transition: background-color var(--ws-motion-fast, 160ms) ease; }
+.zoom-invitation-actions > .zoom-invitation-primary { flex: 1; background: var(--ws-button-surface, #293a55); color: var(--ws-theme-ink, white); }
+.zoom-invitation-actions > .zoom-invitation-decline { background: var(--ws-theme-surface-soft, #eef3f5); color: var(--ws-theme-muted, #617489); }
+.zoom-invitation-actions > .zoom-invitation-decline[data-declined="true"] { background: var(--ws-theme-wash-danger, #faecee); color: var(--ws-theme-ink-danger, #9b3448); cursor: default; }
+.zoom-invitation-actions > .zoom-invitation-decline:disabled { cursor: default; }
+.zoom-invitation-actions > :disabled:not(.zoom-invitation-decline) { cursor: wait; opacity: .65; }
+.zoom-invitation-link { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; margin-top: 8px; color: var(--ws-link); font-size: 12px; text-decoration: none; }
+.zoom-invitation :is(button, a):focus-visible { outline: 2px solid var(--ws-focus-line, #006779); outline-offset: 2px; }
+.zoom-invitation-response, .zoom-invitation-status, .zoom-invitation-error, .zoom-invitation-passcode { margin: 8px 0 0; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.zoom-invitation .zoom-invitation-response { display: flex; align-items: center; gap: 5px; color: var(--ws-theme-ink-success, #2b6b4f); }
+.zoom-invitation .zoom-invitation-error { color: var(--ws-theme-ink-danger, #9b3448); }
+.zoom-invitation-passcode { color: var(--ws-theme-muted, #617489); font-size: 11px; }
+@container (max-width: 260px) {
+  .zoom-invitation-actions { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .zoom-invitation-actions > :is(button, a) { width: 100%; }
+}
+@media (hover: hover) and (pointer: fine) {
+  .zoom-invitation-actions > .zoom-invitation-primary:hover { background: var(--ws-button-hover, #354d6c); }
+  .zoom-invitation-actions > .zoom-invitation-decline:not(:disabled):hover { background: var(--ws-theme-wash-danger, #faecee); color: var(--ws-theme-ink-danger, #9b3448); }
+  .zoom-invitation-link:hover { text-decoration: underline; }
+}
+@media (pointer: coarse), (max-width: 600px) {
+  .zoom-invitation-actions > :is(button, a), .zoom-invitation-disclosure, .zoom-invitation-link { min-height: 44px; }
+  .zoom-invitation-content { padding-inline: 16px; }
+}
+@media (prefers-reduced-motion: reduce) { .zoom-invitation-disclosure > svg { transition: none; } }
+@media (forced-colors: active) {
+  .zoom-invitation, .zoom-invitation-date, .zoom-invitation-banner { background: Canvas; color: CanvasText; border-color: CanvasText; box-shadow: none; }
+  .zoom-invitation-art { display: none; }
+  .zoom-invitation-actions > :is(button, a) { background: ButtonFace; color: ButtonText; border: 1px solid ButtonText; }
+}

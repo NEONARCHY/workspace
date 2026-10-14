@@ -71,6 +71,7 @@ import { MessengerFileDropSurface, useMessengerFileNavigationGuard } from "./Mes
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { ForwardDialog, type ForwardContentAction } from "./ForwardDialog";
 import { ForwardedMessage } from "./ForwardedMessage";
+import { ZoomInvitationCard } from "./ZoomInvitationCard";
 import { MessageMetadata } from "./MessageMetadata";
 import { ConfirmActionDialog } from "./ConfirmActionDialog";
 import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
@@ -83,7 +84,7 @@ function messagesShareBubbleGroup(first?: ChatMessage, second?: ChatMessage): bo
   if (!first || !second || first.systemKind || second.systemKind || first.chatId !== second.chatId
     || first.authorId !== second.authorId || !first.createdAt || !second.createdAt
     || first.replyToMessageId || second.replyToMessageId || first.isPinned || second.isPinned
-    || first.forwarded || second.forwarded
+    || first.forwarded || second.forwarded || first.zoomInvitation || second.zoomInvitation
     || first.reactions?.length || first.deletedAt || second.deletedAt) return false;
   const firstAt = Date.parse(first.createdAt);
   const secondAt = Date.parse(second.createdAt);
@@ -805,7 +806,7 @@ function Conversation({
                   </EmployeeProfileLink>
                 )}
                 <div className="message-content">
-                  <div className={`message-body${message.forwarded || messageAttachments.length ? " has-rich-content" : ""}${messageAttachments.length ? " has-attachments" : ""}`}>
+                  <div className={`message-body${message.forwarded || message.zoomInvitation || messageAttachments.length ? " has-rich-content" : ""}${messageAttachments.length ? " has-attachments" : ""}`}>
                     {!own && (groupedWithPrevious
                       ? <span className="sr-only">Сообщение от {personName(message.authorId)}</span>
                       : <EmployeeProfileLink userId={message.authorId} personName={personName(message.authorId)}><strong>{personName(message.authorId)}</strong></EmployeeProfileLink>)}
@@ -815,7 +816,8 @@ function Conversation({
                         <span>{parent.body}</span>
                       </blockquote>
                     )}
-                    {message.forwarded ? <ForwardedMessage message={message} onOpenPost={onOpenFeedPost} animateText={arrivingIds.has(message.id)} motionDisabled={motionDisabled} />
+                    {message.zoomInvitation && !message.deletedAt ? <ZoomInvitationCard messageId={message.id} invitation={message.zoomInvitation} people={people} token={token} />
+                      : message.forwarded ? <ForwardedMessage message={message} onOpenPost={onOpenFeedPost} animateText={arrivingIds.has(message.id)} motionDisabled={motionDisabled} />
                       : voiceAttachments.length === 0 ? <p className="message-text"><MessageTextAnimate key={`${message.id}:${arrivingIds.has(message.id)}`} enabled={arrivingIds.has(message.id)} disabled={motionDisabled}>{message.body}</MessageTextAnimate></p> : null}
                     {!message.deletedAt && (
                       <>
@@ -829,7 +831,7 @@ function Conversation({
                         {voiceAttachments.map((attachment) => (
                           <VoiceMessagePlayer key={attachment.id} attachment={attachment} onLoad={onLoadAttachment} />
                         ))}
-                        {message.body && message.forwarded?.kind !== "feed" ? <MessageLinkPreviews body={message.body} token={token} /> : null}
+                        {message.body && !message.zoomInvitation && message.forwarded?.kind !== "feed" ? <MessageLinkPreviews body={message.body} token={token} /> : null}
                         <AttachmentChips
                           attachments={messageAttachments.filter((attachment) => attachment.mediaKind !== "voice")}
                           onDownload={onDownloadAttachment}
