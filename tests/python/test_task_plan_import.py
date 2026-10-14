@@ -82,12 +82,14 @@ def test_docx_weekly_table_extracts_all_bullets_without_metadata() -> None:
             first[0] = "•Task 0-0 for manager"  # Some Word files omit space after bullet.
             first[1] = "• Multi-line\nsecond part of task"
         weeks.append("<w:tr>" + "".join((
-            cell(str(week + 1)), cell(f"Week {week + 1}"), cell(*first), cell(*second),
+            cell(str(week + 1)),
+            cell("28 сентябрь \u2013 2 октябрь" if week == 0 else f"Week {week + 1}"),
+            cell(*first), cell(*second),
             cell("Б. Самугов; Матбуот хизмати"), cell("KPI report text"),
         )) + "</w:tr>")
     document = ("<w:document xmlns:w=\"http://schemas.openxmlformats.org/"
                 "wordprocessingml/2006/main\"><w:body><w:p><w:r>"
-                "<w:t>Weekly plan heading</w:t></w:r></w:p><w:tbl>"
+                "<w:t>Weekly plan heading 2026</w:t></w:r></w:p><w:tbl>"
                 + header + "".join(weeks) + "</w:tbl></w:body></w:document>")
     buffer = BytesIO()
     with ZipFile(buffer, "w") as archive:
@@ -100,7 +102,10 @@ def test_docx_weekly_table_extracts_all_bullets_without_metadata() -> None:
     assert preview.rows[0].source == "DOCX, таблица 1, строка 2, столбец 3"
     assert preview.rows[-1].source == "DOCX, таблица 1, строка 16, столбец 4"
     assert preview.rows[0].assignee_hint == "\u041d. Каримбердиева"
-    assert preview.rows[5].assignee_hint == "\u041d. Каримбердиева"
+    assert preview.rows[5].assignee_hint == "Ф. Шокирова"
+    assert preview.rows[0].due_date_hint is not None
+    assert preview.rows[0].due_date_hint.isoformat() == "2026-10-02"
+    assert preview.rows[10].due_date_hint is None
     assert preview.rows[5].coexecutors_hint == "Б. Самугов; Матбуот хизмати"
     assert preview.rows[0].group_key == preview.rows[5].group_key
     assert preview.rows[0].group_key != preview.rows[10].group_key
@@ -108,6 +113,44 @@ def test_docx_weekly_table_extracts_all_bullets_without_metadata() -> None:
         "\u041d. Каримбердиева"
     )
     assert not any("KPI" in row.title or "Самугов" in row.title for row in preview.rows)
+
+
+def test_docx_table_uses_each_rows_responsible_and_exact_deadline() -> None:
+    def cell(text: str) -> str:
+        return f"<w:tc><w:p><w:r><w:t>{text}</w:t></w:r></w:p></w:tc>"
+
+    headings = ("№", "Задача / мероприятие", "Срок", "Ответственный",
+                "Ҳамижрочилар / соисполнители", "Результат / KPI")
+    values = (
+        ("1", "• Подготовить отчёт", "02.10.2026", "\u041d. Каримбердиева",
+         "Б. Самугов", "Отчёт готов"),
+        ("2", "• Провести встречу", "03.10.2026", "Ф. Шокирова",
+         "Б. Самугов", "Встреча проведена"),
+        ("3", "• Согласовать бюджет", "32.10.2026", "Неизвестный сотрудник",
+         "", "Бюджет согласован"),
+    )
+    table = "".join("<w:tr>" + "".join(cell(text) for text in row) + "</w:tr>"
+                    for row in (headings, *values))
+    document = ("<w:document xmlns:w=\"http://schemas.openxmlformats.org/"
+                "wordprocessingml/2006/main\"><w:body><w:tbl>"
+                + table + "</w:tbl></w:body></w:document>")
+    buffer = BytesIO()
+    with ZipFile(buffer, "w") as archive:
+        archive.writestr("word/document.xml", document)
+
+    preview = preview_plan_document("plan.docx", buffer.getvalue())
+    assert [row.title for row in preview.rows] == [
+        "Подготовить отчёт", "Провести встречу", "Согласовать бюджет",
+    ]
+    assert [row.assignee_hint for row in preview.rows] == [
+        "\u041d. Каримбердиева", "Ф. Шокирова", "Неизвестный сотрудник",
+    ]
+    assert [row.due_date_hint.isoformat() if row.due_date_hint else None
+            for row in preview.rows] == ["2026-10-02", "2026-10-03", None]
+    assert preview.model_dump(mode="json", by_alias=True)["rows"][0]["dueDateHint"] == (
+        "2026-10-02"
+    )
+    assert not any("Отчёт готов" in row.title for row in preview.rows)
 
 
 def test_pdf_text_preview_and_candidate_limit() -> None:

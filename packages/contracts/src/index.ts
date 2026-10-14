@@ -1609,6 +1609,7 @@ export interface TaskPlanImportRow {
   readonly assigneeHint?: string | null;
   readonly coexecutorsHint?: string | null;
   readonly groupKey?: string | null;
+  readonly dueDateHint?: string | null;
 }
 
 export interface TaskPlanImportPreview {
