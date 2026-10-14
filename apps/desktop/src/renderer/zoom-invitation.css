@@ -38,7 +38,7 @@
 .zoom-invitation-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 .zoom-invitation-actions > :is(button, a) { display: inline-flex; justify-content: center; align-items: center; gap: 6px; min-height: 38px; min-width: max-content; white-space: nowrap; padding: 8px 12px; border: 0; border-radius: 12px; font: inherit; font-size: 12px; font-weight: 600; text-decoration: none; cursor: pointer; box-sizing: border-box; transition: background-color var(--ws-motion-fast, 160ms) ease; }
 .zoom-invitation-actions > .zoom-invitation-primary { flex: 1; background: var(--ws-button-surface, #293a55); color: var(--ws-theme-ink, white); }
-.zoom-invitation-actions > .zoom-invitation-decline { background: var(--ws-theme-surface-soft, #eef3f5); color: var(--ws-theme-muted, #617489); }
+.zoom-invitation-actions > .zoom-invitation-decline { background: var(--ws-theme-surface-soft, #eef3f5); color: var(--ws-theme-ink, #293a55); }
 .zoom-invitation-actions > .zoom-invitation-decline[data-declined="true"] { background: var(--ws-theme-wash-danger, #faecee); color: var(--ws-theme-ink-danger, #9b3448); cursor: default; }
 .zoom-invitation-actions > .zoom-invitation-decline:disabled { cursor: default; }
 .zoom-invitation-actions > :disabled:not(.zoom-invitation-decline) { cursor: wait; opacity: .65; }

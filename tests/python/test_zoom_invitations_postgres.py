@@ -3,7 +3,7 @@
 import asyncio
 import os
 from datetime import UTC, datetime, timedelta
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import httpx
 import pytest
@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from test_zoom_postgres import FakeZoom, zoom_settings
 from yuksalish_api.auth import load_authenticated_user
 from yuksalish_api.errors import WorkspaceRepositoryError
+from yuksalish_api.forward_service import forward_message
 from yuksalish_api.messenger_service import create_chat, send_chat_message
 from yuksalish_api.repository import find_active_user_by_username
 from yuksalish_api.seed import seed_demo_data
@@ -23,7 +24,11 @@ from yuksalish_api.tables import (
     zoom_meeting_participants,
     zoom_meetings,
 )
-from yuksalish_api.workspace_schemas import CreateChatRequest, SendMessageRequest
+from yuksalish_api.workspace_schemas import (
+    CreateChatRequest,
+    ForwardMessageRequest,
+    SendMessageRequest,
+)
 from yuksalish_api.zoom_client import ZoomClient
 from yuksalish_api.zoom_invitations import (
     deliver_zoom_invitations,
@@ -141,6 +146,11 @@ async def test_zoom_dms_delivery_rsvp_updates_and_privacy() -> None:
         async with engine.begin() as connection:
             withdrawn = (await invitation_detail_map(connection, peer, [row]))[row["id"]]
             assert not withdrawn.available and withdrawn.join_url is None
+            with pytest.raises(WorkspaceRepositoryError) as forwarding:
+                await forward_message(connection, peer, UUID(chat.id), ForwardMessageRequest(
+                    request_id=uuid4(), kind="message", source_id=row["id"],
+                ))
+            assert forwarding.value.status_code == 404
         await cancel_zoom_meeting(engine, owner, settings, client, UUID(meeting.id))
         async with engine.begin() as connection:
             cancelled = (await invitation_detail_map(connection, owner, [row]))[row["id"]]
