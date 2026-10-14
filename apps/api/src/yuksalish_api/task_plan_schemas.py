@@ -40,6 +40,9 @@ class TaskPlanImportRow(ApiModel):
     title: str = Field(min_length=1, max_length=240)
     source: str = Field(max_length=300)
     warning: str | None = None
+    assignee_hint: str | None = Field(default=None, max_length=240)
+    coexecutors_hint: str | None = Field(default=None, max_length=1000)
+    group_key: str | None = Field(default=None, max_length=120)
 
 
 class TaskPlanImportPreview(ApiModel):
@@ -52,6 +55,7 @@ class TaskPlanImportItem(ApiModel):
     source: str = Field(max_length=300)
     mode: Literal["create", "link"]
     assignee_id: UUID | None = None
+    co_assignee_ids: list[UUID] = Field(default_factory=list, max_length=100)
     due_at: datetime | None = None
     task_id: UUID | None = None
 
@@ -64,6 +68,12 @@ class TaskPlanImportItem(ApiModel):
             raise ValueError("Select a task to link")
         if self.mode == "create" and self.task_id is not None:
             raise ValueError("New task cannot reference an existing task")
+        if self.mode == "link" and self.co_assignee_ids:
+            raise ValueError("Linked task participants cannot be changed by import")
+        if len(self.co_assignee_ids) != len(set(self.co_assignee_ids)):
+            raise ValueError("Co-assignees must be unique")
+        if self.assignee_id in self.co_assignee_ids:
+            raise ValueError("The responsible person cannot also be a co-assignee")
         return self
 
 

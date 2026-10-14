@@ -39,7 +39,9 @@ it("keeps extracted rows local until confirmation and supports excluding an item
   const actions = screen.getAllByLabelText("Действие");
   const secondAction = actions[1];
   if (!secondAction) throw new Error("Second candidate action is missing");
-  fireEvent.change(secondAction, { target: { value: "skip" } });
+  fireEvent.click(secondAction);
+  fireEvent.click(await screen.findByRole("option", { name: "Не включать" }));
+  await waitFor(() => expect(secondAction).toHaveAttribute("value", "skip"));
   fireEvent.click(screen.getByRole("button", { name: "Подтвердить и создать план" }));
   await waitFor(() => expect(confirmTaskPlanImport).toHaveBeenCalledTimes(1));
   const payload = vi.mocked(confirmTaskPlanImport).mock.calls[0]?.[1];
@@ -70,4 +72,79 @@ it("keeps the same operation id and edits after a failed confirmation", async ()
   fireEvent.click(screen.getByRole("button", { name: "Подтвердить и создать план" }));
   await waitFor(() => expect(confirmTaskPlanImport).toHaveBeenCalledTimes(2));
   expect(vi.mocked(confirmTaskPlanImport).mock.calls[1]?.[1].operationId).toBe(originalId);
+});
+
+it("allows different responsible people and co-assignees for tasks in the same week", async () => {
+  vi.mocked(previewTaskPlanImport).mockResolvedValue({
+    suggestedTitle: "Weekly plan", rows: [
+      { title: "Manager activity", source: "DOCX, таблица 1, строка 2, столбец 3", warning: null,
+        assigneeHint: "Н. Каримбердиева", coexecutorsHint: "Б. Самугов; Матбуот хизмати",
+        groupKey: "DOCX, таблица 1, строка 2" },
+      { title: "Specialist activity", source: "DOCX, таблица 1, строка 2, столбец 4", warning: null,
+        assigneeHint: "Н. Каримбердиева", coexecutorsHint: "Б. Самугов; Матбуот хизмати",
+        groupKey: "DOCX, таблица 1, строка 2" },
+    ],
+  });
+  vi.mocked(confirmTaskPlanImport).mockResolvedValue({
+    id: "plan-2", title: "Weekly plan", kind: "work", periodStart: null, periodEnd: null,
+    taskIds: ["task-1", "task-2"], createdByUserId: "me", createdAt: "2026-01-01T00:00:00Z",
+    updatedAt: "2026-01-01T00:00:00Z",
+  });
+  render(<FluentProvider theme={webLightTheme}><TaskPlanImportView
+    token="token" currentUserId="me" people={[
+      { id: "me", name: "Автор плана", initials: "А", role: "manager", color: "blue", status: "active" },
+      { id: "nigora", name: "Каримбердиева Нигора", initials: "Н", role: "manager", color: "blue", status: "active" },
+      { id: "bakhtiyor", name: "Самугов Бахтиёр", initials: "Б", role: "employee", color: "blue", status: "active" },
+      { id: "feruza", name: "Шокирова Феруза", initials: "Ф", role: "employee", color: "blue", status: "active" },
+      { id: "temur", name: "Алмазов Темур", initials: "Т", role: "employee", color: "blue", status: "active" },
+    ]} tasks={[]} onImported={vi.fn().mockResolvedValue(undefined)} onClose={vi.fn()} />
+  </FluentProvider>);
+  fireEvent.change(screen.getByLabelText("Файл плана"), {
+    target: { files: [new File(["content"], "weekly.docx")] },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Разобрать документ" }));
+  expect(await screen.findByText("В документе: Б. Самугов; Матбуот хизмати")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Подтвердить и создать план" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Проверьте ответственного");
+  expect(confirmTaskPlanImport).not.toHaveBeenCalled();
+  const bulkParticipants = screen.getByLabelText("Набор соисполнителей для массового назначения по строке");
+  fireEvent.change(bulkParticipants, {
+    target: { value: "temur", selectedOptions: [{ value: "bakhtiyor" }, { value: "temur" }] },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Применить к пунктам этой строки" }));
+  const assignees = screen.getAllByLabelText("Ответственный / исполнитель");
+  if (!assignees[1]) throw new Error("Second responsible person selector is missing");
+  fireEvent.change(assignees[1], { target: { value: "feruza" } });
+  fireEvent.click(screen.getByRole("button", { name: "Изменить соисполнителей пункта 2" }));
+  fireEvent.change(screen.getByLabelText("Соисполнители пункта 2"), {
+    target: { value: "bakhtiyor", selectedOptions: [{ value: "bakhtiyor" }] },
+  });
+  fireEvent.click(screen.getByRole("checkbox"));
+  fireEvent.click(screen.getByRole("button", { name: "Подтвердить и создать план" }));
+  await waitFor(() => expect(confirmTaskPlanImport).toHaveBeenCalledTimes(1));
+  const items = vi.mocked(confirmTaskPlanImport).mock.calls[0]?.[1].items;
+  expect(items?.map((item) => item.assigneeId)).toEqual(["nigora", "feruza"]);
+  expect(items?.map((item) => item.coAssigneeIds)).toEqual([["bakhtiyor", "temur"], ["bakhtiyor"]]);
+});
+
+it("does not silently assign a structured plan to the importer when the leader is unknown", async () => {
+  vi.mocked(previewTaskPlanImport).mockResolvedValue({
+    suggestedTitle: "Weekly plan", rows: [{ title: "Plan activity", source: "DOCX, таблица 1, строка 2",
+      warning: null, assigneeHint: "Н. Каримбердиева", coexecutorsHint: "Матбуот хизмати",
+      groupKey: "DOCX, таблица 1, строка 2" }],
+  });
+  render(<FluentProvider theme={webLightTheme}><TaskPlanImportView
+    token="token" currentUserId="me" people={[
+      { id: "me", name: "Автор плана", initials: "А", role: "manager", color: "blue", status: "active" },
+    ]} tasks={[]} onImported={vi.fn()} onClose={vi.fn()} />
+  </FluentProvider>);
+  fireEvent.change(screen.getByLabelText("Файл плана"), {
+    target: { files: [new File(["content"], "weekly.docx")] },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Разобрать документ" }));
+  await screen.findByText("В документе: Матбуот хизмати");
+  fireEvent.click(screen.getByRole("checkbox"));
+  fireEvent.click(screen.getByRole("button", { name: "Подтвердить и создать план" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("проверьте каждый включённый пункт");
+  expect(confirmTaskPlanImport).not.toHaveBeenCalled();
 });

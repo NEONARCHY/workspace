@@ -71,7 +71,8 @@ def test_docx_weekly_table_extracts_all_bullets_without_metadata() -> None:
         ) + "</w:tc>"
 
     header = "<w:tr>" + "".join(cell(value) for value in (
-        "№", "Ҳафта / муддат", "Раҳбар", "Мутахассис", "Ҳамижрочилар", "Натижа/KPI",
+        "№", "Ҳафта / муддат", "Бўлим раҳбари \u041d. Каримбердиева", "Мутахассис Ф. Шокирова",
+        "Ҳамижрочилар", "Натижа/KPI",
     )) + "</w:tr>"
     weeks = []
     for week in range(15):
@@ -82,7 +83,7 @@ def test_docx_weekly_table_extracts_all_bullets_without_metadata() -> None:
             first[1] = "• Multi-line\nsecond part of task"
         weeks.append("<w:tr>" + "".join((
             cell(str(week + 1)), cell(f"Week {week + 1}"), cell(*first), cell(*second),
-            cell("Co-executor name"), cell("KPI report text"),
+            cell("Б. Самугов; Матбуот хизмати"), cell("KPI report text"),
         )) + "</w:tr>")
     document = ("<w:document xmlns:w=\"http://schemas.openxmlformats.org/"
                 "wordprocessingml/2006/main\"><w:body><w:p><w:r>"
@@ -98,7 +99,15 @@ def test_docx_weekly_table_extracts_all_bullets_without_metadata() -> None:
     assert preview.rows[1].title == "Multi-line second part of task"
     assert preview.rows[0].source == "DOCX, таблица 1, строка 2, столбец 3"
     assert preview.rows[-1].source == "DOCX, таблица 1, строка 16, столбец 4"
-    assert not any("KPI" in row.title or "Co-executor" in row.title for row in preview.rows)
+    assert preview.rows[0].assignee_hint == "\u041d. Каримбердиева"
+    assert preview.rows[5].assignee_hint == "\u041d. Каримбердиева"
+    assert preview.rows[5].coexecutors_hint == "Б. Самугов; Матбуот хизмати"
+    assert preview.rows[0].group_key == preview.rows[5].group_key
+    assert preview.rows[0].group_key != preview.rows[10].group_key
+    assert preview.model_dump(by_alias=True)["rows"][0]["assigneeHint"] == (
+        "\u041d. Каримбердиева"
+    )
+    assert not any("KPI" in row.title or "Самугов" in row.title for row in preview.rows)
 
 
 def test_pdf_text_preview_and_candidate_limit() -> None:
@@ -130,3 +139,14 @@ def test_confirm_payload_requires_link_target_and_nonblank_title() -> None:
     assert len(TaskPlanImportConfirm.model_validate({**valid, "items": items}).items) == 150
     with pytest.raises(ValueError):
         TaskPlanImportConfirm.model_validate({**valid, "items": items * 2})
+    co_assignee = "e0e04184-a101-4fba-8674-33c5f72d4ee6"
+    with pytest.raises(ValueError, match="unique"):
+        TaskPlanImportConfirm.model_validate({**valid, "items": [{
+            "title": "Task", "source": "DOCX", "mode": "create",
+            "coAssigneeIds": [co_assignee, co_assignee],
+        }]})
+    with pytest.raises(ValueError, match="cannot also"):
+        TaskPlanImportConfirm.model_validate({**valid, "items": [{
+            "title": "Task", "source": "DOCX", "mode": "create",
+            "assigneeId": co_assignee, "coAssigneeIds": [co_assignee],
+        }]})

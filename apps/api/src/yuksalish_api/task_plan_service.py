@@ -14,7 +14,7 @@ from .position_policy import is_executive_leader
 from .repository import WorkspaceRepositoryError, _task_access_row, create_task
 from .tables import audit_events, task_participants, task_plan_links, task_plans, tasks
 from .task_plan_schemas import TaskPlanImportConfirm, TaskPlanResponse, TaskPlanWrite
-from .workspace_schemas import CreateTaskRequest
+from .workspace_schemas import CreateTaskRequest, TaskCreateParticipantRequest
 
 
 def _response(row: RowMapping, task_ids: list[str] | None = None) -> TaskPlanResponse:
@@ -187,6 +187,9 @@ async def confirm_import(
             created = await create_task(connection, user, CreateTaskRequest(
                 title=item.title, assignee_id=str(item.assignee_id or user.id),
                 due_at=item.due_at,
+                participants=[TaskCreateParticipantRequest(
+                    user_id=str(participant_id), role="co_assignee",
+                ) for participant_id in item.co_assignee_ids],
             ))
             task_id = UUID(created.id)
         if task_id is None:
