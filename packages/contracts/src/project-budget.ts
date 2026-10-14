@@ -7,6 +7,7 @@ export interface ProjectBudgetArticle {
   readonly funding: "donor" | "own" | "unspecified";
   readonly actualAmount: string;
   readonly remainingAmount: string;
+  readonly actualByCurrency?: readonly { readonly currency: string; readonly amount: string }[];
 }
 export interface ProjectBudgetArticleInput {
   readonly idempotencyKey?: string;

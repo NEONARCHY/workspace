@@ -17,7 +17,8 @@ const summary: ProjectBudgetSummary = {
   projectId: "p1", remainingProjectAmount: "80",
   actualByCurrency: [{ currency: "UZS", amount: "120" }, { currency: "USD", amount: "5" }],
   articles: [{ id: "a1", projectId: "p1", title: "Services", amount: "100.50", currency: "UZS",
-    funding: "donor", actualAmount: "120", remainingAmount: "-19.50" }],
+    funding: "donor", actualAmount: "120", remainingAmount: "-19.50",
+    actualByCurrency: [{ currency: "UZS", amount: "120" }, { currency: "USD", amount: "5" }] }],
 };
 function setup(canEdit = true) {
   return render(<FluentProvider theme={workspaceTheme}><ProjectBudgetDialog token="test"
@@ -35,7 +36,8 @@ describe("actual project budget", () => {
     expect(await screen.findByRole("rowheader", { name: /Services/ })).toBeInTheDocument();
     expect(screen.getByRole("cell", { name: "100,50 UZS" })).toBeInTheDocument();
     expect(screen.getByRole("cell", { name: "-19,50 UZS" })).toBeInTheDocument();
-    expect(screen.getByText("5 USD")).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "120 UZS 5 USD" })).toBeInTheDocument();
+    expect(screen.getAllByText("5 USD")).toHaveLength(2);
     expect(screen.getByText(/Исторические завершённые заявки/)).toBeInTheDocument();
   });
   it("leaves article input and creation key available for retry after failure", async () => {

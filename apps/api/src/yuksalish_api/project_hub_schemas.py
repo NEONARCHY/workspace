@@ -18,6 +18,11 @@ class HubModel(BaseModel):
     )
 
 
+class BudgetCurrencyTotal(HubModel):
+    currency: Literal["UZS", "USD", "EUR"]
+    amount: str
+
+
 class BudgetArticleResponse(HubModel):
     id: str
     project_id: str
@@ -27,6 +32,7 @@ class BudgetArticleResponse(HubModel):
     funding: Literal["donor", "own", "unspecified"]
     actual_amount: str = "0"
     remaining_amount: str = "0"
+    actual_by_currency: list[BudgetCurrencyTotal] = Field(default_factory=list)
 
 
 class PaymentProjectOption(HubModel):

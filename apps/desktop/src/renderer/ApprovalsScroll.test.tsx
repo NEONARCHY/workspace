@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApprovalsView } from "./ApprovalsView";
 
 function Surface() {
-  return <ApprovalsView token="qa-only" canManage={false} canCreateRequest={false} currentUserId="qa" people={[]} positions={[]} requests={[]} calendarEvents={[]} attachments={[]}
+  return <ApprovalsView token="qa-only" canManage={false} canCreateRequest={false} isSuperadmin={false} currentUserId="qa" people={[]} positions={[]} requests={[]} calendarEvents={[]} attachments={[]}
     onSaveWorkflow={vi.fn()} onPublishWorkflow={vi.fn()} onCreateRequest={vi.fn()} onAction={vi.fn()} onDeleteRequest={vi.fn()} onReviseRequest={vi.fn()} onUploadAttachments={vi.fn()} onDownloadAttachment={vi.fn()} />;
 }
 afterEach(cleanup);

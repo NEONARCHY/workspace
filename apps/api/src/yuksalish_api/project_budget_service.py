@@ -15,7 +15,7 @@ from .project_budget_schemas import (
     ExpenseTotal,
     ProjectBudgetResponse,
 )
-from .project_hub_schemas import BudgetArticleResponse
+from .project_hub_schemas import BudgetArticleResponse, BudgetCurrencyTotal
 from .project_import_schemas import ImportBudgetLine
 from .repository import WorkspaceRepositoryError
 from .tables import audit_events, project_hub_projects
@@ -100,14 +100,21 @@ async def article_choices(
         articles.c.project_id.in_(project_ids),
     ).order_by(articles.c.created_at, articles.c.id))).mappings().all()
     totals = (await connection.execute(select(
-        expenses.c.article_id, func.sum(expenses.c.amount),
-    ).where(expenses.c.project_id.in_(project_ids)).group_by(expenses.c.article_id))).all()
-    by_article = {article_id: Decimal(amount) for article_id, amount in totals}
+        expenses.c.article_id, expenses.c.currency, func.sum(expenses.c.amount),
+    ).where(expenses.c.project_id.in_(project_ids), expenses.c.article_id.is_not(None))
+        .group_by(expenses.c.article_id, expenses.c.currency))).all()
+    by_article = {(article_id, currency): Decimal(amount)
+                  for article_id, currency, amount in totals}
     return [BudgetArticleResponse(
         id=str(row["id"]), project_id=str(row["project_id"]), title=row["title"],
         amount=row["planned_amount"], currency=row["currency"], funding=row["funding"],
-        actual_amount=money(by_article.get(row["id"], Decimal(0))),
-        remaining_amount=remainder(row["planned_amount"], by_article.get(row["id"], Decimal(0))),
+        actual_amount=money(by_article.get((row["id"], row["currency"]), Decimal(0))),
+        remaining_amount=remainder(
+            row["planned_amount"], by_article.get((row["id"], row["currency"]), Decimal(0)),
+        ),
+        actual_by_currency=[BudgetCurrencyTotal(currency=currency, amount=money(amount))
+                            for (article_id, currency), amount in sorted(by_article.items())
+                            if article_id == row["id"]],
     ) for row in rows]
 
 
@@ -132,7 +139,7 @@ async def load_budget(
 
 
 async def validate_article_link(
-    connection: AsyncConnection, article_id: str | None, project_id: str | None, currency: str,
+    connection: AsyncConnection, article_id: str | None, project_id: str | None,
 ) -> str:
     if not article_id:
         return ""
@@ -144,9 +151,9 @@ async def validate_article_link(
     row = (await connection.execute(select(articles).where(
         articles.c.id == article_uuid, articles.c.project_id == project_uuid,
     ))).mappings().first()
-    if row is None or row["currency"] != currency.upper():
+    if row is None:
         raise WorkspaceRepositoryError(
-            422, "Budget article and payment project/currency must match",
+            422, "Budget article and payment project must match",
         )
     return str(row["title"])
 
@@ -178,7 +185,7 @@ async def record_expense(
         raise WorkspaceRepositoryError(422, "Payment amount exceeds the exact supported range")
     currency = str(payload["currency"]).upper()
     article_id = str(payload["budget_article_id"]) if payload.get("budget_article_id") else None
-    await validate_article_link(connection, article_id, str(project_id), currency)
+    await validate_article_link(connection, article_id, str(project_id))
     existing = (await connection.execute(select(expenses).where(
         expenses.c.request_id == request_id,
     ))).mappings().first()

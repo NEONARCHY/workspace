@@ -117,11 +117,42 @@ async def test_only_final_payment_records_immutable_once_only_expense() -> None:
                         workstream_id=other_direction.id, budget_article_id=article.id,
                     ))
                 assert wrong_project.value.status_code == 422
-                with pytest.raises(WorkspaceRepositoryError) as wrong_currency:
-                    await create_approval_request(connection, admin, CreateApprovalRequest(
-                        **arguments, currency="USD",
-                    ))
-                assert wrong_currency.value.status_code == 422
+                cross_currency = await create_approval_request(
+                    connection, admin, CreateApprovalRequest(**arguments, currency="USD"),
+                )
+                assert cross_currency.currency == "USD"
+                assert cross_currency.details.budget_article_id == article.id
+                active = await create_approval_request(
+                    connection, outsider, CreateApprovalRequest(title="Active", amount=50),
+                )
+                with pytest.raises(WorkspaceRepositoryError) as not_initiator:
+                    await update_approval_request(connection, employee, UUID(active.id),
+                        UpdateApprovalRequest(title="Unauthorized", amount=50,
+                                              change_comment="No access"))
+                assert not_initiator.value.status_code == 403
+                with pytest.raises(WorkspaceRepositoryError) as no_reason:
+                    await update_approval_request(connection, outsider, UUID(active.id),
+                                                  UpdateApprovalRequest(title="Changed", amount=50))
+                assert no_reason.value.status_code == 422
+                active = await update_approval_request(connection, outsider, UUID(active.id),
+                    UpdateApprovalRequest(title="Changed", amount=55,
+                                          change_comment="Corrected amount"))
+                assert active.revision == 2
+                assert active.active_node_keys == ["review"]
+                assert active.actions[-1].action == "edit"
+                assert active.versions[-1].edited_by_user_id == str(outsider.id)
+                active = await act_on_request(connection, admin, UUID(active.id),
+                                              ApprovalActionRequest(action="approve"))
+                assert active.active_node_keys == ["payment"]
+                active = await update_approval_request(connection, admin, UUID(active.id),
+                    UpdateApprovalRequest(title="Superadmin correction", amount=60,
+                                          change_comment="Checked documents"))
+                assert active.revision == 3
+                assert active.active_node_keys == ["payment"]
+                assert active.versions[-1].edited_by_user_id == str(admin.id)
+                assert [action.action for action in active.actions][-3:] == [
+                    "edit", "approve", "edit",
+                ]
                 request = await create_approval_request(connection, admin, CreateApprovalRequest(
                     **arguments,
                 ))
@@ -158,7 +189,7 @@ async def test_only_final_payment_records_immutable_once_only_expense() -> None:
                     ))
                     await connection.execute(update(approval_requests).where(
                         approval_requests.c.id == request_id,
-                    ).values(payload={**snapshot, "currency": "USD"}))
+                    ).values(payload={**snapshot, "budget_article_id": str(uuid4())}))
                     with pytest.raises(WorkspaceRepositoryError) as failed_final:
                         await act_on_request(connection, admin, request_id,
                                              ApprovalActionRequest(action="approve"))
@@ -180,6 +211,14 @@ async def test_only_final_payment_records_immutable_once_only_expense() -> None:
                 budget = await load_budget(connection, admin, project_id)
                 assert budget.articles[0].amount == "100.50"
                 assert budget.articles[0].actual_amount == "120"
+                for _ in range(2):
+                    await act_on_request(connection, admin, UUID(cross_currency.id),
+                                         ApprovalActionRequest(action="approve"))
+                budget = await load_budget(connection, admin, project_id)
+                assert budget.articles[0].actual_amount == "120"
+                assert budget.articles[0].remaining_amount == "-19.50"
+                assert {total.currency: total.amount for total in
+                        budget.articles[0].actual_by_currency} == {"UZS": "120", "USD": "120"}
                 assert budget.articles[0].remaining_amount == "-19.50"
                 assert budget.remaining_project_amount == "80"
                 with pytest.raises(WorkspaceRepositoryError):
@@ -203,7 +242,7 @@ async def test_only_final_payment_records_immutable_once_only_expense() -> None:
                                          ApprovalActionRequest(action="approve"))
                 budget = await load_budget(connection, admin, project_id)
                 assert {total.currency: total.amount for total in budget.actual_by_currency} == {
-                    "USD": "10", "UZS": "120",
+                    "USD": "130", "UZS": "120",
                 }
                 assert budget.remaining_project_amount == "80"
                 assert budget.articles[0].actual_amount == "120"
