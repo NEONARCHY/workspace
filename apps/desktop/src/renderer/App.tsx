@@ -151,6 +151,7 @@ import {
   createWorkspaceAbsence,
   deleteWorkspaceTaskChecklistItem,
   downloadWorkspaceAttachment,
+  downloadWorkspaceTripDocument,
   extendWorkspaceTaskDeadline,
   loadWorkspace,
   prewarmAssistantMessages,
@@ -204,6 +205,9 @@ import {
   updateWorkspaceProject,
   updateWorkspaceTask,
   updateWorkspaceTripRequest,
+  uploadWorkspaceTripBrief,
+  removeWorkspaceTripBrief,
+  uploadWorkspaceTripSignature,
   updateWorkspaceNotificationPreferences,
   toggleWorkspaceTaskChecklistItem,
   uploadWorkspaceAttachment,
@@ -1556,6 +1560,24 @@ export function App() {
     runTripMutation((token) =>
       actOnWorkspaceTripRequest(token, tripRequest.id, action, comment, targetStage));
 
+  const handleTripBriefUpload = (requestId: string, file: File) =>
+    runTripMutation((token) => uploadWorkspaceTripBrief(token, requestId, file));
+  const handleTripBriefRemoval = (requestId: string) =>
+    runTripMutation((token) => removeWorkspaceTripBrief(token, requestId));
+  const handleTripSignature = (requestId: string, signature: Blob) =>
+    runTripMutation((token) => uploadWorkspaceTripSignature(token, requestId, signature));
+  const handleTripDocument = async (
+    requestId: string, kind: "attachment" | "brief" | "order" | "order-preview",
+  ): Promise<Blob | undefined> => {
+    if (session === undefined) return undefined;
+    try {
+      return await downloadWorkspaceTripDocument(session.accessToken, requestId, kind);
+    } catch (error) {
+      reportError(error);
+      return undefined;
+    }
+  };
+
   const mergeAbsenceRequest = (absenceRequest: AbsenceRequest) => {
     setWorkspace((current) => ({
       ...current,
@@ -2428,6 +2450,10 @@ export function App() {
                 onCreate={handleCreateTrip}
                 onUpdate={handleUpdateTrip}
                 onAction={handleTripAction}
+                onUploadBrief={handleTripBriefUpload}
+                onRemoveBrief={handleTripBriefRemoval}
+                onUploadSignature={handleTripSignature}
+                onDownloadDocument={handleTripDocument}
                 onOpenChat={(chatId) => void handleOpenContextChat(chatId)}
                 renderTripChat={(request) => request.chatId
                   ? renderEmbeddedChat(request.chatId, "поездки")

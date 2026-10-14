@@ -1,12 +1,9 @@
-"""Read-only, bounded extraction of candidate task titles from a plan document.
-
-This is deliberately conservative: dates and people are never assigned from prose.
-Structured table names are hints for a reviewed confirm request, not user IDs.
-"""
+"""Read-only extraction of plan candidates and reviewable table-cell hints."""
 
 import re
 from collections.abc import Iterator
 from dataclasses import dataclass
+from datetime import date
 from io import BytesIO
 from pathlib import PurePath
 from typing import Protocol
@@ -25,6 +22,19 @@ MAX_TEXT_CHARS = 50_000
 _NUMBER = re.compile(r"^\s*(?:\d+[.)]|\d+(?:\.\d+)+[.)]?|[•●▪◦‣-])\s*")
 _TABLE_BULLET = re.compile(r"^\s*(?:[•●▪◦‣]\s*|-\s+)")
 _PERSON_HEADING = re.compile(r"\b[^\W\d_]\s*\.\s*[^\W\d_][^\W\d_'-]+", re.UNICODE)
+_DATE_CELL = re.compile(r"^\s*(?:до\s+)?(\d{1,2})[./](\d{1,2})[./](\d{4})\s*$")
+_WEEK_END = re.compile(r"^\s*(\d{1,2})(?:\s+([\u0430-\u044f\u0451]+))?\s*"
+                       r"[\u2013\u2014-]\s*(\d{1,2})\s+([\u0430-\u044f\u0451]+)\s*$",
+                       re.IGNORECASE)
+_PLAN_YEAR = re.compile(r"\b20\d{2}\b")
+_MONTHS = {
+    "январь": 1, "января": 1, "февраль": 2, "февраля": 2,
+    "март": 3, "марта": 3, "апрель": 4, "апреля": 4,
+    "май": 5, "мая": 5, "июнь": 6, "июня": 6,
+    "июль": 7, "июля": 7, "август": 8, "августа": 8,
+    "сентябрь": 9, "сентября": 9, "октябрь": 10, "октября": 10,
+    "ноябрь": 11, "ноября": 11, "декабрь": 12, "декабря": 12,
+}
 
 
 @dataclass(frozen=True)
@@ -34,13 +44,14 @@ class _Candidate:
     assignee_hint: str | None = None
     coexecutors_hint: str | None = None
     group_key: str | None = None
+    due_date_hint: date | None = None
 
 
 class _XmlNode(Protocol):
     tag: str
     text: str | None
 
-    def iter(self) -> Iterator["_XmlNode"]: ...
+    def iter(self, tag: str | None = None) -> Iterator["_XmlNode"]: ...
 
 
 def _docx_paragraph_text(paragraph: _XmlNode, ns: str) -> str:
@@ -49,6 +60,35 @@ def _docx_paragraph_text(paragraph: _XmlNode, ns: str) -> str:
         " " if node.tag in separators else node.text or ""
         for node in paragraph.iter() if node.tag == ns + "t" or node.tag in separators
     )
+
+
+def _cell_text(cell: _XmlNode, ns: str) -> str:
+    return " ".join(" ".join(_docx_paragraph_text(paragraph, ns).split())
+                    for paragraph in cell.iter(ns + "p")).strip()
+
+
+def _date_cell_hint(value: str, plan_year: int | None = None) -> date | None:
+    match = _DATE_CELL.fullmatch(value)
+    if match is not None:
+        try:
+            return date(int(match[3]), int(match[2]), int(match[1]))
+        except ValueError:
+            return None
+    week = _WEEK_END.fullmatch(value)
+    if week is None or plan_year is None:
+        return None
+    month = _MONTHS.get(week[4].casefold())
+    if month is None:
+        return None
+    start_month = _MONTHS.get(week[2].casefold()) if week[2] else month
+    if start_month is None or start_month > month:
+        return None
+    try:
+        start = date(plan_year, start_month, int(week[1]))
+        end = date(plan_year, month, int(week[3]))
+    except ValueError:
+        return None
+    return end if start <= end else None
 
 
 def _text_rows(text: str, location: str) -> list[_Candidate]:
@@ -78,31 +118,51 @@ def _docx_rows(content: bytes) -> list[_Candidate]:
     table_rows: list[_Candidate] = []
     body = root.find(ns + "body")
     if body is not None:
+        heading_text = " ".join(_docx_paragraph_text(paragraph, ns)
+                                for paragraph in body.findall(ns + "p"))
+        years = set(_PLAN_YEAR.findall(heading_text))
+        plan_year = int(next(iter(years))) if len(years) == 1 else None
         for table_number, table in enumerate(body.findall(ns + "tbl"), 1):
             header = table.find(ns + "tr")
-            header_cells = ([" ".join(_docx_paragraph_text(paragraph, ns)
-                                     for paragraph in cell.iter(ns + "p"))
+            header_cells = ([_cell_text(cell, ns)
                              for cell in header.findall(ns + "tc")] if header is not None else [])
             coexecutors_column = next((index for index, value in enumerate(header_cells)
-                                       if "ҳамижрочи" in value.casefold()), None)
-            leader_column = next((index for index, value in enumerate(header_cells)
-                                  if "раҳбар" in value.casefold()), None)
-            leader_match = (_PERSON_HEADING.search(header_cells[leader_column])
-                            if leader_column is not None else None)
-            leader_hint = leader_match.group(0) if leader_match is not None else None
+                                       if any(label in value.casefold() for label in
+                                              ("ҳамижрочи", "hamijrochi", "соисполнител"))), None)
+            responsible_column = next((index for index, value in enumerate(header_cells)
+                                       if any(label in value.casefold() for label in
+                                              ("ответствен", "масъул", "mas'ul"))), None)
+            deadline_column = next((index for index, value in enumerate(header_cells)
+                                    if any(label in value.casefold() for label in
+                                           ("срок", "муддат", "deadline"))), None)
             for row_number, row in enumerate(table.findall(ns + "tr"), 1):
+                if row_number == 1:
+                    continue
                 cells = row.findall(ns + "tc")
-                coexecutors_hint = None
-                group_key = None
-                if (row_number > 1 and coexecutors_column is not None
-                        and coexecutors_column < len(cells)):
-                    coexecutors_hint = " ".join(" ".join(
-                        _docx_paragraph_text(paragraph, ns).split()
-                    ) for paragraph in cells[coexecutors_column].iter(ns + "p")).strip()[:1000]
-                    group_key = f"DOCX, таблица {table_number}, строка {row_number}"
+                coexecutors_hint = (_cell_text(cells[coexecutors_column], ns)[:1000]
+                                    if coexecutors_column is not None
+                                    and coexecutors_column < len(cells) else "")
+                row_assignee = (_cell_text(cells[responsible_column], ns)[:240]
+                                if responsible_column is not None
+                                and responsible_column < len(cells) else "")
+                due_date_hint = (_date_cell_hint(_cell_text(cells[deadline_column], ns), plan_year)
+                                 if deadline_column is not None
+                                 and deadline_column < len(cells) else None)
                 for column_number, cell in enumerate(cells, 1):
-                    if coexecutors_column is not None and column_number - 1 >= coexecutors_column:
+                    index = column_number - 1
+                    if index in {coexecutors_column, responsible_column, deadline_column}:
                         continue
+                    if coexecutors_column is not None and index >= coexecutors_column:
+                        continue
+                    heading_matches = (_PERSON_HEADING.findall(header_cells[index])
+                                       if index < len(header_cells) else [])
+                    assignee_hint = row_assignee or (
+                        heading_matches[0] if len(heading_matches) == 1 else None
+                    )
+                    structured = (coexecutors_column is not None or responsible_column is not None
+                                  or deadline_column is not None or bool(heading_matches))
+                    group_key = (f"DOCX, таблица {table_number}, строка {row_number}"
+                                 if structured else None)
                     for paragraph in cell.iter(ns + "p"):
                         line = _docx_paragraph_text(paragraph, ns)
                         if not _TABLE_BULLET.match(line):
@@ -113,8 +173,8 @@ def _docx_rows(content: bytes) -> list[_Candidate]:
                         source = (f"DOCX, таблица {table_number}, строка {row_number}, "
                                   f"столбец {column_number}")
                         table_rows.append(_Candidate(
-                            title[:240], source, leader_hint if group_key else None,
-                            coexecutors_hint or None, group_key,
+                            title[:240], source, assignee_hint,
+                            coexecutors_hint or None, group_key, due_date_hint,
                         ))
                         if len(table_rows) > MAX_ROWS:
                             return table_rows
@@ -190,6 +250,7 @@ def preview_plan_document(filename: str, content: bytes) -> TaskPlanImportPrevie
             assignee_hint=candidate.assignee_hint,
             coexecutors_hint=candidate.coexecutors_hint,
             group_key=candidate.group_key,
+            due_date_hint=candidate.due_date_hint,
         ))
     if not rows:
         raise ValueError("No plan text found. Scanned PDFs require OCR; add a plan manually")

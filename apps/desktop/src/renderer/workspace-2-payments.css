@@ -254,6 +254,7 @@
 .approvals-view .approval-board-card.subsidy-route:not(.is-hover-suppressed):focus-within { border-color: var(--ws-theme-line-warning, #b78a53); }
 .approvals-view .approval-board-card.subsidy-route.selected { border-color: var(--ws-theme-line-warning, #9c713f); box-shadow: 0 0 0 2px rgb(156 113 63 / 17%), 0 14px 28px -20px rgb(31 62 72 / 38%); }
 .approvals-view .payment-subsidy-route-hint { margin: 12px 0 0; padding: 10px 12px; border: 1px solid var(--ws-theme-line-warning, #dec7a5); border-radius: 10px; color: var(--ws-theme-muted, #684b2b); background: var(--ws-theme-surface, #fffaf1); font-size: 12px; line-height: 1.45; }
+.approvals-view .payment-currency-hint { margin: 10px 0 0; color: var(--ws-theme-muted, #52697d); font-size: 12px; line-height: 1.45; }
 .approvals-view .approval-card-open { position: relative; gap: 0; padding: 16px 15px 12px; }
 .approvals-view .approval-card-title {
   display: -webkit-box;

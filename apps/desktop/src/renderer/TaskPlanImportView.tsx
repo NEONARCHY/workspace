@@ -15,6 +15,7 @@ type ReviewRow = {
   assigneeId: string;
   coAssigneeIds: string[];
   dueDate: string;
+  dueDateHint: string | null;
   taskId: string;
   assigneeHint: string | null;
   coexecutorsHint: string | null;
@@ -22,19 +23,25 @@ type ReviewRow = {
 };
 
 function matchingPersonId(hint: string, people: readonly WorkspacePerson[]): string | null {
-  const match = hint.match(/([\p{L}])\s*\.\s*([\p{L}-]+)/u);
-  if (!match) return null;
-  const initial = match[1]?.toLocaleLowerCase();
-  const surname = match[2]?.toLocaleLowerCase();
+  const match = hint.match(/^\s*([\p{L}])\s*\.\s*([\p{L}-]+)\s*$/u);
+  const wordsInHint = hint.toLocaleLowerCase().match(/[\p{L}-]+/gu) ?? [];
+  if (!match && wordsInHint.length < 2) return null;
+  const initial = match?.[1]?.toLocaleLowerCase();
+  const surname = match?.[2]?.toLocaleLowerCase();
   const matching = people.filter((person) => {
     const words: string[] = person.name.toLocaleLowerCase().match(/[\p{L}-]+/gu) ?? [];
-    return words.includes(surname ?? "") && words.some((word) => word !== surname && word.startsWith(initial ?? ""));
+    return match
+      ? words.includes(surname ?? "") && words.some((word) => word !== surname && word.startsWith(initial ?? ""))
+      : wordsInHint.every((word) => words.includes(word));
   });
   return matching.length === 1 ? matching[0]?.id ?? null : null;
 }
 
 function suggestedCoAssignees(hint: string, people: readonly WorkspacePerson[]): string[] {
-  const names = hint.match(/[\p{L}]\s*\.\s*[\p{L}-]+/gu) ?? [];
+  const names = hint.split(/[;,\n]+/).flatMap((part) => {
+    const abbreviated = part.match(/[\p{L}]\s*\.\s*[\p{L}-]+/gu) ?? [];
+    return abbreviated.length > 1 ? abbreviated : [part.trim()];
+  });
   return [...new Set(names.map((name) => matchingPersonId(name, people)).filter((id): id is string => Boolean(id)))];
 }
 
@@ -63,6 +70,7 @@ export function TaskPlanImportView({
   const [operationId, setOperationId] = useState("");
   const [title, setTitle] = useState("");
   const [kind, setKind] = useState<"work" | "regional" | "other">("work");
+  const [ownerId, setOwnerId] = useState(currentUserId);
   const [periodStart, setPeriodStart] = useState("");
   const [periodEnd, setPeriodEnd] = useState("");
   const [busy, setBusy] = useState(false);
@@ -86,14 +94,15 @@ export function TaskPlanImportView({
       const result = await previewTaskPlanImport(token, file);
       setPreview(result);
       setRows(result.rows.map((row) => {
-        const assigneeId = row.groupKey
-          ? row.assigneeHint ? matchingPersonId(row.assigneeHint, activePeople) ?? "" : ""
-          : currentUserId;
+        const assigneeId = row.assigneeHint
+          ? matchingPersonId(row.assigneeHint, activePeople) ?? ""
+          : row.groupKey ? "" : currentUserId;
         return {
           ...row, mode: "create", assigneeId,
           coAssigneeIds: row.coexecutorsHint
             ? suggestedCoAssignees(row.coexecutorsHint, activePeople).filter((id) => id !== assigneeId) : [],
-          dueDate: "", taskId: "", assigneeHint: row.assigneeHint ?? null,
+          dueDate: row.dueDateHint ?? "", dueDateHint: row.dueDateHint ?? null,
+          taskId: "", assigneeHint: row.assigneeHint ?? null,
           coexecutorsHint: row.coexecutorsHint ?? null, groupKey: row.groupKey ?? null,
         };
       }));
@@ -137,7 +146,8 @@ export function TaskPlanImportView({
     }
     const payload: TaskPlanImportConfirm = {
       operationId,
-      plan: { title: title.trim(), kind, periodStart: periodStart || null, periodEnd: periodEnd || null },
+      plan: { title: title.trim(), kind, periodStart: periodStart || null, periodEnd: periodEnd || null,
+        ownerUserId: ownerId },
       items: included.map((row) => ({
         title: row.title.trim(), source: row.source,
         mode: row.mode === "link" ? "link" : "create",
@@ -177,22 +187,17 @@ export function TaskPlanImportView({
         <p>Найдено {rows.length} возможных пунктов. Удалите лишние, уточните названия, исполнителей и сроки. Ничего не создаётся до подтверждения.</p>
         <div className="task-plan-import-fields">
           <label>Название плана<Input value={title} maxLength={240} onChange={(_, data) => setTitle(data.value)} /></label>
+          <label>Постановщик плана<WorkspaceSelect value={ownerId} onChange={(event) => setOwnerId(event.target.value)}>
+            {!activePeople.some((person) => person.id === currentUserId) ? <option value={currentUserId}>Текущий пользователь</option> : null}
+            {activePeople.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}
+          </WorkspaceSelect></label>
           <label>Вид<WorkspaceSelect value={kind} onChange={(event) => setKind(event.target.value as typeof kind)}><option value="work">Иш режа</option><option value="regional">Региональный план</option><option value="other">Другой план</option></WorkspaceSelect></label>
           <label>Начало периода<input type="date" value={periodStart} onChange={(event) => setPeriodStart(event.target.value)} /></label>
           <label>Конец периода<input type="date" value={periodEnd} onChange={(event) => setPeriodEnd(event.target.value)} /></label>
         </div>
         {hasStructuredAssignments ? <section className="task-plan-import-assignments" aria-label="Назначения из документа">
-          <h4>Назначения из недельного плана</h4>
-          <p>Ответственный из заголовка предложен для пунктов обеих рабочих колонок. Если сотрудник не найден однозначно, выберите его ниже — автору плана задача автоматически не назначается. Ответственного и соисполнителей можно изменить отдельно у каждой задачи. Названия отделов не превращаются в сотрудников автоматически.</p>
-          <p>В заголовке: {rows.find((row) => row.assigneeHint)?.assigneeHint ?? "ответственный не указан"}</p>
-          <label>Ответственный для всех новых задач
-            <WorkspaceSelect value={rows.find((row) => row.mode === "create")?.assigneeId ?? ""} onChange={(event) => {
-              setRows((current) => current.map((row) => row.mode === "create"
-                ? { ...row, assigneeId: event.target.value } : row));
-              setParticipantsReviewed(false);
-            }}><option value="">Выберите сотрудника</option>{activePeople.map((person) =>
-              <option key={person.id} value={person.id}>{person.name}</option>)}</WorkspaceSelect>
-          </label>
+          <h4>Данные из плана</h4>
+          <p>Ответственный предлагается отдельно для каждого пункта — из его строки или заголовка рабочей колонки. Дата в колонке срока заполняется автоматически; для недельного диапазона берётся последний день, если год однозначен. Неясные имена и сроки проверьте вручную; отделы не превращаются в сотрудников.</p>
           <div className="task-plan-import-groups">{groups.map(([groupKey, hint]) => <div key={groupKey}>
             <strong>{groupKey}</strong><span>В документе: {hint || "не указаны"}</span>
             <label>Набор соисполнителей для массового назначения по строке
@@ -212,6 +217,7 @@ export function TaskPlanImportView({
         <div className="task-plan-import-rows">{rows.map((row, index) => <fieldset key={`${row.source}-${index}`}>
           <legend>Пункт {index + 1} · {row.source}</legend>
           {row.warning ? <p className="task-plan-import-warning">{row.warning}</p> : null}
+          {row.groupKey ? <p>В документе: ответственный — {row.assigneeHint ?? "не указан"}; срок — {row.dueDateHint ?? "не указан или не распознан"}.</p> : null}
           <label>Действие<WorkspaceSelect value={row.mode} onChange={(event) => updateRow(index, { mode: event.target.value as ReviewRow["mode"] })}><option value="create">Создать задачу</option><option value="link">Привязать существующую</option><option value="skip">Не включать</option></WorkspaceSelect></label>
           {row.mode !== "skip" ? <label>Название задачи<Input value={row.title} maxLength={240} onChange={(_, data) => updateRow(index, { title: data.value })} /></label> : null}
           {row.mode === "create" ? <><label>Ответственный / исполнитель<WorkspaceSelect value={row.assigneeId} onChange={(event) => { updateRow(index, { assigneeId: event.target.value, coAssigneeIds: row.coAssigneeIds.filter((id) => id !== event.target.value) }); setParticipantsReviewed(false); }}><option value="">Выберите сотрудника</option>{activePeople.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</WorkspaceSelect></label><label>Срок, если указан в плане<input type="date" value={row.dueDate} onChange={(event) => updateRow(index, { dueDate: event.target.value })} /></label>

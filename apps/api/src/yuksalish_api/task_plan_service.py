@@ -12,8 +12,8 @@ from .access_control import ensure_module_action
 from .auth import AuthenticatedUser
 from .position_policy import is_executive_leader
 from .repository import WorkspaceRepositoryError, _task_access_row, create_task
-from .tables import audit_events, task_participants, task_plan_links, task_plans, tasks
-from .task_plan_schemas import TaskPlanImportConfirm, TaskPlanResponse, TaskPlanWrite
+from .tables import audit_events, task_participants, task_plan_links, task_plans, tasks, users
+from .task_plan_schemas import PlanStatus, TaskPlanImportConfirm, TaskPlanResponse, TaskPlanWrite
 from .workspace_schemas import CreateTaskRequest, TaskCreateParticipantRequest
 
 
@@ -21,6 +21,8 @@ def _response(row: RowMapping, task_ids: list[str] | None = None) -> TaskPlanRes
     return TaskPlanResponse(
         id=str(row["id"]), title=row["title"], kind=row["kind"],
         period_start=row["period_start"], period_end=row["period_end"],
+        owner_user_id=str(row["owner_user_id"] or row["created_by_user_id"]),
+        status=row["status"],
         created_by_user_id=str(row["created_by_user_id"]),
         created_at=row["created_at"], updated_at=row["updated_at"],
         task_ids=task_ids or [],
@@ -38,13 +40,33 @@ async def _audit(
     ))
 
 
-async def _plan_row(connection: AsyncConnection, plan_id: UUID) -> RowMapping:
-    row = (await connection.execute(select(task_plans).where(
-        task_plans.c.id == plan_id,
-    ))).mappings().first()
+async def _plan_row(
+    connection: AsyncConnection, plan_id: UUID, *, lock: bool = False,
+) -> RowMapping:
+    statement = select(task_plans).where(task_plans.c.id == plan_id)
+    if lock:
+        statement = statement.with_for_update()
+    row = (await connection.execute(statement)).mappings().first()
     if row is None:
         raise WorkspaceRepositoryError(404, "Plan was not found")
     return row
+
+
+async def _owner_id(
+    connection: AsyncConnection, requested: UUID | None, user: AuthenticatedUser,
+) -> UUID:
+    owner_id = requested or user.id
+    if await connection.scalar(select(users.c.id).where(
+        users.c.id == owner_id, users.c.status == "active",
+    )) is None:
+        raise WorkspaceRepositoryError(422, "Select an active plan owner")
+    return owner_id
+
+
+def _can_manage_plan(row: RowMapping, user: AuthenticatedUser) -> bool:
+    return user.role in {"admin", "superadmin"} or user.id in {
+        row["created_by_user_id"], row["owner_user_id"],
+    }
 
 
 async def list_plans(
@@ -75,7 +97,8 @@ async def list_plans(
         task_ids.setdefault(plan_id, []).append(str(task_id))
     return [
         _response(row, task_ids.get(row["id"])) for row in rows
-        if privileged or row["created_by_user_id"] == user.id or row["id"] in task_ids
+        if privileged or user.id in {row["created_by_user_id"], row["owner_user_id"]}
+        or row["id"] in task_ids
     ]
 
 
@@ -84,12 +107,16 @@ async def create_plan(
 ) -> TaskPlanResponse:
     await ensure_module_action(connection, user, "tasks", "create")
     now, plan_id = datetime.now(UTC), uuid4()
+    owner_id = await _owner_id(connection, payload.owner_user_id, user)
     row = (await connection.execute(insert(task_plans).values(
         id=plan_id, title=payload.title, kind=payload.kind,
         period_start=payload.period_start, period_end=payload.period_end,
+        owner_user_id=owner_id, status="active",
         created_by_user_id=user.id, created_at=now, updated_at=now,
     ).returning(task_plans))).mappings().one()
-    await _audit(connection, user, "task_plan.created", plan_id, {"title": payload.title})
+    await _audit(connection, user, "task_plan.created", plan_id, {
+        "title": payload.title, "ownerUserId": str(owner_id),
+    })
     return _response(row)
 
 
@@ -98,17 +125,42 @@ async def update_plan(
     payload: TaskPlanWrite,
 ) -> TaskPlanResponse:
     await ensure_module_action(connection, user, "tasks", "edit")
-    row = await _plan_row(connection, plan_id)
-    if row["created_by_user_id"] != user.id and user.role not in {"admin", "superadmin"}:
-        raise WorkspaceRepositoryError(403, "Only the plan author or administrator can edit it")
+    row = await _plan_row(connection, plan_id, lock=True)
+    if not _can_manage_plan(row, user):
+        raise WorkspaceRepositoryError(403, "Only the plan owner, author or admin can edit it")
+    owner_id = (await _owner_id(connection, payload.owner_user_id, user)
+                if payload.owner_user_id is not None
+                else row["owner_user_id"] or row["created_by_user_id"])
     revised = (await connection.execute(update(task_plans).where(
         task_plans.c.id == plan_id,
     ).values(
         title=payload.title, kind=payload.kind,
         period_start=payload.period_start, period_end=payload.period_end,
+        owner_user_id=owner_id,
         updated_at=datetime.now(UTC),
     ).returning(task_plans))).mappings().one()
-    await _audit(connection, user, "task_plan.updated", plan_id, {"title": payload.title})
+    await _audit(connection, user, "task_plan.updated", plan_id, {
+        "title": payload.title, "ownerUserId": str(owner_id),
+    })
+    return _response(revised)
+
+
+async def change_status(
+    connection: AsyncConnection, user: AuthenticatedUser, plan_id: UUID,
+    status: PlanStatus,
+) -> TaskPlanResponse:
+    await ensure_module_action(connection, user, "tasks", "edit")
+    row = await _plan_row(connection, plan_id, lock=True)
+    if not _can_manage_plan(row, user):
+        raise WorkspaceRepositoryError(403, "Only the plan owner, author or admin can edit it")
+    if row["status"] == status:
+        return _response(row)
+    revised = (await connection.execute(update(task_plans).where(
+        task_plans.c.id == plan_id,
+    ).values(status=status, updated_at=datetime.now(UTC)).returning(task_plans))).mappings().one()
+    await _audit(connection, user, "task_plan.status_changed", plan_id, {
+        "from": row["status"], "to": status,
+    })
     return _response(revised)
 
 
@@ -165,9 +217,11 @@ async def confirm_import(
                 await _task_access_row(connection, user, task_id, manage=True)
 
     now = datetime.now(UTC)
+    owner_id = await _owner_id(connection, payload.plan.owner_user_id, user)
     inserted = (await connection.execute(pg_insert(task_plans).values(
         id=payload.operation_id, title=payload.plan.title, kind=payload.plan.kind,
         period_start=payload.plan.period_start, period_end=payload.plan.period_end,
+        owner_user_id=owner_id, status="active",
         created_by_user_id=user.id, created_at=now, updated_at=now,
     ).on_conflict_do_nothing(index_elements=[task_plans.c.id]).returning(task_plans))).mappings().first()
     if inserted is None:
@@ -200,5 +254,6 @@ async def confirm_import(
         ))
         task_ids.append(str(task_id))
     await _audit(connection, user, "task_plan.imported", payload.operation_id,
-                 {"title": payload.plan.title, "itemCount": str(len(task_ids))})
+                 {"title": payload.plan.title, "ownerUserId": str(owner_id),
+                  "itemCount": str(len(task_ids))})
     return _response(row, task_ids)

@@ -1,0 +1,85 @@
+.trip-dialog .trip-document-panel {
+  margin: 20px 0;
+  padding: 20px;
+  border: 1px solid var(--ws-line, #d8e5e7);
+  border-radius: 18px;
+  background: linear-gradient(135deg, var(--ws-surface, #fff), var(--ws-canvas, #f5faf9));
+}
+
+.trip-dialog .trip-document-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.trip-dialog .trip-document-heading h3 {
+  margin: 0;
+  color: var(--ws-text, #293a55);
+  font-size: 17px;
+}
+
+.trip-dialog .trip-document-heading p,
+.trip-dialog .trip-signature-help,
+.trip-dialog .trip-document-reminder {
+  margin: 6px 0 0;
+  color: var(--ws-muted, #526b77);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.trip-dialog .trip-document-facts { margin: 16px 0; }
+.trip-dialog .trip-document-facts > div { padding: 12px 0; border-top: 1px solid var(--ws-line, #d8e5e7); }
+.trip-dialog .trip-document-facts dt { color: var(--ws-muted, #526b77); font-size: 12px; }
+.trip-dialog .trip-document-facts dd { margin: 4px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; line-height: 1.5; }
+
+.trip-dialog .trip-document-files,
+.trip-dialog .trip-signature-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.trip-dialog .trip-document-files .fui-Button { max-width: 100%; overflow-wrap: anywhere; }
+.trip-dialog .trip-composer-brief-file { display: grid; min-width: 0; gap: 8px; }
+.trip-dialog .trip-composer-brief-file > .fui-Button { justify-self: start; }
+.trip-dialog .trip-composer-brief-file > p { margin: 0; color: var(--ws-muted, #526b77); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.trip-dialog .trip-signature-pad { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--ws-line, #d8e5e7); }
+.trip-dialog .trip-signature-pad canvas {
+  display: block;
+  width: 100%;
+  height: 160px;
+  margin: 12px 0;
+  border: 1px solid var(--ws-line, #b7cdd0);
+  border-radius: 12px;
+  background: var(--ws-surface, #fff);
+  cursor: crosshair;
+  touch-action: none;
+}
+.trip-dialog .trip-signature-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ws-link, #006779);
+  font-size: 13px;
+  font-weight: 600;
+}
+.trip-dialog .trip-signature-file input { max-width: 170px; font-size: 12px; }
+.trip-dialog .trip-signature-pad [role="status"] { color: var(--ws-link, #006779); font-size: 12px; }
+.trip-dialog .trip-signature-error { color: #9b2434; font-size: 13px; }
+.trip-dialog .trip-document-approved {
+  margin: 16px 0 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  color: #165c3a;
+  background: #eaf8ef;
+  font-size: 13px;
+}
+
+@media (max-width: 640px) {
+  .trip-dialog .trip-document-panel { padding: 14px; }
+  .trip-dialog .trip-document-files > .fui-Button { width: 100%; justify-content: flex-start; }
+  .trip-dialog .trip-signature-controls > .fui-Button { flex: 1 1 130px; }
+}
+
+@media (forced-colors: active) {
+  .trip-dialog .trip-document-panel,
+  .trip-dialog .trip-signature-pad canvas,
+  .trip-dialog .trip-document-approved { background: Canvas; border: 1px solid CanvasText; color: CanvasText; }
+}

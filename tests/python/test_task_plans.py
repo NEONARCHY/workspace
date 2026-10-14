@@ -12,9 +12,20 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from yuksalish_api.access_control import request_module_action
 from yuksalish_api.auth import AuthenticatedUser
 from yuksalish_api.repository import WorkspaceRepositoryError, create_task
-from yuksalish_api.tables import task_participants, task_plans, tasks, users
-from yuksalish_api.task_plan_schemas import TaskPlanImportConfirm, TaskPlanWrite
-from yuksalish_api.task_plan_service import change_link, confirm_import, create_plan, list_plans
+from yuksalish_api.tables import audit_events, task_participants, task_plans, tasks, users
+from yuksalish_api.task_plan_schemas import (
+    TaskPlanImportConfirm,
+    TaskPlanStatusWrite,
+    TaskPlanWrite,
+)
+from yuksalish_api.task_plan_service import (
+    change_link,
+    change_status,
+    confirm_import,
+    create_plan,
+    list_plans,
+    update_plan,
+)
 from yuksalish_api.workspace_schemas import CreateTaskRequest
 
 
@@ -29,11 +40,102 @@ def test_plan_validation_rejects_blank_title_and_reversed_period() -> None:
     assert request_module_action("/api/v1/task-plans", "POST") == ("tasks", "create")
     assert request_module_action("/api/v1/task-plans", "GET") == ("tasks", "view")
     assert request_module_action("/api/v1/task-plans/a/tasks/b", "PUT") == ("tasks", "edit")
+    assert request_module_action("/api/v1/task-plans/a/status", "PATCH") == ("tasks", "edit")
     with pytest.raises(ValidationError):
         TaskPlanWrite(title="   ")
     with pytest.raises(ValidationError):
         TaskPlanWrite(title="Иш режа", period_start=date(2026, 12, 1),
                       period_end=date(2026, 11, 1))
+    with pytest.raises(ValidationError):
+        TaskPlanStatusWrite.model_validate({"status": "archived"})
+
+
+@pytest.mark.anyio
+@pytest.mark.postgres
+async def test_plan_owner_lifecycle_preserves_open_tasks_and_audits_transition() -> None:
+    database_url = os.environ.get("YUKSALISH_TEST_DATABASE_URL")
+    if not database_url:
+        pytest.skip("YUKSALISH_TEST_DATABASE_URL is not configured")
+    engine = create_async_engine(database_url)
+    author_id, owner_id, outsider_id = uuid4(), uuid4(), uuid4()
+    try:
+        async with engine.connect() as connection:
+            transaction = await connection.begin()
+            try:
+                for user_id, role in (
+                    (author_id, "manager"), (owner_id, "employee"),
+                    (outsider_id, "employee"),
+                ):
+                    await connection.execute(insert(users).values(
+                        id=user_id, username=f"plan-lifecycle-{user_id.hex[:12]}",
+                        full_name="Plan User", role=role, status="active",
+                        created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
+                    ))
+                author = actor(author_id, "manager")
+                owner = actor(owner_id, "employee")
+                outsider = actor(outsider_id, "employee")
+                task = await create_task(connection, author, CreateTaskRequest(
+                    title="Open task", assignee_id=str(author_id),
+                ))
+                with pytest.raises(WorkspaceRepositoryError) as invalid_owner:
+                    await create_plan(connection, author, TaskPlanWrite(
+                        title="Invalid owner", owner_user_id=uuid4(),
+                    ))
+                assert invalid_owner.value.status_code == 422
+                created = await create_plan(connection, author, TaskPlanWrite(
+                    title="Work plan", owner_user_id=owner_id,
+                ))
+                assert created.owner_user_id == str(owner_id)
+                assert created.created_by_user_id == str(author_id)
+                assert created.status == "active"
+                await change_link(connection, author, UUID(created.id), UUID(task.id), linked=True)
+                assert [plan.id for plan in await list_plans(connection, owner)] == [created.id]
+                with pytest.raises(WorkspaceRepositoryError) as forbidden:
+                    await update_plan(connection, outsider, UUID(created.id), TaskPlanWrite(
+                        title="Unauthorized rename",
+                    ))
+                assert forbidden.value.status_code == 403
+                with pytest.raises(WorkspaceRepositoryError) as forbidden_status:
+                    await change_status(connection, outsider, UUID(created.id), "completed")
+                assert forbidden_status.value.status_code == 403
+                renamed = await update_plan(connection, owner, UUID(created.id), TaskPlanWrite(
+                    title="Renamed work plan",
+                ))
+                assert renamed.title == "Renamed work plan"
+                assert renamed.owner_user_id == str(owner_id)
+                completed = await change_status(connection, owner, UUID(created.id), "completed")
+                assert completed.status == "completed"
+                await change_status(connection, owner, UUID(created.id), "completed")
+                assert await connection.scalar(select(tasks.c.status).where(
+                    tasks.c.id == UUID(task.id),
+                )) == "new"
+                assert next(plan for plan in await list_plans(connection, owner)
+                            if plan.id == created.id).task_ids == []
+                assert next(plan for plan in await list_plans(connection, author)
+                            if plan.id == created.id).task_ids == [task.id]
+                assert len((await connection.execute(select(audit_events.c.id).where(
+                    audit_events.c.target_id == UUID(created.id),
+                    audit_events.c.action == "task_plan.status_changed",
+                ))).all()) == 1
+                assert (await change_status(connection, author, UUID(created.id), "active")
+                        ).status == "active"
+                legacy_id = uuid4()
+                await connection.execute(insert(task_plans).values(
+                    id=legacy_id, title="Old API plan", kind="work",
+                    created_by_user_id=author_id,
+                    created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
+                ))
+                legacy = next(plan for plan in await list_plans(connection, author)
+                              if plan.id == str(legacy_id))
+                assert legacy.owner_user_id == str(author_id)
+                assert legacy.status == "active"
+                assert (await update_plan(connection, author, legacy_id, TaskPlanWrite(
+                    title="Old API plan renamed",
+                ))).owner_user_id == str(author_id)
+            finally:
+                await transaction.rollback()
+    finally:
+        await engine.dispose()
 
 
 @pytest.mark.anyio
@@ -114,7 +216,8 @@ async def test_import_confirm_is_atomic_idempotent_and_checks_links() -> None:
                 ))
                 payload = TaskPlanImportConfirm.model_validate({
                     "operationId": str(uuid4()),
-                    "plan": {"title": "Imported plan", "kind": "work"},
+                    "plan": {"title": "Imported plan", "kind": "work",
+                             "ownerUserId": str(co_assignee_id)},
                     "items": [
                         {"title": "New task", "source": "TXT, строка 1", "mode": "create",
                          "assigneeId": str(manager_id),
@@ -124,6 +227,7 @@ async def test_import_confirm_is_atomic_idempotent_and_checks_links() -> None:
                     ],
                 })
                 created = await confirm_import(connection, manager, payload)
+                assert created.owner_user_id == str(co_assignee_id)
                 assert created.task_ids[1] == unrelated.id
                 assert created.task_ids[0] != unrelated.id
                 assert (await connection.execute(select(task_participants.c.user_id).where(

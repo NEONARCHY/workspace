@@ -9,6 +9,7 @@ from pydantic import Field, model_validator
 from .workspace_schemas import ApiModel
 
 PlanKind = Literal["work", "regional", "other"]
+PlanStatus = Literal["active", "completed"]
 MAX_PLAN_IMPORT_ITEMS = 250
 
 
@@ -17,6 +18,7 @@ class TaskPlanWrite(ApiModel):
     kind: PlanKind = "work"
     period_start: date | None = None
     period_end: date | None = None
+    owner_user_id: UUID | None = None
 
     @model_validator(mode="after")
     def validate_plan(self) -> "TaskPlanWrite":
@@ -28,12 +30,22 @@ class TaskPlanWrite(ApiModel):
         return self
 
 
-class TaskPlanResponse(TaskPlanWrite):
+class TaskPlanResponse(ApiModel):
     id: str
+    title: str
+    kind: PlanKind
+    period_start: date | None
+    period_end: date | None
+    owner_user_id: str
+    status: PlanStatus
     created_by_user_id: str
     created_at: datetime
     updated_at: datetime
     task_ids: list[str] = Field(default_factory=list)
+
+
+class TaskPlanStatusWrite(ApiModel):
+    status: PlanStatus
 
 
 class TaskPlanImportRow(ApiModel):
@@ -43,6 +55,7 @@ class TaskPlanImportRow(ApiModel):
     assignee_hint: str | None = Field(default=None, max_length=240)
     coexecutors_hint: str | None = Field(default=None, max_length=1000)
     group_key: str | None = Field(default=None, max_length=120)
+    due_date_hint: date | None = None
 
 
 class TaskPlanImportPreview(ApiModel):

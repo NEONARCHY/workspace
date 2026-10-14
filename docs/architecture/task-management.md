@@ -32,6 +32,28 @@ primary assignee, co-assignee or observer; overlapping roles count a task only o
 The role picker, plan filter and search further narrow that dataset. Task statuses
 and server-side access rules are unchanged.
 
+The plan-document preview reads task titles and reviewable participant/deadline hints
+from DOCX table rows. A dedicated responsible-person cell takes precedence; in
+weekly tables with separate work columns, each column's named person applies only
+to tasks in that column. Exact dates are suggested directly. A week range may use
+its final day only when the document heading supplies one unambiguous year. The
+desktop matches names only when exactly one active employee fits; unresolved names
+and dates remain editable and are not silently assigned to the importer. Nothing
+is created until the reviewed plan is confirmed.
+
+Plans have an explicitly selected owner («постановщик»), defaulting to the creator
+for manual creation and document import. The creator remains immutable for audit.
+Only an active employee may be selected. The owner, creator, or administrator may
+rename the plan, change its details or move it between `active` and `completed`;
+each actual transition is audited. Existing plans receive their creator as owner
+and remain active in migration `0091_task_plan_settings`. The Plans view searches
+active plans by default and has an explicit «Показать завершённые планы» toggle.
+Completing a plan changes only the plan record: linked tasks remain linked, keep
+their own statuses, and stay visible in Tasks according to normal task access.
+During rollout, older API processes may still insert without an owner; the new API
+treats those rows as owned by their creator. Deploy the migration and API before
+the updated desktop client.
+
 Each task card contains:
 
 - a primary assignee plus `co_assignee` and `observer` participants;

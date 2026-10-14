@@ -1589,6 +1589,8 @@ export interface TaskPlan {
   readonly kind: "work" | "regional" | "other";
   readonly periodStart: string | null;
   readonly periodEnd: string | null;
+  readonly ownerUserId: string;
+  readonly status: "active" | "completed";
   readonly createdByUserId: string;
   readonly createdAt: string;
   readonly updatedAt: string;
@@ -1600,6 +1602,7 @@ export interface TaskPlanWrite {
   readonly kind: TaskPlan["kind"];
   readonly periodStart?: string | null;
   readonly periodEnd?: string | null;
+  readonly ownerUserId?: string | null;
 }
 
 export interface TaskPlanImportRow {
@@ -1609,6 +1612,7 @@ export interface TaskPlanImportRow {
   readonly assigneeHint?: string | null;
   readonly coexecutorsHint?: string | null;
   readonly groupKey?: string | null;
+  readonly dueDateHint?: string | null;
 }
 
 export interface TaskPlanImportPreview {
@@ -1887,11 +1891,20 @@ export interface TripRequest {
   readonly id: string;
   readonly number: string;
   readonly requesterUserId: string;
+  readonly workflowVersion?: number;
   readonly purpose: string;
   readonly destination: string;
   readonly startDate: string;
   readonly endDate: string;
   readonly employeeIds: readonly string[];
+  readonly briefText?: string;
+  readonly expenseSource?: string;
+  readonly briefAttachmentName?: string | null;
+  readonly hasEmployeeSignature?: boolean;
+  readonly hasSignedBrief?: boolean;
+  readonly orderNumber?: string | null;
+  readonly orderIssuedAt?: string | null;
+  readonly hasOrderPdf?: boolean;
   readonly stage: TripStage;
   readonly stageLabel: string;
   readonly status: TripStatus;
@@ -1912,6 +1925,8 @@ export interface TripRequestInput {
   readonly startDate: string;
   readonly endDate: string;
   readonly employeeIds: readonly string[];
+  readonly briefText?: string;
+  readonly expenseSource?: string;
 }
 
 export type ApprovalNodeKind =

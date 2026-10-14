@@ -35,12 +35,15 @@
 .record-table .record-row:hover td, .record-table .record-row:focus-within td, .record-table .record-row.selected td { background: var(--ws-theme-surface-soft, #eef7f9); }
 .record-table .record-row td:first-child { background: var(--ws-theme-surface, #f5fafb); }
 .record-table .record-row:hover td:first-child, .record-table .record-row:focus-within td:first-child { background: var(--ws-theme-wash-teal, #e5f3f6); }
-.task-record-table th:first-child { width: 28%; }
-.task-record-table th:nth-child(2) { width: 16%; }
-.task-record-table th:nth-child(3) { width: 15%; }
-.task-record-table th:nth-child(4) { width: 13%; }
-.task-record-table th:nth-child(5) { width: 14%; }
-.task-record-table th:last-child { width: 14%; }
+.task-record-table { min-width: 1120px; }
+.task-record-table th:first-child { width: 24%; }
+.task-record-table th:nth-child(2) { width: 14%; }
+.task-record-table th:nth-child(3) { width: 14%; }
+.task-record-table th:nth-child(4) { width: 12%; }
+.task-record-table th:nth-child(5) { width: 11%; }
+.task-record-table th:nth-child(6) { width: 15%; }
+.task-record-table th:last-child { width: 10%; }
+.task-record-table .record-plan > span:last-child { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .record-open { display: inline; padding: 0; border: 0; background: none; color: var(--ws-link); font-size: 14px; line-height: 1.45; text-align: left; cursor: pointer; }
 .record-open strong { font-size: inherit; font-weight: 600; white-space: normal; }
 .record-open:hover { text-decoration: underline; text-underline-offset: 3px; }

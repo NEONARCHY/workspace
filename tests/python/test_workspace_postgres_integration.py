@@ -106,7 +106,15 @@ from yuksalish_api.repository import (
     update_trip_request,
 )
 from yuksalish_api.seed import seed_demo_data
-from yuksalish_api.tables import audit_events, chat_members, chats, task_cycles, tasks, users
+from yuksalish_api.tables import (
+    audit_events,
+    chat_members,
+    chats,
+    task_cycles,
+    tasks,
+    trip_requests,
+    users,
+)
 from yuksalish_api.workspace_schemas import (
     ApprovalActionRequest,
     ChangeProjectStageRequest,
@@ -1116,6 +1124,11 @@ async def _exercise_live_workspace(database_url: str) -> None:
                     end_date=date(2026, 10, 7),
                     employee_ids=[str(dilshod_auth.id)],
                 ),
+            )
+            # Records created before the new signed-document route retain the legacy HR stage.
+            await connection.execute(
+                update(trip_requests).where(trip_requests.c.id == UUID(trip.id))
+                .values(workflow_version=1)
             )
             assert trip.stage == "launch"
             assert trip.chat_id is not None
