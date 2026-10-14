@@ -21,6 +21,7 @@ from yuksalish_api.tables import (
     chat_members,
     message_receipts,
     messages,
+    workspace_notifications,
     zoom_meeting_participants,
     zoom_meetings,
 )
@@ -107,6 +108,11 @@ async def test_zoom_dms_delivery_rsvp_updates_and_privacy() -> None:
                 message_receipts.c.user_id == peer.id,
             ))).mappings().one()
             assert receipts["read_at"] is None
+            notice = (await connection.execute(select(workspace_notifications).where(
+                workspace_notifications.c.user_id == peer.id,
+                workspace_notifications.c.event_key == f"message:{row['id']}",
+            ))).mappings().one()
+            assert "https://" not in notice["body"]
             card = (await invitation_detail_map(connection, peer, [row]))[row["id"]]
             assert card.join_url == meeting.join_url and card.can_respond
             hidden = (await invitation_detail_map(connection, outsider, [row]))[row["id"]]

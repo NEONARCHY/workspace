@@ -1053,7 +1053,8 @@ async def notify_message(
                 kind="message",
                 priority="attention" if mentioned else "normal",
                 title=f"{notice} · {chat['title'] or author_name}"[:240],
-                body=f"{author_name}: {row['body']}"[:4000],
+                body=(f"{author_name}: Приглашение на Zoom"
+                      if row.get("zoom_meeting_id") else f"{author_name}: {row['body']}")[:4000],
                 section="messenger",
                 entity_id=chat["id"],
                 requires_action=False,
