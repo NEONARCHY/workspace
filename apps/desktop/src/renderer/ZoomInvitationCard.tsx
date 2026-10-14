@@ -1,10 +1,9 @@
-import { useEffect, useId, useState, type MouseEvent } from "react";
+import { useEffect, useId, useMemo, useState, type MouseEvent } from "react";
 import type { WorkspacePerson, ZoomInvitation } from "@yuksalish/contracts";
 import { Check, ChevronDown, Clock3, ExternalLink, Video, X } from "lucide-react";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { respondToZoomInvitation } from "./workspace-api";
-import { useContextMotion } from "./useContextMotion";
 import { validatedZoomLink } from "../shared/zoom-link";
 import { workspacePlatform } from "./platform-adapter";
 import "./zoom-invitation.css";
@@ -15,13 +14,13 @@ export function ZoomInvitationCard({ messageId, invitation, people, token }: {
 }) {
   const panelId = useId();
   const [expanded, setExpanded] = useState(false);
+  const [membersMounted, setMembersMounted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [now, setNow] = useState(() => Date.now());
   const [saved, setSaved] = useState<{ source: string; value: ZoomInvitation }>();
   const source = JSON.stringify(invitation);
   const card = saved?.source === source ? saved.value : invitation;
-  const panelRef = useContextMotion(String(expanded));
   const start = new Date(card.startsAt), end = new Date(card.endsAt);
   const format = (options: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat("ru-RU", { ...options, timeZone: card.timezone });
   useEffect(() => {
@@ -35,6 +34,8 @@ export function ZoomInvitationCard({ messageId, invitation, people, token }: {
   const joinUrl = validatedZoomLink(card.joinUrl);
   const canReply = scheduled && card.canRespond;
   const members = [...(card.organizerId ? [{ userId: card.organizerId, response: "organizer" }] : []), ...card.participants.filter(p => p.userId !== card.organizerId)];
+  const personById = useMemo(() => new Map<string, WorkspacePerson>(people.map(person => [person.id, person])), [people]);
+  function toggleMembers() { setMembersMounted(true); setExpanded(!expanded); }
   async function reply(response: "accepted" | "declined") {
     if (busy) return;
     setBusy(true); setError("");
@@ -72,21 +73,20 @@ export function ZoomInvitationCard({ messageId, invitation, people, token }: {
         : card.status !== "scheduled" ? <p className="zoom-invitation-status">Конференция отменена или недоступна.</p>
         : finished ? <p className="zoom-invitation-status">Конференция завершилась.</p> : null}
       {card.available && <>
-        <button type="button" className="zoom-invitation-disclosure" aria-expanded={expanded} aria-controls={panelId} onClick={() => setExpanded(!expanded)}>
+        <button type="button" className="zoom-invitation-disclosure" aria-expanded={expanded} aria-controls={panelId} onClick={toggleMembers}>
           <span>Участники</span><span>{members.length}</span><ChevronDown size={16} aria-hidden="true" /></button>
-        <div id={panelId} ref={panelRef} hidden={!expanded} className="zoom-invitation-people" tabIndex={0} role="region" aria-label="Список участников">
-          {members.map(member => {
-            const person = people.find(p => p.id === member.userId);
+        <div className="zoom-invitation-accordion" data-open={expanded} aria-hidden={!expanded} inert={!expanded}>
+        <div className="zoom-invitation-accordion-inner">
+        <div id={panelId} className="zoom-invitation-people" tabIndex={0} role="region" aria-label="Список участников">
+          {membersMounted && members.map(member => {
+            const person = personById.get(member.userId);
             return <div key={member.userId} className="zoom-invitation-person">
               <ProfileAvatar person={person ?? { id: member.userId, name: "Сотрудник" }} token={token} size={28} aria-hidden />
               <span>{person ? <EmployeeProfileLink userId={person.id} personName={person.name}>{person.name}</EmployeeProfileLink> : "Сотрудник"}
                 <small>{member.response === "organizer" ? "Организатор" : member.response === "accepted" ? "Участвует" : member.response === "declined" ? "Отказался" : "Приглашён"}</small></span></div>;
           })}
         </div>
-        {!expanded && <div className="zoom-invitation-avatar-stack" aria-hidden="true">{members.slice(0, 5).map(member => {
-          const person = people.find(p => p.id === member.userId);
-          return <ProfileAvatar key={member.userId} person={person ?? { id: member.userId, name: "Сотрудник" }} token={token} size={24} aria-hidden />;
-        })}<span>{members.length > 5 ? `+${members.length - 5}` : "Ваша команда"}</span></div>}
+        </div></div>
       </>}
       {scheduled && <>
         <div className="zoom-invitation-actions">

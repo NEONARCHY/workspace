@@ -27,14 +27,17 @@
 .zoom-invitation-disclosure > span:nth-child(2) { color: var(--ws-theme-muted, #617489); font-variant-numeric: tabular-nums; }
 .zoom-invitation-disclosure > svg { transition: transform var(--ws-motion-normal, 220ms) var(--ws-ease, ease-out); }
 .zoom-invitation-disclosure[aria-expanded="true"] > svg { transform: rotate(180deg); }
+.zoom-invitation-accordion { display: grid; grid-template-rows: 0fr; transition: grid-template-rows var(--ws-motion-normal, 220ms) var(--ws-ease, ease-out); }
+.zoom-invitation-accordion[data-open="true"] { grid-template-rows: 1fr; }
+.zoom-invitation-accordion-inner { min-height: 0; overflow: hidden; opacity: 0; transition: opacity var(--ws-motion-fast, 160ms) ease; }
+.zoom-invitation-accordion[data-open="true"] .zoom-invitation-accordion-inner { opacity: 1; }
+.zoom-invitation-disclosure:focus-visible > svg,
+.zoom-invitation-disclosure:focus-visible + .zoom-invitation-accordion,
+.zoom-invitation-disclosure:focus-visible + .zoom-invitation-accordion .zoom-invitation-accordion-inner { transition: none; }
 .zoom-invitation-people { max-height: 192px; overflow: auto; scrollbar-gutter: stable; }
 .zoom-invitation-person { display: flex; align-items: center; gap: 9px; padding: 6px 0; font-size: 12px; }
 .zoom-invitation-person > span { min-width: 0; overflow-wrap: anywhere; }
 .zoom-invitation-person small { display: block; margin-top: 2px; color: var(--ws-theme-muted, #617489); font-size: 11px; }
-.zoom-invitation-avatar-stack { display: flex; align-items: center; padding: 4px 0; }
-.zoom-invitation-avatar-stack > .fui-Avatar + .fui-Avatar { margin-left: -5px; }
-.zoom-invitation-avatar-stack > .fui-Avatar { outline: 2px solid var(--ws-theme-surface, #fff); }
-.zoom-invitation-avatar-stack > span:last-child:not(.fui-Avatar) { margin-left: 10px; font-size: 11px; color: var(--ws-theme-muted, #617489); }
 .zoom-invitation-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 .zoom-invitation-actions > :is(button, a) { display: inline-flex; justify-content: center; align-items: center; gap: 6px; min-height: 38px; min-width: max-content; white-space: nowrap; padding: 8px 12px; border: 0; border-radius: 12px; font: inherit; font-size: 12px; font-weight: 600; text-decoration: none; cursor: pointer; box-sizing: border-box; transition: background-color var(--ws-motion-fast, 160ms) ease; }
 .zoom-invitation-actions > .zoom-invitation-primary { flex: 1; background: var(--ws-button-surface, #293a55); color: var(--ws-theme-ink, white); }
@@ -61,9 +64,10 @@
   .zoom-invitation-actions > :is(button, a), .zoom-invitation-disclosure, .zoom-invitation-link { min-height: 44px; }
   .zoom-invitation-content { padding-inline: 16px; }
 }
-@media (prefers-reduced-motion: reduce) { .zoom-invitation-disclosure > svg { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .zoom-invitation-disclosure > svg, .zoom-invitation-accordion, .zoom-invitation-accordion-inner { transition: none; } }
 @media (forced-colors: active) {
   .zoom-invitation, .zoom-invitation-date, .zoom-invitation-banner { background: Canvas; color: CanvasText; border-color: CanvasText; box-shadow: none; }
   .zoom-invitation-art { display: none; }
+  .zoom-invitation-disclosure > svg, .zoom-invitation-accordion, .zoom-invitation-accordion-inner { transition: none; }
   .zoom-invitation-actions > :is(button, a) { background: ButtonFace; color: ButtonText; border: 1px solid ButtonText; }
 }
