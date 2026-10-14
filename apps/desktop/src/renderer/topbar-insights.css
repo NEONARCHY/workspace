@@ -120,4 +120,7 @@ html body .topbar-context-surface { display: flex; flex-direction: column; width
   .context-trigger, html body .topbar-context-surface, .context-air { background: Canvas; color: CanvasText; border: 1px solid CanvasText; box-shadow: none; }
   .topbar-context-surface .context-panel-head, .context-rate-row[aria-pressed="true"], .context-capital { background: Canvas; }
   .context-rate-row[aria-pressed="true"] { border-color: Highlight; }
+  .topbar-context-surface .fui-Input { background: Canvas; color: CanvasText; border-color: CanvasText; }
+  .topbar-context-surface :is(input, .fui-Button) { background: Canvas; color: CanvasText; }
+  .topbar-context-surface .fui-Button { border-color: ButtonText; }
 }
