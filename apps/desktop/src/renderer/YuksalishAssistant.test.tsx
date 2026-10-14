@@ -121,6 +121,56 @@ describe("YuksalishAssistant", () => {
     expect(screen.getByRole("combobox", { name: "Чат ассистента" })).toBeEnabled();
   });
 
+  it("resizes the sidebar and retains its width and draft after collapsing", async () => {
+    render(<YuksalishAssistant token="test-token" />);
+    fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
+    await screen.findByText("С чего начнём?");
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Не потерять" } });
+    fireEvent.click(screen.getByRole("button", { name: "Развернуть окно" }));
+    const sidebar = screen.getByRole("complementary", { name: "Чаты ассистента" });
+    expect(within(sidebar).getByRole("button", { name: "Свернуть список чатов" })).toBeInTheDocument();
+    expect(document.querySelector(".assistant-header .assistant-sidebar-toggle")).toBeNull();
+    expect(within(sidebar).queryByText("Ваши чаты")).not.toBeInTheDocument();
+    const row = sidebar.querySelector(".assistant-sidebar-heading")!;
+    expect(within(row as HTMLElement).getByRole("button", { name: "Новый чат" })).toBeInTheDocument();
+    expect(within(row as HTMLElement).getByRole("button", { name: "Свернуть список чатов" })).toBeInTheDocument();
+    const handle = screen.getByRole("separator", { name: "Ширина списка чатов" });
+    fireEvent.keyDown(handle, { key: "ArrowRight" });
+    expect(handle).toHaveAttribute("aria-valuenow", "268");
+    fireEvent.keyDown(handle, { key: "Home" });
+    expect(handle).toHaveAttribute("aria-valuenow", "220");
+    fireEvent.keyDown(handle, { key: "ArrowLeft" });
+    expect(handle).toHaveAttribute("aria-valuenow", "220");
+    fireEvent.keyDown(handle, { key: "End" });
+    const width = handle.getAttribute("aria-valuenow");
+    fireEvent.click(within(sidebar).getByRole("button", { name: "Свернуть список чатов" }));
+    expect(screen.queryByRole("separator")).not.toBeInTheDocument();
+    fireEvent.click(within(sidebar).getByRole("button", { name: "Показать список чатов" }));
+    expect(screen.getByRole("separator")).toHaveAttribute("aria-valuenow", width);
+    expect(screen.getByRole("textbox")).toHaveValue("Не потерять");
+    expect(sendAssistantMessage).not.toHaveBeenCalled();
+  });
+
+  it("drags the sidebar one-to-one and restores the width when the gesture is cancelled", async () => {
+    vi.stubGlobal("PointerEvent", MouseEvent);
+    render(<YuksalishAssistant token="test-token" />);
+    fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
+    await screen.findByText("С чего начнём?");
+    fireEvent.click(screen.getByRole("button", { name: "Развернуть окно" }));
+    const handle = screen.getByRole("separator");
+    handle.setPointerCapture = vi.fn(); handle.hasPointerCapture = vi.fn(() => true); handle.releasePointerCapture = vi.fn();
+    fireEvent.pointerDown(handle, { button: 0, clientX: 258 });
+    fireEvent.pointerMove(handle, { clientX: 308 });
+    expect(handle).toHaveAttribute("aria-valuenow", "308");
+    fireEvent.pointerCancel(handle);
+    expect(handle).toHaveAttribute("aria-valuenow", "258");
+    fireEvent.pointerDown(handle, { button: 0, clientX: 258 });
+    fireEvent.pointerMove(handle, { clientX: 288 });
+    fireEvent.pointerUp(handle);
+    fireEvent.pointerMove(handle, { clientX: 400 });
+    expect(handle).toHaveAttribute("aria-valuenow", "288");
+  });
+
   it("switches sidebar chats in the expanded window without losing unsent text", async () => {
     vi.mocked(listAssistantChats).mockResolvedValue(["first", "second"].map((id) => ({ id,
       title: id, isDefault: id === "first", createdAt: "2026-10-04", updatedAt: "2026-10-04" })));
@@ -188,6 +238,11 @@ describe("YuksalishAssistant", () => {
     fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
     await screen.findByText("С чего начнём?");
     const toggle = screen.getByRole("button", { name: "Быстрые действия" });
+    const tools = toggle.closest(".assistant-composer-tools");
+    expect(tools).not.toBeNull();
+    expect(tools).toContainElement(screen.getByRole("button", { name: "Выбрать мощность модели" }));
+    expect(toggle.textContent).toBe("");
+    expect(toggle.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
     fireEvent.click(toggle);
     const actions = await screen.findByRole("group", { name: "Быстрые действия" });
     expect(within(actions).getAllByRole("button")).toHaveLength(8);
@@ -196,6 +251,21 @@ describe("YuksalishAssistant", () => {
     expect(toggle).toHaveFocus();
     expect(screen.getByRole("dialog", { name: "Ассистент Yuksalish" })).toBeInTheDocument();
     expect(screen.getByText("ИИ может допускать ошибки, перепроверяйте ответы")).toBeInTheDocument();
+  });
+
+  it("starts with a single compact line and still grows and scrolls for multiline input", async () => {
+    render(<YuksalishAssistant token="test-token" />);
+    fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
+    await screen.findByText("С чего начнём?");
+    const editor = screen.getByRole("textbox", { name: "Сообщение ассистенту" });
+    expect(editor).toHaveAttribute("rows", "1");
+    await waitFor(() => expect(editor).toHaveStyle({ height: "24px" }));
+    Object.defineProperty(editor, "scrollHeight", { configurable: true, value: 1000 });
+    fireEvent.change(editor, { target: { value: "Длинный текст\n".repeat(30) } });
+    await waitFor(() => expect(editor).toHaveStyle({ height: "180px", overflowY: "auto" }));
+    Object.defineProperty(editor, "scrollHeight", { configurable: true, value: 24 });
+    fireEvent.change(editor, { target: { value: "Короткий текст" } });
+    await waitFor(() => expect(editor).toHaveStyle({ height: "24px", overflowY: "hidden" }));
   });
 
   it("confirms permanent deletion and keeps the chat and draft on failure", async () => {
@@ -214,6 +284,8 @@ describe("YuksalishAssistant", () => {
     fireEvent.click(screen.getByRole("button", { name: "Действия с текущим чатом" }));
     fireEvent.click(await screen.findByRole("menuitem", { name: "Удалить чат" }));
     const firstConfirmation = await screen.findByRole("dialog", { name: "Удалить чат?" });
+    expect(firstConfirmation).toHaveClass("assistant-owned-dialog");
+    await waitFor(() => expect(document.querySelector(".yuksalish-assistant-root")).not.toHaveAttribute("data-blocking-dialog"));
     const cancelButton = within(firstConfirmation).getByRole("button", { name: "Отмена", hidden: true });
     // Model the focus of a real pointer click before asserting Tabster's modal state.
     act(() => cancelButton.focus());
@@ -277,7 +349,7 @@ describe("YuksalishAssistant", () => {
     expect(screen.getByRole("textbox")).toHaveValue("Не потерять");
     expect(within(sidebar).getByRole("button", { name: /first/ })).toHaveAttribute("aria-current", "true");
     fireEvent.click(screen.getByRole("button", { name: "Свернуть список чатов" }));
-    expect(screen.queryByRole("navigation", { name: "Список чатов ассистента" })).not.toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "Список чатов ассистента", hidden: true })).not.toBeVisible();
     expect(screen.getByRole("textbox")).toHaveValue("Не потерять");
     fireEvent.click(screen.getByRole("button", { name: "Показать список чатов" }));
     const restored = screen.getByRole("navigation", { name: "Список чатов ассистента" });
@@ -403,6 +475,24 @@ describe("YuksalishAssistant", () => {
     } finally { journey.mockRestore(); }
   });
 
+  it("uses shared blur entrance for both assistant roles and reverse composer exit without replaying history", async () => {
+    vi.mocked(loadAssistantMessages).mockResolvedValue([{ id: "old", role: "assistant", model: "flash-lite", content: "Старая история", createdAt: "2026-09-28T09:00:00Z" }]);
+    let resolve!: (value: Awaited<ReturnType<typeof sendAssistantMessage>>) => void;
+    vi.mocked(sendAssistantMessage).mockImplementation(() => new Promise(done => { resolve = done; }));
+    render(<YuksalishAssistant token="test-token" />);
+    fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
+    await screen.findByText("Старая история");
+    expect(document.querySelector(".assistant-message [data-text-animation]")).toBeNull();
+    fireEvent.change(screen.getByRole("textbox", { name: "Сообщение ассистенту" }), { target: { value: "Новый вопрос" } });
+    fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
+    expect(document.querySelector('.assistant-message.is-user [data-text-animation="enter"]')).toBeInTheDocument();
+    expect(document.querySelector('.assistant-composer [data-text-animation="exit"]')).toBeInTheDocument();
+    await act(async () => resolve({ id: "answer", role: "assistant", model: "flash-lite", content: "## Ответ\nЭто **важно**\n[Источник](https://example.com)", createdAt: "2026-09-28T10:00:00Z" }));
+    expect(document.querySelector('.assistant-reply .is-heading [data-text-animation="enter"]')).toBeInTheDocument();
+    expect(document.querySelector('.assistant-reply strong [data-text-animation="enter"]')).toBeInTheDocument();
+    expect(document.querySelector('.assistant-source')).toHaveAttribute("title", "https://example.com");
+  });
+
   it("opens globally, switches model and keeps a real answer in the stream", async () => {
     vi.mocked(sendAssistantMessage).mockResolvedValue({
       id: "reply-1", role: "assistant", model: "pro",
@@ -521,7 +611,7 @@ describe("YuksalishAssistant", () => {
     fireEvent.change(input, { target: { value: "Что нового?" } });
     fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
     expect(input.value).toBe("");
-    expect(screen.getByText("Что нового?")).toBeInTheDocument();
+    expect(document.querySelector(".assistant-message.is-user")).toHaveTextContent("Что нового?");
     expect(screen.getByTestId("thinking-composing")).toBeInTheDocument();
     resolveAnswer({ id: "reply-2", role: "assistant", model: "flash",
       content: "Есть обновления.", createdAt: "2026-09-28T10:00:00Z" });
@@ -661,17 +751,28 @@ describe("YuksalishAssistant", () => {
     fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
     await screen.findByText("С чего начнём?");
     const cancel = vi.fn();
-    const animate = vi.fn(() => ({ cancel }) as unknown as Animation);
+    const originalAnimate = Object.getOwnPropertyDescriptor(Element.prototype, "animate");
+    const animation = () => ({ cancel, finished: new Promise<void>(() => {}) }) as unknown as Animation;
+    Object.defineProperty(Element.prototype, "animate", { configurable: true, writable: true, value: vi.fn(animation) });
+    const animate = vi.fn(animation);
     screen.getByRole("dialog", { name: "Ассистент Yuksalish" }).animate = animate;
     fireEvent.click(screen.getByRole("button", { name: "Развернуть окно" }));
     expect(animate).toHaveBeenCalledTimes(1);
+    const snapshot = document.querySelector(".assistant-resize-snapshot");
+    expect(snapshot).toHaveAttribute("aria-hidden", "true");
+    expect(snapshot?.querySelector("[id]")).toBeNull();
+    expect(document.querySelector<HTMLElement>(".assistant-panel-content")?.style.width).not.toBe("");
     act(() => { reduced.matches = true; reduced.dispatchEvent(new Event("change")); });
     expect(cancel).toHaveBeenCalled();
+    expect(document.querySelector(".assistant-resize-snapshot")).toBeNull();
+    expect(document.querySelector<HTMLElement>(".assistant-panel-content")?.style.width).toBe("");
     fireEvent.click(screen.getByRole("button", { name: "Свернуть окно" }));
     expect(animate).toHaveBeenCalledTimes(1);
     act(() => { forced.matches = true; reduced.matches = false; forced.dispatchEvent(new Event("change")); });
     fireEvent.click(screen.getByRole("button", { name: "Развернуть окно" }));
     expect(animate).toHaveBeenCalledTimes(1);
+    if (originalAnimate) Object.defineProperty(Element.prototype, "animate", originalAnimate);
+    else Reflect.deleteProperty(Element.prototype, "animate");
   });
 
   it("does not treat a general question after a ready draft as a draft edit", async () => {

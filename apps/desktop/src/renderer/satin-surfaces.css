@@ -1,0 +1,98 @@
+/* Maqro satin is painted IN the element's real border box.
+   Opaque padding-box fill prevents the border gradient entering the content.
+   No pseudo-element, mask, positioning, z-index or extra DOM layer is used. */
+@media (forced-colors: none) {
+  html[data-color-theme="dark"] .app-shell .app-rail.sidebar-palette,
+  html[data-color-theme="dark"] .browser-navigation-dialog .app-rail.sidebar-palette {
+    border-color: transparent;
+    box-shadow: none;
+  }
+  html[data-color-theme="dark"] {
+    --ws-date-time-popover-edge: transparent;
+    /* Maqro's sweep alpha multiplied by its inactive strength, .78. */
+    --ws-satin-edge: conic-gradient(from 0deg,
+      rgb(255 255 255 / 12.09%) 0%, rgb(255 255 255 / 9.75%) 13%,
+      rgb(255 255 255 / 2.964%) 27%, rgb(255 255 255 / 1.56%) 40%,
+      rgb(255 255 255 / .546%) 50%, rgb(255 255 255 / 1.56%) 60%,
+      rgb(255 255 255 / 2.964%) 73%, rgb(255 255 255 / 9.75%) 87%,
+      rgb(255 255 255 / 12.09%) 100%);
+    --ws-satin-sheen: linear-gradient(90deg, transparent, rgb(255 255 255 / 7.8585%) 22%,
+      rgb(155 213 212 / 3.6465%) 78%, transparent);
+    --ws-date-time-satin-background: linear-gradient(var(--ws-surface), var(--ws-surface)) padding-box,
+      var(--ws-satin-sheen) top center / 80% 1px no-repeat border-box, var(--ws-satin-edge) border-box;
+  }
+  html[data-color-theme="dark"] body :is(
+    .workspace-view .ws-section-header, .team-dashboard .ws-section-header, .telegram-access-view .ws-section-header,
+    .project-hub-header, .home-panel, .home-overview article, .kanban-card, .project-card,
+    .approval-board-card, .feed-card, .team-dash-metric, .team-dash-panel,
+    .notification-progress-card, .calendar-board, .calendar-side, .record-table-frame,
+    .record-table-shell, .employee-records, .task-records, .task-focus-object,
+    .messenger-view > .list-pane, .messenger-view > .conversation-pane,
+    .assistant-panel, .account-panel, .fui-DialogSurface, .fui-PopoverSurface,
+    .fui-MenuPopover:not(.reaction-picker-popover), .fui-Listbox,
+    .edo-incoming-list, .edo-incoming-detail, .edo-incoming-summary > span, .edo-incoming-error,
+    .edo-incoming-secondary, .edo-incoming-error button, .edo-access-card,
+    .telegram-access-overview, .telegram-access-guide, .telegram-access-row, .telegram-access-bot,
+    .calendar-filters, .employees-header-tools, .chat-row.selected,
+    .account-section, .account-profile, .session-list > div, .color-theme-choice, .sidebar-theme-choice, .sidebar-theme-swatch,
+    .account-profile-status button:not(.needs-attention),
+    .totp-setup, .invite-result, .account-session-confirm, .desktop-update-step,
+    .notification-metrics > button, .notification-stream-shell, .notification-context,
+    .notification-kind-filters, .notification-head-actions,
+    .survey-panel, .survey-settings, .survey-file-drop, .survey-group-grid article, .task-team-picker, .task-composer .record-section,
+    .fui-Input:not(.composer-input .fui-Input), .fui-Textarea, .fui-Select, .fui-Combobox, .fui-Dropdown,
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]):not(.fui-Input__input):not(.fui-Combobox__input):not(.ai-gooey-search-input),
+    textarea:not(.fui-Textarea__textarea):not(.assistant-editor), select:not(.fui-Select__select), .account-page-heading > svg
+  ):not([data-satin-excluded]):not([aria-invalid="true"]):not(:has([aria-invalid="true"])) {
+    border-color: var(--ws-satin-border-color, transparent);
+    background-image: var(--ws-satin-fill, linear-gradient(var(--ws-surface), var(--ws-surface))), var(--ws-satin-sheen), var(--ws-satin-edge);
+    background-origin: border-box, border-box, border-box;
+    background-clip: padding-box, border-box, border-box;
+    background-size: auto, 80% 1px, auto;
+    background-position: center, top center, center;
+    background-repeat: no-repeat;
+    background-attachment: scroll;
+  }
+  /* Preserve the established raised/recessed and selected surface fills. */
+  html[data-color-theme="dark"] body :is(.ws-section-header, .project-hub-header) {
+    --ws-satin-fill: linear-gradient(115deg, #25252f, #1b1c22 72%);
+  }
+  html[data-color-theme="dark"] body :is(.fui-MenuPopover, .fui-PopoverSurface, .fui-Listbox) {
+    --ws-satin-fill: linear-gradient(var(--ws-popup-surface), var(--ws-popup-surface));
+  }
+  html[data-color-theme="dark"] body :is(.session-list > div, .account-page-heading > svg) {
+    --ws-satin-fill: linear-gradient(var(--ws-muted-surface), var(--ws-muted-surface));
+  }
+  html[data-color-theme="dark"] body .account-profile {
+    --ws-satin-fill: linear-gradient(100deg, var(--ws-selected), var(--ws-muted-surface) 60%, var(--ws-surface));
+  }
+  html[data-color-theme="dark"] body :is(.color-theme-choice, .sidebar-theme-choice)[aria-pressed="true"],
+  html[data-color-theme="dark"] body :is(.chat-row.selected, .notification-metrics > button.active, .telegram-access-bot:has(input:checked)) {
+    --ws-satin-fill: linear-gradient(var(--ws-selected), var(--ws-selected));
+    --ws-satin-sheen: linear-gradient(90deg, transparent, rgb(155 213 212 / 65%) 22%, rgb(155 213 212 / 28%) 78%, transparent);
+  }
+  html[data-color-theme="dark"] body :is(.color-theme-choice, .sidebar-theme-choice)[aria-pressed="true"] { box-shadow: none; }
+  html[data-color-theme="dark"] body .fui-Dropdown > .fui-Dropdown__button { border-color: transparent; }
+  /* Field shells own the border; their child input remains borderless. */
+  html[data-color-theme="dark"] body :is(.fui-Input, .fui-Textarea, .fui-Select, .fui-Combobox, .fui-Dropdown) {
+    --ws-satin-fill: linear-gradient(var(--ws-surface), var(--ws-surface));
+  }
+  html[data-color-theme="dark"] body .edo-incoming-error { --ws-satin-tone: var(--ws-danger); }
+  html[data-color-theme="dark"] body .edo-incoming-caution {
+    --ws-satin-tone: var(--ws-theme-ink-warning);
+    --ws-satin-fill: linear-gradient(var(--ws-theme-wash-warning), var(--ws-theme-wash-warning));
+  }
+  html[data-color-theme="dark"] body :is(.edo-incoming-error, .edo-incoming-caution) {
+    --ws-satin-sheen: linear-gradient(90deg, transparent, color-mix(in srgb, var(--ws-satin-tone) 45%, transparent), transparent);
+    --ws-satin-edge: conic-gradient(from 0deg,
+      color-mix(in srgb, var(--ws-satin-tone) 45%, transparent) 0%,
+      color-mix(in srgb, var(--ws-satin-tone) 35%, transparent) 13%,
+      color-mix(in srgb, var(--ws-satin-tone) 12%, transparent) 27%,
+      color-mix(in srgb, var(--ws-satin-tone) 6%, transparent) 40%,
+      color-mix(in srgb, var(--ws-satin-tone) 3%, transparent) 50%,
+      color-mix(in srgb, var(--ws-satin-tone) 6%, transparent) 60%,
+      color-mix(in srgb, var(--ws-satin-tone) 12%, transparent) 73%,
+      color-mix(in srgb, var(--ws-satin-tone) 35%, transparent) 87%,
+      color-mix(in srgb, var(--ws-satin-tone) 45%, transparent) 100%);
+  }
+}

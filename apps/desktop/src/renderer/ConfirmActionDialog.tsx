@@ -14,9 +14,10 @@ interface ConfirmActionDialogProps {
   readonly onCancel: () => void;
   readonly onConfirm: () => void | Promise<void>;
   readonly onExited?: () => void;
+  readonly owner?: "assistant";
 }
 
-export function ConfirmActionDialog({ open, title, message, confirmLabel = "Удалить", busyLabel = "Удаляем…", busy = false, onCancel, onConfirm, onExited }: ConfirmActionDialogProps) {
+export function ConfirmActionDialog({ open, title, message, confirmLabel = "Удалить", busyLabel = "Удаляем…", busy = false, onCancel, onConfirm, onExited, owner }: ConfirmActionDialogProps) {
   const messageId = useId();
   const [content, setContent] = useState({ title, message, confirmLabel, busyLabel, busy });
   // Callers clear the target when closing; Fluent keeps its surface for exit
@@ -30,7 +31,9 @@ export function ConfirmActionDialog({ open, title, message, confirmLabel = "Уд
     easing: "cubic-bezier(0.2, 0, 0, 1)", exitEasing: "cubic-bezier(0.4, 0, 1, 1)",
     onMotionFinish: (_, data) => { if (data.direction === "exit") onExited?.(); } }}
     onOpenChange={(_, data) => { if (open && !data.open && !busy) onCancel(); }}>
-    <DialogSurface className="confirm-action-dialog" aria-describedby={messageId} aria-busy={content.busy}>
+    <DialogSurface className={`confirm-action-dialog${owner === "assistant" ? " assistant-owned-dialog" : ""}`}
+      backdrop={owner === "assistant" ? { className: "assistant-owned-dialog" } : undefined}
+      aria-describedby={messageId} aria-busy={content.busy}>
       <DialogBody>
         <DialogTitle>{content.title}</DialogTitle>
         <DialogContent id={messageId}>{content.message}</DialogContent>

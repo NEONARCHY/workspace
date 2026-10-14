@@ -1,7 +1,7 @@
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import { useRef } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { orbPose, orbReveal, orbStreamClip, orbTransform, useAssistantOrbJourney } from "./assistant-orb-journey";
+import { launcherOrbPose, orbPose, orbReveal, orbStreamClip, orbTransform, useAssistantOrbJourney } from "./assistant-orb-journey";
 
 function Harness({ open = false, empty = true, reduced = false, geometry = "desktop", ready = true, blocked = false,
   returnWithoutFlight = false, welcomeWithoutFlight = false }) {
@@ -17,6 +17,17 @@ function Harness({ open = false, empty = true, reduced = false, geometry = "desk
 }
 
 const originalAnimate = Object.getOwnPropertyDescriptor(Element.prototype, "animate");
+it("centres the launcher orb between the visible theme icon and avatar, including zoom", () => {
+  const { container } = render(<div className="workspace-top-context"><button className="color-theme-toggle"><svg /></button>
+    <button className="assistant-launcher" /><button className="workspace-identity-menu"><span className="fui-Avatar" /></button></div>);
+  vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
+    return this.matches("svg") ? new DOMRect(12, 22, 16, 16)
+      : this.matches(".fui-Avatar") ? new DOMRect(112, 14, 32, 32) : new DOMRect(52, 6, 48, 48);
+  });
+  const launcher = container.querySelector<HTMLElement>(".assistant-launcher")!;
+  expect(launcherOrbPose(launcher, 1)).toEqual({ x: 70, y: 30, size: 48 });
+  expect(launcherOrbPose(launcher, 1.25)).toEqual({ x: 56, y: 24, size: 38.4 });
+});
 const originalFonts = Object.getOwnPropertyDescriptor(document, "fonts");
 afterEach(() => {
   cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals();
@@ -55,6 +66,20 @@ function motionFixture({ followVisual = false } = {}) {
 }
 
 describe("assistant orb choreography", () => {
+  it.each([true, false])("does not start an independent flight on expand/collapse geometry (empty=%s)", async (empty) => {
+    const pending = motionFixture({ followVisual: true });
+    const view = render(<Harness open empty={empty} geometry="compact" />);
+    await screen.findByText("travelling");
+    await act(async () => { pending[0]!.finish(); pending[1]!.finish(); });
+    await screen.findByText("ready");
+    const orb = document.querySelector("[data-slot='visual']");
+    view.rerender(<Harness open empty={empty} geometry="expanded" welcomeWithoutFlight returnWithoutFlight />);
+    await screen.findByText("ready");
+    view.rerender(<Harness open empty={empty} geometry="compact" />);
+    await screen.findByText("ready");
+    expect(pending).toHaveLength(2);
+    expect(document.querySelector("[data-slot='visual']")).toBe(orb);
+  });
   it("tracks a fixed-size launcher moved by its layout ancestors, then disconnects", async () => {
     let notify = () => {};
     const observe = vi.fn(), disconnect = vi.fn();

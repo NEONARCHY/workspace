@@ -71,6 +71,8 @@
 .task-participant-co { --task-participant-ring: #71869b; }
 .task-participant-observer { --task-participant-ring: #b6c4ca; }
 .task-participant-author { --task-participant-ring: #95bbc2; }
+.task-participant-anchor[data-working="true"] { --task-participant-ring: var(--ws-theme-line-success, #319564); }
+.task-participant-anchor[data-working="true"] .task-participant-avatar .fui-Avatar { border-color: var(--task-participant-ring); outline-color: var(--task-participant-ring); }
 .task-participant-popover { position: fixed; z-index: 100; box-sizing: border-box; width: max-content; max-width: min(320px, calc(100vw - 24px)); padding: 9px 12px; border: 1px solid var(--ws-line); border-radius: 13px; color: var(--ws-text); background: var(--ws-surface); box-shadow: var(--ws-shadow-float); }
 .task-participant-profile { display: grid; justify-items: center; gap: 1px; max-width: 100%; text-align: center; overflow-wrap: anywhere; color: var(--ws-text); }
 .task-participant-profile small { color: var(--ws-muted); font-size: 11px; }
@@ -143,7 +145,9 @@
 .record-table-paging .record-page-nav { display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 1px solid var(--ws-line); border-radius: 10px; color: var(--ws-link); background: var(--ws-theme-surface, white); cursor: pointer; }
 .record-table-paging .record-page-nav:hover:not(:disabled) { border-color: var(--ws-theme-line-teal, #8abfc5); background: var(--ws-theme-surface-soft, #eef7f6); }
 .record-table-paging .record-page-nav:disabled { color: var(--ws-theme-muted, #81909d); background: var(--ws-muted-surface); cursor: default; }
-.record-table-empty { display: grid; gap: 8px; padding: 40px 24px; text-align: center; color: var(--ws-muted); font-size: 14px; }
+.record-table-scroll:has(> .record-table-empty) { display: flex; flex-direction: column; }
+.record-table-scroll:has(> .record-table-empty) > .record-table { flex: none; }
+.record-table-empty { display: grid; flex: 1; align-content: center; justify-items: center; gap: 8px; min-height: 0; box-sizing: border-box; padding: 24px; text-align: center; color: var(--ws-muted); font-size: 14px; }
 .record-table-empty strong { color: var(--ws-text); }
 .fui-DialogSurface.task-record-dialog, .fui-DialogSurface.directory-record-dialog { width: min(840px, calc(100vw - 32px)); max-width: none; max-height: calc(100dvh - 32px); padding: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; margin: auto !important; }
 .task-record-dialog .task-detail { overflow: visible; border-left: 0; }

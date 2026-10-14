@@ -1,0 +1,202 @@
+/* One contextual surface, derived from the messenger's flat message menu.
+   Forms, calendars, sliders and emoji grids retain their own content layout. */
+:root {
+  --ws-popup-radius: 17px;
+  --ws-popup-row-height: 34px;
+  --ws-popup-menu-fill: rgb(var(--ws-theme-surface-rgb, 255 255 255) / .97);
+  --ws-popup-menu-shadow: 0 18px 44px rgb(41 58 85 / 18%);
+  --ws-popup-menu-hover: var(--ws-selected);
+  --ws-popup-separator: rgb(75 112 128 / .14);
+}
+html[data-color-theme="dark"] {
+  --ws-popup-menu-shadow: 0 18px 44px rgb(5 5 9 / 40%);
+  --ws-popup-menu-hover: #3b3d4b;
+  --ws-popup-separator: rgb(190 205 220 / .12);
+}
+html body :is(
+  .fui-PopoverSurface.fui-PopoverSurface, .fui-MenuPopover.fui-MenuPopover,
+  .fui-Listbox.fui-Listbox, .fui-Tooltip,
+  .message-context-menu, .assistant-context-menu, .assistant-chat-options,
+  .rail-ai-popover, .task-participant-popover, .task-section-help-surface,
+  .media-volume-popover, .message-reaction-submenu, .task-deadline-request-popover
+) {
+  border: 0;
+  border-radius: var(--ws-popup-radius);
+  background: var(--ws-popup-menu-fill);
+  color: var(--ws-text);
+  box-shadow: var(--ws-popup-menu-shadow);
+  backdrop-filter: blur(16px);
+}
+/* Keep dark satin in the actual border, never as a foreground sprite. */
+@media (forced-colors: none) {
+  html[data-color-theme="dark"] body :is(
+    .fui-PopoverSurface.fui-PopoverSurface, .fui-MenuPopover.fui-MenuPopover,
+    .fui-Listbox.fui-Listbox, .fui-Tooltip,
+    .message-context-menu, .assistant-context-menu, .assistant-chat-options,
+    .rail-ai-popover, .task-participant-popover, .task-section-help-surface,
+    .media-volume-popover, .message-reaction-submenu, .task-deadline-request-popover
+  ) {
+    border: 1px solid transparent;
+    --ws-satin-fill: linear-gradient(var(--ws-theme-surface), var(--ws-theme-surface));
+    background-image: linear-gradient(var(--ws-theme-surface), var(--ws-theme-surface)), var(--ws-satin-sheen), var(--ws-satin-edge);
+    background-origin: border-box;
+    background-clip: padding-box, border-box, border-box;
+    background-size: auto, 80% 1px, auto;
+    background-position: center, top center, center;
+    background-repeat: no-repeat;
+  }
+}
+html body :is(
+  .fui-MenuPopover:not(.reaction-picker-popover):not(.message-reaction-popover),
+  .fui-Listbox, .assistant-context-menu, .assistant-chat-options,
+  .identity-popover, .browser-chat-actions-popover, .assistant-presets-surface,
+  .rail-ai-popover
+) { padding: 0; gap: 0; overflow-x: hidden; }
+html body :is(
+  .fui-MenuList:not(.reaction-picker-grid):not(.message-reaction-grid):not(.feed-reaction-grid),
+  .identity-popover-actions, .browser-chat-actions-popover > div,
+  .assistant-presets-list, .assistant-chat-options
+) { gap: 0; padding: 0; }
+html body :is(.fui-MenuPopover, .identity-popover, .browser-chat-actions-popover, .assistant-presets-surface) { overflow: hidden; }
+html body :is(
+  .fui-Listbox .fui-Option.fui-Option,
+  .fui-MenuList:not(.reaction-picker-grid):not(.message-reaction-grid):not(.feed-reaction-grid) > :is(.fui-MenuItem, .fui-MenuItemCheckbox, .fui-MenuItemRadio),
+  .identity-popover-actions .fui-Button, .browser-chat-actions-popover .fui-Button,
+  .assistant-context-menu > button, .assistant-chat-options > button,
+  .assistant-presets-list > button, .rail-ai-popover .rail-action
+) {
+  box-sizing: border-box;
+  position: relative;
+  width: 100%;
+  height: auto;
+  min-height: var(--ws-popup-row-height);
+  margin: 0;
+  padding: 6px 16px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  background-image: none;
+  color: var(--priority-ink, var(--ws-text));
+  box-shadow: var(--ws-popup-row-focus, none);
+  transform: none;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 14px;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 20px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  transition: color 150ms var(--ws-ease);
+}
+html[data-popup-input="pointer"] body :is(
+  .fui-Listbox .fui-Option.fui-Option,
+  .fui-MenuList:not(.reaction-picker-grid):not(.message-reaction-grid):not(.feed-reaction-grid) > :is(.fui-MenuItem, .fui-MenuItemCheckbox, .fui-MenuItemRadio),
+  .identity-popover-actions .fui-Button, .browser-chat-actions-popover .fui-Button,
+  .assistant-context-menu > button, .assistant-chat-options > button,
+  .assistant-presets-list > button, .rail-ai-popover .rail-action
+):not(:disabled):not([aria-disabled="true"]):hover {
+  background: var(--ws-popup-row-hover, var(--priority-fill, var(--ws-popup-menu-hover)));
+  transform: none;
+  color: var(--ws-popup-row-hover-ink, var(--priority-ink, var(--ws-text)));
+}
+html:not([data-popup-input="pointer"]) body :is(
+  .fui-Listbox .fui-Option.fui-Option,
+  .fui-MenuList:not(.reaction-picker-grid):not(.message-reaction-grid):not(.feed-reaction-grid) > :is(.fui-MenuItem, .fui-MenuItemCheckbox, .fui-MenuItemRadio),
+  .identity-popover-actions .fui-Button, .browser-chat-actions-popover .fui-Button,
+  .assistant-context-menu > button, .assistant-chat-options > button,
+  .assistant-presets-list > button, .rail-ai-popover .rail-action
+):not(:disabled):not([aria-disabled="true"]):is(:focus-visible, [data-activedescendant-focusvisible]) {
+  background: var(--ws-popup-row-hover, var(--priority-fill, var(--ws-popup-menu-hover)));
+  transform: none;
+  color: var(--ws-popup-row-hover-ink, var(--priority-ink, var(--ws-text)));
+}
+html body .fui-Listbox .fui-Option::before,
+html body .fui-Listbox .fui-Option::after,
+html body .fui-MenuList:not(.reaction-picker-grid):not(.message-reaction-grid):not(.feed-reaction-grid) > :is(.fui-MenuItem, .fui-MenuItemCheckbox, .fui-MenuItemRadio)::after { display: none; }
+/* A selected value keeps its checkmark; keyboard focus uses a flat inset marker. */
+html:not([data-popup-input="pointer"]) body .fui-Listbox .fui-Option[data-activedescendant-focusvisible] {
+  outline: 0;
+  --ws-popup-row-focus: inset 3px 0 var(--ws-link);
+}
+html:not([data-popup-input="pointer"]) body :is(.fui-Option.fui-Option, .fui-MenuItem, .fui-MenuItemCheckbox, .fui-MenuItemRadio):focus-visible {
+  outline: 0;
+  --ws-popup-row-focus: inset 3px 0 var(--ws-link);
+}
+html:not([data-popup-input="pointer"]) body :is(.assistant-context-menu, .assistant-chat-options, .identity-popover-actions, .assistant-presets-list) > button:focus-visible {
+  outline: 0;
+  --ws-popup-row-focus: inset 3px 0 var(--ws-link);
+}
+/* Decorative inset hairlines: no added borders, gaps or pointer hit areas. */
+html body :is(.fui-Listbox .fui-Option, .message-context-menu > button, .person-picker-list > button) { position: relative; }
+html body :is(
+  .fui-Listbox .fui-Option + .fui-Option,
+  .fui-MenuList:not(.reaction-picker-grid):not(.message-reaction-grid):not(.feed-reaction-grid) > :is(.fui-MenuItem, .fui-MenuItemCheckbox, .fui-MenuItemRadio) + :is(.fui-MenuItem, .fui-MenuItemCheckbox, .fui-MenuItemRadio),
+  .identity-popover-actions > button + button, .browser-chat-actions-popover button + button,
+  .assistant-context-menu > button + button, .assistant-chat-options > button + button,
+  .assistant-presets-list > button + button, .rail-ai-popover .rail-action + .rail-action,
+  .person-picker-list > button + button, .message-context-menu > button + button
+)::after {
+  content: "";
+  display: block;
+  position: absolute;
+  inset-inline: 16px;
+  top: 0;
+  bottom: auto;
+  height: 1px;
+  box-sizing: border-box;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  box-shadow: none;
+  margin: 0;
+  padding: 0;
+  background: linear-gradient(90deg, transparent, var(--ws-popup-separator) 15%, var(--ws-popup-separator) 85%, transparent);
+  pointer-events: none;
+}
+html body .identity-popover { gap: 0; }
+html body .identity-popover-profile { padding: 16px; border: 0; border-radius: 0; background: transparent; }
+html body .identity-popover-actions .identity-signout { margin: 0; border: 0; border-radius: 0; }
+html body .fui-PopoverSurface.person-picker-surface { padding: 0; }
+html body .person-picker-surface > :not(.person-picker-list-viewport) { margin: 12px; width: auto; }
+html body .person-picker-surface .person-picker-list { gap: 0; margin: 0; padding: 0; }
+html body .person-picker-surface .person-picker-list > button {
+  border: 0; border-radius: 0; background: transparent; box-shadow: none; transform: none;
+}
+html[data-popup-input="pointer"] body .person-picker-surface .person-picker-list > button:hover,
+html:not([data-popup-input="pointer"]) body .person-picker-surface .person-picker-list > button:focus-visible {
+  background: var(--ws-popup-menu-hover); transform: none;
+}
+html body :is(.fui-Option, .fui-MenuItem, .fui-MenuItemCheckbox, .fui-MenuItemRadio)[aria-disabled="true"] { opacity: .48; }
+html body :is(.identity-popover-actions, .assistant-chat-options, .assistant-presets-list) > button:disabled { opacity: .48; }
+html body .assistant-presets-surface { max-width: min(360px, calc(100vw - 24px)); }
+html body .assistant-panel .assistant-presets-list.assistant-presets-list { grid-template-columns: minmax(0, 1fr); }
+html body .assistant-preset-icon { width: 20px; height: 20px; border-radius: 0; background: transparent; }
+html body .assistant-presets-list button > span:last-child { font-size: 13px; font-weight: 400; }
+html body :is(.identity-popover-actions, .browser-chat-actions-popover) .fui-Button__icon { width: 20px; height: 20px; margin: 0; }
+html body .fui-MenuList :is(.assistant-chat-delete, [data-popup-danger="true"]):not(:disabled):not([aria-disabled="true"]):is(:hover, :focus-visible) {
+  --ws-popup-row-hover-ink: var(--ws-theme-ink-danger, #9c3341);
+  --ws-popup-row-hover: linear-gradient(90deg, rgb(243 164 172 / .42), rgb(243 164 172 / 10%) 65%, transparent);
+}
+html[data-color-theme="dark"] body .fui-MenuList :is(.assistant-chat-delete, [data-popup-danger="true"]):not(:disabled):not([aria-disabled="true"]):is(:hover, :focus-visible) {
+  --ws-popup-row-hover: linear-gradient(90deg, rgb(243 164 172 / .28), rgb(243 164 172 / 10%) 65%, transparent);
+}
+@media (max-width: 600px) {
+  :root { --ws-popup-row-height: 44px; }
+  html body .message-context-menu .fui-Button { min-height: 44px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html body :is(.fui-Option, .fui-MenuItem, .identity-popover-actions .fui-Button,
+    .assistant-chat-options > button, .assistant-presets-list > button) { transition: none; }
+}
+@media (forced-colors: active) {
+  html body :is(.fui-PopoverSurface, .fui-MenuPopover, .fui-Listbox, .fui-Tooltip,
+    .assistant-context-menu, .assistant-chat-options, .rail-ai-popover,
+    .task-participant-popover, .task-section-help-surface, .media-volume-popover) {
+    border: 1px solid CanvasText; background: Canvas; color: CanvasText; box-shadow: none; backdrop-filter: none;
+  }
+  html:not([data-popup-input="pointer"]) body .fui-Listbox .fui-Option[data-activedescendant-focusvisible],
+  html:not([data-popup-input="pointer"]) body :is(.fui-Option.fui-Option, .fui-MenuItem, .fui-MenuItemCheckbox, .fui-MenuItemRadio):focus-visible {
+    outline: 2px solid Highlight; outline-offset: -2px;
+  }
+}

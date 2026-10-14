@@ -12,7 +12,7 @@
 .notification-swipe { margin-bottom: 8px; }
 .notification-swipe:last-child { margin-bottom: 0; }
 .notifications-view .notification-swipe .notification-row { margin: 0; }
-.chat-list-item .swipe-row { --swipe-row-radius: 12px; width: 100%; }
+.chat-list-item .swipe-row { --swipe-row-radius: 17px; width: 100%; }
 .chat-list-item .swipe-row .chat-row { width: 100%; }
 .chat-deletion-choice { width: min(460px, calc(100vw - 32px)); }
 .chat-deletion-options { display: grid; gap: 10px; margin: 18px 0; }

@@ -14,7 +14,8 @@ import { SlidingSegmented } from "./SlidingSegmented";
 import { useContextMotion } from "./useContextMotion";
 import { SwipeRow } from "./SwipeRow";
 import { UndoActionsToast, useUndoActions } from "./UndoActions";
-import { Button, Input, Switch } from "@fluentui/react-components";
+import { Button, Switch } from "@fluentui/react-components";
+import { Input } from "./WorkspaceInput";
 import {
   AlertOn24Regular,
   Airplane24Regular,

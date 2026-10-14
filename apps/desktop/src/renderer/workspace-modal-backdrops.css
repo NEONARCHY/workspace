@@ -1,0 +1,30 @@
+/* Full-size modal scrims dim the page without sampling/blurring its pixels.
+   Keep each window's existing presence, resize and animation lifecycle. */
+html[data-color-theme] body :is(
+  .fui-DialogSurface__backdrop,
+  .record-composer-backdrop,
+  .account-scrim,
+  .absence-drawer-scrim,
+  .eff-help-overlay,
+  .approval-overlay,
+  .approval-detail-overlay,
+  .bp7-modal-backdrop,
+  .message-forward-overlay
+) {
+  backdrop-filter: none;
+}
+@media (forced-colors: none) {
+  :root { --ws-modal-dim: rgb(28 42 55 / 32%); }
+  html[data-color-theme="dark"] { --ws-modal-dim: rgb(0 0 0 / 48%); }
+  html[data-color-theme] body :is(
+    .fui-DialogSurface__backdrop,
+    .record-composer-backdrop,
+    .account-scrim,
+    .absence-drawer-scrim,
+    .eff-help-overlay,
+    .approval-overlay,
+    .approval-detail-overlay,
+    .bp7-modal-backdrop,
+    .message-forward-overlay
+  ) { background: var(--ws-modal-dim); }
+}

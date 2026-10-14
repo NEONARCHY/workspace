@@ -1,6 +1,48 @@
 # Yuksalish Workspace: UI foundation 0.15
 
+## Dark satin surfaces — 14 October 2026
+
+The owner-selected reference is the dark `_SatinBorderPainter` in Maqro's Flutter app, not its light variant. `satin-surfaces.css` ports its sweep stops and subdued 0.78 strength: reference white 15.5% at the top, 12.5% corners, 3.8% sides, 2% bottom and 0.7% bottom centre, with a quiet turquoise top sheen. Alpha is premultiplied by 0.78. The gradient is painted in the element's existing transparent CSS border box; opaque padding-box fill clips it out of the content. Border radius and scrolling therefore belong to the real element, with no pseudo-element, mask, absolute positioning or foreground layer. The outer navigation island has no decorative outline or top-edge shadow.
+
+Shared cards, calendar/message panes, floating windows and remaining account, mail, bot-access, employee, notification, survey and participant-picker surfaces use this treatment. Fluent and native fields use the same padding-box/border-box backgrounds. Selected choices strengthen the turquoise sheen; mail errors/warnings keep their semantic colour in a satin sweep. Raised/recessed/selected fills remain explicit, with the established dark header palette. Illustrations, radii, row separators, borderless buttons, avatars, keyboard focus and the light theme remain unchanged. Invalid fields, composer inner inputs and reaction picker's pointer decoration are excluded. System forced colours retain their existing boundaries. No canvas, dependency, per-frame rendering or perpetual animation is added.
+
+### Shared expanding searches — 14 October 2026
+
+Search height follows the complete adjacent control surface, including segmented
+group padding, rather than its inset button. Only visible controls on the same
+row participate; resizing remeasures the row. The temporary gooey split keeps
+SourceGraphic over the thresholded fill so the actual thin border remains
+visible throughout expansion and collapse. No foreground border sprite is added.
+
 ## Scope and source of truth
+
+### Shared field borders — 14 October 2026
+
+Task creation sections now retain a rounded surface and a real border in both
+collapsed and expanded states. The three dependency controls share equal grid
+columns and a 52 px height, stacking at narrow widths. Native disclosure keeps
+the same plus glyph and draft nodes; its 240 ms rotation maps 0 to 45 degrees
+in both directions, with instant feedback under reduced motion/system colours.
+
+`workspace-field-borders.css` gives Input, Textarea, Select, Combobox and Dropdown
+one real border on their sized shell. Native Select children stretch into that
+shell and have no separate border. Fluent decorative focus pseudo-elements,
+inset highlights and legacy focus halos are removed. Focus changes only the
+existing 1 px border to readable cool grey; geometry does not change. Native
+fields and date triggers share the no-glow treatment. Dark satin backgrounds,
+search splitting, invalid/disabled states, composer transparency and system
+forced-colour focus remain explicit; no foreground border layer is introduced.
+
+### Shared contextual menus — 14 October 2026
+
+`workspace-popups.css` applies the messenger message-menu design to dropdown
+listboxes, action menus and small contextual popovers: one 17 px rounded
+surface, flat 34 px rows (44 px on phones), zero row gaps and edge-to-edge hover.
+Checked values, disabled actions, long-label wrapping, keyboard inset focus,
+system colours and dark real satin borders remain explicit. Automatic per-row
+separators are removed; intentional section dividers remain. Calendar, slider,
+person-picker and emoji content retain their functional layout. Full forms and
+modal dialogs are not flattened into action menus.
 
 Redesign of the existing Windows corporate application, not a marketing dashboard. References supplied on 2026-09-04 inform whitespace, grouping and surface hierarchy, not their medical content, violet palettes or invented analytics. Information architecture, personal navigation ordering, access rules, existing records and workflow transitions remain unchanged.
 
@@ -143,6 +185,16 @@ That roadmap records real-component screenshots, dark/light regressions,
 contrast measurements and release status. Automated contrast checks cannot
 resolve all gradients/optical layers; they complement visual review, not a
 claim of full accessibility certification or physical-device/Electron testing.
+
+## Compact header — 2026-10-14
+
+Search is a labelled magnifier button, not a pretend input. Its command dialog,
+Ctrl+K, permitted results and focus restoration are unchanged. On phones up to
+600 px, menu, search, theme, assistant and profile form one equal-slot row with
+48 px touch targets. Without assistant access the row uses four slots. The
+workday control occupies the second row; its label is centered and the server
+status has a separate accessible trigger at the left. Tablets keep the controls
+in one aligned row. Shared theme tokens and existing popover behavior remain.
 
 ## Application icon — 2026-10-14
 

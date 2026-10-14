@@ -27,6 +27,11 @@ The calendar shows tasks on their local due date, preserves the active state/rol
 filters and text search, and keeps tasks without a deadline in a separate visible
 queue. Month navigation never changes task data.
 
+The «Мои» filter and its count include tasks where the current user is the author,
+primary assignee, co-assignee or observer; overlapping roles count a task only once.
+The role picker, plan filter and search further narrow that dataset. Task statuses
+and server-side access rules are unchanged.
+
 The plan-document preview reads task titles and reviewable participant/deadline hints
 from DOCX table rows. A dedicated responsible-person cell takes precedence; in
 weekly tables with separate work columns, each column's named person applies only

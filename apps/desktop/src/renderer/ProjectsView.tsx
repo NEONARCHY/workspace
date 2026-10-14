@@ -21,7 +21,8 @@ import type {
   WorkflowDefinition,
   WorkflowPosition,
 } from "@yuksalish/contracts";
-import { Badge, Button, Input, Textarea } from "@fluentui/react-components";
+import { Badge, Button, Textarea } from "@fluentui/react-components";
+import { Input } from "./WorkspaceInput";
 import { Add24Regular, ArrowLeft24Regular, ArrowRight24Regular, Chat24Regular, Dismiss20Regular, Edit24Regular, Search20Regular } from "@fluentui/react-icons";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { SlidingSegmented } from "./SlidingSegmented";

@@ -68,6 +68,15 @@ html[data-color-theme="dark"] .app-provider .fui-DialogTitle { color: var(--ws-t
 html[data-color-theme="dark"] .app-provider .fui-Button {
   transition-property: color, background-color, border-color, transform;
 }
+html[data-color-theme="dark"] body .message-context-menu .fui-Button { background: transparent; }
+html[data-color-theme="dark"] body .message-context-menu .message-context-delete { --message-delete-hover-opacity: .28; }
+html[data-color-theme="dark"][data-popup-input="pointer"] body .message-context-menu .fui-Button:hover,
+html[data-color-theme="dark"]:not([data-popup-input="pointer"]) body .message-context-menu .fui-Button:focus-visible,
+html[data-color-theme="dark"][data-popup-input="pointer"] body .fui-Listbox .fui-Option:hover,
+html[data-color-theme="dark"]:not([data-popup-input="pointer"]) body .fui-Listbox .fui-Option:focus-visible {
+  background: #3b3d4b;
+  color: var(--ws-text);
+}
 html[data-color-theme="dark"] .workflow-color-option { color: var(--ws-text); background: var(--ws-surface); }
 html[data-color-theme="dark"] .ai-referent-view { --ai-teal: #7cdae1; }
 html[data-color-theme="dark"] .employee-selection-summary > span { color: #f2fafb; background: #31545b; }
@@ -295,7 +304,7 @@ html[data-color-theme="dark"] :is(.employee-reward-card, .reward-catalog-option)
     background: var(--ws-button-pressed);
   }
   html[data-color-theme="dark"] .app-provider .workspace-select:has(> button:disabled) { background: #202128; }
-  html[data-color-theme="dark"] .app-provider :is(.sliding-segmented, .view-switch, .process-view-tabs, .approval-mode-switch, .ws2-segmented, .calendar-month-navigation) {
+  html[data-color-theme="dark"] .app-provider :is(.sliding-segmented, .view-switch, .process-view-tabs, .approval-mode-switch, .ws2-segmented) {
     --sliding-indicator-background: var(--ws-segment-selected);
     border-color: transparent;
     background: var(--ws-surface-raised);
@@ -336,6 +345,7 @@ html[data-color-theme="dark"] :is(.employee-reward-card, .reward-catalog-option)
   html[data-color-theme="dark"] .tasks-view .task-filters { border-color: transparent; background: transparent; box-shadow: none; }
   html[data-color-theme="dark"] .app-provider .record-status-badge[data-status] { border-color: transparent; }
   html[data-color-theme="dark"] .task-participant-avatar .fui-Avatar { border-color: var(--ws-surface); outline: none; }
+  html[data-color-theme="dark"] .task-participant-anchor[data-working="true"] .task-participant-avatar .fui-Avatar { border-color: var(--task-participant-ring); }
   html[data-color-theme="dark"] .app-provider :is(.fui-Button, .workspace-select, .record-page-size-trigger, .section-jump-trigger, .person-picker-trigger, .ws-date-time-trigger, .browser-menu-trigger, .sliding-segmented > button, .view-switch > button):focus-visible,
   html[data-color-theme="dark"] .app-provider .workspace-select:has(> button:focus-visible) {
     outline: 2px solid var(--ws-focus-line);
@@ -345,6 +355,11 @@ html[data-color-theme="dark"] :is(.employee-reward-card, .reward-catalog-option)
 .color-theme-choices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .color-theme-toggle-wrap { position: relative; display: flex; flex: none; }
 .global-bar .color-theme-toggle { min-width: 40px; min-height: 40px; padding: 8px; color: var(--ws-link); border-radius: 50%; }
+html body .app-provider .global-bar .color-theme-toggle,
+html body .app-provider .global-bar .color-theme-toggle:hover { background: var(--ws-button-hover, var(--ws-surface)); }
+@media (forced-colors: active) {
+  html body .app-provider .global-bar .color-theme-toggle { background: ButtonFace; }
+}
 .color-theme-save-notice { position: absolute; z-index: 90; top: calc(100% + 8px); right: 0; width: min(280px, 70vw); padding: 12px; border: 1px solid var(--ws-control-line); border-radius: 12px; color: var(--ws-text); background: var(--ws-surface); box-shadow: var(--ws-shadow-float); font-size: 12px; }
 .color-theme-choice { display: grid; gap: 8px; min-width: 0; padding: 12px; border: 1px solid var(--ws-control-line); border-radius: 16px; background: var(--ws-surface); color: var(--ws-text); text-align: left; cursor: pointer; }
 .color-theme-choice[aria-pressed="true"] { border-color: var(--ws-link); background: var(--ws-selected); box-shadow: inset 0 0 0 1px var(--ws-link); }

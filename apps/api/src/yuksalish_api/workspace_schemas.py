@@ -1520,6 +1520,7 @@ class WorkspaceBootstrapResponse(ApiModel):
     trip_requests: list[TripRequestResponse]
     absence_requests: list[AbsenceRequestResponse]
     presence_summary: list[PresenceSummaryItemResponse]
+    working_user_ids: list[UUID] = Field(default_factory=list)
     feed_posts: list[FeedPostResponse]
     calendar_events: list[CalendarEventResponse]
     notifications: list[NotificationResponse]

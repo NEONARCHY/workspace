@@ -23,12 +23,12 @@ import {
   Badge,
   Button,
   Checkbox,
-  Input,
   ProgressBar,
   DialogSurface,
   Textarea,
   useRestoreFocusTarget,
 } from "@fluentui/react-components";
+import { Input } from "./WorkspaceInput";
 import {
   Add24Regular,
   Calendar24Regular,
@@ -170,6 +170,11 @@ const taskFilterLabels: Readonly<Record<TaskFilter, string>> = {
   overdue: "Просроченные",
   completed: "Завершённые",
 };
+
+function isMyTask(task: WorkspaceTask, userId: string): boolean {
+  return task.authorId === userId || task.assigneeId === userId
+    || task.participants.some((participant) => participant.userId === userId);
+}
 
 function taskJourneyStep(status: TaskStatus): number {
   if (status === "completed") return 3;
@@ -431,7 +436,7 @@ export function TasksView(props: TasksViewProps) {
     const search = query.trim().toLocaleLowerCase("ru");
     const names = new Map(people.map((person) => [person.id, person.name]));
     return planTasks.filter((task) => {
-      const matchesFilter = filter === "mine" ? task.assigneeId === currentUserId
+      const matchesFilter = filter === "mine" ? isMyTask(task, currentUserId)
         : filter === "review" ? task.status === "awaiting_review"
           && (task.authorId === currentUserId || ["manager", "admin", "superadmin"].includes(people.find((person) => person.id === currentUserId)?.role ?? ""))
         : filter === "overdue" ? isTaskOverdue(task, deadlineNow)
@@ -447,7 +452,7 @@ export function TasksView(props: TasksViewProps) {
 
   const taskCounts = useMemo(() => ({
     active: planTasks.filter((task) => !["completed", "cancelled"].includes(task.status)).length,
-    mine: planTasks.filter((task) => task.assigneeId === currentUserId).length,
+    mine: planTasks.filter((task) => isMyTask(task, currentUserId)).length,
     overdue: planTasks.filter((task) => isTaskOverdue(task, deadlineNow)).length,
     completed: planTasks.filter((task) => task.status === "completed").length,
     review: planTasks.filter((task) => task.status === "awaiting_review"
@@ -725,7 +730,7 @@ export function TasksView(props: TasksViewProps) {
 
         {!(["calendar", "efficiency", "plans"] as TaskMode[]).includes(mode) ? <div className="task-workbench-summary" aria-label="Сводка задач">
           <div className="task-focus-object review"><span>Ждут решения</span><strong>{taskCounts.review}</strong><small>результатов на проверке</small></div>
-          <div className="task-focus-object mine"><span>Моя работа</span><strong>{taskCounts.mine}</strong><small>задач назначено вам</small></div>
+          <div className="task-focus-object mine"><span>Моя работа</span><strong>{taskCounts.mine}</strong><small>задач с вашим участием</small></div>
           <div className="task-focus-object overdue"><span>Риск срока</span><strong>{taskCounts.overdue}</strong><small>{taskCounts.overdue ? "нужно обратить внимание" : "всё идёт по плану"}</small></div>
         </div> : null}
 

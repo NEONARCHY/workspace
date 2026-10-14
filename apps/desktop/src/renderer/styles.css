@@ -1196,7 +1196,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .calendar-toolbar h1 { color: var(--calendar-ink); font-size: 25px; letter-spacing: -.025em; }
 .calendar-toolbar p { margin-top: 3px; color: var(--ws-theme-muted, #708397); font-size: 12px; text-transform: capitalize; }
 .calendar-toolbar-actions, .calendar-month-navigation { display: flex; align-items: center; gap: 7px; }
-.calendar-month-navigation { padding: 3px; border: 1px solid var(--ws-theme-line, #dbe5ec); border-radius: 10px; background: rgb(var(--ws-theme-surface-rgb, 255 255 255) / 0.82); }
+.calendar-month-navigation { padding: 3px; border: 1px solid transparent; border-radius: 10px; background: transparent; box-shadow: none; }
 .calendar-month-navigation .fui-Button { min-width: 32px; }
 .calendar-board { display: grid; grid-template-rows: 34px minmax(0, 1fr); min-height: 0; overflow: hidden; border: 1px solid var(--ws-theme-line, #d8e3eb); border-radius: 16px; box-shadow: 0 14px 34px rgb(27 61 87 / 7%); background: var(--ws-theme-surface, #fff); }
 .calendar-weekdays, .calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }

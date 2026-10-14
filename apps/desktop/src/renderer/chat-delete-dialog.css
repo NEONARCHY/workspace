@@ -1,0 +1,80 @@
+/* Confirmation is centred in the full application viewport. */
+html body .chat-delete-backdrop {
+  position: fixed;
+  inset: 0;
+  border-radius: 0;
+  background: rgb(24 43 58 / 18%);
+}
+html body .chat-delete-dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: min(380px, calc(100% - 32px));
+  height: fit-content;
+  max-height: calc(100% - 32px);
+  box-sizing: border-box;
+  overflow: auto;
+  padding: 24px;
+  border: 1px solid var(--ws-line);
+  border-radius: 20px;
+  background-color: var(--ws-surface);
+  color: var(--ws-text);
+  box-shadow: var(--ws-popup-menu-shadow, 0 18px 44px rgb(24 43 58 / 18%));
+}
+.chat-delete-dialog .fui-DialogBody { gap: 14px; }
+.chat-delete-dialog .fui-DialogTitle { font-size: 20px; line-height: 1.3; font-weight: 600; }
+.chat-delete-dialog .fui-DialogContent { color: var(--ws-muted); font-size: 14px; line-height: 1.6; }
+.chat-delete-dialog .chat-delete-icon { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 13px; background: rgb(243 164 172 / 18%); color: var(--ws-danger); margin-bottom: 14px; }
+.chat-delete-dialog .chat-delete-actions { display: flex; grid-column: 1 / -1; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+.chat-delete-dialog .chat-delete-actions button { flex: 0 0 auto; min-height: 36px; padding: 8px 14px; border-radius: 10px; white-space: nowrap; }
+html body .chat-delete-dialog .chat-delete-confirm { border: 0; box-shadow: none; color: var(--ws-theme-ink-danger, var(--ws-danger)); background: rgb(243 164 172 / 20%); }
+html body .chat-delete-dialog .chat-delete-confirm::before,
+html body .chat-delete-dialog .chat-delete-confirm::after { display: none; }
+html body .chat-delete-dialog .chat-delete-confirm:focus-visible,
+html body .chat-delete-dialog .chat-delete-confirm[data-fui-focus-visible] { outline: 2px solid var(--ws-link); outline-offset: 2px; }
+html body .chat-delete-dialog .chat-delete-confirm:not(:disabled):hover,
+html body .chat-delete-dialog .chat-delete-confirm:not(:disabled):focus-visible { background: linear-gradient(90deg, rgb(243 164 172 / 42%), rgb(243 164 172 / 16%)); }
+@media (forced-colors: active) {
+  html body .chat-delete-dialog { border-color: CanvasText; }
+  html body .chat-delete-dialog .chat-delete-confirm { border: 1px solid ButtonText; background: ButtonFace; color: ButtonText; }
+}
+
+/* Keep the chosen chat snapshot throughout Fluent's exit transition. */
+html body .chat-deletion-choice {
+  --ws-satin-fill: linear-gradient(125deg, color-mix(in srgb, var(--ws-selected) 35%, var(--ws-surface)), var(--ws-surface) 58%);
+  width: min(480px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  padding: 26px;
+  border-radius: 20px;
+  background-image: var(--ws-satin-fill);
+  color: var(--ws-text);
+}
+.chat-deletion-choice .fui-DialogTitle { font-size: 22px; line-height: 1.3; font-weight: 600; }
+.chat-deletion-choice .fui-DialogContent > p { color: var(--ws-muted); line-height: 1.6; }
+.chat-deletion-choice .chat-deletion-mark { display: grid; place-items: center; width: 44px; height: 44px; margin-bottom: 14px; border-radius: 13px; color: var(--ws-theme-ink-danger, var(--ws-danger)); background: rgb(243 164 172 / 18%); }
+html body .chat-deletion-choice .chat-deletion-options > button {
+  display: grid; grid-template-columns: 40px minmax(0, 1fr); align-items: start; gap: 14px;
+  width: 100%; padding: 16px; border: 0; border-radius: 14px; box-shadow: none; color: var(--ws-text);
+  background: linear-gradient(105deg, color-mix(in srgb, var(--ws-link) 13%, var(--ws-surface)), var(--ws-surface) 85%);
+}
+html body .chat-deletion-choice .chat-deletion-options > .chat-deletion-both {
+  background: linear-gradient(105deg, color-mix(in srgb, #f3a4ac 24%, var(--ws-surface)), var(--ws-surface) 85%);
+}
+.chat-deletion-choice .chat-deletion-option-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 11px; color: var(--ws-link); background: color-mix(in srgb, var(--ws-link) 9%, transparent); }
+.chat-deletion-choice .chat-deletion-both .chat-deletion-option-icon { color: var(--ws-theme-ink-danger, var(--ws-danger)); background: rgb(243 164 172 / 16%); }
+.chat-deletion-choice .chat-deletion-options strong { font-size: 14px; line-height: 1.5; }
+.chat-deletion-choice .chat-deletion-options small { font-size: 13px; line-height: 1.55; }
+html body .chat-deletion-choice .chat-deletion-options > button:not(:disabled):hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ws-link) 35%, transparent); }
+html body .chat-deletion-choice .chat-deletion-options > .chat-deletion-both:not(:disabled):hover { box-shadow: inset 0 0 0 1px rgb(243 164 172 / 60%); }
+html body .chat-deletion-choice .chat-deletion-options > button:disabled { opacity: .5; cursor: not-allowed; }
+html body .chat-deletion-choice .chat-deletion-options > button::before,
+html body .chat-deletion-choice .chat-deletion-options > button::after { display: none; }
+html body .chat-deletion-choice .chat-deletion-options > button:focus-visible,
+html body .chat-deletion-choice .chat-deletion-options > button[data-fui-focus-visible] { outline: 2px solid var(--ws-link); outline-offset: 2px; }
+.chat-deletion-choice .chat-deletion-note { margin: 18px 0 0; font-size: 12px; }
+.chat-deletion-choice .chat-deletion-actions { display: flex; justify-content: flex-end; margin-top: 8px; }
+@media (max-width: 480px) { html body .chat-deletion-choice { padding: 20px; } }
+@media (forced-colors: active) {
+  html body .chat-deletion-choice, html body .chat-deletion-choice .chat-deletion-options > button { background: Canvas; border: 1px solid CanvasText; }
+}

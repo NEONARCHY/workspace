@@ -4,7 +4,7 @@ const selector = '[role="dialog"]:not(.assistant-panel), [role="alertdialog"], d
 
 export function hasBlockingDialog() {
   return Array.from(document.querySelectorAll<HTMLElement>(selector))
-    .some((element) => !element.closest('[hidden], [aria-hidden="true"]')
+    .some((element) => !element.closest('.assistant-owned-dialog, [hidden], [aria-hidden="true"]')
       && element.style.display !== "none" && element.style.visibility !== "hidden");
 }
 

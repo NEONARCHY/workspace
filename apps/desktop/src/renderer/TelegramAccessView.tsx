@@ -1,3 +1,4 @@
+import { Input } from "./WorkspaceInput";
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
 import { WorkspaceSelect } from "./WorkspaceSelect";
 import { useEffect, useMemo, useState } from "react";
@@ -233,7 +234,7 @@ export function TelegramAccessView({ token, departments }: { readonly token: str
     </div>
     <label className="telegram-access-search">
       <span>Найти сотрудника</span>
-      <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Имя, логин или должность" />
+      <Input aria-label="Поиск сотрудников для Telegram" type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Имя, логин или должность" />
     </label>
     {departments ? <EmployeeScopeSwitch value={scope} onChange={setScope} label="Сотрудники с доступом к Telegram-ботам" /> : null}
     {error ? <div className="telegram-access-page-error" role="alert">{error} <button type="button" onClick={() => void refresh()}>Повторить</button></div> : null}

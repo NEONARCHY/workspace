@@ -14,9 +14,9 @@ import {
   Button,
   Checkbox,
   DialogSurface,
-  Input,
   Textarea,
 } from "@fluentui/react-components";
+import { Input } from "./WorkspaceInput";
 import {
   Add20Regular,
   Calendar20Regular,
@@ -435,7 +435,7 @@ export function TaskComposer({
                     <dl className="record-summary-facts">
                       <div><dt>Ответственный</dt><dd>{assignee ? <EmployeeProfileLink userId={assignee.id} personName={assignee.name}>{assignee.name}</EmployeeProfileLink> : "Не выбран"}</dd></div>
                       <div><dt>Проект</dt><dd>{selectedProject?.title ?? "Без проекта"}</dd></div>
-                      <div><dt>Срок</dt><dd>{dateTimeLabel(dueAt)}</dd></div>
+                      <div className="record-summary-deadline"><dt>Срок</dt><dd>{dateTimeLabel(dueAt)}</dd></div>
                     </dl>
                   </div>
                 </RecordSummary>

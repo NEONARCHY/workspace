@@ -1,5 +1,6 @@
 import { useId, useState } from "react";
-import { Button, Checkbox, Combobox, Input, Option } from "@fluentui/react-components";
+import { Button, Checkbox, Combobox, Option } from "@fluentui/react-components";
+import { Input } from "./WorkspaceInput";
 import type { WorkspacePerson } from "@yuksalish/contracts";
 import { Search20Regular } from "@fluentui/react-icons";
 import { ProfileAvatar } from "./ProfileAvatar";
@@ -17,7 +18,6 @@ export function CalendarFilters({ value, onChange, onReset, people, token, curre
   readonly compact?: boolean;
 }) {
   const bodyId = useId();
-  const employeeInputId = useId();
   const [expanded, setExpanded] = useState(false);
   const [search, setSearch] = useState<string>();
   const person = people.find(item => item.id === value.employeeId);
@@ -31,8 +31,8 @@ export function CalendarFilters({ value, onChange, onReset, people, token, curre
     <div id={bodyId} className="calendar-filter-body" hidden={compact && !expanded}>
     <div className="calendar-filter-fields">
       <div className="calendar-filter-field">
-        <label htmlFor={employeeInputId}>Сотрудник</label>
-        <Combobox input={{ id: employeeInputId }} aria-label="Сотрудник в событиях" placeholder="Все сотрудники" disabled={disabled}
+        <span>Сотрудник</span>
+        <Combobox aria-label="Сотрудник в событиях" placeholder="Все сотрудники" disabled={disabled}
           value={search ?? person?.name ?? (value.employeeId ? "Выбранный сотрудник" : "Все сотрудники")} selectedOptions={[value.employeeId]}
           onChange={event => setSearch(event.target.value)} onBlur={() => setSearch(undefined)}
           onOptionSelect={(_, data) => { onChange({ ...value, employeeId: data.optionValue ?? "" }); setSearch(undefined); }}>
@@ -43,15 +43,15 @@ export function CalendarFilters({ value, onChange, onReset, people, token, curre
           {!candidates.length && <Option disabled value="no-match">Сотрудники не найдены</Option>}
         </Combobox>
       </div>
-      <label className="calendar-filter-field">Поиск события
+      <div className="calendar-filter-field"><span>Поиск события</span>
         <Input aria-label="Поиск событий" placeholder="Название, место или описание" value={value.query} disabled={disabled}
           contentBefore={<Search20Regular />} onChange={(_, data) => onChange({ ...value, query: data.value })} />
-      </label>
+      </div>
       <div className="calendar-filter-period">
-        <label className="calendar-filter-field">С даты<WorkspaceDateTimePicker mode="date" ariaLabel="События с даты"
-          value={value.from} disabled={disabled} onChange={from => onChange({ ...value, from })} /></label>
-        <label className="calendar-filter-field">По дату<WorkspaceDateTimePicker mode="date" ariaLabel="События по дату"
-          value={value.to} disabled={disabled} onChange={to => onChange({ ...value, to })} /></label>
+        <div className="calendar-filter-field"><span>С даты</span><WorkspaceDateTimePicker mode="date" ariaLabel="События с даты"
+          value={value.from} disabled={disabled} onChange={from => onChange({ ...value, from })} /></div>
+        <div className="calendar-filter-field"><span>По дату</span><WorkspaceDateTimePicker mode="date" ariaLabel="События по дату"
+          value={value.to} disabled={disabled} onChange={to => onChange({ ...value, to })} /></div>
       </div>
     </div>
     <div className="calendar-filter-options">

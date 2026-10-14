@@ -294,9 +294,9 @@
   min-height: 38px;
   border-radius: 11px;
   color: var(--ws-text);
-  transition: color 150ms var(--ws-ease), background-color 150ms var(--ws-ease), transform 150ms var(--ws-ease);
+  transition: color 150ms var(--ws-ease), background-color 150ms var(--ws-ease);
 }
-:is(.fui-MenuItem.fui-MenuItem, .fui-Option.fui-Option):hover { color: var(--ws-theme-ink-teal, #006779); background: var(--ws-theme-surface-soft, #e8f3f2); transform: translateX(2px); }
+:is(.fui-MenuItem.fui-MenuItem, .fui-Option.fui-Option):hover { color: var(--ws-theme-ink-teal, #006779); background: var(--ws-theme-surface-soft, #e8f3f2); transform: none; }
 .fui-MenuItem[aria-disabled="true"] { opacity: .48; }
 .fui-PopoverSurface.identity-popover {
   width: min(310px, calc(100vw - 28px));
@@ -327,16 +327,15 @@
   min-height: 42px;
   justify-content: flex-start;
   border-radius: 12px;
-  transition: color 150ms var(--ws-ease-out), background-color 150ms var(--ws-ease-out),
-    box-shadow 180ms var(--ws-ease-out), transform 180ms var(--ws-ease-out);
+  transition: color 150ms var(--ws-ease-out), background-color 150ms var(--ws-ease-out);
 }
 .identity-popover-actions .fui-Button:is(:hover, :focus-visible) {
   color: var(--ws-theme-ink-teal, #006779);
   background: var(--ws-theme-surface-soft, #e8f3f2);
-  box-shadow: 0 8px 18px -14px rgb(41 58 85 / 48%);
-  transform: translateY(-2px);
+  box-shadow: none;
+  transform: none;
 }
-.identity-popover-actions .fui-Button:active { box-shadow: none; transform: translateY(0); }
+.identity-popover-actions .fui-Button:active { box-shadow: none; transform: none; }
 .identity-popover-actions .identity-signout { margin-top: 3px; border-top: 1px solid rgb(var(--ws-theme-line-rgb, 41 58 85) / 0.07); border-radius: 0 0 12px 12px; }
 
 /* Account settings use the same full, centered workspace shell as the employee profile. */

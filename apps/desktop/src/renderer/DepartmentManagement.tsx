@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { DirectoryEmployee, WorkspaceDepartment } from "@yuksalish/contracts";
-import { Button, Checkbox, Field, Input } from "@fluentui/react-components";
+import { Button, Checkbox, Field } from "@fluentui/react-components";
+import { Input } from "./WorkspaceInput";
 import { Add20Regular, Building20Regular, Delete20Regular, PeopleTeam20Regular, Search20Regular } from "@fluentui/react-icons";
 import { WorkspaceSelect as Select } from "./WorkspaceSelect";
 import { createDepartment, deleteDepartment, updateDepartment, updateDepartmentMembers } from "./workspace-api";

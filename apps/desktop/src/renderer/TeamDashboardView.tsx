@@ -327,9 +327,6 @@ export function TeamDashboardView({
           </div>
         </header>
         <div className="team-dash-flow-overview">
-          <div className={`team-dash-flow-bar ${activeTasks.length ? "" : "is-empty"}`} aria-label={`Всего активных задач: ${activeTasks.length}`}>
-            {flowParts.filter((part) => part.value > 0).map((part) => <i className={`part-${part.key}`} key={part.key} style={{ flexGrow: part.value }} />)}
-          </div>
           <div className="team-dash-flow-legend" role="group" aria-label="Задачи по статусам">
             {flowParts.map((part) => <button
               type="button"

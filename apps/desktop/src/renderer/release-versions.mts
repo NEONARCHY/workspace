@@ -51,8 +51,41 @@ export function nextUpdateVersion(version: string): string {
   if (!Number.isSafeInteger(major) || !Number.isSafeInteger(minor) || !Number.isSafeInteger(patch) || patch > 999) {
     throw new Error(`Invalid published version: ${version}`);
   }
-  if (patch === 999) return `${major}.${minor + 1}.0`;
-  return `${major}.${minor}.${patch + 1}`;
+  const formatPatch = (value: number) => major >= 2 ? String(value).padStart(3, "0") : String(value);
+  if (patch === 999) return `${major}.${minor + 1}.${formatPatch(0)}`;
+  return `${major}.${minor}.${formatPatch(patch + 1)}`;
+}
+
+export interface ReleaseConsolidation {
+  readonly id: string;
+  readonly version: string;
+  readonly date: string;
+  readonly noteIds: readonly string[];
+}
+
+/** Retain source notes and old numbers, but expose one complete launch entry.
+ * New additions still follow first-parent merge order, regardless of their dates. */
+export function consolidateUpdateNotes<T extends { readonly id: string; readonly date: string; readonly version: string; readonly items: readonly string[] }>(
+  notes: readonly T[], group: ReleaseConsolidation,
+): Array<{ id: string; version: string; items: readonly string[]; date: string } | T> {
+  const byId = new Map(notes.map(note => [note.id, note]));
+  if (!group.noteIds.length || new Set(group.noteIds).size !== group.noteIds.length
+    || group.noteIds.some(id => !byId.has(id))) throw new Error("Release consolidation IDs must be complete and unique");
+  const grouped = new Set(group.noteIds);
+  const chronological = [...notes].reverse();
+  const boundary = chronological.reduce((last, note, index) => grouped.has(note.id) ? index : last, -1);
+  const historical = chronological.slice(0, boundary + 1).filter(note => !grouped.has(note.id));
+  let version = group.version;
+  const future = chronological.slice(boundary + 1).map(note => {
+    version = nextUpdateVersion(version);
+    return { ...note, version };
+  });
+  return [
+    ...future.reverse(),
+    { id: group.id, version: group.version, date: group.date,
+      items: group.noteIds.flatMap(id => byId.get(id)!.items) },
+    ...historical.reverse(),
+  ];
 }
 
 /** A note keeps its number when it moves from pending to a released folder. */

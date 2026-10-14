@@ -1,0 +1,51 @@
+/* Task sections own a visible surface, including their collapsed header. */
+html body .task-composer .record-section,
+html body .task-composer .record-section:first-child {
+  border: 1px solid var(--ws-line);
+  background-color: var(--ws-surface);
+  border-radius: 18px;
+  box-shadow: none;
+}
+html[data-color-theme="dark"] body .task-composer .record-section {
+  --ws-satin-fill: linear-gradient(var(--ws-muted-surface), var(--ws-muted-surface));
+  background-color: var(--ws-muted-surface);
+}
+html body .task-composer .record-disclosure[open] > summary {
+  border-bottom: 1px solid var(--ws-line);
+  border-radius: 17px 17px 0 0;
+  margin-bottom: 20px;
+}
+html body .task-composer .dependency-add-row {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch;
+}
+html body .task-composer .dependency-add-row > :is(.workspace-select, .fui-Button) {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: 52px;
+  min-height: 52px;
+  justify-self: stretch;
+  border-radius: 12px;
+}
+html body .task-composer .dependency-add-row .fui-Dropdown__button {
+  height: 100%;
+  min-height: 0;
+  padding-block: 8px;
+}
+/* Animate the same glyph in both directions; never rotate the hit target. */
+.record-disclosure .disclosure-plus {
+  transform: rotate(0deg);
+  transition: transform 240ms cubic-bezier(.2, 0, 0, 1);
+  transform-origin: center;
+}
+.record-disclosure[open] .disclosure-plus { transform: rotate(45deg); }
+@media (max-width: 720px) {
+  html body .task-composer .dependency-add-row { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce), (forced-colors: active) {
+  .record-disclosure .disclosure-plus { transition: none; }
+}
+@media (forced-colors: active) {
+  html body .task-composer .record-section { border-color: CanvasText; background: Canvas; }
+}

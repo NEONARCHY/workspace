@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 
 import type { EfficiencyOverview, EmployeeEfficiency } from "@yuksalish/contracts";
-import { Button, Input } from "@fluentui/react-components";
+import { Button } from "@fluentui/react-components";
+import { Input } from "./WorkspaceInput";
 import { Dismiss24Regular, Search20Regular } from "@fluentui/react-icons";
 import { WorkspaceSelect } from "./WorkspaceSelect";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";

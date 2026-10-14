@@ -68,7 +68,18 @@ import "./page-canvas.css";
 import "./browser-responsive.css";
 import "./browser-secondary.css";
 import "./dark-theme.css";
+import "./satin-surfaces.css";
+import "./workspace-search.css";
+import "./workspace-popups.css";
+import "./chat-delete-dialog.css";
+import "./workspace-field-borders.css";
+import "./task-composer-sections.css";
+import "./messenger-outgoing.css";
+import "./workspace-select-motion.css";
+import "./workspace-modal-backdrops.css";
+import "./notification-bell.css";
 import { initializeColorTheme } from "./color-theme";
+import { observePopupInputMode } from "./popup-input-mode";
 import { workspacePlatform } from "./platform-adapter";
 import { observeBrowserViewport } from "./browser-layout";
 
@@ -84,6 +95,8 @@ if (workspacePlatform.kind === "electron" && navigator.userAgent.includes("Windo
 
 window.addEventListener("error", (event) => reportDiagnostic("window-error", event.error));
 initializeColorTheme();
+const stopPopupInputMode = observePopupInputMode();
+import.meta.hot?.dispose(stopPopupInputMode);
 window.addEventListener("unhandledrejection", (event) => reportDiagnostic("unhandled-rejection", event.reason));
 
 const root = document.getElementById("root");

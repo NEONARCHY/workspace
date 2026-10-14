@@ -26,6 +26,7 @@ function MediaAttachment({attachment, onLoad, onOpen}: {
   const ref = useRef<HTMLElement>(null);
   const [visibility, setVisibility] = useState({visible:false, epoch:0});
   const [resource, setResource] = useState({epoch:-1, url:"", failed:false});
+  const [imageSize, setImageSize] = useState<{ width: number; height: number }>();
   useEffect(() => {
     if (!ref.current || typeof IntersectionObserver === "undefined") return;
     const observer = new IntersectionObserver(entries => {
@@ -50,10 +51,14 @@ function MediaAttachment({attachment, onLoad, onOpen}: {
   const shown = visibility.visible && resource.epoch === visibility.epoch;
   const video = fileViewerKind(attachment) === "video";
   const failed = () => setResource(current => ({...current, url:"", failed:true}));
-  return <article ref={ref} className={`attachment-media-preview ${video ? "attachment-video-card" : "attachment-image-card"}`}>
+  return <article ref={ref} className={`attachment-media-preview ${video ? "attachment-video-card" : "attachment-image-card"}${imageSize ? " has-image-size" : ""}`}
+    style={imageSize ? { width: Math.min(360, imageSize.width, 320 * imageSize.width / imageSize.height) } : undefined}>
     {video && shown && resource.url ? <InlineVideoPlayer url={resource.url} fileName={attachment.fileName} onError={failed} /> :
     <button className="attachment-image-thumb" type="button" aria-label={`Открыть ${video ? "видео" : "изображение"}: ${attachment.fileName}`} onClick={() => void onOpen(attachment)}>
-      {shown && resource.url ? <img src={resource.url} alt={attachment.fileName} onError={failed} /> : <span>{shown && resource.failed ? "Предпросмотр недоступен · открыть файл" : video ? "Видео · открыть" : "Изображение · открыть"}</span>}
+      {shown && resource.url ? <img src={resource.url} alt={attachment.fileName} onError={failed} onLoad={event => {
+        const { naturalWidth: width, naturalHeight: height } = event.currentTarget;
+        if (width && height) setImageSize({ width, height });
+      }} /> : <span>{shown && resource.failed ? "Предпросмотр недоступен · открыть файл" : video ? "Видео · открыть" : "Изображение · открыть"}</span>}
     </button>}
     <button type="button" title={`Открыть ${attachment.fileName}`} onClick={() => void onOpen(attachment)}><Document24Regular /><span>{attachment.fileName}</span><small>{fileSize(attachment.byteSize)}</small></button>
   </article>;

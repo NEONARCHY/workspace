@@ -1,3 +1,4 @@
+import { Input } from "./WorkspaceInput";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { WorkspaceSelect } from "./WorkspaceSelect";
 
@@ -241,7 +242,7 @@ export function AIHisobotView({ token }: { readonly token: string }) {
           <label>С&nbsp;<WorkspaceDateTimePicker mode="date" ariaLabel="Начало периода" value={startDate} onChange={setStartDate} /></label>
           <label>По&nbsp;<WorkspaceDateTimePicker mode="date" ariaLabel="Конец периода" value={endDate} min={startDate} onChange={setEndDate} /></label>
           <WorkspaceSelect value={scope} onChange={(event) => setScope(event.target.value as typeof scope)} aria-label="Контур отчётности"><option value="all">Все подразделения</option><option value="central">Центральный аппарат</option><option value="hudud">Hudud</option></WorkspaceSelect>
-          <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Поиск по региону, имени или тексту" aria-label="Поиск отчётов" />
+          <Input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Поиск по региону, имени или тексту" aria-label="Поиск отчётов" />
           <button type="button" onClick={() => void loadTeam()}>Обновить</button>
         </div>
         {visibleTeam.length || visibleTeamUnits.length ? <div className="hisobot-report-grid">{visibleTeam.map((report) => <ReportCard key={report.id} report={report} />)}{visibleTeamUnits.map((report) => <UnitReportCard key={report.id} report={report} />)}</div> : <p className="hisobot-empty">За выбранный период отчётов нет.</p>}

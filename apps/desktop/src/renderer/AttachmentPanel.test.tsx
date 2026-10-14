@@ -1,6 +1,27 @@
-import { describe, expect, it } from "vitest";
+import { createElement } from "react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { embeddedMp3Artwork, isAudioAttachment } from "./AttachmentPanel";
+import { AttachmentChips, embeddedMp3Artwork, isAudioAttachment } from "./AttachmentPanel";
+import type { WorkspaceAttachment } from "@yuksalish/contracts";
+
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+it("sizes an image preview to its natural aspect ratio, including portrait images", async () => {
+  vi.stubGlobal("IntersectionObserver", class {
+    constructor(private readonly callback: (entries: { isIntersecting: boolean }[]) => void) {}
+    observe() { this.callback([{ isIntersecting: true }]); }
+    disconnect() {}
+  });
+  vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:test-image");
+  vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+  const attachment = { id: "photo", ownerType: "message", ownerId: "one", fileName: "photo.png", contentType: "image/png", byteSize: 1024 } as WorkspaceAttachment;
+  const { container } = render(createElement(AttachmentChips, { attachments: [attachment], onDownload: vi.fn(), onLoad: async () => new Blob() }));
+  const image = await screen.findByAltText("photo.png");
+  Object.defineProperties(image, { naturalWidth: { configurable: true, value: 600 }, naturalHeight: { configurable: true, value: 1200 } });
+  fireEvent.load(image);
+  expect(container.querySelector(".attachment-image-card")).toHaveClass("has-image-size");
+  expect(container.querySelector(".attachment-image-card")).toHaveStyle({ width: "160px" });
+});
 
 function bytes(blob: Blob): Promise<number[]> {
   return new Promise((resolve, reject) => {

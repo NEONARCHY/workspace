@@ -20,6 +20,19 @@ export function orbPose(rect: Pick<DOMRect, "left" | "top" | "width" | "height">
 export function orbTransform(pose: OrbPose) {
   return `translate(${pose.x - ORB_SIZE / 2}px, ${pose.y - ORB_SIZE / 2}px) scale(${pose.size / ORB_SIZE})`;
 }
+/** Centre in the visible gap, not between differently padded control boxes. */
+export function launcherOrbPose(launcher: HTMLElement, zoom: number): OrbPose {
+  const bounds = launcher.getBoundingClientRect();
+  const pose = orbPose(bounds, zoom);
+  // The measured button itself is aligned with the visible gap, including its focus/hit area.
+  if (launcher.closest(".assistant-launcher-space")) return pose;
+  const context = launcher.closest(".workspace-top-context");
+  const left = context?.querySelector(".color-theme-toggle svg")?.getBoundingClientRect();
+  const right = context?.querySelector(".workspace-identity-menu .fui-Avatar")?.getBoundingClientRect();
+  if (!left?.width || !right?.width || left.right > bounds.left || right.left < bounds.right
+    || Math.abs(left.top + left.height / 2 - (right.top + right.height / 2)) > 8) return pose;
+  return { ...pose, x: (left.right + right.left) / (2 * zoom) };
+}
 export function orbReveal(pose: OrbPose, panel: DOMRect, zoom: number) {
   const x = pose.x - panel.left / zoom, y = pose.y - panel.top / zoom;
   const radius = Math.hypot(Math.max(x, panel.width / zoom - x), Math.max(y, panel.height / zoom - y));
@@ -70,7 +83,7 @@ export function useAssistantOrbJourney({ open, ready, empty, blocked, returnWith
       if (!destination) return;
       const bounds = destination.getBoundingClientRect();
       if (!bounds.width) return;
-      element.style.transform = orbTransform(orbPose(bounds, zoom));
+      element.style.transform = orbTransform(destination === launcher.current ? launcherOrbPose(destination, zoom) : orbPose(bounds, zoom));
       element.style.opacity = "1";
       element.style.clipPath = "none";
       element.style.filter = "none";
@@ -138,7 +151,7 @@ export function useAssistantOrbJourney({ open, ready, empty, blocked, returnWith
       const destination = slot();
       const bounds = destination?.getBoundingClientRect();
       if (!destination || !bounds?.width) { revealedRef.current = open; finish(); return; }
-      const to = orbPose(bounds, zoom);
+      const to = destination === launcher.current ? launcherOrbPose(destination, zoom) : orbPose(bounds, zoom);
       if (!open) {
         const wasRevealed = revealedRef.current;
         revealedRef.current = false;

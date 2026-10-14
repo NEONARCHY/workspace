@@ -1,0 +1,150 @@
+/* Width participates in layout: opening a search pushes siblings rather than painting over them. */
+html body .workspace-search {
+  --search-height: 34px;
+  --search-width: 280px;
+  --search-growth: calc(var(--search-height) + 8px);
+  display: flex;
+  align-items: center;
+  flex: 0 1 auto;
+  width: var(--search-width);
+  max-width: 100%;
+  min-width: 0;
+  height: var(--search-height);
+  box-sizing: border-box;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  outline: none;
+  transition: width 520ms cubic-bezier(.22, 1, .36, 1);
+}
+html body .workspace-search.workspace-search.workspace-search[data-expanded="true"],
+html[data-color-theme] body .workspace-search.workspace-search.workspace-search[data-expanded="true"] {
+  width: calc(var(--search-width) + var(--search-growth));
+}
+html body .workspace-search.workspace-search.workspace-search,
+html[data-color-theme] body .workspace-search.workspace-search.workspace-search {
+  flex: 0 1 auto;
+  width: var(--search-width);
+  height: var(--search-height);
+  max-width: 100%;
+  min-width: 0;
+  min-height: var(--search-height);
+  border: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+html body .workspace-search .workspace-search-trigger {
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  flex: 0 0 var(--search-height);
+  width: var(--search-height);
+  height: var(--search-height);
+  margin: 0 calc(-1 * var(--search-height)) 0 0;
+  padding: 0;
+  overflow: hidden;
+  opacity: 0;
+  border: 1px solid var(--ws-theme-line, #c5dde2);
+  border-radius: 50%;
+  background: var(--ws-surface, #fff);
+  color: var(--ws-theme-ink-teal, #007b8e);
+  transform: scale(.65);
+  transition: margin-right 520ms cubic-bezier(.22, 1, .36, 1), transform 520ms cubic-bezier(.22, 1, .36, 1), opacity 180ms ease;
+}
+html body .workspace-search[data-expanded="true"] .workspace-search-trigger {
+  border-width: 1px;
+  flex-basis: var(--search-height);
+  width: var(--search-height);
+  margin-right: 8px;
+  opacity: 1;
+  transform: scale(1);
+}
+html body .workspace-search-filter { position: absolute; width: 0; height: 0; overflow: hidden; pointer-events: none; }
+@media (forced-colors: none) {
+  html body .workspace-search[data-morphing="true"] { filter: var(--search-morph-filter); }
+}
+html body .workspace-search.workspace-search .workspace-search-field {
+  box-sizing: border-box;
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 0;
+  height: var(--search-height);
+  min-height: var(--search-height);
+  padding: 0 12px;
+  border: 1px solid var(--search-border, var(--ws-theme-line, #c5dde2));
+  background-color: var(--ws-theme-surface, #fff);
+  border-radius: 999px;
+}
+html body .workspace-search .fui-Input__input { min-width: 0; text-overflow: ellipsis; }
+/* Keep the inner icon mounted so the text inset interpolates, never jumps. */
+html body .workspace-search .workspace-search-field .fui-Input__contentBefore {
+  width: 20px;
+  flex: 0 0 auto;
+  overflow: hidden;
+  margin-right: 8px;
+  opacity: 1;
+  transition: width 520ms cubic-bezier(.22, 1, .36, 1), margin-right 520ms cubic-bezier(.22, 1, .36, 1), opacity 180ms ease;
+}
+html body .workspace-search[data-expanded="true"] .workspace-search-field .fui-Input__contentBefore {
+  width: 0;
+  margin-right: 0;
+  opacity: 0;
+}
+html body .workspace-search .fui-Input__contentBefore svg { flex-shrink: 0; width: 20px; height: 20px; }
+/* Search reveals its focused state structurally; no Fluent underline or glow. */
+html body .workspace-search .workspace-search-field,
+html body .workspace-search .workspace-search-field:focus-within,
+html[data-color-theme="dark"] body .workspace-search .workspace-search-field:focus-within {
+  box-shadow: none;
+  outline: none;
+}
+html body .workspace-search .workspace-search-field::before,
+html body .workspace-search .workspace-search-field::after { display: none; }
+html body .workspace-search input.fui-Input__input {
+  box-sizing: border-box; width: 100%; height: 100%; min-height: 0;
+  border: 0; border-radius: 0; background: transparent; box-shadow: none;
+  padding: 0; font: inherit; line-height: normal; outline: none;
+}
+html body .workspace-search-trigger svg { width: 20px; height: 20px; flex-shrink: 0; }
+html body .workspace-search:has(input:disabled) { opacity: .6; }
+html body .workspace-search.pane-search { --search-width: 100%; }
+html body .workspace-search.task-search { margin-left: auto; }
+html body .workspace-search.employee-search { --search-width: 360px; }
+/* Match the 44px segmented toolbar even before its first layout measurement. */
+html body .workspace-search.approval-search { --search-width: 300px; --search-height: 44px; }
+html body .workspace-search.trip-search { --search-width: 300px; --search-height: 44px; }
+html body .project-toolbar > .workspace-search { --search-width: 300px; }
+html body .edo-incoming-controls label:first-child { flex: 0 1 auto; max-width: 100%; }
+html body .telegram-access-search .workspace-search { --search-height: 40px; --search-width: 350px; }
+html body .ai-referent-toolbar > .workspace-search { --search-width: 340px; }
+html body .ai-referent-toolbar-actions { transform: none; }
+html body .ai-referent-view .ai-referent-toolbar { background: transparent; border: 0; box-shadow: none; padding: 0; }
+/* Grid search columns must also reserve the added icon's width. */
+@container workspace (min-width: 851px) {
+  html body .calendar-filter-fields { grid-template-columns: minmax(220px, 30%) auto minmax(0, 1fr); }
+}
+@media (max-width: 600px) {
+  html body .workspace-search.workspace-search.workspace-search { --search-width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html body .workspace-search, html body .workspace-search .workspace-search-trigger { transition: none; }
+  html body .workspace-search .workspace-search-field .fui-Input__contentBefore { transition: none; }
+  html body .workspace-search[data-morphing="true"] { filter: none; }
+}
+@media (forced-colors: active) {
+  html body .workspace-search .workspace-search-trigger { background: Canvas; border-color: CanvasText; color: CanvasText; }
+}
+@media (forced-colors: none) {
+  html[data-color-theme="dark"] body .workspace-search { --search-border: transparent; }
+  html[data-color-theme="dark"] body .workspace-search .workspace-search-trigger {
+    border-color: transparent;
+    background-image: linear-gradient(var(--ws-surface), var(--ws-surface)), var(--ws-satin-sheen), var(--ws-satin-edge);
+    background-origin: border-box;
+    background-clip: padding-box, border-box, border-box;
+    background-size: auto, 80% 1px, auto;
+    background-position: center, top center, center;
+    background-repeat: no-repeat;
+  }
+}

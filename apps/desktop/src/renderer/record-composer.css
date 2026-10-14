@@ -43,6 +43,8 @@
 .record-summary-facts > div { display: grid; grid-template-columns: minmax(90px, .7fr) minmax(0, 1fr); gap: 12px; padding-top: 12px; border-top: 1px solid var(--ws-line); }
 .record-summary-facts dt { color: var(--ws-muted); font-size: 12px; }
 .record-summary-facts dd { margin: 0; color: var(--ws-text); font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
+.task-composer-preview .record-summary-deadline { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 12px; }
+.task-composer-preview .record-summary-deadline dd { white-space: nowrap; overflow-wrap: normal; font-variant-numeric: tabular-nums; }
 .record-summary-note { border-left: 3px solid var(--ws-turquoise); }
 .record-summary-people { display: grid; gap: 8px; margin: 14px 0 0; padding: 0; list-style: none; }
 .record-summary-people li { padding: 8px 10px; color: var(--ws-text); background: var(--ws-muted-surface); border-radius: 8px; font-size: 13px; overflow-wrap: anywhere; }

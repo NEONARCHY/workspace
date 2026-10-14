@@ -1,7 +1,8 @@
 import { SpatialSort, SpatialSortItem } from "./SpatialSort";
 import { useEffect, useMemo, useRef, useState, type ReactNode, type TransitionEvent } from "react";
 import type { ChatMessage, ChatSummary, PersonalChatAction, PersonalPreferences, WorkspaceDepartment, WorkspacePerson } from "@yuksalish/contracts";
-import { Avatar, Badge, Input, Menu, MenuItem, MenuList, MenuPopover, MenuTrigger } from "@fluentui/react-components";
+import { Avatar, Badge, Menu, MenuItem, MenuList, MenuPopover, MenuTrigger } from "@fluentui/react-components";
+import { Input } from "./WorkspaceInput";
 import { Airplane20Regular, Archive20Regular, ArrowDown20Regular, ArrowUp20Regular, Delete20Regular, Folder20Regular, MoreHorizontal20Regular, Pin16Filled, Pin20Regular, PinOff20Regular, Search24Regular, SignOut20Regular, TaskListSquareLtr24Regular } from "@fluentui/react-icons";
 import { moveBefore } from "./personal-organization";
 import { ProfileAvatar } from "./ProfileAvatar";
@@ -227,7 +228,7 @@ export function OrganizedChatList({ token, chats, messages, people = [], departm
                 {pinned && <MenuItem icon={<ArrowDown20Regular />} disabled={!onReorder || pinIndex === pinnedIds.length - 1 || Boolean(query.trim())} onClick={() => move(chat.id, pinnedIds[pinIndex + 1]!)}>Переместить ниже</MenuItem>}
                 {onChange ? <MenuItem icon={<Archive20Regular />} onClick={() => void run(() => onChange(chat.id, archive ? "unarchive" : "archive"), archive ? "Чат возвращён из архива" : "Чат убран в архив; переписка сохранена")}>{archive ? "Вернуть из архива" : "В архив"}</MenuItem> : null}
                 {(chat.kind === "group" && userManaged || managedLeave && canLeave) && onLeave ? <MenuItem icon={<SignOut20Regular />} disabled={!canLeave} title={!canLeave ? "Сначала добавьте участника для передачи владения" : undefined} onClick={() => onLeave(chat)}>Выйти из группы</MenuItem> : null}
-                {userManaged && (chat.kind === "direct" || chat.canDelete) && onDelete ? <MenuItem icon={<Delete20Regular />} onClick={() => onDelete(chat)}>{chat.kind === "group" ? "Удалить группу" : "Удалить чат"}</MenuItem> : null}
+                {userManaged && (chat.kind === "direct" || chat.canDelete) && onDelete ? <MenuItem data-popup-danger="true" icon={<Delete20Regular />} onClick={() => onDelete(chat)}>{chat.kind === "group" ? "Удалить группу" : "Удалить чат"}</MenuItem> : null}
               </MenuList></MenuPopover>
             </Menu>
             </SwipeRow>

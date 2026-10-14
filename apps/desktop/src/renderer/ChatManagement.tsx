@@ -16,10 +16,10 @@ import {
   DialogSurface,
   DialogTitle,
   Field,
-  Input,
   Switch,
   Textarea,
 } from "@fluentui/react-components";
+import { Input } from "./WorkspaceInput";
 import { Dismiss24Regular, PeopleTeam24Regular, Sparkle24Regular } from "@fluentui/react-icons";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import { WorkspaceSelect as Select } from "./WorkspaceSelect";

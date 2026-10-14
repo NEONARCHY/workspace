@@ -210,6 +210,7 @@ describe("TeamDashboardView", () => {
     renderDashboard();
     const statuses = screen.getByRole("group", { name: "Задачи по статусам" });
     expect(within(statuses).getAllByRole("button")).toHaveLength(4);
+    expect(document.querySelector(".team-dash-flow-bar")).toBeNull();
     for (const [label, count] of [["Новые", 1], ["В работе", 0], ["На проверке", 1], ["Просрочены", 1]] as const) {
       const tile = within(statuses).getByRole("button", { name: `${label} ${count}` });
       fireEvent.click(tile);

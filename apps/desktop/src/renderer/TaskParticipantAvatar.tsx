@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Avatar } from "@fluentui/react-components";
 import { motion, useMotionValue, useReducedMotion, useSpring } from "framer-motion";
@@ -7,12 +7,15 @@ import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { ProfileAvatar } from "./ProfileAvatar";
 
 let closeActiveParticipantPopover: (() => void) | undefined;
+export const WorkingUserIdsContext = createContext<readonly string[]>([]);
 
 export function TaskParticipantAvatar({ person, role, token }: {
   readonly person?: WorkspacePerson;
   readonly role: "Постановщик" | "Исполнитель" | "Соисполнитель" | "Наблюдатель";
   readonly token?: string;
 }) {
+  const workingUserIds = useContext(WorkingUserIdsContext);
+  const isWorking = person !== undefined && workingUserIds.includes(person.id);
   const [open, setOpen] = useState(false);
   const [pointerOpened, setPointerOpened] = useState(false);
   const reduceMotion = useReducedMotion();
@@ -105,7 +108,7 @@ export function TaskParticipantAvatar({ person, role, token }: {
     : <Avatar name={name} size={28} color="colorful" />;
 
   return <>
-    <span ref={anchorRef} className={`task-participant-anchor task-participant-${role === "Исполнитель" ? "primary" : role === "Соисполнитель" ? "co" : role === "Наблюдатель" ? "observer" : "author"}`}
+    <span ref={anchorRef} data-working={isWorking || undefined} className={`task-participant-anchor task-participant-${role === "Исполнитель" ? "primary" : role === "Соисполнитель" ? "co" : role === "Наблюдатель" ? "observer" : "author"}`}
       onPointerEnter={(event) => { show(true); followPointer(event.clientX); }} onPointerMove={(event) => followPointer(event.clientX)}
       onPointerLeave={hideSoon} onFocus={() => show(false)} onBlur={hideSoon} onClickCapture={() => setOpen(false)}
       onKeyDown={(event) => {
@@ -124,7 +127,7 @@ export function TaskParticipantAvatar({ person, role, token }: {
       onPointerEnter={() => { window.clearTimeout(closeTimer.current); cursorX.set(0); cursorTilt.set(0); }} onPointerLeave={hideSoon}
       onFocus={() => window.clearTimeout(closeTimer.current)} onBlur={hideSoon} onClickCapture={() => setOpen(false)}>
       <EmployeeProfileLink userId={person?.id} personName={name} className="task-participant-profile">
-        <small>{role}</small><strong>{name}</strong>
+        <small>{role}</small><strong>{name}</strong>{isWorking ? <small>Работа начата</small> : null}
       </EmployeeProfileLink>
     </motion.div>, document.body) : null}
   </>;

@@ -2111,6 +2111,8 @@ export interface WorkspaceBootstrap {
   readonly tripRequests: readonly TripRequest[];
   readonly absenceRequests: readonly AbsenceRequest[];
   readonly presenceSummary: readonly PresenceSummaryItem[];
+  /** Explicit open workday sessions; older servers omit the avatar signal. */
+  readonly workingUserIds?: readonly string[];
   readonly feedPosts: readonly FeedPost[];
   readonly calendarEvents: readonly CalendarEvent[];
   readonly notifications: readonly WorkspaceNotification[];

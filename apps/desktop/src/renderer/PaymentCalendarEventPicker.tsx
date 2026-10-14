@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Input } from "@fluentui/react-components";
+import { Input } from "./WorkspaceInput";
 
 import type { CalendarEvent, PaymentProjectTargets } from "@yuksalish/contracts";
 

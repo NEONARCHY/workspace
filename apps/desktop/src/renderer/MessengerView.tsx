@@ -1,7 +1,8 @@
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { WandSparkles } from "lucide-react";
-import { scrollToLatest } from "./message-scroll";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Copy, Forward, ListTodo, Pencil, Pin, PinOff, Reply, Smile, Trash2, UserRound, UsersRound, WandSparkles } from "lucide-react";
+import { useMessageArrivalMotion } from "./useMessageArrivalMotion";
+import { ComposerSendTransition, MessageTextAnimate } from "./MessageTextAnimate";
 import type {
   AssistantActionDraft,
   ChatMessage,
@@ -28,7 +29,6 @@ import {
   DialogSurface,
   DialogTitle,
   DialogTrigger,
-  Input,
   Textarea,
   Popover,
   PopoverSurface,
@@ -36,6 +36,7 @@ import {
   Tooltip,
   useRestoreFocusTarget,
 } from "@fluentui/react-components";
+import { Input } from "./WorkspaceInput";
 import {
   Add24Regular,
   Attach24Regular,
@@ -45,10 +46,8 @@ import {
   Mic24Regular,
   MoreHorizontal20Regular,
   Pin24Regular,
-  PinOff24Regular,
   Search24Regular,
   Send24Filled,
-  TaskListSquareLtr24Regular,
 } from "@fluentui/react-icons";
 import { AttachmentChips } from "./AttachmentPanel";
 import { PendingMessageFiles } from "./PendingMessageFiles";
@@ -79,19 +78,6 @@ import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
 import { employeeScope, type EmployeeScope } from "./employee-scope";
 import { chatBackgrounds, readChatBackground, saveChatBackground } from "./chat-backgrounds";
 import { ChatAvatar, ChatIconPicker, defaultChatIcon } from "./ChatAvatar";
-import {
-  MessageRevealOverlay,
-  MessageVanishOverlay,
-  type MessageRevealRequest,
-  type MessageVanishRequest,
-} from "./MessageVanishOverlay";
-
-interface OutgoingMessageReveal {
-  readonly messageId?: string;
-  readonly request: MessageRevealRequest;
-  readonly composerFinished: boolean;
-  readonly phase: "waiting" | "revealing";
-}
 
 function messagesShareBubbleGroup(first?: ChatMessage, second?: ChatMessage): boolean {
   if (!first || !second || first.systemKind || second.systemKind || first.chatId !== second.chatId
@@ -261,6 +247,8 @@ function Conversation({
   const [editBody, setEditBody] = useState("");
   const [editMentions, setEditMentions] = useState<readonly string[]>([]);
   const [deleting, setDeleting] = useState<ChatMessage>();
+  const deleteReturnFocus = useRef<HTMLElement | null>(null);
+  const deleteDescriptionId = useId();
   const [removingMessage, setRemovingMessage] = useState<{ message: ChatMessage; index: number; height: number; phase: "ready" | "exiting" | "done" }>();
   const removalTimer = useRef<number | undefined>(undefined);
   const previousRows = useRef(new Map<string, { message: ChatMessage; index: number; height: number }>());
@@ -284,9 +272,8 @@ function Conversation({
   const [deadlineBusy, setDeadlineBusy] = useState(false);
   const [deadlineDecisionId, setDeadlineDecisionId] = useState<string>();
   const [deadlineError, setDeadlineError] = useState("");
-  const [vanishRequest, setVanishRequest] = useState<MessageVanishRequest>();
-  const [outgoingReveal, setOutgoingReveal] = useState<OutgoingMessageReveal>();
-  const vanishSequence = useRef(0);
+  const [sendingText, setSendingText] = useState<{ id: number; text: string; scrollLeft: number }>();
+  const sendingSequence = useRef(0);
   const [voiceOpen, setVoiceOpen] = useState(false);
   const [rewriteOpen, setRewriteOpen] = useState(false);
   const [rewriteBusy, setRewriteBusy] = useState(false);
@@ -303,8 +290,16 @@ function Conversation({
   const restoreFocusTarget = useRestoreFocusTarget();
   const avatarRestoreFocusTarget = useRestoreFocusTarget();
   const scrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (deleting || busy || !deleteReturnFocus.current) return;
+    const frame = requestAnimationFrame(() => {
+      const target = deleteReturnFocus.current;
+      deleteReturnFocus.current = null;
+      (target?.isConnected ? target : composerInputRef.current)?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [deleting, busy]);
   const followLatest = useRef(true);
-  const scrollInitialized = useRef(false);
   useEffect(() => {
     const bridge = workspacePlatform;
     let active = true;
@@ -361,10 +356,17 @@ function Conversation({
     (message) => message.id === editing?.id || !query
       || message.body.toLowerCase().includes(query.toLowerCase()),
   ), [activeMessages, editing?.id, query]);
-  const renderedMessages = visibleMessages.filter((message) => message.id !== removingMessage?.message.id);
-  if (removingMessage && removingMessage.phase !== "done") {
-    renderedMessages.splice(Math.min(removingMessage.index, renderedMessages.length), 0, removingMessage.message);
-  }
+  const renderedMessages = useMemo(() => {
+    const rows = visibleMessages.filter((message) => message.id !== removingMessage?.message.id);
+    if (removingMessage && removingMessage.phase !== "done") {
+      rows.splice(Math.min(removingMessage.index, rows.length), 0, removingMessage.message);
+    }
+    return rows;
+  }, [visibleMessages, removingMessage]);
+  const { arrivingIds, motionDisabled, cancelArrivalMotion } = useMessageArrivalMotion({
+    paneRef: scrollRef, messages: renderedMessages, scope: `${chat.id}:${query}`,
+    followLatest, currentUserId,
+  });
   useLayoutEffect(() => {
     const pane = scrollRef.current;
     const currentRows = new Map<string, { message: ChatMessage; index: number; height: number }>();
@@ -429,7 +431,6 @@ function Conversation({
     return (!departments || employeeScope(person?.departmentId, departments) === mentionScope)
       && (!mentionQuery || `${person?.name ?? ""} ${person?.username ?? ""}`.toLocaleLowerCase("ru").includes(mentionQuery));
   });
-  const latestMessage = activeMessages.at(-1);
   const pinnedMessages = activeMessages.filter((message) => message.isPinned && !message.deletedAt);
   const latestPinned = pinnedMessages.at(-1);
   const revealMessage = (messageId: string) => {
@@ -438,19 +439,6 @@ function Conversation({
       document.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(messageId)}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" });
     });
   };
-  useLayoutEffect(() => {
-    const pane = scrollRef.current;
-    if (pane && (followLatest.current || latestMessage?.authorId === currentUserId)) {
-      scrollToLatest(pane, scrollInitialized.current);
-    }
-    scrollInitialized.current = true;
-  }, [
-    latestMessage?.id,
-    latestMessage?.authorId,
-    currentUserId,
-    outgoingReveal?.messageId,
-    outgoingReveal?.phase,
-  ]);
   useEffect(() => {
     if (editing) {
       const input = composerInputRef.current;
@@ -484,8 +472,7 @@ function Conversation({
   }, [contextMenu]);
   const startEditing = (message: ChatMessage) => {
     if (busy || !canSend || message.authorId !== currentUserId || !message.canEdit || message.deletedAt) return;
-    vanishSequence.current += 1;
-    setVanishRequest({ id: vanishSequence.current, text: message.body, direction: "restore" });
+    setSendingText(undefined);
     setEditing(message);
     setEditBody(message.body);
     setEditMentions(message.mentionUserIds ?? []);
@@ -507,6 +494,13 @@ function Conversation({
       setBusy(false);
     }
   };
+  const requestMessageDelete = (message: ChatMessage, trigger?: HTMLButtonElement) => {
+    if (busy) return;
+    deleteReturnFocus.current = trigger ?? composerInputRef.current;
+    deleteReturnFocus.current?.focus({ preventScroll: true });
+    setDeleting(message);
+    setContextMenu(undefined);
+  };
   const send = () => {
     if (!canSend || busy || (!draft.trim() && pendingFiles.length === 0)) return;
     const sentText = draft.trim();
@@ -514,17 +508,9 @@ function Conversation({
     const sentFiles = pendingFiles;
     const sentReplyId = reply?.id;
     const sentMentions = mentions.filter((id) => activeMemberIds.has(id));
-    let transitionId: number | undefined;
     if (sentText) {
-      vanishSequence.current += 1;
-      transitionId = vanishSequence.current;
-      const request = { id: transitionId, text: sentText };
-      setOutgoingReveal({ request, composerFinished: false, phase: "waiting" });
-      setVanishRequest({
-        ...request,
-        direction: "vanish",
-        scrollLeft: sentScrollLeft,
-      });
+      sendingSequence.current += 1;
+      setSendingText({ id: sendingSequence.current, text: sentText, scrollLeft: sentScrollLeft });
       setDraft("");
     }
     focusAfterSend.current = true;
@@ -538,25 +524,10 @@ function Conversation({
           throw new Error(
             "Сообщение не отправлено. Текст сохранён — попробуйте снова.",
           );
-        if (transitionId !== undefined) {
-          setOutgoingReveal((current) => current?.request.id === transitionId
-            ? {
-                ...current,
-                messageId: message.id,
-                phase: current.composerFinished ? "revealing" : "waiting",
-              }
-            : current);
-        }
       } catch (cause) {
-        if (transitionId !== undefined) {
-          setOutgoingReveal(undefined);
+        if (sentText) {
+          setSendingText(undefined);
           setDraft(sentText);
-          setVanishRequest({
-            id: transitionId,
-            text: sentText,
-            direction: "restore",
-            scrollLeft: sentScrollLeft,
-          });
         }
         throw cause;
       }
@@ -751,6 +722,7 @@ function Conversation({
         </div>
       ) : null}
       <div className="message-scroll" data-chat-background={chatBackground} aria-label="Переписка" aria-live="polite" ref={scrollRef}
+        onWheel={cancelArrivalMotion} onPointerDown={cancelArrivalMotion}
         onScroll={(event) => { const pane = event.currentTarget; followLatest.current = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 80; }}>
         {!renderedMessages.length && (
           <div className="empty-compact">
@@ -772,12 +744,12 @@ function Conversation({
             : "История переписки";
           const deadlineRequest = message.systemKind === "task_deadline_request"
             ? taskForChat?.deadlineRequests?.find((item) => item.messageId === message.id) : undefined;
-          if (message.systemKind) return <div key={message.id}>
+          if (message.systemKind) return <div key={message.id} data-message-row-id={message.id}>
             {(index === 0 || date !== previousDate) && <div className="date-separator">{date}</div>}
             {deadlineRequest ? <div className="task-deadline-message" data-message-id={message.id} role="group" aria-label="Запрос переноса срока">
               <strong>Перенос срока · {deadlineRequest.status === "pending" ? "ожидает решения" : deadlineRequest.status === "approved" ? "подтверждён" : deadlineRequest.status === "rejected" ? "отклонён" : "неактуален"}</strong>
               <small>Запросил: {people.find((person) => person.id === deadlineRequest.requesterUserId)?.name ?? "Исполнитель"}</small>
-              <p>{message.body}</p>
+              <p><MessageTextAnimate key={`${message.id}:${arrivingIds.has(message.id)}`} enabled={arrivingIds.has(message.id)} disabled={motionDisabled}>{message.body}</MessageTextAnimate></p>
               <div><span>Было: {new Date(deadlineRequest.oldDueAt).toLocaleString("ru-RU")}</span><span>Предложено: {new Date(deadlineRequest.proposedDueAt).toLocaleString("ru-RU")}</span></div>
               {deadlineRequest.status === "pending" && canDecideDeadline && onDecideTaskDeadline ? <div className="task-deadline-message-actions">
                 <Button appearance="primary" disabled={!!deadlineDecisionId} onClick={() => void decideDeadline(deadlineRequest.id, true)}>Подтвердить перенос</Button>
@@ -785,7 +757,7 @@ function Conversation({
               </div> : null}
               <time>{message.time}</time>
             </div> : <div className="message-system" data-message-id={message.id} role="note">
-              <span>{message.body}</span><time>{message.time}</time>
+              <span><MessageTextAnimate key={`${message.id}:${arrivingIds.has(message.id)}`} enabled={arrivingIds.has(message.id)} disabled={motionDisabled}>{message.body}</MessageTextAnimate></span><time>{message.time}</time>
             </div>}
           </div>;
           const own = message.authorId === currentUserId;
@@ -798,23 +770,14 @@ function Conversation({
             (attachment) => attachment.ownerType === "message" && attachment.ownerId === message.id,
           );
           const voiceAttachments = messageAttachments.filter((attachment) => attachment.mediaKind === "voice");
-          const revealPhase = outgoingReveal?.messageId === message.id
-            ? outgoingReveal.phase
-            : undefined;
-          const revealClass = revealPhase === "waiting"
-            ? " message-awaiting-reveal"
-            : revealPhase === "revealing"
-              ? " message-particle-revealing"
-              : "";
           return (
-            <div key={message.id} className={`message-row ${groupPosition}${removingMessage?.message.id === message.id ? ` is-removing is-${removingMessage.phase}` : ""}`} style={removingMessage?.message.id === message.id ? { height: removingMessage.phase === "exiting" ? 0 : removingMessage.height } : undefined} hidden={revealPhase === "waiting"}>
+            <div key={message.id} data-message-row-id={message.id} className={`message-row ${groupPosition}${removingMessage?.message.id === message.id ? ` is-removing is-${removingMessage.phase}` : ""}`} style={removingMessage?.message.id === message.id ? { height: removingMessage.phase === "exiting" ? 0 : removingMessage.height } : undefined}>
               {(index === 0 || date !== previousDate) && (
                 <div className="date-separator">{date}</div>
               )}
               <div
                 data-message-id={message.id}
-                className={`message ${own ? "own" : ""} ${message.isPinned ? "message-pinned" : ""} ${message.mentionUserIds?.includes(currentUserId) ? "message-mentioned" : ""}${revealClass}`}
-                aria-hidden={revealPhase ? true : undefined}
+                className={`message ${own ? "own" : ""} ${message.isPinned ? "message-pinned" : ""} ${message.mentionUserIds?.includes(currentUserId) ? "message-mentioned" : ""}`}
                 onContextMenu={(event) => {
                   event.preventDefault();
                   setContextMenu({ message, x: event.clientX, y: event.clientY, portalContainer: menuPortalContainerFor(event.currentTarget) });
@@ -826,7 +789,7 @@ function Conversation({
                     setContextMenu({ message, x: rect.left + 28, y: rect.top + 28, portalContainer: menuPortalContainerFor(event.currentTarget) });
                   }
                 }}
-                tabIndex={revealPhase ? -1 : 0}
+                tabIndex={0}
                 onPointerEnter={() => setReactionTargetId(message.id)}
                 onPointerLeave={() => {
                   setReactionTargetId((current) => current === message.id ? undefined : current);
@@ -842,7 +805,7 @@ function Conversation({
                   </EmployeeProfileLink>
                 )}
                 <div className="message-content">
-                  <div className={`message-body${message.forwarded || messageAttachments.length ? " has-rich-content" : ""}`}>
+                  <div className={`message-body${message.forwarded || messageAttachments.length ? " has-rich-content" : ""}${messageAttachments.length ? " has-attachments" : ""}`}>
                     {!own && (groupedWithPrevious
                       ? <span className="sr-only">Сообщение от {personName(message.authorId)}</span>
                       : <EmployeeProfileLink userId={message.authorId} personName={personName(message.authorId)}><strong>{personName(message.authorId)}</strong></EmployeeProfileLink>)}
@@ -852,16 +815,8 @@ function Conversation({
                         <span>{parent.body}</span>
                       </blockquote>
                     )}
-                    {message.forwarded ? <ForwardedMessage message={message} onOpenPost={onOpenFeedPost} />
-                      : voiceAttachments.length === 0 ? <p className="message-text">{message.body}</p> : null}
-                    {revealPhase === "revealing" ? (
-                      <MessageRevealOverlay
-                        request={outgoingReveal?.request}
-                        onComplete={(id) => {
-                          setOutgoingReveal((current) => current?.request.id === id ? undefined : current);
-                        }}
-                      />
-                    ) : null}
+                    {message.forwarded ? <ForwardedMessage message={message} onOpenPost={onOpenFeedPost} animateText={arrivingIds.has(message.id)} motionDisabled={motionDisabled} />
+                      : voiceAttachments.length === 0 ? <p className="message-text"><MessageTextAnimate key={`${message.id}:${arrivingIds.has(message.id)}`} enabled={arrivingIds.has(message.id)} disabled={motionDisabled}>{message.body}</MessageTextAnimate></p> : null}
                     {!message.deletedAt && (
                       <>
                         {!!message.mentionUserIds?.length && (
@@ -927,7 +882,9 @@ function Conversation({
         const hasVoice = attachments.some((attachment) => attachment.ownerType === "message" && attachment.ownerId === message.id && attachment.mediaKind === "voice");
         const mayDelete = message.canDelete ?? (own || message.canPin || ["admin", "superadmin"].includes(currentUserRole));
         return <MessageContextMenu x={contextMenu.x} y={contextMenu.y} portalContainer={contextMenu.portalContainer} autoFocus={Boolean(contextMenu.trigger)} onPointerDown={(event) => event.stopPropagation()}>
-          {message.body && !(message.forwarded?.kind === "feed" && !message.forwarded.available) ? <Button appearance="subtle" onClick={() => {
+          <Button appearance="subtle" icon={<Reply size={20} />} onClick={() => { setReply(message); setContextMenu(undefined); }}>Ответить</Button>
+          {message.canPin ? <Button appearance="subtle" icon={message.isPinned ? <PinOff size={20} /> : <Pin size={20} />} onClick={() => { void run(() => onPinMessage(message, !message.isPinned)); setContextMenu(undefined); }}>{message.isPinned ? "Открепить" : "Закрепить"}</Button> : null}
+          {message.body && !(message.forwarded?.kind === "feed" && !message.forwarded.available) ? <Button appearance="subtle" icon={<Copy size={20} />} onClick={() => {
             setContextMenu(undefined);
             void run(async () => {
               if (!navigator.clipboard?.writeText) throw new Error("Копирование недоступно. Выделите текст и нажмите Ctrl+C.");
@@ -935,14 +892,12 @@ function Conversation({
               catch { throw new Error("Не удалось скопировать. Выделите текст и нажмите Ctrl+C."); }
             });
           }}>Копировать</Button> : null}
-          <Button appearance="subtle" onClick={() => { setReply(message); setContextMenu(undefined); }}>Ответить</Button>
-              {onForwardContent && <Button appearance="subtle" onClick={() => { setForwarding(message); setContextMenu(undefined); }}>Переслать</Button>}
-          {message.canPin ? <Button appearance="subtle" icon={message.isPinned ? <PinOff24Regular /> : <Pin24Regular />} onClick={() => { void run(() => onPinMessage(message, !message.isPinned)); setContextMenu(undefined); }}>{message.isPinned ? "Открепить" : "Закрепить"}</Button> : null}
-          <Button appearance="subtle" icon={<TaskListSquareLtr24Regular />} onClick={() => { setTaskSource(message); setContextMenu(undefined); }}>В задачу</Button>
-          {own && message.canEdit && !hasVoice ? <Button appearance="subtle" onClick={() => { startEditing(message); setContextMenu(undefined); }}>Изменить</Button> : null}
-          {mayDelete ? <Button appearance="subtle" onClick={() => { setDeleting(message); setContextMenu(undefined); }}>Удалить</Button> : null}
+          {onForwardContent && <Button appearance="subtle" icon={<Forward size={20} />} onClick={() => { setForwarding(message); setContextMenu(undefined); }}>Переслать</Button>}
+          <Button appearance="subtle" icon={<ListTodo size={20} />} onClick={() => { setTaskSource(message); setContextMenu(undefined); }}>В задачу</Button>
+          {own && message.canEdit && !hasVoice ? <Button appearance="subtle" icon={<Pencil size={20} />} onClick={() => { startEditing(message); setContextMenu(undefined); }}>Изменить</Button> : null}
+          {mayDelete ? <Button className="message-context-delete" appearance="subtle" icon={<Trash2 size={20} />} onClick={() => requestMessageDelete(message, contextMenu.trigger)}>Удалить</Button> : null}
           {message.reactions?.length ? <div className="message-context-reactions" onPointerEnter={() => setReactionPreview(true)} onPointerLeave={() => setReactionPreview(false)}>
-            <Button appearance="subtle" aria-haspopup="dialog" aria-expanded={reactionPreview} onFocus={() => setReactionPreview(true)} onClick={() => { setReactionDialog(message); setContextMenu(undefined); setReactionPreview(false); }}>Реакции · {message.reactions.reduce((total, reaction) => total + reaction.count, 0)}</Button>
+            <Button appearance="subtle" icon={<Smile size={20} />} aria-haspopup="dialog" aria-expanded={reactionPreview} onFocus={() => setReactionPreview(true)} onClick={() => { setReactionDialog(message); setContextMenu(undefined); setReactionPreview(false); }}>Реакции · {message.reactions.reduce((total, reaction) => total + reaction.count, 0)}</Button>
             {reactionPreview ? <div className={`message-reaction-submenu ${contextMenu.x + 540 < window.innerWidth ? "is-right" : "is-left"}`} role="region" aria-label="Кто поставил реакции">
               <ReactionPeople reactions={message.reactions} people={people} token={token} onOpenPersonProfile={(id) => { setContextMenu(undefined); onOpenPersonProfile?.(id); }} />
             </div> : null}
@@ -963,15 +918,21 @@ function Conversation({
         </div>
       )}
       {deleting && (
-        <div className="chat-confirmation" role="alert">
-          <p>
-            Удалить сообщение из переписки? История изменений сохранится для
-            аудита.
-          </p>
+        <WorkspaceDialog open onOpenChange={(_, data) => { if (!data.open && !busy) setDeleting(undefined); }}>
+          <DialogSurface className="chat-delete-dialog"
+            backdrop={{ className: "chat-delete-backdrop" }} aria-describedby={deleteDescriptionId}>
+            <span className="chat-delete-icon" aria-hidden="true"><Trash2 size={24} strokeWidth={1.6} /></span>
+            <DialogBody>
+              <DialogTitle>Удалить это сообщение?</DialogTitle>
+              <DialogContent id={deleteDescriptionId}>Сообщение исчезнет у всех участников чата. История изменений сохранится для аудита.</DialogContent>
+              <DialogActions className="chat-delete-actions">
+                <Button disabled={busy} appearance="subtle" onClick={() => setDeleting(undefined)}>Отмена</Button>
           <Button
+            className="chat-delete-confirm"
             disabled={busy}
             appearance="primary"
             onClick={() => {
+              if (busy) return;
               const target = deleting;
               const row = [...scrollRef.current?.querySelectorAll<HTMLElement>(".message-row") ?? []]
                 .find((element) => element.querySelector<HTMLElement>("[data-message-id]")?.dataset.messageId === target.id);
@@ -998,10 +959,10 @@ function Conversation({
           >
             Удалить для всех
           </Button>
-          <Button disabled={busy} onClick={() => setDeleting(undefined)}>
-            Отмена
-          </Button>
-        </div>
+              </DialogActions>
+            </DialogBody>
+          </DialogSurface>
+        </WorkspaceDialog>
       )}
       {taskSource ? <TaskComposer
         open
@@ -1222,9 +1183,9 @@ function Conversation({
             <div className="composer-input">
               <PendingMessageFiles files={pendingFiles} disabled={busy}
                 onRemove={index => setPendingFiles(current => current.filter((_, fileIndex) => fileIndex !== index))} />
-              <div className={`composer-field-shell${vanishRequest ? " is-message-animating" : ""}`}>
+              <div className={`composer-field-shell${sendingText && !motionDisabled ? " is-message-animating" : ""}`}>
                 <Input
-                  input={{ ref: composerInputRef }}
+                input={{ ref: composerInputRef }}
                   aria-label={editing ? "Редактирование сообщения" : "Новое сообщение"}
                   aria-description="Стрелка вверх в пустом поле — изменить последнее своё сообщение"
                   placeholder={editing ? "Измените сообщение" : "Напишите сообщение · @ упомянуть"}
@@ -1232,6 +1193,7 @@ function Conversation({
                   value={editing ? editBody : draft}
                   disabled={busy}
                   onChange={(_, data) => {
+                    setSendingText(undefined);
                     if (editing) {
                       setEditBody(data.value);
                       setMentionPicker(/(?:^|\s)@[^\s@]*$/u.test(data.value));
@@ -1280,20 +1242,9 @@ function Conversation({
                   }
                   }}
                 />
-                <MessageVanishOverlay
-                  inputRef={composerInputRef}
-                  request={vanishRequest}
-                  onComplete={(id) => {
-                    setVanishRequest((current) => current?.id === id ? undefined : current);
-                    setOutgoingReveal((current) => current?.request.id === id
-                      ? {
-                          ...current,
-                          composerFinished: true,
-                          phase: current.messageId ? "revealing" : "waiting",
-                        }
-                      : current);
-                  }}
-                />
+                {sendingText ? <ComposerSendTransition key={sendingText.id} inputRef={composerInputRef}
+                  text={sendingText.text} scrollLeft={sendingText.scrollLeft} disabled={motionDisabled}
+                  onComplete={() => setSendingText(current => current?.id === sendingText.id ? undefined : current)} /> : null}
               </div>
             </div>
             <Button
@@ -1341,6 +1292,7 @@ export function MessengerView(props: MessengerViewProps) {
   const { chats, messages, focusChatId, onMarkRead } = props;
   const undo = useUndoActions();
   const [deletionChoice, setDeletionChoice] = useState<ChatSummary>();
+  const [deletionChoiceOpen, setDeletionChoiceOpen] = useState(false);
   const [pendingLeave, setPendingLeave] = useState<ChatSummary>();
   const visibleChats = chats.filter((chat) => !undo.pending.some(item => item.scope === "chat" && item.id === chat.id));
   const preferences = props.personalPreferences ?? defaultPersonalPreferences;
@@ -1387,7 +1339,7 @@ export function MessengerView(props: MessengerViewProps) {
   const requestChatDeletion = (chat: ChatSummary) => {
     if (chat.contextType || (chat.kind !== "direct" && chat.kind !== "group")) return;
     setPanel(undefined);
-    if (chat.kind === "direct") setDeletionChoice(chat);
+    if (chat.kind === "direct") { setDeletionChoice(chat); setDeletionChoiceOpen(true); }
     else if (chat.canDelete) queueChatRemoval(chat, "both");
   };
   const queueChatRemoval = (chat: ChatSummary, mode: "self" | "both" | "leave") => {
@@ -1397,7 +1349,7 @@ export function MessengerView(props: MessengerViewProps) {
       : () => props.chatActions.delete(chat.id);
     if (!commit) return;
     undo.enqueue({ id: chat.id, scope: "chat", label: mode === "leave" ? "Выход из группы" : mode === "self" ? "Чат удалён у вас" : chat.kind === "direct" ? "Чат удалён у обоих" : "Группа удалена", commit });
-    setDeletionChoice(undefined);
+    setDeletionChoiceOpen(false);
     setPendingLeave(undefined);
     if (activeChat?.id === chat.id) setConversationOpen(false);
   };
@@ -1472,7 +1424,7 @@ export function MessengerView(props: MessengerViewProps) {
             // The list is revealed in this commit; retain keyboard context without remounting the draft.
             requestAnimationFrame(() => row?.isConnected && row.focus({ preventScroll: true }));
           }}
-          fileDropDisabledReason={panel || deletionChoice || pendingLeave ? "Сначала закройте окно управления чатом" : undefined}
+          fileDropDisabledReason={panel || deletionChoiceOpen || pendingLeave ? "Сначала закройте окно управления чатом" : undefined}
         />
       ) : (
         <div className="empty-state">
@@ -1509,23 +1461,26 @@ export function MessengerView(props: MessengerViewProps) {
         onCancel={() => setPendingLeave(undefined)}
         onConfirm={() => { if (pendingLeave) queueChatRemoval(pendingLeave, "leave"); }}
       />
-      <WorkspaceDialog open={Boolean(deletionChoice)} onOpenChange={(_, data) => { if (!data.open) setDeletionChoice(undefined); }}>
+      <WorkspaceDialog open={deletionChoiceOpen} onOpenChange={(_, data) => { if (!data.open) setDeletionChoiceOpen(false); }}>
         <DialogSurface className="chat-deletion-choice">
+          <span className="chat-deletion-mark" aria-hidden="true"><Trash2 size={24} strokeWidth={1.6} /></span>
           <DialogBody>
             <DialogTitle>Удалить личный чат?</DialogTitle>
             <DialogContent>
               <p>Выберите, что сделать с диалогом «{deletionChoice?.title}».</p>
               <div className="chat-deletion-options">
-                <Button disabled={!props.chatActions.dismiss || !deletionChoice} onClick={() => { if (deletionChoice) queueChatRemoval(deletionChoice, "self"); }}>
+                <Button className="chat-deletion-self" disabled={!props.chatActions.dismiss || !deletionChoice} onClick={() => { if (deletionChoiceOpen && deletionChoice) queueChatRemoval(deletionChoice, "self"); }}>
+                  <span className="chat-deletion-option-icon" aria-hidden="true"><UserRound size={22} strokeWidth={1.6} /></span>
                   <span><strong>Удалить у меня</strong><small>У собеседника переписка останется. Новый диалог с ним вернёт вашу историю.</small></span>
                 </Button>
-                <Button disabled={!deletionChoice?.canDelete} onClick={() => { if (deletionChoice?.canDelete) queueChatRemoval(deletionChoice, "both"); }}>
+                <Button className="chat-deletion-both" disabled={!deletionChoice?.canDelete} onClick={() => { if (deletionChoiceOpen && deletionChoice?.canDelete) queueChatRemoval(deletionChoice, "both"); }}>
+                  <span className="chat-deletion-option-icon" aria-hidden="true"><UsersRound size={22} strokeWidth={1.6} /></span>
                   <span><strong>Удалить у обоих</strong><small>{deletionChoice?.canDelete ? "Диалог исчезнет у обоих участников. Историю нельзя будет вернуть после сохранения." : "Удаление для обоих недоступно в этом диалоге."}</small></span>
                 </Button>
               </div>
               <p className="chat-deletion-note">После выбора у вас будет 5 секунд на отмену.</p>
             </DialogContent>
-            <DialogActions><Button onClick={() => setDeletionChoice(undefined)}>Отмена</Button></DialogActions>
+            <DialogActions className="chat-deletion-actions"><Button appearance="subtle" onClick={() => setDeletionChoiceOpen(false)}>Отмена</Button></DialogActions>
           </DialogBody>
         </DialogSurface>
       </WorkspaceDialog>

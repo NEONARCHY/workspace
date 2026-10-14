@@ -2,7 +2,8 @@ import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { MemberDirectoryItem, MembersRegistry } from "@yuksalish/contracts";
-import { Avatar, Badge, Button, Input, Spinner } from "@fluentui/react-components";
+import { Avatar, Badge, Button, Spinner } from "@fluentui/react-components";
+import { Input } from "./WorkspaceInput";
 import { ArrowClockwise20Regular, Search20Regular } from "@fluentui/react-icons";
 
 import { RecordTablePager, SortHeading, tableCollator, useTablePage, type TableSort } from "./RecordTableTools";

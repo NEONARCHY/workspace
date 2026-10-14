@@ -1,0 +1,90 @@
+/* One owner for every field boundary. Fluent Select normally borders its child
+   while the product sizes its root: move that boundary to the sized shell.
+   Focus changes the real border, never an underline, halo or overlay sprite. */
+html body .app-provider :is(.fui-Input, .fui-Textarea, .fui-Select, .fui-Combobox, .fui-Dropdown) {
+  border-width: 1px;
+  border-style: solid;
+  box-shadow: none;
+}
+html body .app-provider .fui-Select {
+  display: inline-flex;
+  align-items: stretch;
+}
+html body .app-provider :is(.fui-Input__input, .fui-Textarea__textarea, .fui-Select__select, .fui-Combobox__input, .fui-Dropdown__button) {
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+}
+html body .app-provider .fui-Select__select {
+  height: auto;
+  min-height: 0;
+  width: 100%;
+  border-radius: inherit;
+}
+html body .app-provider .fui-Select__icon {
+  top: 50%;
+  bottom: auto;
+  transform: translateY(-50%);
+}
+/* Disable only Fluent's decorative field pseudo-elements, not icons, popup
+   pointers, validation messages or the actual keyboard focus indication. */
+html body .app-provider :is(.fui-Input, .fui-Textarea, .fui-Select, .fui-Combobox, .fui-Dropdown, .fui-Dropdown__button)::before,
+html body .app-provider :is(.fui-Input, .fui-Textarea, .fui-Select, .fui-Combobox, .fui-Dropdown, .fui-Dropdown__button)::after {
+  display: none;
+}
+@media (forced-colors: none) {
+  :root { --ws-field-focus-border: #53677b; }
+  html[data-color-theme="dark"] { --ws-field-focus-border: #aeb8c7; }
+  html body .app-provider :is(.fui-Input, .fui-Textarea, .fui-Select, .fui-Combobox, .fui-Dropdown, .ws-date-time-trigger) {
+    outline: none;
+    box-shadow: none;
+    transition-property: border-color, background-color;
+    transition-delay: 0ms;
+  }
+  html body .app-provider :is(.fui-Input, .fui-Textarea, .fui-Select, .fui-Combobox, .fui-Dropdown, .ws-date-time-trigger):focus-within:not([disabled]):not([aria-disabled="true"]):not(:has(:disabled)) {
+    --ws-satin-border-color: var(--ws-field-focus-border);
+    border-color: var(--ws-field-focus-border);
+    outline: none;
+    box-shadow: none;
+  }
+  html body .app-provider :is(.fui-Input__input, .fui-Textarea__textarea, .fui-Select__select, .fui-Combobox__input, .fui-Dropdown__button):is(:focus, :focus-visible) {
+    outline: none;
+    box-shadow: none;
+  }
+  html body .app-provider :is(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]):not(.fui-Input__input):not(.fui-Combobox__input):not(.ai-gooey-search-input),
+    textarea:not(.fui-Textarea__textarea):not(.assistant-editor), select:not(.fui-Select__select)
+  ) {
+    outline: none;
+    box-shadow: none;
+    transition-property: border-color, background-color;
+    transition-delay: 0ms;
+  }
+  html body .app-provider :is(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]):not(.fui-Input__input):not(.fui-Combobox__input):not(.ai-gooey-search-input),
+    textarea:not(.fui-Textarea__textarea):not(.assistant-editor), select:not(.fui-Select__select)
+  ):focus:not(:disabled) {
+    --ws-satin-border-color: var(--ws-field-focus-border);
+    border-color: var(--ws-field-focus-border);
+  }
+  /* An invalid field must not become a neutral focus border. */
+  html body .app-provider :is(.fui-Input, .fui-Textarea, .fui-Select, .fui-Combobox, .fui-Dropdown):is([aria-invalid="true"], :has([aria-invalid="true"])),
+  html body .app-provider :is(input, textarea, select)[aria-invalid="true"] {
+    border-color: var(--ws-danger, #ab2842);
+  }
+  html body .app-provider .composer-input .fui-Input { border: 0; }
+}
+@media (forced-colors: active) {
+  html body .app-provider :is(.fui-Input, .fui-Textarea, .fui-Select, .fui-Combobox, .fui-Dropdown) {
+    border-color: CanvasText;
+    background: Canvas;
+  }
+  html body .app-provider :is(.fui-Input, .fui-Textarea, .fui-Select, .fui-Combobox, .fui-Dropdown):focus-within {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+  html body .app-provider :is(.fui-Input, .fui-Textarea, .fui-Select, .fui-Combobox, .fui-Dropdown):is([aria-disabled="true"], :has(:disabled)) { border-color: GrayText; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html body .app-provider :is(.fui-Input, .fui-Textarea, .fui-Select, .fui-Combobox, .fui-Dropdown, .ws-date-time-trigger) { transition: none; }
+}

@@ -14,6 +14,23 @@ async function open() { fireEvent.click(await screen.findByRole("button", { name
 describe("private survey workspace", () => {
   beforeEach(() => { vi.resetAllMocks(); vi.mocked(listSurveyAnalyses).mockResolvedValue([fixture.analysis]); vi.mocked(loadSurveyAnalysis).mockResolvedValue(fixture); });
   afterEach(cleanup);
+  it("uses product dropdowns and passes the chosen CSV settings only on explicit import", async () => {
+    vi.mocked(importSurveyAnalysis).mockResolvedValue(fixture);
+    show(); await screen.findByRole("button", { name: /Опрос команды/ });
+    const encoding = screen.getByRole("combobox", { name: "Кодировка CSV" });
+    const delimiter = screen.getByRole("combobox", { name: "Разделитель столбцов CSV" });
+    expect(encoding.tagName).toBe("BUTTON");
+    expect(delimiter.tagName).toBe("BUTTON");
+    fireEvent.click(encoding);
+    fireEvent.click(screen.getByRole("option", { name: "Windows-1251" }));
+    fireEvent.click(delimiter);
+    fireEvent.click(screen.getByRole("option", { name: "Точка с запятой" }));
+    expect(importSurveyAnalysis).not.toHaveBeenCalled();
+    const file = new File(["Q;A"], "sample.csv", { type: "text/csv" });
+    fireEvent.change(screen.getByLabelText("Файл опроса"), { target: { files: [file] } });
+    fireEvent.click(screen.getByRole("button", { name: "Загрузить и открыть" }));
+    await waitFor(() => expect(importSurveyAnalysis).toHaveBeenCalledWith("test", file, expect.any(String), "cp1251", ";"));
+  });
   it("opens the author's saved analysis and computes exact source values without a mutation", async () => {
     show(); await open();
     expect(loadSurveyAnalysis).toHaveBeenCalledWith("test", "survey-1");
@@ -61,5 +78,43 @@ describe("private survey workspace", () => {
     show(); await open(); fireEvent.click(screen.getByText("2. Поиск, фильтры и сохранённые срезы"));
     fireEvent.change(screen.getByRole("textbox", { name: "Поиск по всем ответам" }), { target: { value: "A" } });
     expect(screen.getByText(/Ответили:/)).toHaveTextContent("1 из 1");
+  });
+  it("selects a dropped file without uploading before confirmation", async () => {
+    show(); await screen.findByRole("button", { name: /Опрос команды/ });
+    const file = new File(["Q\nA"], "dropped.csv", { type: "text/csv" });
+    const drop = screen.getByLabelText("Файл опроса").closest("label")!;
+    fireEvent.dragOver(drop);
+    expect(drop).toHaveAttribute("data-dragging", "true");
+    fireEvent.drop(drop, { dataTransfer: { files: [file] } });
+    expect(screen.getByText("dropped.csv")).toBeInTheDocument();
+    expect(screen.getByText("3 Б · нажмите, чтобы заменить")).toBeInTheDocument();
+    expect(drop).toHaveAttribute("data-dragging", "false");
+    expect(screen.getByRole("button", { name: "Загрузить и открыть" })).toBeEnabled();
+    expect(importSurveyAnalysis).not.toHaveBeenCalled();
+  });
+  it("rejects unsupported and oversized files before import", async () => {
+    show(); await screen.findByRole("button", { name: /Опрос команды/ });
+    const input = screen.getByLabelText("Файл опроса");
+    fireEvent.change(input, { target: { files: [new File(["text"], "answers.txt")] } });
+    expect(screen.getByRole("alert")).toHaveTextContent("Выберите файл CSV, XLSX или XLS");
+    const large = new File(["Q"], "large.csv");
+    Object.defineProperty(large, "size", { value: 10 * 1024 * 1024 + 1 });
+    fireEvent.change(input, { target: { files: [large] } });
+    expect(screen.getByRole("alert")).toHaveTextContent("не должен превышать 10 МиБ");
+    expect(screen.getByRole("button", { name: "Загрузить и открыть" })).toBeDisabled();
+    expect(importSurveyAnalysis).not.toHaveBeenCalled();
+  });
+  it("does not accept drops without create rights or while an analysis draft is dirty", async () => {
+    const view = show(false, false);
+    await screen.findByRole("button", { name: /Опрос команды/ });
+    const file = new File(["Q\nA"], "blocked.csv");
+    fireEvent.drop(screen.getByLabelText("Файл опроса").closest("label")!, { dataTransfer: { files: [file] } });
+    expect(screen.queryByText("blocked.csv")).not.toBeInTheDocument();
+    view.rerender(<SurveyAnalyticsView token="test" canCreate canEdit />);
+    await open();
+    fireEvent.change(screen.getByRole("textbox", { name: "Название анализа" }), { target: { value: "Черновик" } });
+    fireEvent.drop(screen.getByLabelText("Файл опроса").closest("label")!, { dataTransfer: { files: [file] } });
+    expect(screen.queryByText("blocked.csv")).not.toBeInTheDocument();
+    expect(importSurveyAnalysis).not.toHaveBeenCalled();
   });
 });

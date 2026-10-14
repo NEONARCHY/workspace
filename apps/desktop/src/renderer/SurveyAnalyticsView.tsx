@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Button, Field, Input, Select, Spinner } from "@fluentui/react-components";
+import { Button, Field, Select, Spinner } from "@fluentui/react-components";
+import { ArrowUpload24Regular, Document24Regular, Folder24Regular } from "@fluentui/react-icons";
+import { Input } from "./WorkspaceInput";
+import { WorkspaceSelect } from "./WorkspaceSelect";
 import type { SurveyAnalysis, SurveyAnalysisDetail, SurveyConfiguration, SurveyFilter, SurveyQuestionType } from "@yuksalish/contracts";
 import { downloadSurveyOriginal, exportSurveyWorkbook, importSurveyAnalysis, listSurveyAnalyses, loadSurveyAnalysis, saveSurveyAnalysis } from "./workspace-api";
 import { buildSurveyDataset, filterSurveyRows, surveyComparison, surveyCsv, surveyDistribution, surveyNumericSummary, surveyQuality } from "./survey-engine";
@@ -13,6 +16,7 @@ const typeLabels: Readonly<Record<SurveyQuestionType, string>> = {
 const filterLabels = { equals: "равно", contains: "содержит", range: "диапазон", empty: "пропуск", filled: "заполнено" } as const;
 const message = (error: unknown) => error instanceof Error ? error.message : "Не удалось выполнить действие.";
 const number = (value: number | undefined) => value === undefined || !Number.isFinite(value) ? "—" : value.toLocaleString("ru-RU", { maximumFractionDigits: 3 });
+const fileSize = (bytes: number) => bytes < 1024 ? `${number(bytes)} Б` : bytes < 1024 * 1024 ? `${number(bytes / 1024)} КиБ` : `${number(bytes / 1024 / 1024)} МиБ`;
 function download(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
@@ -43,6 +47,7 @@ export function SurveyAnalyticsView({ token, canCreate, canEdit }: { readonly to
   const [configuration, setConfiguration] = useState<SurveyConfiguration>();
   const [title, setTitle] = useState("");
   const [file, setFile] = useState<File>();
+  const [dragging, setDragging] = useState(false);
   const [requestId, setRequestId] = useState(() => crypto.randomUUID());
   const [encoding, setEncoding] = useState("utf-8-sig");
   const [delimiter, setDelimiter] = useState(",");
@@ -65,6 +70,14 @@ export function SurveyAnalyticsView({ token, canCreate, canEdit }: { readonly to
   const [missingText, setMissingText] = useState("");
   const visibleAnalyses = analyses.filter((item) => item.archived === archive && item.title.toLocaleLowerCase().includes(listQuery.toLocaleLowerCase()));
   const dirty = !!detail && !!configuration && (title !== detail.analysis.title || JSON.stringify(configuration) !== JSON.stringify(detail.analysis.configuration));
+  const uploadDisabled = busy || !canCreate || dirty;
+  const chooseFile = (next: File | undefined) => {
+    if (uploadDisabled || !next) return;
+    setFile(undefined); setError("");
+    if (!/\.(csv|xlsx|xls)$/i.test(next.name)) { setError("Выберите файл CSV, XLSX или XLS."); return; }
+    if (next.size > 10 * 1024 * 1024) { setError("Размер файла не должен превышать 10 МиБ."); return; }
+    setFile(next); setRequestId(crypto.randomUUID());
+  };
   const refresh = useCallback(async () => {
     setLoading(true); setError("");
     try { setAnalyses(await listSurveyAnalyses(token)); }
@@ -161,7 +174,8 @@ export function SurveyAnalyticsView({ token, canCreate, canEdit }: { readonly to
     {notice && <p role="status" className="survey-note">{notice}</p>}
     <div className="survey-layout">
       <aside className="survey-panel survey-library" aria-label="Мои анализы">
-        <h2>Мои анализы</h2><Field label="Поиск анализов"><Input value={listQuery} onChange={(_, data) => setListQuery(data.value)} /></Field>
+        <div className="survey-panel-heading"><div><span className="survey-section-label">Библиотека</span><h2>Мои анализы</h2></div><Folder24Regular aria-hidden="true" /></div>
+        <div className="survey-library-search-row"><Field label="Поиск анализов"><Input className="survey-library-search" aria-label="Поиск анализов" placeholder="Название анализа" value={listQuery} onChange={(_, data) => setListQuery(data.value)} /></Field></div>
         <label className="survey-check"><input type="checkbox" checked={archive} onChange={(event) => setArchive(event.target.checked)} />Показать архив</label>
         {loading ? <Spinner label="Загрузка личных анализов" /> : <div className="survey-analysis-list">
           {visibleAnalyses.map((item) => <Button key={item.id}
@@ -169,24 +183,40 @@ export function SurveyAnalyticsView({ token, canCreate, canEdit }: { readonly to
             onClick={() => void perform(async () => accept(await loadSurveyAnalysis(token, item.id)))}>
             <span>{item.title}<small>{new Date(item.updatedAt).toLocaleDateString("ru-RU")} · версия {item.revision}</small></span>
           </Button>)}
-          {!visibleAnalyses.length && <p>{listQuery ? "По вашему поиску анализы не найдены." : archive ? "В архиве пока нет анализов." : "Здесь появятся ваши сохранённые анализы."}</p>}
+          {!visibleAnalyses.length && <div className="survey-library-empty"><Document24Regular aria-hidden="true" /><h3>{listQuery ? "Ничего не найдено" : archive ? "Архив пуст" : "Пока нет анализов"}</h3><p>{listQuery ? "Попробуйте другое название." : archive ? "Здесь будут архивные анализы." : "Загрузите первый опрос. Сохранённые анализы появятся здесь."}</p></div>}
         </div>}
-        <details open={!detail}><summary>Загрузить новый опрос</summary><p>CSV, XLSX или XLS · до 10 МиБ. До 25 000 строк на лист, 150 000 ячеек на файл.</p>
-          <label className="survey-file-label">Файл опроса<input aria-label="Файл опроса" type="file" accept=".csv,.xlsx,.xls" disabled={busy || !canCreate || dirty}
-            onChange={(event) => { setFile(event.target.files?.[0]); setRequestId(crypto.randomUUID()); }} /></label>
-          <Field label="Кодировка CSV"><Select value={encoding} disabled={busy || dirty} onChange={(_, data) => { setEncoding(data.value); setRequestId(crypto.randomUUID()); }}><option value="utf-8-sig">UTF-8</option><option value="cp1251">Windows-1251</option></Select></Field>
-          <Field label="Разделитель столбцов CSV"><Select value={delimiter} disabled={busy || dirty} onChange={(_, data) => { setDelimiter(data.value); setRequestId(crypto.randomUUID()); }}><option value=",">Запятая</option><option value=";">Точка с запятой</option><option value="\t">Табуляция</option></Select></Field>
-          <Button appearance="primary" disabled={!file || !canCreate || busy || dirty} onClick={() => void perform(async () => {
-            if (file) { accept(await importSurveyAnalysis(token, file, requestId, encoding, delimiter)); setNotice("Файл сохранён приватно. Проверьте лист, заголовки и типы вопросов перед выводами."); }
-          })}>Загрузить и открыть</Button>
-          {!canCreate && <p>У вас нет права создавать анализы.</p>}
-        </details>
+        <p className="survey-library-footer">Личная библиотека · без отправки в ИИ</p>
       </aside>
+      <div className="survey-workspace">
+        <section className="survey-panel survey-import" aria-label="Загрузка опроса">
+          <div className="survey-panel-heading"><div><span className="survey-section-label">Новый анализ</span><h2>Загрузить опрос</h2><p>Начните с выгрузки ответов из вашего сервиса опросов.</p></div><ArrowUpload24Regular aria-hidden="true" /></div>
+          <label className="survey-file-drop" data-dragging={dragging} data-disabled={uploadDisabled}
+            onDragOver={(event) => { event.preventDefault(); if (!uploadDisabled) setDragging(true); }}
+            onDragLeave={(event) => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setDragging(false); }}
+            onDrop={(event) => { event.preventDefault(); setDragging(false); chooseFile(event.dataTransfer.files[0]); }}>
+            <input aria-label="Файл опроса" type="file" accept=".csv,.xlsx,.xls" disabled={uploadDisabled}
+              onChange={(event) => chooseFile(event.target.files?.[0])} />
+            <span className="survey-file-icon">{file ? <Document24Regular aria-hidden="true" /> : <ArrowUpload24Regular aria-hidden="true" />}</span>
+            <strong>{file ? file.name : "Выберите файл или перетащите его сюда"}</strong>
+            <span>{file ? `${fileSize(file.size)} · нажмите, чтобы заменить` : "CSV, XLSX или XLS · до 10 МиБ"}</span>
+            <span className="survey-file-action">{file ? "Заменить файл" : "Выбрать файл"}</span>
+          </label>
+          <div className="survey-import-options">
+          <Field label="Кодировка CSV"><WorkspaceSelect aria-label="Кодировка CSV" value={encoding} disabled={busy || dirty} onChange={event => { setEncoding(event.target.value); setRequestId(crypto.randomUUID()); }}><option value="utf-8-sig">UTF-8</option><option value="cp1251">Windows-1251</option></WorkspaceSelect></Field>
+          <Field label="Разделитель столбцов CSV"><WorkspaceSelect aria-label="Разделитель столбцов CSV" value={delimiter} disabled={busy || dirty} onChange={event => { setDelimiter(event.target.value); setRequestId(crypto.randomUUID()); }}><option value=",">Запятая</option><option value=";">Точка с запятой</option><option value="\t">Табуляция</option></WorkspaceSelect></Field>
+          </div>
+          <div className="survey-import-footer"><p>До 25 000 строк на лист · 150 000 ячеек на файл</p><Button appearance="primary" disabled={!file || uploadDisabled} onClick={() => void perform(async () => {
+            if (file) { accept(await importSurveyAnalysis(token, file, requestId, encoding, delimiter)); setNotice("Файл сохранён приватно. Проверьте лист, заголовки и типы вопросов перед выводами."); }
+          })}>{busy ? "Загрузка…" : "Загрузить и открыть"}</Button></div>
+          {!canCreate && <p>У вас нет права создавать анализы.</p>}
+          {dirty && <p className="survey-note">Сохраните или отмените изменения текущего анализа перед загрузкой нового файла.</p>}
+        </section>
       <div role="region" aria-label="Анализ опроса" className="survey-panel survey-workbench">
         <fieldset aria-label="Настройки и результаты анализа" disabled={busy} className="survey-interaction">
-        {!detail || !configuration || !dataset ? <div className="survey-empty"><h2>От ответов — к понятным результатам</h2>
-          <p>Загрузите выгрузку опроса или откройте свой сохранённый анализ слева. Сначала проверим структуру файла, затем покажем распределения, сравнение групп и качество данных.</p>
-          <p>Одна строка считается одним предполагаемым респондентом. Модуль не обещает репрезентативность и не делает выводы о причинах.</p></div> : <>
+        {!detail || !configuration || !dataset ? <div className="survey-empty"><span className="survey-section-label">Рабочая область</span><h2>От ответов — к понятным результатам</h2>
+          <p>Загрузите опрос или откройте сохранённый анализ из библиотеки.</p>
+          <ol className="survey-start-steps"><li><span>01</span><div><h3>Проверьте структуру</h3><p>Выберите лист, заголовки и типы вопросов.</p></div></li><li><span>02</span><div><h3>Изучите ответы</h3><p>Распределения, сравнение групп и качество данных.</p></div></li><li><span>03</span><div><h3>Сохраните результат</h3><p>Настройки, срезы и экспорт для дальнейшей работы.</p></div></li></ol>
+          <p className="survey-methodology">Одна строка — один предполагаемый респондент. Расчёты описывают ответы в файле, не доказывают репрезентативность и не объясняют причины.</p></div> : <>
           <div className="survey-actions"><Field label="Название анализа"><Input value={title} maxLength={240} disabled={busy || !canEdit} onChange={(_, data) => { setTitle(data.value); setNotice(""); }} /></Field>
             <Button appearance="primary" disabled={busy || !canEdit || !dirty || !title.trim()} onClick={() => void perform(() => save())}>Сохранить изменения</Button>
             <Button disabled={busy || !dirty} onClick={() => { accept(detail); setNotice("Несохранённые настройки отменены."); }}>Отменить изменения</Button>
@@ -210,7 +240,7 @@ export function SurveyAnalyticsView({ token, canCreate, canEdit }: { readonly to
             <div className="survey-table-scroll"><table><caption>Превью: заголовки и первые 3 строки, первые 12 столбцов</caption><thead><tr><th>Строка</th>{dataset.questions.slice(0, 12).map((item) => <th key={item.column}>{item.label}</th>)}</tr></thead><tbody>{dataset.rows.slice(0, 3).map((row) => <tr key={row.sourceRow}><th>{row.sourceRow}</th>{dataset.questions.slice(0, 12).map((item) => <td key={item.column}>{row.values[item.column] ?? ""}</td>)}</tr>)}</tbody></table></div>
           </details>
           <div className="survey-metrics"><div><strong>{dataset.rows.length}</strong><span>непустых строк на листе</span></div><div><strong>{rows.length}</strong><span>строк в текущем срезе</span></div><div><strong>{questions.length}</strong><span>вопросов в сводках</span></div><div><strong>{quality?.flaggedRows ?? 0}</strong><span>строк с флагами проверки</span></div></div>
-          <details className="survey-settings"><summary>2. Поиск, фильтры и сохранённые срезы</summary><Field label="Поиск по всем ответам"><Input value={configuration.query} maxLength={200} onChange={(_, data) => patch({ query: data.value })} /></Field>
+          <details className="survey-settings"><summary>2. Поиск, фильтры и сохранённые срезы</summary><Field label="Поиск по всем ответам"><Input aria-label="Поиск по всем ответам" value={configuration.query} maxLength={200} onChange={(_, data) => patch({ query: data.value })} /></Field>
             <div className="survey-controls"><Field label="Столбец фильтра"><Select value={filterColumn} onChange={(_, data) => setFilterColumn(Number(data.value))}>{dataset.questions.map((item) => <option value={item.column} key={item.column}>{item.label}</option>)}</Select></Field>
               <Field label="Условие"><Select value={filterOperator} onChange={(_, data) => setFilterOperator(data.value as NonNullable<SurveyFilter["operator"]>)}><option value="equals">Равно варианту</option><option value="contains">Содержит текст</option><option value="range">Числовой диапазон</option><option value="empty">Пропуск</option><option value="filled">Заполнено</option></Select></Field>
               {!["empty", "filled"].includes(filterOperator) && <Field label={filterOperator === "range" ? "От" : "Значение"}><Input value={filterValue} maxLength={2000} onChange={(_, data) => setFilterValue(data.value)} /></Field>}
@@ -248,6 +278,7 @@ export function SurveyAnalyticsView({ token, canCreate, canEdit }: { readonly to
           <footer className="survey-methodology">3. Интерпретация: расчёты невзвешенные. Пропуски исключены из знаменателя вопроса; для числовых сводок также исключены нечисловые значения. Результаты описывают загруженные строки, а не всё население. Автотипы проверяются вручную; выборка, веса и качество сбора — ответственность исследователя.</footer>
         </>}
         </fieldset>
+      </div>
       </div>
     </div>
   </section>;

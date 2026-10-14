@@ -46,3 +46,14 @@ it("pauses for confirmation alert dialogs as well", async () => {
   confirmation.remove();
   await screen.findByText("running");
 });
+it("keeps the assistant visible behind its own confirmation but still blocks for foreign dialogs", async () => {
+  const own = addWindow("fui-DialogSurface assistant-owned-dialog");
+  const backdrop = addWindow("fui-DialogSurface__backdrop assistant-owned-dialog");
+  render(<WindowState />);
+  expect(screen.getByText("running")).toBeInTheDocument();
+  const foreign = addWindow("account-dialog");
+  await screen.findByText("paused");
+  foreign.remove();
+  await screen.findByText("running");
+  own.remove(); backdrop.remove();
+});

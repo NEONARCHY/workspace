@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Button, Checkbox, Input, Spinner } from "@fluentui/react-components";
+import { Button, Checkbox, Spinner } from "@fluentui/react-components";
+import { Input } from "./WorkspaceInput";
 import type { EdoAccessConfiguration, EdoAccessUpdate, EdoVisibility, WorkspacePerson } from "@yuksalish/contracts";
 import { WorkspaceSelect } from "./WorkspaceSelect";
 import { EdoEmployeeSync } from "./EdoEmployeeSync";

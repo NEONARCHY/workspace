@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type DragEve
 import { AnimatePresence, motion } from "framer-motion";
 import { createPortal } from "react-dom";
 import { Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Popover, PopoverSurface, PopoverTrigger } from "@fluentui/react-components";
-import { ArrowUp, ArrowUpRight, CalendarDays, ChevronDown, FileText, FolderKanban, ListChecks, ListTodo, Maximize2, MessageCircle, Mic, Minimize2, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Paperclip, PenLine, Pin, PinOff, Plane, Plus, Reply, Square, Trash2, Upload, UserRound, X } from "lucide-react";
+import { ArrowUp, ArrowUpRight, CalendarDays, ChevronDown, FileText, FolderKanban, ListChecks, ListTodo, Maximize2, MessageCircle, Mic, Minimize2, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Paperclip, PenLine, Pin, PinOff, Plane, Plus, Reply, Square, Trash2, Upload, UserRound, X, Zap } from "lucide-react";
 
 import type { AssistantActionDraft, AssistantChat, AssistantMessage, AssistantModel, AssistantReference } from "@yuksalish/contracts";
 import { GradientOrb } from "@/components/ui/gradient-orb";
@@ -11,7 +11,9 @@ import { ThinkingOrb } from "@/components/ui/thinking-orbs";
 import { createAssistantChat, deleteAssistantChat, pinAssistantChat, listAssistantChats, loadAssistantMessages, sendAssistantMessage, type AssistantAttachmentInput } from "./workspace-api";
 import { ConfirmActionDialog } from "./ConfirmActionDialog";
 import { AssistantModelControl } from "./AssistantModelControl";
-import { useAssistantOrbJourney } from "./assistant-orb-journey";
+import { ComposerSendTransition, MessageTextAnimate } from "./MessageTextAnimate";
+import { orbPose, orbTransform, useAssistantOrbJourney } from "./assistant-orb-journey";
+import { useAssistantLauncherLayout } from "./useAssistantLauncherLayout";
 import { isDraftContinuation, isFormOpenSignal } from "./assistant-form-handoff";
 import { browserNavigationQuery } from "./browser-layout";
 
@@ -106,25 +108,23 @@ function useAssistantMotionDisabled() {
 function GeneratedReply({ content, animate, reducedMotion }: {
   readonly content: string; readonly animate: boolean; readonly reducedMotion: boolean;
 }) {
+  const text = (value: string) => <MessageTextAnimate enabled={animate} disabled={reducedMotion}>{value}</MessageTextAnimate>;
   const inline = (value: string) => value.split(/(\*\*[^*]+\*\*|\[[^\]]+\]\(https?:\/\/[^)]+\))/g)
     .filter(Boolean).map((part, index) => {
-      if (part.startsWith("**") && part.endsWith("**")) return <strong key={index}>{part.slice(2, -2)}</strong>;
+      if (part.startsWith("**") && part.endsWith("**")) return <strong key={index}>{text(part.slice(2, -2))}</strong>;
       const link = part.match(/^\[([^\]]+)\]\((https?:\/\/[^)]+)\)$/);
-      if (link) return <span className="assistant-source" key={index} title={link[2]}>{link[1]} · {link[2]}</span>;
-      return part;
+      if (link) return <span className="assistant-source" key={index} title={link[2]}>{text(`${link[1]} · ${link[2]}`)}</span>;
+      return animate && !reducedMotion ? <span key={index}>{text(part)}</span> : part;
     });
   return <div className="assistant-reply">{content.split("\n").map((line, index) => {
     const trimmed = line.trim();
     if (!trimmed) return <div className="assistant-reply-spacer" key={index} />;
     const heading = trimmed.match(/^#{1,3}\s+(.+)$/);
     const list = trimmed.match(/^(?:[-*]|\d+[.)])\s+(.+)$/);
-    return <motion.p key={index} className={heading ? "is-heading" : list ? "is-list" : ""}
-      initial={animate && !reducedMotion ? { opacity: 0 } : false}
-      animate={{ opacity: 1 }}
-      transition={{ duration: reducedMotion ? 0 : 0.18, delay: animate ? Math.min(index * 0.02, 0.12) : 0 }}>
+    return <p key={index} className={heading ? "is-heading" : list ? "is-list" : ""}>
       {list && <span className="assistant-list-marker" aria-hidden="true">•</span>}
       {inline(heading?.[1] ?? list?.[1] ?? trimmed)}
-    </motion.p>;
+    </p>;
   })}</div>;
 }
 
@@ -145,6 +145,8 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
   const [chatToDelete, setChatToDelete] = useState<AssistantChat>();
   const confirmClear = Boolean(chatToDelete);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(258);
+  const sidebarDragRef = useRef<{ x: number; width: number } | null>(null);
   const [clearError, setClearError] = useState("");
   const chatOperationRef = useRef(false);
   const chatDraftsRef = useRef(new Map<string, string>());
@@ -156,6 +158,8 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
   const [preparingVoice, setPreparingVoice] = useState(false);
   const [error, setError] = useState("");
   const [animatedReplyId, setAnimatedReplyId] = useState<string | null>(null);
+  const [animatedUserId, setAnimatedUserId] = useState<string | null>(null);
+  const [sendingText, setSendingText] = useState<{ text: string; scrollLeft: number; scrollTop: number; height: number } | null>(null);
   const [replyingTo, setReplyingTo] = useState<AssistantMessage | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const selectedAudio = selectedFile?.name.toLowerCase().endsWith(".webm") ?? false;
@@ -186,9 +190,13 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
   const sendBusyRef = useRef(false);
   const dragDepthRef = useRef(0);
   const sizeFromRef = useRef<DOMRect | null>(null);
+  const sizeOrbFromRef = useRef<DOMRect | null>(null);
+  const sizeSnapshotRef = useRef<HTMLElement | null>(null);
   const sizeAnimationRef = useRef<Animation | null>(null);
   const reducedMotion = useAssistantMotionDisabled();
   const welcomeVisible = loaded && messages.length === 0 && !busy;
+  const launcherVacated = open && (loaded || Boolean(error)) && !blockingDialog;
+  useAssistantLauncherLayout(launcherRef, launcherVacated, reducedMotion, viewport.zoom, `${viewport.width}:${viewport.height}`);
   const orbPhase = useAssistantOrbJourney({ open, ready: loaded || Boolean(error), empty: welcomeVisible,
     blocked: blockingDialog, returnWithoutFlight: expanded, welcomeWithoutFlight: expanded, reducedMotion, zoom: viewport.zoom,
     geometryKey: `${viewport.width}:${viewport.height}:${viewport.zoom}:${expanded}`,
@@ -209,6 +217,8 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
     setChatPickerOpen(false);
     setPresetsOpen(false);
     setAnimatedReplyId(null);
+    setAnimatedUserId(null);
+    setSendingText(null);
     setDraggingFile(false);
     dragDepthRef.current = 0;
     sizeFromRef.current = null;
@@ -217,11 +227,12 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
   const resizeInput = useCallback(() => {
     const input = inputRef.current;
     if (!input) return;
+    if (sendingText && !draft) { input.style.height = `${sendingText.height}px`; return; }
     const maxHeight = Math.min(MAX_COMPOSER_HEIGHT, Math.max(72, viewport.height / 4));
     input.style.height = "0px";
-    input.style.height = `${Math.min(Math.max(input.scrollHeight, 48), maxHeight)}px`;
+    input.style.height = `${Math.min(Math.max(input.scrollHeight, 24), maxHeight)}px`;
     input.style.overflowY = input.scrollHeight > maxHeight ? "auto" : "hidden";
-  }, [viewport.height]);
+  }, [viewport.height, sendingText, draft]);
 
   useEffect(() => {
     const updateViewport = () => {
@@ -237,23 +248,53 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
     return () => { window.removeEventListener("resize", updateViewport); observer.disconnect(); };
   }, []);
 
-  useLayoutEffect(resizeInput, [draft, resizeInput, expanded, viewport]);
+  useLayoutEffect(resizeInput, [draft, resizeInput, expanded, viewport, open]);
 
   useLayoutEffect(() => {
     const from = sizeFromRef.current;
+    const orbFrom = sizeOrbFromRef.current;
+    sizeOrbFromRef.current = null;
     sizeFromRef.current = null;
     const panel = panelRef.current;
     sizeAnimationRef.current?.cancel();
-    if (!from || !panel || reducedMotion || !panel.animate) return;
+    const snapshot = sizeSnapshotRef.current;
+    sizeSnapshotRef.current = null;
+    if (!from || !panel || reducedMotion || !panel.animate) { snapshot?.remove(); return; }
     const to = panel.getBoundingClientRect();
-    // Real bounds, not a scaled screenshot: text stays crisp and controls remain usable.
+    const content = panel.querySelector<HTMLElement>(".assistant-panel-content");
+    if (!content) { snapshot?.remove(); return; }
+    // Lay out the destination once. The frame can resize without repeatedly
+    // wrapping live text; a short inert crossfade bridges the two layouts.
+    const contentBounds = content.getBoundingClientRect();
+    const orb = travellingOrbRef.current;
+    const orbSlot = welcomeVisible ? welcomeOrbRef.current : headerOrbRef.current;
+    // Read the committed destination before the frame's old geometry is applied.
+    // Both use the same clock/easing, keeping the orb inside the resizing window.
+    const orbTo = orbSlot?.getBoundingClientRect();
+    content.style.width = `${contentBounds.width / viewport.zoom}px`;
+    content.style.height = `${contentBounds.height / viewport.zoom}px`;
+    if (snapshot) panel.append(snapshot);
+    const fade = content.animate([{ opacity: 0 }, { opacity: 0, offset: .2 }, { opacity: 1 }], { duration: 220 });
+    const oldFade = snapshot?.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 100 });
+    void oldFade?.finished.then(() => snapshot?.remove()).catch(() => {});
     const animation = panel.animate([
       { width: `${from.width / viewport.zoom}px`, height: `${from.height / viewport.zoom}px` },
       { width: `${to.width / viewport.zoom}px`, height: `${to.height / viewport.zoom}px` },
     ], { duration: 220, easing: "cubic-bezier(.2, 0, 0, 1)" });
     sizeAnimationRef.current = animation;
-    return () => animation.cancel();
-  }, [expanded, viewport, reducedMotion]);
+    const orbResize = orb && orbFrom?.width && orbTo?.width ? orb.animate([
+      { transform: orbTransform(orbPose(orbFrom, viewport.zoom)) },
+      { transform: orbTransform(orbPose(orbTo, viewport.zoom)) },
+    ], { duration: 220, easing: "cubic-bezier(.2, 0, 0, 1)" }) : undefined;
+    let restored = false;
+    const restore = () => {
+      if (restored) return;
+      restored = true; content.style.removeProperty("width"); content.style.removeProperty("height"); snapshot?.remove();
+      if (orb && orbSlot?.isConnected) orb.style.transform = orbTransform(orbPose(orbSlot.getBoundingClientRect(), viewport.zoom));
+    };
+    void animation.finished.then(restore).catch(() => {});
+    return () => { animation.cancel(); orbResize?.cancel(); fade.cancel(); oldFade?.cancel(); restore(); };
+  }, [expanded, viewport, reducedMotion, open, welcomeVisible]);
 
   const acceptFiles = (files: readonly File[]) => {
     if (!files.length) return;
@@ -343,6 +384,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
       setChatId(nextId); setMessages(history); setDraft(chatDraftsRef.current.get(nextId) ?? "");
       setSelectedFile(null); setReplyingTo(null); setReplyMenu(null);
       setEditingDraftId(undefined); setDismissedDraftId(undefined); setAnimatedReplyId(null);
+      setAnimatedUserId(null); setSendingText(null);
       setSelectedActionKind(undefined);
       if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (failure) {
@@ -363,6 +405,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
       if (chatToDelete.id === chatId) {
         setChatId(""); setMessages([]); setDraft(""); setSelectedFile(null); setReplyingTo(null); setReplyMenu(null);
         setEditingDraftId(undefined); setDismissedDraftId(undefined); setAnimatedReplyId(null);
+        setAnimatedUserId(null); setSendingText(null);
         setSelectedActionKind(undefined);
         if (fileInputRef.current) fileInputRef.current.value = "";
         const next = remaining[0];
@@ -548,6 +591,11 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
     const continueDraft = Boolean(latestAnswer?.actionDraft && latestAnswer.id !== dismissedDraftId
       && (!latestAnswer.actionDraft.ready || editingDraftId === latestAnswer.id || isDraftContinuation(value)));
     const temporaryId = `pending-${Date.now()}`;
+    setAnimatedUserId(temporaryId);
+    if (value && !reducedMotion && inputRef.current) {
+      const input = inputRef.current;
+      setSendingText({ text: draft, scrollLeft: input.scrollLeft, scrollTop: input.scrollTop, height: input.getBoundingClientRect().height });
+    }
     setMessages((current) => [...current, {
       id: temporaryId, role: "user", model,
       content: file ? `${content}${content ? "\n\n" : ""}${selectedAudio ? "🎙" : "📎"} ${file.name}` : content,
@@ -589,6 +637,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
     } catch (failure) {
       if (!mountedRef.current) return;
       setMessages((current) => current.filter((item) => item.id !== temporaryId));
+      setSendingText(null);
       setDraft((current) => current ? `${value}\n${current}` : value);
       setSelectedFile(file);
       setError(failure instanceof Error ? failure.message : "Не удалось получить ответ. Попробуйте ещё раз.");
@@ -637,14 +686,19 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
   const currentChat = chats.find((chat) => chat.id === chatId);
   const edge = compact ? 8 : expanded ? 12 : 18;
   const panelWidth = expanded || compact ? viewport.width - edge * 2 : Math.min(460, viewport.width - 36);
-  const panelHeight = expanded || compact ? viewport.height - edge * 2 : Math.min(670, viewport.height - 36);
+  const panelHeight = expanded || compact ? viewport.height - edge * 2 : Math.min(750, viewport.height - 36);
+  const sidebarMaxWidth = Math.max(220, Math.min(380, panelWidth - 420));
+  const visibleSidebarWidth = sidebarCollapsed ? 56 : Math.min(sidebarWidth, sidebarMaxWidth);
+  const resizeSidebar = (width: number) => setSidebarWidth(Math.round(Math.max(220, Math.min(sidebarMaxWidth, width))));
   return <div className="yuksalish-assistant-root" data-blocking-dialog={blockingDialog || undefined}>
-    <button type="button" className="assistant-launcher" ref={launcherRef}
+    <span className="assistant-launcher-space" data-vacated={launcherVacated || undefined}>
+    <button type="button" className="assistant-launcher" ref={launcherRef} tabIndex={launcherVacated ? -1 : 0}
       aria-label="Открыть ассистента Yuksalish" title="Ассистент Yuksalish"
       aria-busy={open && ["waiting", "travelling", "revealing"].includes(orbPhase)}
       aria-expanded={open} disabled={blockingDialog} onClick={() => open ? close() : setOpen(true)}>
       <span className="assistant-launcher-slot" aria-hidden="true" />
     </button>
+    </span>
     {open && orbPhase === "waiting" && <span className="assistant-journey-status" role="status">Загружаю чат ассистента…</span>}
     {createPortal(<span className="assistant-travelling-orb" ref={travellingOrbRef} aria-hidden="true"
       data-orb-phase={orbPhase} data-blocking-dialog={blockingDialog || undefined}>
@@ -680,33 +734,63 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
           event.preventDefault(); event.stopPropagation(); dragDepthRef.current = 0; setDraggingFile(false);
           acceptFiles(Array.from(event.dataTransfer.files));
         }}
-        className={`assistant-panel ${expanded ? "is-expanded" : ""} ${showChatSidebar ? "has-sidebar" : ""}`}
+        className={`assistant-panel ${expanded ? "is-expanded" : ""} ${canShowChatSidebar ? "has-sidebar" : ""} ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}
         role="dialog" aria-modal="false" aria-label="Ассистент Yuksalish">
-        <div className="assistant-panel-content">
+        <div className="assistant-panel-content" style={canShowChatSidebar ? { gridTemplateColumns: `${visibleSidebarWidth}px minmax(0, 1fr)` } : undefined}>
         <header className={`assistant-header ${welcomeVisible ? "has-welcome-orb" : "has-docked-orb"}`}>
           <span className="assistant-header-icon assistant-orb-slot" ref={headerOrbRef} aria-hidden="true" />
-          <motion.span layout="position" className="assistant-header-title"
-            transition={{ duration: reducedMotion ? 0 : .42, ease: [0.2, 0, 0, 1] }}>
-            <strong>Ассистент Yuksalish</strong><small>Ваши дела и любые вопросы</small></motion.span>
-          {canShowChatSidebar && <button type="button" className="assistant-sidebar-toggle"
-            aria-label={sidebarCollapsed ? "Показать список чатов" : "Свернуть список чатов"}
-            title={sidebarCollapsed ? "Показать список чатов" : "Свернуть список чатов"}
-            aria-expanded={showChatSidebar} aria-controls={showChatSidebar ? "assistant-chat-sidebar" : undefined}
-            onClick={() => { setChatPickerOpen(false); setSidebarCollapsed((current) => !current); }}>
-            {sidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
-          </button>}
+          <span className="assistant-header-title">
+            <strong>Ассистент Yuksalish</strong><small>Ваши дела и любые вопросы</small></span>
           <button type="button" aria-label={expanded ? "Свернуть окно" : "Развернуть окно"}
             title={expanded ? "Свернуть окно" : "Развернуть окно"}
-            onClick={() => { setChatPickerOpen(false); setPresetsOpen(false); sizeFromRef.current = panelRef.current?.getBoundingClientRect() ?? null; setExpanded((current) => !current); }}>
+            onClick={() => {
+              setChatPickerOpen(false); setPresetsOpen(false);
+              const panel = panelRef.current;
+              sizeFromRef.current = panel?.getBoundingClientRect() ?? null;
+              sizeOrbFromRef.current = travellingOrbRef.current?.getBoundingClientRect() ?? null;
+              sizeSnapshotRef.current?.remove(); sizeSnapshotRef.current = null;
+              const content = panel?.querySelector<HTMLElement>(".assistant-panel-content");
+              if (!reducedMotion && content) {
+                const snapshot = content.cloneNode(true) as HTMLElement;
+                snapshot.className = "assistant-resize-snapshot"; snapshot.setAttribute("aria-hidden", "true"); snapshot.inert = true;
+                const layout = getComputedStyle(content);
+                snapshot.style.display = layout.display; snapshot.style.gridTemplateColumns = layout.gridTemplateColumns;
+                snapshot.style.gridTemplateRows = layout.gridTemplateRows;
+                Array.from(content.children).forEach((child, index) => {
+                  const cloned = snapshot.children[index] as HTMLElement | undefined;
+                  if (!cloned) return;
+                  const style = getComputedStyle(child);
+                  cloned.style.gridColumn = style.gridColumn; cloned.style.gridRow = style.gridRow;
+                });
+                snapshot.querySelectorAll("[id]").forEach((node) => node.removeAttribute("id"));
+                const bounds = content.getBoundingClientRect();
+                snapshot.style.width = `${bounds.width / viewport.zoom}px`; snapshot.style.height = `${bounds.height / viewport.zoom}px`;
+                sizeSnapshotRef.current = snapshot;
+              }
+              setExpanded((current) => !current);
+            }}>
             {expanded ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
           </button>
           <button type="button" aria-label="Закрыть ассистента" title="Закрыть"
             onClick={close}><X size={19} /></button>
         </header>
-        {showChatSidebar && <aside id="assistant-chat-sidebar" className="assistant-chat-sidebar" aria-label="Чаты ассистента">
-          <div className="assistant-sidebar-heading"><span>Ваши чаты</span><strong>{chats.length}</strong></div>
-          <button type="button" className="assistant-sidebar-new" disabled={chatControlsDisabled}
-            onClick={() => void changeChat()}><Plus size={17} aria-hidden="true" /> Новый чат</button>
+        {canShowChatSidebar && <aside id="assistant-chat-sidebar" className="assistant-chat-sidebar" aria-label="Чаты ассистента">
+          <div className="assistant-sidebar-heading">
+            {showChatSidebar && <button type="button" className="assistant-sidebar-new" disabled={chatControlsDisabled}
+              onClick={() => void changeChat()}><Plus size={17} aria-hidden="true" /> Новый чат</button>}
+            {currentChat && <Menu><MenuTrigger disableButtonEnhancement>
+              <button type="button" className="assistant-sidebar-toggle" aria-label="Действия с текущим чатом"
+                title="Действия с чатом" disabled={chatControlsDisabled}><MoreHorizontal size={18} /></button>
+            </MenuTrigger>{chatMenu(currentChat)}</Menu>}
+            <button type="button" className="assistant-sidebar-toggle"
+              aria-label={sidebarCollapsed ? "Показать список чатов" : "Свернуть список чатов"}
+              title={sidebarCollapsed ? "Показать список чатов" : "Свернуть список чатов"}
+              aria-expanded={showChatSidebar} aria-controls="assistant-sidebar-chats"
+              onClick={() => { setChatPickerOpen(false); setSidebarCollapsed((current) => !current); }}>
+              {sidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+            </button>
+          </div>
+          <div id="assistant-sidebar-chats" className="assistant-sidebar-chats" hidden={!showChatSidebar}>
           <nav className="assistant-sidebar-list" aria-label="Список чатов ассистента">
             {orderedChats.map((chat) => <Menu key={chat.id} openOnContext>
               <MenuTrigger disableButtonEnhancement><button type="button" className="assistant-sidebar-chat"
@@ -718,6 +802,34 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
               <span><strong title={chat.title}>{chat.title}</strong><small>{chat.isPinned ? "Закреплён" : chat.isDefault ? "Основной чат" : "Диалог"}</small></span>
             </button></MenuTrigger>{chatMenu(chat)}</Menu>)}
           </nav>
+          </div>
+          {showChatSidebar && <div className="assistant-sidebar-resizer" role="separator" tabIndex={0}
+            aria-label="Ширина списка чатов" aria-orientation="vertical" aria-valuemin={220}
+            aria-valuemax={sidebarMaxWidth} aria-valuenow={visibleSidebarWidth}
+            onPointerDown={(event) => {
+              if (event.button !== 0) return;
+              event.preventDefault(); sidebarDragRef.current = { x: event.clientX, width: visibleSidebarWidth };
+              event.currentTarget.setPointerCapture(event.pointerId);
+            }}
+            onPointerMove={(event) => {
+              const drag = sidebarDragRef.current;
+              if (drag) resizeSidebar(drag.width + (event.clientX - drag.x) / viewport.zoom);
+            }}
+            onPointerUp={(event) => {
+              sidebarDragRef.current = null;
+              if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+            }}
+            onPointerCancel={() => {
+              if (sidebarDragRef.current) resizeSidebar(sidebarDragRef.current.width);
+              sidebarDragRef.current = null;
+            }}
+            onLostPointerCapture={() => { sidebarDragRef.current = null; }}
+            onKeyDown={(event) => {
+              if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+              event.preventDefault();
+              resizeSidebar(event.key === "Home" ? 220 : event.key === "End" ? sidebarMaxWidth
+                : visibleSidebarWidth + (event.key === "ArrowRight" ? 10 : -10));
+            }} />}
         </aside>}
         <nav className="assistant-chat-controls" aria-label="Чаты ассистента">
           <span className="assistant-current-chat"><MessageCircle size={18} aria-hidden="true" />
@@ -755,7 +867,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
           <button type="button" className="assistant-chat-new" disabled={chatControlsDisabled} onClick={() => void changeChat()}>
             <Plus size={16} aria-hidden="true" /> Новый чат
           </button>
-          {currentChat && <Menu><MenuTrigger disableButtonEnhancement>
+          {currentChat && !canShowChatSidebar && <Menu><MenuTrigger disableButtonEnhancement>
             <button type="button" aria-label="Действия с текущим чатом" title="Действия с чатом" disabled={chatControlsDisabled}>
               <MoreHorizontal size={18} />
             </button></MenuTrigger>{chatMenu(currentChat)}</Menu>}
@@ -811,8 +923,8 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
                   </div>
                 </div> : null}
               </> : item.content.startsWith("↳ Ответ на сообщение ассистента: ") && item.content.includes("\n\n")
-                ? <p><span className="assistant-message-quote">{item.content.split("\n\n", 1)[0]}</span>{item.content.slice(item.content.indexOf("\n\n") + 2)}</p>
-                : <p>{item.content}</p>}
+                ? <p><span className="assistant-message-quote"><MessageTextAnimate enabled={item.id === animatedUserId} disabled={reducedMotion}>{item.content.split("\n\n", 1)[0] ?? ""}</MessageTextAnimate></span><MessageTextAnimate enabled={item.id === animatedUserId} disabled={reducedMotion}>{item.content.slice(item.content.indexOf("\n\n") + 2)}</MessageTextAnimate></p>
+                : <p><MessageTextAnimate enabled={item.id === animatedUserId} disabled={reducedMotion}>{item.content}</MessageTextAnimate></p>}
             </article>)}
             {busy && <div className="assistant-working"><ThinkingOrb state={thinkingState} />
               <span>{thinkingState === "searching" ? "Ищу источники…"
@@ -826,30 +938,6 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
         </div>
         <div className="assistant-composer-area">
           <div className="assistant-composer-inner">
-            <div className="assistant-presets">
-              <Popover open={presetsOpen} onOpenChange={(_, data) => setPresetsOpen(data.open)}
-                positioning={{ position: "above", align: "start", offset: 8 }} mountNode={panelRef.current}>
-              <PopoverTrigger disableButtonEnhancement>
-              <button ref={presetsToggleRef} type="button" className="assistant-presets-toggle" aria-expanded={presetsOpen}
-                aria-controls="assistant-presets-list" disabled={chatBusy || confirmClear}>
-                Быстрые действия <ChevronDown size={14} aria-hidden="true" />
-              </button>
-              </PopoverTrigger>
-              <PopoverSurface role="group" aria-label="Быстрые действия" className="assistant-presets-surface"
-                onKeyDown={(event) => {
-                  if (event.key !== "Escape") return;
-                  event.preventDefault(); event.stopPropagation(); setPresetsOpen(false); presetsToggleRef.current?.focus();
-                }}
-                style={{ width: Math.min(800, Math.max(240, panelWidth - (showChatSidebar ? 258 : 0) - 36)) }}>
-              <div id="assistant-presets-list" className="assistant-presets-list">
-                {presets.map((preset) => <button key={preset.label} type="button" disabled={chatBusy || confirmClear}
-                  onClick={() => { setSelectedActionKind("kind" in preset ? preset.kind : undefined); setDraft(preset.prompt); setDismissedDraftId(currentActionId); setPresetsOpen(false); inputRef.current?.focus(); }}>
-                  <span className="assistant-preset-icon"><preset.icon size={17} aria-hidden="true" /></span><span>{preset.label}</span>
-                </button>)}
-              </div>
-              </PopoverSurface>
-              </Popover>
-            </div>
             <form className="assistant-composer" onSubmit={(event) => void send(event)}>
               {selectedActionKind && <div className="assistant-draft-context" role="status">
                 <span>Подготовка: {actionLabels[selectedActionKind]}. Обсудим детали, затем откроем форму.</span>
@@ -871,7 +959,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
                 </button>
               </div>}
               {selectedAudio && <audio ref={voicePreviewRef} className="assistant-voice-preview" controls preload="metadata" aria-label="Прослушать голосовое сообщение" />}
-              <textarea ref={inputRef} className="assistant-editor" aria-label="Сообщение ассистенту" placeholder="Задайте вопрос или опишите, что нужно сделать…"
+              <textarea ref={inputRef} className="assistant-editor" rows={1} aria-label="Сообщение ассистенту" placeholder={sendingText && !draft ? "" : "Задайте вопрос или опишите, что нужно сделать…"}
                 value={draft} disabled={chatBusy || confirmClear} maxLength={4000} onChange={(event) => setDraft(event.target.value)}
                 onPaste={(event) => {
                   const files = Array.from(event.clipboardData.files);
@@ -883,8 +971,42 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
                     event.preventDefault(); event.currentTarget.form?.requestSubmit();
                   }
                 }} />
+              {sendingText && !draft && <ComposerSendTransition inputRef={inputRef} text={sendingText.text}
+                scrollLeft={sendingText.scrollLeft} scrollTop={sendingText.scrollTop} disabled={reducedMotion} onComplete={() => setSendingText(null)} />}
               <div className="assistant-composer-toolbar">
-                <AssistantModelControl value={model} onChange={setModel} mountNode={panelRef.current} disabled={busy || chatBusy || confirmClear || preparingAction} />
+                <div className="assistant-composer-tools">
+                  <AssistantModelControl value={model} onChange={setModel} mountNode={panelRef.current} disabled={busy || chatBusy || confirmClear || preparingAction} />
+                  <div className="assistant-presets">
+                    <Popover open={presetsOpen} onOpenChange={(_, data) => setPresetsOpen(data.open)}
+                      positioning={{ position: "above", align: "center", offset: 8, target: {
+                        getBoundingClientRect: () => {
+                          const editor = inputRef.current?.closest(".assistant-composer")?.getBoundingClientRect();
+                          const trigger = presetsToggleRef.current?.getBoundingClientRect();
+                          return new DOMRect(editor?.left ?? 0, trigger?.top ?? 0, editor?.width ?? 0, trigger?.height ?? 0);
+                        },
+                      } }} mountNode={panelRef.current}>
+                      <PopoverTrigger disableButtonEnhancement>
+                        <button ref={presetsToggleRef} type="button" className="assistant-presets-toggle" aria-expanded={presetsOpen}
+                          aria-label="Быстрые действия" title="Быстрые действия" aria-controls="assistant-presets-list" disabled={chatBusy || confirmClear}>
+                          <Zap size={19} aria-hidden="true" />
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverSurface role="group" aria-label="Быстрые действия" className="assistant-presets-surface"
+                        onKeyDown={(event) => {
+                          if (event.key !== "Escape") return;
+                          event.preventDefault(); event.stopPropagation(); setPresetsOpen(false); presetsToggleRef.current?.focus();
+                        }}
+                        style={{ width: Math.min(800, Math.max(240, panelWidth - (canShowChatSidebar ? visibleSidebarWidth : 0) - 36)) }}>
+                        <div id="assistant-presets-list" className="assistant-presets-list">
+                          {presets.map((preset) => <button key={preset.label} type="button" disabled={chatBusy || confirmClear}
+                            onClick={() => { setSelectedActionKind("kind" in preset ? preset.kind : undefined); setDraft(preset.prompt); setDismissedDraftId(currentActionId); setPresetsOpen(false); inputRef.current?.focus(); }}>
+                            <span className="assistant-preset-icon"><preset.icon size={17} aria-hidden="true" /></span><span>{preset.label}</span>
+                          </button>)}
+                        </div>
+                      </PopoverSurface>
+                    </Popover>
+                  </div>
+                </div>
                 <div className="assistant-composer-actions">
                   <input ref={fileInputRef} type="file" className="assistant-file-input" tabIndex={-1}
                     accept=".docx,.pdf,.png,.jpg,.jpeg,.webp,.txt,.webm" aria-label="Выбрать вложение"
@@ -932,7 +1054,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
         </div>}
       </motion.section>}
     </AnimatePresence>
-    <ConfirmActionDialog open={confirmClear} title="Удалить чат?"
+    <ConfirmActionDialog owner="assistant" open={confirmClear} title="Удалить чат?"
       message={clearError || `«${chatToDelete?.title ?? "Чат"}» и вся его переписка будут удалены без восстановления. Остальные чаты сохранятся.`}
       confirmLabel="Удалить чат" busyLabel="Удаляем…" busy={chatBusy}
       onCancel={() => setChatToDelete(undefined)} onConfirm={deleteSelectedChat} />

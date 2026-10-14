@@ -9,7 +9,8 @@ import { ChatIconPicker } from "./ChatAvatar";
 import type { ChatAvatarIconKey } from "@yuksalish/contracts";
 import { tripColumns, tripDropAction } from "./trip-board";
 import type { AssistantActionDraft, TripAction, TripRequest, TripRequestInput, TripStage, WorkflowDefinition, WorkflowPosition, WorkspaceDepartment, WorkspacePerson } from "@yuksalish/contracts";
-import { Avatar, Badge, Button, Checkbox, DialogSurface, DialogTitle, Input, Textarea, useRestoreFocusTarget } from "@fluentui/react-components";
+import { Avatar, Badge, Button, Checkbox, DialogSurface, DialogTitle, Textarea, useRestoreFocusTarget } from "@fluentui/react-components";
+import { Input } from "./WorkspaceInput";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import { workflowStageColor } from "./workflow-stage-colors";
 import { Add24Regular, Chat24Regular, Dismiss20Regular, Edit24Regular, Search20Regular } from "@fluentui/react-icons";
@@ -271,7 +272,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
         </SlidingSegmented>
         <Input contentBefore={<Search20Regular />} className="trip-search" aria-label="Поиск поездок" placeholder="Цель, город, сотрудник или номер" value={query} onChange={(_, data) => setQuery(data.value)} />
         <SlidingSegmented className="ws2-segmented" role="group" aria-label="Фильтр поездок">
-          {([["running", "В работе"], ["all", "Все"], ["finished", "Завершённые"]] as const).map(([key, label]) => <button type="button" key={key} className={filter === key ? "active" : ""} aria-pressed={filter === key} onClick={() => setFilter(key)}>{label}<span>{filterCounts[key]}</span></button>)}
+          {([["running", "В работе"], ["all", "Все"], ["finished", "Завершённые"]] as const).map(([key, label]) => <button type="button" key={key} className={filter === key ? "active" : ""} aria-pressed={filter === key} onClick={() => setFilter(key)}>{label}<span className="approval-filter-count">{filterCounts[key]}</span></button>)}
         </SlidingSegmented>
       </div>
       {feedback}

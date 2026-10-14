@@ -33,10 +33,10 @@ import {
   Avatar,
   Badge,
   Button,
-  Input,
   Textarea,
   Tooltip,
 } from "@fluentui/react-components";
+import { Input } from "./WorkspaceInput";
 import {
   Add24Regular,
   ArrowDownload24Regular,

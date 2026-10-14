@@ -111,7 +111,7 @@ body .app-provider :is(.workspace-view, .team-dashboard, .telegram-access-view) 
 }
 .ws-section-header :is(button, input):focus-visible { outline: 2px solid var(--ws-theme-line, #fff); outline-offset: 3px; }
 /* Segmented controls stay light: selected, idle and hover remain distinct. */
-.ws-section-header :is(.view-switch, .process-view-tabs, .approval-mode-switch, .ws2-segmented, .calendar-month-navigation) {
+.ws-section-header :is(.view-switch, .process-view-tabs, .approval-mode-switch, .ws2-segmented) {
   max-width: 100%;
   border: 1px solid var(--ws-control-line, var(--ws-theme-line, #d5e3e8));
   background: var(--ws-theme-surface-soft, #e7eeee);
@@ -136,7 +136,7 @@ body .app-provider :is(.workspace-view, .team-dashboard, .telegram-access-view) 
 .ws-section-header :is(.view-switch, .process-view-tabs, .approval-mode-switch, .ws2-segmented) > button:is(.active, [aria-pressed="true"], [aria-selected="true"]) {
   color: var(--ws-text, var(--ws-theme-ink, #293a55));
   background: var(--ws-theme-surface, #fff);
-  font-weight: 700;
+  font-weight: 600;
 }
 .ws-section-header :is(.view-switch, .process-view-tabs, .approval-mode-switch, .ws2-segmented) > button:disabled { color: var(--ws-muted); cursor: default; }
 .ws-section-header .calendar-month-navigation .fui-Button {
@@ -146,6 +146,34 @@ body .app-provider :is(.workspace-view, .team-dashboard, .telegram-access-view) 
 }
 .ws-section-header .calendar-month-navigation .fui-Button:hover { color: var(--ws-text, var(--ws-theme-ink, #293a55)); background: var(--ws-theme-wash-teal, #dbeaed); }
 .ws-section-header .calendar-month-navigation button:focus-visible { outline-color: var(--ws-navy, var(--ws-theme-line, #293a55)); outline-offset: -3px; }
+/* Three independent date buttons; the surrounding navigation remains transparent. */
+html body .app-provider .ws-section-header .calendar-month-navigation {
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+html body .app-provider .ws-section-header .calendar-month-navigation .fui-Button {
+  flex: none;
+  height: 36px;
+  min-height: 36px;
+  padding: 7px 12px;
+  border: 1px solid var(--ws-control-line, var(--ws-line));
+  border-radius: 10px;
+  color: var(--ws-text);
+  background: var(--ws-button-surface, var(--ws-surface));
+}
+html body .app-provider .ws-section-header .calendar-month-navigation .fui-Button[aria-label] {
+  width: 36px;
+  min-width: 36px;
+  padding: 0;
+}
+html body .app-provider .ws-section-header .calendar-month-navigation .fui-Button:not([aria-label]) { min-width: 76px; }
+html body .app-provider .ws-section-header .calendar-month-navigation .fui-Button:not(:disabled):hover {
+  color: var(--ws-text);
+  background: var(--ws-button-hover, var(--ws-muted-surface));
+}
 .tasks-view .ws-section-header .view-switch { min-width: 0; max-width: 100%; overflow-x: auto; }
 .tasks-view .ws-section-header .task-calendar-navigation-slot:empty { display: none; }
 .ws-section-header :is(.view-switch, .process-view-tabs, .approval-mode-switch, .ws2-segmented) button:focus-visible { outline-color: var(--ws-navy, var(--ws-theme-line, #293a55)); outline-offset: -3px; }
@@ -282,7 +310,7 @@ body .app-provider :is(.workspace-view, .team-dashboard, .telegram-access-view) 
   :is(.workspace-view, .team-dashboard, .telegram-access-view) .ws-section-header :is(.view-kicker, .record-kicker, .hr-kicker, .notification-kicker, .telegram-access-eyebrow, .calendar-title > span, .team-dash-hero-copy > span, .messenger-eyebrow) { color: CanvasText; }
   .ws-section-header :is(.fui-Button, .telegram-access-secondary, .hisobot-help-button) { border: 1px solid ButtonText; color: ButtonText; background: ButtonFace; box-shadow: none; }
   .ws-section-header :is(button, input):focus-visible { outline-color: Highlight; }
-  .ws-section-header :is(.view-switch, .process-view-tabs, .approval-mode-switch, .ws2-segmented, .calendar-month-navigation) { color: CanvasText; background: Canvas; border-color: CanvasText; }
+  .ws-section-header :is(.view-switch, .process-view-tabs, .approval-mode-switch, .ws2-segmented) { color: CanvasText; background: Canvas; border-color: CanvasText; }
   .ws-section-header :is(.view-switch, .process-view-tabs, .approval-mode-switch, .ws2-segmented) > button { color: ButtonText; background: ButtonFace; }
   .ws-section-header :is(.view-switch, .process-view-tabs, .approval-mode-switch, .ws2-segmented) > button:is(.active, [aria-pressed="true"], [aria-selected="true"]) { color: HighlightText; background: Highlight; }
   .ws-section-header :is(.view-switch, .process-view-tabs, .approval-mode-switch, .ws2-segmented) > .sliding-segmented-indicator { background: Highlight; border-color: Highlight; box-shadow: none; }

@@ -31,6 +31,48 @@ function freeze(date = new Date(2026, 9, 12, 12)) {
   vi.useFakeTimers(); vi.setSystemTime(date);
 }
 
+describe("My tasks participation filter", () => {
+  const userId = people[0]!.id;
+  const otherId = people[1]!.id;
+  const tasks = [
+    task("author", 1, { authorId: userId, assigneeId: otherId, participants: [] }),
+    task("assignee", 1, { authorId: otherId, assigneeId: userId, participants: [] }),
+    task("co-assignee", 1, { authorId: otherId, assigneeId: otherId, participants: [{ userId, role: "co_assignee" }] }),
+    task("observer", 1, { authorId: otherId, assigneeId: otherId, participants: [{ userId, role: "observer" }] }),
+    task("multiple-roles", 1, { authorId: userId, assigneeId: userId, participants: [{ userId, role: "observer" }] }),
+    task("unrelated", 1, { authorId: otherId, assigneeId: otherId, participants: [{ userId: otherId, role: "observer" }] }),
+  ];
+
+  it("includes all four roles, excludes unrelated tasks and counts each task once", () => {
+    render(wrap(<TasksView {...props(tasks)} />));
+    const mine = screen.getByRole("button", { name: "Мои" });
+    expect(mine).toHaveTextContent("5");
+    expect(document.querySelector(".task-focus-object.mine")).toHaveTextContent("5задач с вашим участием");
+    fireEvent.click(mine);
+    for (const id of ["author", "assignee", "co-assignee", "observer", "multiple-roles"]) expect(row(id)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Открыть задачу: unrelated" })).toBeNull();
+    fireEvent.change(screen.getByRole("textbox", { name: "Поиск задач" }), { target: { value: "co-assignee" } });
+    expect(row("co-assignee")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Открыть задачу: author" })).toBeNull();
+  });
+
+  it.each([
+    ["author", ["author", "multiple-roles"]],
+    ["assignee", ["assignee", "multiple-roles"]],
+    ["co_assignee", ["co-assignee"]],
+    ["observer", ["observer", "multiple-roles"]],
+  ])("combines My tasks with the %s role filter", (role, expected) => {
+    render(wrap(<TasksView {...props(tasks)} />));
+    fireEvent.click(screen.getByRole("button", { name: "Мои" }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Моя роль в задаче" }), { target: { value: role } });
+    for (const item of tasks) {
+      const button = screen.queryByRole("button", { name: `Открыть задачу: ${item.id}` });
+      if (expected.includes(item.id)) expect(button).toBeInTheDocument();
+      else expect(button).toBeNull();
+    }
+  });
+});
+
 describe("Task list deadline colours and overdue filter", () => {
   it("updates the open card from the approved exact deadline, ignoring a stale server label", () => {
     const original = task("extension", 1, { dueAt: new Date(2026, 9, 13, 13).toISOString(), dueLabel: "13.10.2026, 13:00" });
