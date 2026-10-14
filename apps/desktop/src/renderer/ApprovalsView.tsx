@@ -118,6 +118,7 @@ interface ApprovalsViewProps {
   readonly createContext?: { readonly projectId: string; readonly workstreamId: string };
   readonly onCreateContextConsumed?: () => void;
   readonly canManage: boolean;
+  readonly isSuperadmin: boolean;
   readonly canCreateRequest: boolean;
   readonly currentUserId: string;
   readonly people: readonly WorkspacePerson[];
@@ -718,6 +719,7 @@ const approvalActionLabels: Readonly<Record<string, string>> = {
   clarify: "Запрошено уточнение",
   delegate: "Передано другому сотруднику",
   resubmit: "Повторно отправлено",
+  edit: "Заявка изменена",
   cancel: "Отменено",
   move: "Перемещено вручную",
 };
@@ -755,7 +757,6 @@ export function PaymentFields({ form, targets, calendarEvents, people, departmen
   const tripPeople = people.filter((person) => !departments || employeeScope(person.departmentId, departments) === tripScope);
   const tripPeopleIds = new Set(tripPeople.map((person) => person.id));
   const projectBudgetArticles = (targets.budgetArticles ?? []).filter((article) => article.projectId === form.projectId);
-  const matchingBudgetArticles = projectBudgetArticles.filter((article) => article.currency === form.currency);
   const update = <Key extends keyof PaymentFormState>(
     key: Key,
     value: PaymentFormState[Key],
@@ -793,7 +794,7 @@ export function PaymentFields({ form, targets, calendarEvents, people, departmen
             {targets.projects.map((project) => <option value={project.id} key={project.id}>{project.code} · {project.title}</option>)}
           </WorkspaceSelect></label>
           <label>Валюта оплаты<WorkspaceSelect aria-label={`${prefix}валюта оплаты`} value={form.currency}
-            onChange={(event) => onChange({ ...form, currency: event.target.value, budgetArticleId: "" })}>
+            onChange={(event) => update("currency", event.target.value)}>
             {!['UZS', 'USD', 'EUR'].includes(form.currency) ? <option>{form.currency}</option> : null}
             <option>UZS</option><option>USD</option><option>EUR</option>
           </WorkspaceSelect></label>
@@ -801,7 +802,7 @@ export function PaymentFields({ form, targets, calendarEvents, people, departmen
             onChange={(event) => update("budgetArticleId", event.target.value)}>
             <option value="">Без статьи</option>
             {form.budgetArticleId && !targets.budgetArticles?.some((article) => article.id === form.budgetArticleId) ? <option value={form.budgetArticleId}>Ранее выбранная статья</option> : null}
-            {matchingBudgetArticles.map((article) => <option key={article.id} value={article.id}>
+            {projectBudgetArticles.map((article) => <option key={article.id} value={article.id}>
               {article.title} · остаток {article.remainingAmount} {article.currency}
             </option>)}
           </WorkspaceSelect></label>
@@ -818,8 +819,8 @@ export function PaymentFields({ form, targets, calendarEvents, people, departmen
             {targets.items.filter((row) => row.workstreamId === form.workstreamId).map((row) => <option value={row.id} key={row.id}>{row.kind === "task" ? "Задача" : "Мероприятие"} · {row.title}</option>)}
           </WorkspaceSelect></label>
         </div>
-        {projectBudgetArticles.length > matchingBudgetArticles.length ? (
-          <p className="payment-currency-hint">Статьи в другой валюте скрыты. Для их выбора сначала измените валюту оплаты; сумма автоматически не конвертируется.</p>
+        {form.budgetArticleId && projectBudgetArticles.some((article) => article.id === form.budgetArticleId && article.currency !== form.currency) ? (
+          <p className="payment-currency-hint">Валюта оплаты отличается от валюты плана статьи. Расход сохранится в выбранной валюте; автоматического пересчёта и уменьшения остатка плана не будет.</p>
         ) : null}
         {isSubsidyProjectSelection(form.projectId, targets) ? (
           <p className="payment-subsidy-route-hint">Для проекта «Субсидия» этап руководства согласует первый исполнительный директор Аскар Маматханов.</p>
@@ -952,6 +953,7 @@ export function ApprovalsView({
   createContext,
   onCreateContextConsumed,
   canManage,
+  isSuperadmin,
   canCreateRequest,
   currentUserId,
   people,
@@ -1069,6 +1071,7 @@ export function ApprovalsView({
   const [editFiles, setEditFiles] = useState<readonly File[]>([]);
   const [editAdditionalFiles, setEditAdditionalFiles] = useState<readonly File[]>([]);
   const [editError, setEditError] = useState("");
+  const [editComment, setEditComment] = useState("");
   const [returnRequestId, setReturnRequestId] = useState("");
   const [returnNodeKey, setReturnNodeKey] = useState("");
   const [returnComment, setReturnComment] = useState("");
@@ -1140,6 +1143,11 @@ export function ApprovalsView({
     () => requests.find((request) => request.id === selectedRequestId),
     [requests, selectedRequestId],
   );
+  const canEditRequest = (request: ApprovalRequestSummary) =>
+    ["running", "needs_revision"].includes(request.status) && (
+      isSuperadmin || request.requesterId === currentUserId
+      || (request.status === "needs_revision" && request.activeStages.some((stage) => stage.canAct))
+    );
   const selectedRequestColumn = selectedRequest === undefined
     ? ""
     : requestBoardColumn(selectedRequest, boardColumns);
@@ -1434,23 +1442,37 @@ export function ApprovalsView({
     setEditFiles([]);
     setEditAdditionalFiles([]);
     setEditError("");
+    setEditComment(request.status === "needs_revision" ? "Исправлено после возврата" : "");
   };
 
   const saveRevision = async (request: ApprovalRequestSummary) => {
+    if (actionBusyRef.current) return;
     const amount = Number(editAmount.replace(/\s/g, ""));
     if (!editTitle.trim() || !Number.isSafeInteger(amount) || amount <= 0) {
       setEditError("Укажите название и положительную целую сумму не более 9 007 199 254 740 991");
       return;
     }
+    if (request.status === "running" && !editComment.trim()) {
+      setEditError("Укажите причину изменения заявки");
+      return;
+    }
     setEditError("");
-    const saved = await onReviseRequest(
-      request,
-      requestPayload(editTitle.trim(), amount, editPurpose.trim(), editDetails),
-      editFiles,
-      editAdditionalFiles,
-    );
-    if (saved !== undefined) setEditingRequestId("");
-    else setEditError("Сервер не подтвердил исправленную версию");
+    actionBusyRef.current = true;
+    setActionBusy(true);
+    try {
+      const saved = await onReviseRequest(
+        request,
+        { ...requestPayload(editTitle.trim(), amount, editPurpose.trim(), editDetails),
+          changeComment: editComment.trim() },
+        editFiles,
+        editAdditionalFiles,
+      );
+      if (saved !== undefined) setEditingRequestId("");
+      else setEditError("Сервер не подтвердил исправленную версию");
+    } finally {
+      actionBusyRef.current = false;
+      setActionBusy(false);
+    }
   };
 
   const performAction = async (
@@ -1758,10 +1780,7 @@ export function ApprovalsView({
                       const cardStatus = approvalCardStatusPresentation(request, currentUserId);
                       const responsibleName = peopleById.get(request.responsibleUserId)?.name
                         || "Ответственный не указан";
-                      const canRevise = request.status === "needs_revision" && (
-                        request.requesterId === currentUserId
-                        || request.activeStages.some((stage) => stage.canAct)
-                      );
+                      const canRevise = canEditRequest(request);
                       const requestAttachments = attachments.filter((attachment) =>
                         attachment.ownerType === "approval_request" && attachment.ownerId === request.id,
                       ).length;
@@ -1992,7 +2011,7 @@ export function ApprovalsView({
                   >
                     {selectedRequest.statusLabel}
                   </Badge>
-                  {selectedRequest.status === "needs_revision" && (selectedRequest.requesterId === currentUserId || selectedRequest.activeStages.some((stage) => stage.canAct)) && editingRequestId !== selectedRequest.id ? (
+                  {canEditRequest(selectedRequest) && editingRequestId !== selectedRequest.id ? (
                     <Button className="approval-edit-button" appearance="subtle" icon={<CircleEdit24Regular />} disabled={actionBusy} onClick={() => startRevision(selectedRequest)}>Исправить заявку</Button>
                   ) : null}
                   {canManage ? (
@@ -2105,7 +2124,7 @@ export function ApprovalsView({
                           && attachment.ownerId === selectedRequest.id
                           && ["primary", "general"].includes(attachment.documentRole),
                         )}
-                        canUpload={(selectedRequest.requesterId === currentUserId && ["running", "needs_revision"].includes(selectedRequest.status)) || (selectedRequest.status === "needs_revision" && selectedRequest.activeStages.some((stage) => stage.canAct))}
+                        canUpload={canEditRequest(selectedRequest)}
                         onUpload={(files) => onUploadAttachments(selectedRequest, files, "primary")}
                         onDownload={onDownloadAttachment}
                       />
@@ -2116,7 +2135,7 @@ export function ApprovalsView({
                           && attachment.ownerId === selectedRequest.id
                           && attachment.documentRole === "additional",
                         )}
-                        canUpload={(selectedRequest.requesterId === currentUserId && ["running", "needs_revision"].includes(selectedRequest.status)) || (selectedRequest.status === "needs_revision" && selectedRequest.activeStages.some((stage) => stage.canAct))}
+                        canUpload={canEditRequest(selectedRequest)}
                         onUpload={(files) => onUploadAttachments(selectedRequest, files, "additional")}
                         onDownload={onDownloadAttachment}
                       />
@@ -2160,18 +2179,20 @@ export function ApprovalsView({
                       </div>
                     ) : null}
                     {editingRequestId === selectedRequest.id ? (
-                      <section className="approval-revision-editor detail-overview" aria-label="Редактирование возвращённой заявки">
+                      <section className="approval-revision-editor detail-overview" aria-label="Редактирование заявки">
                         <h3>Исправленная версия</h3>
+                        {selectedRequest.status === "running" ? <p>Текущий этап и прежние решения сохранятся. Исправление с причиной появится в истории заявки.</p> : null}
                         <label>Название<Input aria-label="Исправленное название заявки" value={editTitle} onChange={(_event, data) => setEditTitle(data.value)} /></label>
                         <label>Сумма в {editDetails.currency}<Input aria-label="Исправленная сумма заявки" inputMode="numeric" value={editAmount} onChange={(_event, data) => setEditAmount(data.value)} /></label>
                         <label>Назначение<Textarea aria-label="Исправленное назначение платежа" value={editPurpose} onChange={(_event, data) => setEditPurpose(data.value)} /></label>
+                        <label>Причина изменения{selectedRequest.status === "running" ? " *" : ""}<Textarea aria-label="Причина изменения заявки" value={editComment} onChange={(_event, data) => setEditComment(data.value)} /></label>
                         <PaymentFields form={editDetails} targets={paymentTargets} calendarEvents={calendarEvents} people={people} departments={departments} onChange={setEditDetails} revision />
                         <PendingFilePicker files={editFiles} onChange={setEditFiles} label="Добавить исправленные документы" />
                         <PendingFilePicker files={editAdditionalFiles} onChange={setEditAdditionalFiles} label="Добавить дополнительные документы" />
                         {editError ? <div className="approval-form-error" role="alert">{editError}</div> : null}
                         <div className="approval-revision-actions">
-                          <Button appearance="primary" onClick={() => void saveRevision(selectedRequest)}>Сохранить и отправить повторно</Button>
-                          <Button appearance="subtle" onClick={() => setEditingRequestId("")}>Отмена</Button>
+                          <Button appearance="primary" disabled={actionBusy} onClick={() => void saveRevision(selectedRequest)}>{selectedRequest.status === "running" ? "Сохранить изменения" : "Сохранить и отправить повторно"}</Button>
+                          <Button appearance="subtle" disabled={actionBusy} onClick={() => setEditingRequestId("")}>Отмена</Button>
                         </div>
                       </section>
                     ) : null}
@@ -2211,7 +2232,7 @@ export function ApprovalsView({
                       {selectedRequest.versions.slice().reverse().map((version) => (
                         <div key={version.version}>
                           <strong>v{version.version} · {formatMoney(version.amount, version.currency)}</strong>
-                          <span>{version.changeReason === "initial" ? "Создание" : version.changeReason === "attachment_added" ? "Добавлен файл" : "Исправление"}{version.changeComment ? ` · ${version.changeComment}` : ""}</span>
+                          <span>{version.changeReason === "initial" ? "Создание" : version.changeReason === "attachment_added" ? "Добавлен файл" : "Исправление"}{version.changeComment ? ` · ${version.changeComment}` : ""} · {peopleById.get(version.editedByUserId)?.name ?? "Сотрудник"}</span>
                         </div>
                       ))}
                     </section>

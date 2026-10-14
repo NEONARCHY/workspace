@@ -187,6 +187,7 @@ function mockServer(
     readonly extraNotifications?: readonly WorkspaceNotification[];
     readonly failApprovalActionOnce?: boolean;
     readonly withSubsidyRequest?: boolean;
+    readonly superadminLogin?: boolean;
   } = {},
 ) {
   let failApprovalActionOnce = serverOptions.failApprovalActionOnce ?? false;
@@ -377,7 +378,9 @@ function mockServer(
     const url = String(input);
     if (url.endsWith("/auth/login")) {
       const payload = JSON.parse(String(options?.body)) as { username: string };
-      currentUser = people.find((person) => person.username === payload.username) ?? people[0]!;
+      const selectedUser = people.find((person) => person.username === payload.username) ?? people[0]!;
+      currentUser = serverOptions.superadminLogin && selectedUser.username === "malika"
+        ? { ...selectedUser, role: "superadmin" } : selectedUser;
       return response({
         accessToken: "access-token",
         refreshToken: "refresh-token",
@@ -1000,12 +1003,15 @@ function mockServer(
       const payload = JSON.parse(String(options.body)) as {
         title: string;
         amount: number;
+        currency: string;
         purpose: string;
+        changeComment?: string;
       };
       const current = requests[0]!;
       const revised = {
         ...current,
         ...payload,
+        details: { ...current.details, ...payload },
         revision: current.revision + 1,
         versions: [
           ...current.versions,
@@ -1013,15 +1019,20 @@ function mockServer(
             version: current.revision + 1,
             title: payload.title,
             amount: payload.amount,
-            currency: "UZS",
+            currency: payload.currency,
             purpose: payload.purpose,
             details: { ...current.details, ...payload },
             attachmentIds: [],
             editedByUserId: currentUser.id,
-            changeReason: "correction",
+            changeReason: payload.changeComment ?? "correction",
             createdAt: "2026-09-03T11:00:00Z",
           },
         ],
+        actions: current.status === "running" ? [
+          ...current.actions,
+          { action: "edit", comment: payload.changeComment, actorUserId: currentUser.id,
+            nodeKey: current.activeNodeKeys[0] ?? "start", createdAt: "2026-09-03T11:00:00Z" },
+        ] : current.actions,
       };
       requests = [revised];
       return response(revised);
@@ -2054,6 +2065,40 @@ describe("corporate workspace authentication alpha", () => {
 
     expect((await screen.findAllByText(/4.800.000 UZS/)).length).toBeGreaterThan(0);
     expect(screen.getByText("Версия 2 · создана из задачи")).toBeInTheDocument();
+  });
+
+  it("lets the initiator change an active request currency without resubmitting the workflow", async () => {
+    const fetchMock = mockServer({ withSubsidyRequest: true });
+    render(<App />);
+    await loginToWorkspace("aziza", "payment_requests");
+    fireEvent.click(screen.getByRole("button", { name: "Исправить заявку" }));
+    fireEvent.change(screen.getByLabelText("Исправленные валюта оплаты"), {
+      target: { value: "USD" },
+    });
+    fireEvent.change(screen.getByRole("textbox", { name: "Причина изменения заявки" }), {
+      target: { value: "Уточнили валюту счёта" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить изменения" }));
+
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url, options]) =>
+      String(url).endsWith("/approval-requests/subsidy-request") && options?.method === "PATCH"
+    )).toBe(true));
+    const patchCall = fetchMock.mock.calls.find(([url, options]) =>
+      String(url).endsWith("/approval-requests/subsidy-request") && options?.method === "PATCH");
+    expect(JSON.parse(String(patchCall?.[1]?.body))).toMatchObject({
+      currency: "USD", changeComment: "Уточнили валюту счёта",
+    });
+    expect(fetchMock.mock.calls.some(([url, options]) =>
+      String(url).endsWith("/approval-requests/subsidy-request/actions") && options?.method === "POST"
+    )).toBe(false);
+    expect(await screen.findByText("Уточнили валюту счёта")).toBeInTheDocument();
+  });
+
+  it("shows active-request editing to the superadmin who did not initiate it", async () => {
+    mockServer({ withSubsidyRequest: true, superadminLogin: true });
+    render(<App />);
+    await loginToWorkspace("malika", "payment_requests");
+    expect(screen.getByRole("button", { name: "Исправить заявку" })).toBeInTheDocument();
   });
 
   it("opens the workflow designer inside the authenticated shell", async () => {
