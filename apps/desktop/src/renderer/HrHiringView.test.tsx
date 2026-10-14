@@ -91,6 +91,23 @@ describe("HR hiring", () => {
     await waitFor(() => expect(actHiringCase).toHaveBeenCalledTimes(2));
     expect(vi.mocked(actHiringCase).mock.calls[1]).toEqual(first);
   });
+  it("finishes after paper-signature confirmation without requiring a scan", async () => {
+    vi.mocked(loadHiringCase).mockResolvedValue({ ...item, status: "awaiting_employee", canEdit: false });
+    vi.mocked(actHiringCase).mockResolvedValue({ ...item, status: "completed", revision: 2, canEdit: false });
+    mount(); await openCase();
+    expect(screen.getByRole("button", { name: "Загрузить скан договора (необязательно)" })).toBeInTheDocument();
+    await focusClick(screen.getByRole("button", { name: "Завершить оформление" }));
+    const dialog = await screen.findByRole("dialog", { name: "Завершить оформление?" });
+    await act(async () => { within(dialog).getByText("Отмена").focus(); });
+    await waitFor(() => expect(dialog).not.toHaveAttribute("aria-hidden", "true"));
+    expect(within(dialog).getByRole("button", { name: "Подтвердить" })).toBeDisabled();
+    await focusClick(within(dialog).getByRole("checkbox", { name: /сотрудник подписал бумажный договор/ }));
+    await focusClick(within(dialog).getByRole("button", { name: "Подтвердить" }));
+    await waitFor(() => expect(actHiringCase).toHaveBeenCalledWith(
+      "synthetic-token", "test-case", 1, "complete", expect.any(String), "", true,
+    ));
+    expect(await screen.findByRole("button", { name: "Загрузить скан договора (необязательно)" })).toBeInTheDocument();
+  });
   it("shows retryable loading errors and does not expose an empty working form", async () => {
     vi.mocked(loadHiringRegistry).mockRejectedValueOnce(new Error("HR временно недоступен"));
     mount(); await screen.findByText("HR временно недоступен");

@@ -63,6 +63,13 @@ export interface HiringRegistry {
   readonly signerName: string;
 }
 export type HiringActionName = "submit" | "approve" | "return" | "complete";
+export interface HiringActionRequest {
+  readonly expectedRevision: number;
+  readonly action: HiringActionName;
+  readonly requestId: string;
+  readonly comment: string;
+  readonly employeeSignatureConfirmed: boolean;
+}
 export interface IdentityRecognition {
   readonly fullName: string | null;
   readonly pinfl: string | null;

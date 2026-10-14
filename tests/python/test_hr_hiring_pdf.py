@@ -1,5 +1,6 @@
 """Synthetic identity/signature only; no production personnel files."""
 
+import re
 from datetime import date
 from io import BytesIO
 from pathlib import Path
@@ -10,6 +11,7 @@ from pydantic import ValidationError
 from pypdf import PdfReader, PdfWriter
 
 from yuksalish_api.hr_hiring_pdf import (
+    _visible_signature,
     application_pdf,
     documents,
     place_signature,
@@ -64,8 +66,10 @@ def test_unicode_contract_order_slots_and_safe_signature() -> None:
     order_text = "\n".join(
         page.extract_text() for page in PdfReader(BytesIO(packet["order"])).pages
     )
-    assert "Бухгалтерия бўлими бошлиғи Тест Бухгалтерга" in order_text
-    assert "Меҳнат кодексининг 127, 129 ва 130-моддалари" in " ".join(order_text.split())
+    assert "BUYRUQ" in order_text and "Toshkent shahri" in order_text
+    assert "Buxgalteriya boʻlimi boshligʻi Test Buxgalterga" in order_text  # noqa: RUF001
+    assert "Mehnat kodeksining 127, 129 va 130-moddalari" in " ".join(order_text.split())
+    assert not re.search(r"[А-Яа-яЁёЎўҚқҒғҲҳ]", order_text)  # noqa: RUF001
 
 
 def test_document_fields_are_text_not_paragraph_markup() -> None:
@@ -75,8 +79,15 @@ def test_document_fields_are_text_not_paragraph_markup() -> None:
     packet = documents(values, 'Руководитель <i>текст</i> & "имя"')
     for name, content in packet.items():
         text = "\n".join(page.extract_text() for page in PdfReader(BytesIO(content)).pages)
-        assert values.full_name in text, name
-        assert 'Руководитель <i>текст</i> & "имя"' in " ".join(text.split()), name
+        expected_name = (
+            values.full_name if name == "contract" else 'Test <b>ne teg</b> & "kavichki"'
+        )
+        expected_signer = (
+            'Руководитель <i>текст</i> & "имя"'
+            if name == "contract" else 'Rukovoditel <i>tekst</i> & "imya"'
+        )
+        assert expected_name in text, name
+        assert expected_signer in " ".join(text.split()), name
     contract = "\n".join(
         page.extract_text() for page in PdfReader(BytesIO(packet["contract"])).pages
     )
@@ -87,12 +98,14 @@ def test_original_backgrounds_have_no_sample_employee_or_extra_page() -> None:
     root = Path(__file__).parents[2] / "apps/api/src/yuksalish_api/hr_assets"
     contract = PdfReader(root / "contract-original-blank.pdf")
     order = PdfReader(root / "order-original-blank.pdf")
-    assert len(contract.pages) == 2 and len(order.pages) == 1
+    latin_order = PdfReader(root / "order-latin-blank.pdf")
+    assert len(contract.pages) == 2 and len(order.pages) == 1 and len(latin_order.pages) == 1
     content = "\n".join(page.extract_text() for page in [*contract.pages, *order.pages])
     assert "Муталиева" not in content
     assert "Турдалиева" not in content
     assert "Бекмуродов" not in content
     assert "Тошкент шаҳри" in content and "HARAKAT" in content
+    assert latin_order.pages[0].extract_text().split() == ["HARAKAT", "MOVEMENT"]
 
 
 def test_original_form_rejects_fields_with_no_room_or_no_slot() -> None:
@@ -136,7 +149,16 @@ def test_source_length_order_fits_its_original_three_line_first_clause() -> None
     result = documents(current, "Тестовый руководитель")
     assert len(PdfReader(BytesIO(result["order"])).pages) == 1
     text = " ".join(PdfReader(BytesIO(result["order"])).pages[0].extract_text().split())
-    assert "икки ойлик дастлабки синов муддати билан ишга қабул қилинсин" in text
+    assert "ikki oylik dastlabki sinov muddati bilan ishga qabul qilinsin" in text
+
+
+def test_visible_signature_crops_transparent_source_margins() -> None:
+    image = Image.new("RGBA", (500, 500), (0, 0, 0, 0))
+    ImageDraw.Draw(image).line([(30, 220), (240, 180), (460, 260)], fill="blue", width=5)
+    output = BytesIO()
+    image.save(output, format="PNG")
+    cropped = _visible_signature(output.getvalue())
+    assert cropped.width > 400 and cropped.height < 120
 
 
 @pytest.mark.parametrize(

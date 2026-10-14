@@ -34,6 +34,37 @@ _MONTHS = (
     ("декабрь", "декабрдан", "декабрда"),
 )
 _NUMBERS = ("", "бир", "икки", "уч", "тўрт", "беш", "олти")
+_MONTHS_LATIN = (
+    ("yanvar", "yanvardan", "yanvarda"),
+    ("fevral", "fevraldan", "fevralda"),
+    ("mart", "martdan", "martda"),
+    ("aprel", "apreldan", "aprelda"),
+    ("may", "maydan", "mayda"),
+    ("iyun", "iyundan", "iyunda"),
+    ("iyul", "iyuldan", "iyulda"),
+    ("avgust", "avgustdan", "avgustda"),
+    ("sentabr", "sentabrdan", "sentabrda"),
+    ("oktabr", "oktabrdan", "oktabrda"),
+    ("noyabr", "noyabrdan", "noyabrda"),
+    ("dekabr", "dekabrdan", "dekabrda"),
+)
+_NUMBERS_LATIN = ("", "bir", "ikki", "uch", "toʻrt", "besh", "olti")  # noqa: RUF001
+_CYRILLIC_TO_LATIN = {
+    "а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "е": "e", "ё": "yo", "ж": "j",  # noqa: RUF001
+    "з": "z", "и": "i", "й": "y", "к": "k", "л": "l", "м": "m", "н": "n", "о": "o",  # noqa: RUF001
+    "п": "p", "р": "r", "с": "s", "т": "t", "у": "u", "ф": "f", "х": "x", "ц": "ts",  # noqa: RUF001
+    "ч": "ch", "ш": "sh", "щ": "shch", "ъ": "ʼ", "ы": "i", "ь": "", "э": "e",  # noqa: RUF001
+    "ю": "yu", "я": "ya", "ў": "oʻ", "қ": "q", "ғ": "gʻ", "ҳ": "h",  # noqa: RUF001
+}
+_CYRILLIC_TO_LATIN.update({letter.upper(): latin.capitalize() for letter, latin in
+                           tuple(_CYRILLIC_TO_LATIN.items())})
+_LATIN_TRANSLATION = str.maketrans(_CYRILLIC_TO_LATIN)
+
+
+def _latin(value: str) -> str:
+    """Keep already-Latin ID names while converting legacy Cyrillic HR fields."""
+    translated = value.translate(_LATIN_TRANSLATION)
+    return translated.upper() if value.isupper() else translated
 
 
 def _fonts() -> None:
@@ -167,55 +198,63 @@ def _order(fields: HiringFields, signer: str) -> bytes:
         raise ValueError("В оригинальном бланке нет места для дополнительных условий")  # noqa: RUF001
     output = BytesIO()
     canvas = Canvas(output, pagesize=A4)
-    month = _MONTHS[f.document_date.month - 1]
-    start_month = _MONTHS[f.start_date.month - 1]
-    _line(canvas, 286, 160, 73, f"{f.order_number}-сон ш/т", "номер приказа")
+    canvas.setFont("HRFormBold", 14)
+    canvas.drawCentredString(A4[0] / 2, 691.5, "BUYRUQ")
+    canvas.setFont("HRForm", 13)
+    canvas.drawString(433.5, 641, "Toshkent shahri")
+    canvas.setFont("HRFormBold", 13)
+    canvas.drawString(79.5, 604.2, "“Ishga qabul qilish toʻgʻrisida”")  # noqa: RUF001
+    canvas.drawString(100.8, 313.2, "Rais")
+    month = _MONTHS_LATIN[f.document_date.month - 1]
+    start_month = _MONTHS_LATIN[f.start_date.month - 1]
+    full_name = _latin(f.full_name)
+    _line(canvas, 286, 160, 73, f"{_latin(f.order_number)}-son sh/t", "номер приказа")
     _line(
         canvas,
         79.5,
         185,
         232,
-        f"{f.document_date.year} йил “{f.document_date.day}” {month[0]}",
+        f"{f.document_date.year} yil “{f.document_date.day}” {month[0]}",
         "дата приказа",
     )
     probation = (
-        f"{_NUMBERS[f.probation_months]} ойлик дастлабки синов муддати билан "
+        f"{_NUMBERS_LATIN[f.probation_months]} oylik dastlabki sinov muddati bilan "
         if f.probation_months
         else ""
     )
-    start_date = f"{f.start_date.year} йил {f.start_date.day} {start_month[1]}"
+    start_date = f"{f.start_date.year} yil {f.start_date.day} {start_month[1]}"
     first = (
-        f"1. {f.full_name} {start_date} {f.department}нинг {f.job_title} "
-        f"лавозимига {probation}ишга қабул қилинсин."
+        f"1. {full_name} {start_date} {_latin(f.department)}ning {_latin(f.job_title)} "
+        f"lavozimiga {probation}ishga qabul qilinsin."
     )
     second = (
-        f"2. Бухгалтерия бўлими бошлиғи {f.accountant_dative} ходимга штат жадвалига "
-        "мувофиқ лавозим маошини белгилаш ҳамда меҳнатга ҳақ тўлашни белгиланган "
-        "тартибда амалга ошириш вазифаси юклатилсин."
+        f"2. Buxgalteriya boʻlimi boshligʻi {_latin(f.accountant_dative)} xodimga shtat "  # noqa: RUF001
+        "jadvaliga muvofiq lavozim maoshini belgilash hamda mehnatga haq toʻlashni "  # noqa: RUF001
+        "belgilangan tartibda amalga oshirish vazifasi yuklatilsin."
     )
     short_name = (
-        f"{f.full_name.split()[1][0]}. {f.full_name.split()[0]}"
-        if len(f.full_name.split()) > 1
-        else f.full_name
+        f"{full_name.split()[1][0]}. {full_name.split()[0]}"
+        if len(full_name.split()) > 1
+        else full_name
     )
-    basis_date = f"{f.document_date.year} йил {f.document_date.day} {month[2]}"
+    basis_date = f"{f.document_date.year} yil {f.document_date.day} {month[2]}"
     basis = (
-        f"Асос: {short_name} билан {basis_date} тузилган {f.contract_number}-сонли "  # noqa: RUF001
-        "меҳнат шартномаси, Ўзбекистон Республикаси Меҳнат кодексининг 127, 129 ва "
-        "130-моддалари."
+        f"Asos: {short_name} bilan {basis_date} tuzilgan {_latin(f.contract_number)}-sonli "
+        "mehnat shartnomasi, Oʻzbekiston Respublikasi Mehnat kodeksining 127, 129 va "  # noqa: RUF001
+        "130-moddalari."
     )
     top = 262.5
-    top = max(323.7, top + _paragraph(canvas, first, top, bold_name=f.full_name) + 4)
+    top = max(323.7, top + _paragraph(canvas, first, top, bold_name=full_name) + 4)
     top = max(391.3, top + _paragraph(canvas, second, top) + 12)
     top += _paragraph(canvas, basis, top)
     if top > 487:
         raise ValueError("Текст приказа не помещается на оригинальном бланке; сократите поля")
-    _signer_name(canvas, signer)
+    _signer_name(canvas, _latin(signer))
     canvas.save()
     return _merge(
-        "order-original-blank.pdf",
+        "order-latin-blank.pdf",
         [output],
-        SignatureBox(page=1, x=0.43, y=0.59, width=0.19, height=0.055),
+        SignatureBox(page=1, x=0.36, y=0.58, width=0.29, height=0.075),
     )
 
 
