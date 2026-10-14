@@ -37,6 +37,9 @@
 .trip-dialog .trip-document-files,
 .trip-dialog .trip-signature-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .trip-dialog .trip-document-files .fui-Button { max-width: 100%; overflow-wrap: anywhere; }
+.trip-dialog .trip-composer-brief-file { display: grid; min-width: 0; gap: 8px; }
+.trip-dialog .trip-composer-brief-file > .fui-Button { justify-self: start; }
+.trip-dialog .trip-composer-brief-file > p { margin: 0; color: var(--ws-muted, #526b77); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
 .trip-dialog .trip-signature-pad { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--ws-line, #d8e5e7); }
 .trip-dialog .trip-signature-pad canvas {
   display: block;
