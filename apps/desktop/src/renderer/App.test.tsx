@@ -1304,6 +1304,7 @@ describe("corporate workspace authentication alpha", () => {
     expect(screen.getByRole("button", { name: "Уведомления" })).toHaveAttribute("aria-description", "Уведомления: непрочитанных 2");
     expect(within(drawer).getByRole("button", { name: "Задачи" }).querySelector(".rail-badge")).toHaveTextContent(String(initialTasks.filter(task => !["completed", "cancelled"].includes(task.status)).length));
     expect(within(drawer).getByRole("button", { name: "Календарь" }).querySelector(".rail-badge")).toBeNull();
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Уведомления" }));
     fireEvent.click(screen.getByRole("button", { name: "Уведомления" }));
     expect(await screen.findByRole("heading", { name: "Требует моего внимания" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Ещё, \d+ разделов/ })).toHaveAttribute("aria-expanded", "false");
