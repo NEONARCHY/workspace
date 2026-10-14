@@ -326,6 +326,7 @@ async def chat_summary(
     preview = (
         "Сообщений пока нет"
         if latest is None
+        else "Приглашение на Zoom" if latest.get("zoom_meeting_id")
         else latest["body"]
     )
     return ChatSummaryResponse(

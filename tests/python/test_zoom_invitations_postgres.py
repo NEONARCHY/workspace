@@ -14,7 +14,7 @@ from test_zoom_postgres import FakeZoom, zoom_settings
 from yuksalish_api.auth import load_authenticated_user
 from yuksalish_api.errors import WorkspaceRepositoryError
 from yuksalish_api.forward_service import forward_message
-from yuksalish_api.messenger_service import create_chat, send_chat_message
+from yuksalish_api.messenger_service import chat_summary, create_chat, send_chat_message
 from yuksalish_api.repository import find_active_user_by_username
 from yuksalish_api.seed import seed_demo_data
 from yuksalish_api.tables import (
@@ -146,6 +146,8 @@ async def test_zoom_dms_delivery_rsvp_updates_and_privacy() -> None:
         async with engine.begin() as connection:
             withdrawn = (await invitation_detail_map(connection, peer, [row]))[row["id"]]
             assert not withdrawn.available and withdrawn.join_url is None
+            preview = await chat_summary(connection, peer, UUID(chat.id))
+            assert preview.preview == "Приглашение на Zoom"
             with pytest.raises(WorkspaceRepositoryError) as forwarding:
                 await forward_message(connection, peer, UUID(chat.id), ForwardMessageRequest(
                     request_id=uuid4(), kind="message", source_id=row["id"],
