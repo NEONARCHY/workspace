@@ -143,3 +143,14 @@ That roadmap records real-component screenshots, dark/light regressions,
 contrast measurements and release status. Automated contrast checks cannot
 resolve all gradients/optical layers; they complement visual review, not a
 claim of full accessibility certification or physical-device/Electron testing.
+
+## Application icon — 2026-10-14
+
+The owner-provided square Y mark is the source for the Windows executable icon,
+browser favicon and web shortcut icons. Its original colors, transparent outer
+area and white circle are preserved; the full wordmark used inside the app is
+unchanged. The source is `apps/desktop/build/app-icon-source.png`; regenerate
+derived sizes with `apps/desktop/scripts/build-app-icons.py` using the project
+Python environment. A deployed web build updates browser shortcuts after the
+browser refreshes its icon cache; installed Windows shortcuts require a new
+desktop package. Merely merging this change does not update either deployment.
