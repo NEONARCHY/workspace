@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, type RefObject } from "react";
 
-const targets = ".workspace-workday-status, .color-theme-toggle-wrap, .workspace-identity, .section-jump, .browser-menu-trigger";
+const targets = ".workspace-workday-status, .color-theme-toggle-wrap, .workspace-workday-person, .workspace-identity, .section-jump, .browser-menu-trigger";
 
 /** Reflow the header once, then animate only its translated controls (never their text size). */
 export function useAssistantLauncherLayout(launcher: RefObject<HTMLElement | null>, vacated: boolean, disabled: boolean, zoom: number, geometry: string) {
@@ -14,7 +14,8 @@ export function useAssistantLauncherLayout(launcher: RefObject<HTMLElement | nul
     if (!button || !space || !bar) return;
     const context = button.closest(".workspace-top-context");
     space.style.setProperty("--assistant-launcher-gap", context ? getComputedStyle(context).columnGap : "12px");
-    const controls = Array.from(bar.querySelectorAll<HTMLElement>(targets));
+    const controls = Array.from(bar.querySelectorAll<HTMLElement>(targets))
+      .filter(control => !control.matches(".workspace-identity") || !control.closest(".workspace-workday-person"));
     // An interrupted reversal starts from the currently visible positions.
     animations.current.forEach((animation, control) => {
       const visible = control.getBoundingClientRect();
@@ -28,7 +29,8 @@ export function useAssistantLauncherLayout(launcher: RefObject<HTMLElement | nul
     if (!vacated) {
       const base = space.getBoundingClientRect();
       const left = bar.querySelector(".color-theme-toggle")?.getBoundingClientRect();
-      const right = bar.querySelector(".workspace-identity-menu .fui-Avatar")?.getBoundingClientRect();
+      const right = (bar.querySelector(".workspace-workday-person")
+        ?? bar.querySelector(".workspace-identity-menu .fui-Avatar"))?.getBoundingClientRect();
       const aligned = left?.width && right?.width && left.right <= base.left && right.left >= base.right
         && Math.abs(left.top + left.height / 2 - (right.top + right.height / 2)) <= 8;
       const offset = aligned ? ((left.right + right.left) / 2 - (base.left + base.width / 2)) / zoom : 0;

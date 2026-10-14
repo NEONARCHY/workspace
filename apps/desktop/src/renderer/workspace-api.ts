@@ -1,4 +1,5 @@
 import type {
+  ExchangeSnapshot, WeatherSnapshot,
   HiringDetail, HiringRegistry, HiringFields, HiringSignatureBox, HiringActionName, HiringActionRequest, HiringDocumentKind, IdentityRecognition,
   SurveyAnalysis, SurveyAnalysisDetail, SurveyAnalysisUpdate, SurveyExport,
   OfficeFilePreview,
@@ -851,6 +852,22 @@ async function apiRequest<T>(
   if (token !== undefined) headers.set("Authorization", `Bearer ${token}`);
   return boundedRequest(`${getApiBaseUrl()}/api/v1${path}`, { ...options, headers }, async (response) =>
     response.status === 204 ? undefined as T : await response.json() as T, timeout);
+}
+
+export function loadExchangeRates(token: string, signal?: AbortSignal): Promise<ExchangeSnapshot> {
+  return apiRequest<ExchangeSnapshot>("/context/exchange-rates", { signal }, token, 20_000).then(data => {
+    if (!data || !Array.isArray(data.rates) || !data.rates.some(rate => rate.code === "USD")
+      || !data.effectiveDate || !data.fetchedAt) throw new Error("Сервер вернул неполные курсы валют.");
+    return data;
+  });
+}
+export function loadUzbekistanWeather(token: string, signal?: AbortSignal): Promise<WeatherSnapshot> {
+  return apiRequest<WeatherSnapshot>("/context/weather", { signal }, token, 20_000).then(data => {
+    if (!data || !Array.isArray(data.locations) || !data.locations.some(place => place.id === "tashkent-city")) {
+      throw new Error("Сервер вернул неполные погодные данные.");
+    }
+    return data;
+  });
 }
 
 let warmedAssistantMessages: {

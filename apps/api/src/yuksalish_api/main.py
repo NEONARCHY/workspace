@@ -14,6 +14,7 @@ from . import __version__
 from .absence_service import materialize_sick_document_notifications
 from .ai_referent_agent_service import expire_jobs
 from .birthday_service import materialize_birthdays
+from .context_service import ContextDataService
 from .database import create_database_engine
 from .edo_employee_sync import run_employee_sync_cycle
 from .efficiency_service import materialize_efficiency_digest_notifications
@@ -30,6 +31,7 @@ from .routers import (
     ai_referent_shared,
     assistant,
     authentication,
+    context,
     directory,
     edo_incoming,
     health,
@@ -72,6 +74,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         engine = create_database_engine(runtime_settings)
         lifespan_app.state.database_engine = engine
         lifespan_app.state.event_bus = WorkspaceEventBus()
+        context_service = ContextDataService()
+        lifespan_app.state.context_service = context_service
         storage = (
             InMemoryObjectStorage()
             if runtime_settings.environment == "test"
@@ -143,6 +147,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             with suppress(asyncio.CancelledError):
                 await scheduler_task
             await zoom_client.aclose()
+            await context_service.aclose()
             await engine.dispose()
             logger.info("api_stopped")
 
@@ -183,6 +188,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return response
 
     application.include_router(health.router, prefix=runtime_settings.api_prefix)
+    application.include_router(context.router, prefix=runtime_settings.api_prefix)
     application.include_router(home.router, prefix=runtime_settings.api_prefix)
     application.include_router(members.router, prefix=runtime_settings.api_prefix)
     application.include_router(hr.router, prefix=runtime_settings.api_prefix)

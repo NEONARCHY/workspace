@@ -35,6 +35,7 @@ import "./FeedView";
 import "./CalendarView";
 import "./SurveyAnalyticsView";
 import "./EmployeesView";
+import "./TasksView";
 
 function render(element: ReactElement) {
   // Each scenario models a new app session. A shared Griffel renderer retains
