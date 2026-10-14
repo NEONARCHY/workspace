@@ -308,7 +308,7 @@ async def upload_document(
         return detail(row, user, settings)
     check_revision(row, expected)
     if (kind == "application" and row["status"] not in EDITABLE) or (
-        kind == "employee-scan" and row["status"] != "awaiting_employee"
+        kind == "employee-scan" and row["status"] not in {"awaiting_employee", "completed"}
     ):
         raise Error(409, "На этом этапе документ нельзя заменить")  # noqa: RUF001 - intentional Cyrillic document text
     async with PDF_LIMIT:
@@ -467,8 +467,10 @@ async def act_case(
                 document_hashes=preview_hashes,
             )
         else:
-            if row["status"] != "awaiting_employee" or not row["employee_scan_key"]:
-                raise Error(409, "Загрузите скан договора с подписью сотрудника")  # noqa: RUF001 - intentional Cyrillic document text
+            if row["status"] != "awaiting_employee":
+                raise Error(409, "Пакет не ожидает подписи сотрудника")
+            if not action.employee_signature_confirmed and not row["employee_scan_key"]:
+                raise Error(422, "Подтвердите подпись сотрудника на бумажном договоре")
             values.update(status="completed")
     new = (
         (

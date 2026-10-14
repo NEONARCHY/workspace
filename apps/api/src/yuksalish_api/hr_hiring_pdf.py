@@ -117,10 +117,30 @@ def sign_generated(content: bytes, signature: bytes) -> bytes:
     if not reader.metadata or not reader.metadata.get("/HRSignatureBox"):
         raise ValueError("В документе отсутствует безопасное место подписи")  # noqa: RUF001 - intentional Cyrillic document text
     box = SignatureBox.model_validate_json(str(reader.metadata["/HRSignatureBox"]))
-    return place_signature(content, box, signature)
+    return place_signature(content, box, signature, crop_transparency=True)
 
 
-def place_signature(content: bytes, box: SignatureBox, signature: bytes | None) -> bytes:
+def _visible_signature(signature: bytes) -> Image.Image:
+    """Exclude transparent margins so the actual stroke fills the signature slot."""
+    with Image.open(BytesIO(signature)) as source:
+        image = source.convert("RGBA")
+    visible = image.getchannel("A").point(lambda alpha: 255 if alpha >= 16 else 0).getbbox()
+    if visible is None:
+        raise ValueError("Изображение подписи пустое")
+    padding = max(2, round(max(visible[2] - visible[0], visible[3] - visible[1]) * 0.02))
+    return image.crop(
+        (
+            max(0, visible[0] - padding),
+            max(0, visible[1] - padding),
+            min(image.width, visible[2] + padding),
+            min(image.height, visible[3] + padding),
+        )
+    )
+
+
+def place_signature(
+    content: bytes, box: SignatureBox, signature: bytes | None, *, crop_transparency: bool = False
+) -> bytes:
     reader = PdfReader(BytesIO(content))
     if box.page > len(reader.pages):
         raise ValueError("Выбранной страницы для подписи нет")
@@ -134,7 +154,7 @@ def place_signature(content: bytes, box: SignatureBox, signature: bytes | None) 
     x, y = box.x * w, (1 - box.y - box.height) * h
     if signature:
         canvas.drawImage(
-            ImageReader(BytesIO(signature)),
+            ImageReader(_visible_signature(signature) if crop_transparency else BytesIO(signature)),
             x,
             y,
             width=box.width * w,

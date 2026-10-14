@@ -93,6 +93,7 @@ class HiringAction(StrictModel):
     expected_revision: int = Field(ge=1)
     action: Literal["submit", "approve", "return", "complete"]
     comment: str = Field(default="", max_length=2000)
+    employee_signature_confirmed: bool = False
 
 
 class HiringSummary(ApiModel):

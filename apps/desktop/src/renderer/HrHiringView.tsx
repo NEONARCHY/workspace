@@ -38,7 +38,7 @@ export function HrHiringView({ token }: { readonly token: string }) {
   const applicationInput = useRef<HTMLInputElement>(null);
   const scanInput = useRef<HTMLInputElement>(null);
   const signatureInput = useRef<HTMLInputElement>(null);
-  const [pendingAction, setPendingAction] = useState<{ action: HiringActionName; id: string; revision: number; requestId: string; comment: string }>();
+  const [pendingAction, setPendingAction] = useState<{ action: HiringActionName; id: string; revision: number; requestId: string; comment: string; employeeSignatureConfirmed: boolean }>();
   const errorMessage = (value: unknown) => value instanceof Error ? value.message : "Не удалось выполнить действие";
   const refresh = useCallback(async () => setRegistry(await loadHiringRegistry(token, offset)), [token, offset]);
   useEffect(() => { let active = true; void loadHiringRegistry(token, offset).then((value) => { if (active) setRegistry(value); })
@@ -63,10 +63,11 @@ export function HrHiringView({ token }: { readonly token: string }) {
       if (download) { const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = `${kind}.${kind === "packet" ? "zip" : "pdf"}`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
       else setPreview(new File([blob], `${title}.pdf`, { type: "application/pdf" })); }); };
   const confirmDecision = () => { if (!selected || !decision) return;
-    const action = pendingAction ?? { action: decision, id: selected.id, revision: selected.revision, requestId: crypto.randomUUID(), comment };
+    const action = pendingAction ?? { action: decision, id: selected.id, revision: selected.revision, requestId: crypto.randomUUID(), comment,
+      employeeSignatureConfirmed: decision === "complete" && reviewConfirmed };
     setPendingAction(action);
     void run(async () => { try {
-      const result = await actHiringCase(token, action.id, action.revision, action.action, action.requestId, action.comment);
+      const result = await actHiringCase(token, action.id, action.revision, action.action, action.requestId, action.comment, action.employeeSignatureConfirmed);
       setPendingAction(undefined); accept(result); setDecision(undefined); setComment(""); setReviewConfirmed(false); await refresh();
     } catch (value) {
       if (value instanceof ApiHttpError && value.status >= 400 && value.status < 500 && value.status !== 408) setPendingAction(undefined);
@@ -119,7 +120,7 @@ export function HrHiringView({ token }: { readonly token: string }) {
             {number("daysPerWeek", "Дней в неделю", 1, 6)}{number("hoursPerWeek", "Часов в неделю", 1, 40)}{number("annualLeave", "Основной отпуск, календарных дней", 21, 90)}{number("additionalLeave", "Дополнительный отпуск, дней", 0, 90)}
             {text("salaryTerms", "Зарплата / основание по штатному расписанию")}{text("allowances", "Доплаты и компенсации")}
           </div>{fields.probationMonths > 0 ? <Checkbox checked={fields.probationEligible} label="Я проверил(а) допустимость испытательного срока для этого сотрудника" onChange={(_, data) => { setFields({ ...fields, probationEligible: data.checked === true }); setDirty(true); }} /> : null}
-            <p>Договор и приказ заполняются по исходным бланкам. Дополнительные условия вне бланка не печатаются; очистите их в старом черновике перед сохранением.</p>
+            <p>Договор заполняется по исходному бланку, приказ — на узбекской латинице. Проверьте написание ФИО, должности и реквизитов в PDF. Дополнительные условия вне бланка не печатаются; очистите их в старом черновике перед сохранением.</p>
             {fields.additionalTerms ? <Field label="Дополнительные условия старого черновика — очистить"><Textarea value={fields.additionalTerms} onChange={(_, data) => { setFields({ ...fields, additionalTerms: data.value }); setDirty(true); }} /></Field> : null}</fieldset>
           {editable ? <Button appearance="primary" disabled={busy || !valid || !dirty} onClick={save}>Сохранить черновик</Button> : null}
           {editable && dirty ? <Button disabled={busy} onClick={() => setDiscardOpen(true)}>Отменить изменения</Button> : null}
@@ -137,19 +138,20 @@ export function HrHiringView({ token }: { readonly token: string }) {
             {selected.canEdit ? <Button appearance="primary" disabled={busy || dirty || !selected.hasApplication} onClick={() => { setDecision("submit"); setComment(""); }}>Отправить руководителю</Button> : null}
             {selected.canSign ? <><Button appearance="primary" disabled={busy || !registry.signatureReady} onClick={() => setDecision("approve")}>Подписать пакет</Button><Button disabled={busy} onClick={() => setDecision("return")}>Вернуть кадровику</Button></> : null}
             {["awaiting_employee", "completed"].includes(selected.status) ? <Button disabled={busy} onClick={() => openDocument("packet", "Подписанный пакет", true)}>Скачать пакет ZIP</Button> : null}
-            {selected.status === "awaiting_employee" && registry.canCreate ? <><input ref={scanInput} type="file" hidden accept="application/pdf,image/jpeg,image/png" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) upload("employee-scan", file); }} /><Button disabled={busy} onClick={() => scanInput.current?.click()}>Загрузить подписанный сотрудником договор</Button>
-              <Button disabled={busy || !selected.hasEmployeeScan} onClick={() => setDecision("complete")}>Завершить оформление</Button></> : null}
+            {["awaiting_employee", "completed"].includes(selected.status) && registry.canCreate ? <><input ref={scanInput} type="file" hidden accept="application/pdf,image/jpeg,image/png" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) upload("employee-scan", file); }} /><Button disabled={busy} onClick={() => scanInput.current?.click()}>{selected.hasEmployeeScan ? "Заменить скан договора" : "Загрузить скан договора (необязательно)"}</Button>
+              {selected.status === "awaiting_employee" ? <Button disabled={busy} onClick={() => { setReviewConfirmed(false); setDecision("complete"); }}>Завершить оформление</Button> : null}</> : null}
             {selected.hasEmployeeScan ? <Button disabled={busy} onClick={() => openDocument("employee-scan", "Договор с подписью сотрудника")}>Скан договора</Button> : null}
           </div>{busy ? <Spinner label="Подготавливаем документы…" /> : null}</> : null}
         </>}
       </div></div></> : null}
     {preview ? <LocalFileViewer file={preview} onClose={() => setPreview(undefined)} onLoadOffice={noOfficePreview} /> : null}
     <WorkspaceDialog open={discardOpen} onOpenChange={(_, data) => setDiscardOpen(data.open)}><DialogSurface><DialogBody><DialogTitle>Сбросить несохранённые изменения?</DialogTitle><DialogContent>Сохранённые документы останутся. Несохранённый ввод будет сброшен.</DialogContent><DialogActions><Button onClick={() => setDiscardOpen(false)}>Продолжить заполнение</Button><Button onClick={() => { if (selected) accept(selected); else { setDraftId(undefined); setFields(blank()); setBox(defaultBox); setDirty(false); } setDiscardOpen(false); }}>Сбросить изменения</Button></DialogActions></DialogBody></DialogSurface></WorkspaceDialog>
-    <WorkspaceDialog open={Boolean(decision)} onOpenChange={(_, data) => { if (!data.open && !pendingAction && !busy) setDecision(undefined); }}><DialogSurface><DialogBody><DialogTitle>{decision === "approve" ? "Подписать весь пакет?" : decision === "return" ? "Вернуть кадровику" : decision === "submit" ? "Отправить на согласование?" : "Завершить оформление?"}</DialogTitle><DialogContent>
-      <p>{decision === "approve" ? "Подтвердите, что проверили договор, приказ, аризу и место подписи. Будет применено изображение вашей подписи, не ЭЦП." : decision === "submit" ? "Данные и документы будут зафиксированы до решения руководителя." : decision === "complete" ? "Подтвердите наличие бумажной подписи сотрудника на загруженном скане." : "Укажите, что кадровику нужно исправить."}</p>
+    <WorkspaceDialog open={Boolean(decision)} onOpenChange={(_, data) => { if (!data.open && !pendingAction && !busy) { setDecision(undefined); setReviewConfirmed(false); } }}><DialogSurface><DialogBody><DialogTitle>{decision === "approve" ? "Подписать весь пакет?" : decision === "return" ? "Вернуть кадровику" : decision === "submit" ? "Отправить на согласование?" : "Завершить оформление?"}</DialogTitle><DialogContent>
+      <p>{decision === "approve" ? "Подтвердите, что проверили договор, приказ, аризу и место подписи. Будет применено изображение вашей подписи, не ЭЦП." : decision === "submit" ? "Данные и документы будут зафиксированы до решения руководителя." : decision === "complete" ? "Проверьте бумажный экземпляр договора с подписью сотрудника. Его скан можно приложить сейчас или позже — без скана пакет не будет содержать подпись сотрудника." : "Укажите, что кадровику нужно исправить."}</p>
       {decision === "approve" ? <Checkbox checked={reviewConfirmed} disabled={busy || Boolean(pendingAction)} label="Я ознакомился с полным пакетом и подтверждаю применение моей подписи" onChange={(_, data) => setReviewConfirmed(data.checked === true)} /> : null}
+      {decision === "complete" ? <Checkbox checked={reviewConfirmed} disabled={busy || Boolean(pendingAction)} label="Я проверил(а), что сотрудник подписал бумажный договор" onChange={(_, data) => setReviewConfirmed(data.checked === true)} /> : null}
       {decision === "return" ? <Field label="Причина возврата" required><Textarea disabled={busy || Boolean(pendingAction)} value={comment} onChange={(_, data) => setComment(data.value)} /></Field> : null}
       {pendingAction && error ? <p role="alert">{error} Повтор использует тот же ключ и не подписывает документы дважды.</p> : null}
-    </DialogContent><DialogActions><Button disabled={busy || Boolean(pendingAction)} onClick={() => { setDecision(undefined); setReviewConfirmed(false); }}>Отмена</Button><Button appearance="primary" disabled={busy || (decision === "return" && !comment.trim()) || (decision === "approve" && !reviewConfirmed)} onClick={confirmDecision}>{pendingAction ? "Повторить безопасно" : "Подтвердить"}</Button></DialogActions></DialogBody></DialogSurface></WorkspaceDialog>
+    </DialogContent><DialogActions><Button disabled={busy || Boolean(pendingAction)} onClick={() => { setDecision(undefined); setReviewConfirmed(false); }}>Отмена</Button><Button appearance="primary" disabled={busy || (decision === "return" && !comment.trim()) || ((decision === "approve" || decision === "complete") && !reviewConfirmed)} onClick={confirmDecision}>{pendingAction ? "Повторить безопасно" : "Подтвердить"}</Button></DialogActions></DialogBody></DialogSurface></WorkspaceDialog>
   </section>;
 }

@@ -187,18 +187,59 @@ async def test_complete_workflow_frozen_documents_receipts_and_personal_signing(
         assert set(archive.namelist()) == {"application.pdf", "contract.pdf", "order.pdf"}
     active["user"] = active["hr"]
     complete = {"action": "complete", "expectedRevision": 4, "requestId": str(uuid4())}
-    assert (await client.post(path + "/actions", json=complete)).status_code == 409
-    scan = await client.put(path + "/documents/employee-scan?expectedRevision=4", content=pdf)
-    assert scan.status_code == 200 and scan.json()["hasEmployeeScan"]
-    complete["expectedRevision"] = 5
+    assert (await client.post(path + "/actions", json=complete)).status_code == 422
+    complete["employeeSignatureConfirmed"] = True
     finished = await client.post(path + "/actions", json=complete)
     assert finished.status_code == 200 and finished.json()["status"] == "completed"
+    assert not finished.json()["hasEmployeeScan"]
+    assert (await client.post(path + "/actions", json=complete)).json()["revision"] == 5
+    with ZipFile(BytesIO((await client.get(path + "/documents/packet")).content)) as archive:
+        assert set(archive.namelist()) == {"application.pdf", "contract.pdf", "order.pdf"}
+    scan = await client.put(path + "/documents/employee-scan?expectedRevision=5", content=pdf)
+    assert scan.status_code == 200 and scan.json()["hasEmployeeScan"]
+    assert scan.json()["status"] == "completed"
+    with ZipFile(BytesIO((await client.get(path + "/documents/packet")).content)) as archive:
+        assert "employee-scan.pdf" in archive.namelist()
     assert len((await client.get("/api/v1/hr/hiring")).json()["items"]) == 1
     # Successful retries neither duplicate journal transitions nor include personal values.
     receipts = (await connection.execute(select(hiring_receipts))).all()
     assert len(receipts) == 3
     audit = str((await connection.execute(select(audit_events.c.details))).all())
     assert fields().pinfl not in audit and fields().passport not in audit
+
+
+@pytest.mark.anyio
+@pytest.mark.postgres
+async def test_existing_client_can_finish_with_scan_without_new_confirmation(hiring_api) -> None:
+    client, active, _storage, _connection = hiring_api
+    path, _payload = await create(client)
+    pdf = documents(fields(), "Synthetic chair")["order"]
+    assert (
+        await client.put(path + "/documents/application?expectedRevision=1", content=pdf)
+    ).status_code == 200
+    assert (
+        await client.post(
+            path + "/actions",
+            json={"action": "submit", "expectedRevision": 2, "requestId": str(uuid4())},
+        )
+    ).status_code == 200
+    active["user"] = active["chair"]
+    assert (await client.put("/api/v1/hr/hiring/signature", content=signature())).status_code == 204
+    assert (
+        await client.post(
+            path + "/actions",
+            json={"action": "approve", "expectedRevision": 3, "requestId": str(uuid4())},
+        )
+    ).status_code == 200
+    active["user"] = active["hr"]
+    assert (
+        await client.put(path + "/documents/employee-scan?expectedRevision=4", content=pdf)
+    ).status_code == 200
+    finished = await client.post(
+        path + "/actions",
+        json={"action": "complete", "expectedRevision": 5, "requestId": str(uuid4())},
+    )
+    assert finished.status_code == 200 and finished.json()["status"] == "completed"
 
 
 @pytest.mark.anyio

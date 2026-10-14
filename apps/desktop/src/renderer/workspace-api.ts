@@ -1,5 +1,5 @@
 import type {
-  HiringDetail, HiringRegistry, HiringFields, HiringSignatureBox, HiringActionName, HiringDocumentKind, IdentityRecognition,
+  HiringDetail, HiringRegistry, HiringFields, HiringSignatureBox, HiringActionName, HiringActionRequest, HiringDocumentKind, IdentityRecognition,
   SurveyAnalysis, SurveyAnalysisDetail, SurveyAnalysisUpdate, SurveyExport,
   OfficeFilePreview,
   ProjectBudgetSummary,
@@ -600,9 +600,10 @@ export function saveHiringCase(token: string, id: string, expectedRevision: numb
 }
 
 export function actHiringCase(token: string, id: string, expectedRevision: number,
-  action: HiringActionName, requestId: string, comment = ""): Promise<HiringDetail> {
+  action: HiringActionName, requestId: string, comment = "", employeeSignatureConfirmed = false): Promise<HiringDetail> {
+  const payload: HiringActionRequest = { expectedRevision, action, requestId, comment, employeeSignatureConfirmed };
   return apiRequest<HiringDetail>(`/hr/hiring/${id}/actions`, { method: "POST",
-    body: JSON.stringify({ expectedRevision, action, requestId, comment }) }, token);
+    body: JSON.stringify(payload) }, token);
 }
 
 export function uploadHiringDocument(token: string, id: string, expectedRevision: number,
