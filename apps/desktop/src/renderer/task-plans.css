@@ -36,8 +36,12 @@
 .task-plan-import-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; max-height: 240px; overflow-y: auto; }
 .task-plan-import-groups > div { display: grid; gap: 6px; min-width: 0; padding: 10px; border: 1px solid var(--ws-line); border-radius: 10px; }
 .task-plan-import-groups strong { color: var(--ws-text); font-size: 12px; }
+.task-plan-import-groups button { justify-self: start; }
 .task-plan-import .task-plan-import-review { display: flex; align-items: flex-start; gap: 8px; font-weight: 500; }
 .task-plan-import-review input { flex: none; margin-top: 3px; }
+.task-plan-import-participants { display: grid; grid-column: 1 / -1; justify-items: start; gap: 8px; min-width: 0; padding-top: 8px; border-top: 1px solid var(--ws-line); }
+.task-plan-import-participants span { color: var(--ws-muted); font-size: 13px; }
+.task-plan-import-participants label { width: min(100%, 420px); }
 .task-plan-import-rows { display: grid; gap: 10px; max-height: min(45vh, 560px); overflow-y: auto; padding-right: 5px; }
 .task-plan-import-rows fieldset { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; min-width: 0; margin: 0; padding: 12px; border: 1px solid var(--ws-line); border-radius: 12px; }
 .task-plan-import-rows legend { padding: 0 5px; color: var(--ws-muted); font-size: 12px; }

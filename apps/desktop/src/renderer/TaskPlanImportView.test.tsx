@@ -74,7 +74,7 @@ it("keeps the same operation id and edits after a failed confirmation", async ()
   expect(vi.mocked(confirmTaskPlanImport).mock.calls[1]?.[1].operationId).toBe(originalId);
 });
 
-it("uses the weekly leader for both columns and applies reviewed row co-assignees", async () => {
+it("allows different responsible people and co-assignees for tasks in the same week", async () => {
   vi.mocked(previewTaskPlanImport).mockResolvedValue({
     suggestedTitle: "Weekly plan", rows: [
       { title: "Manager activity", source: "DOCX, таблица 1, строка 2, столбец 3", warning: null,
@@ -95,6 +95,8 @@ it("uses the weekly leader for both columns and applies reviewed row co-assignee
       { id: "me", name: "Автор плана", initials: "А", role: "manager", color: "blue", status: "active" },
       { id: "nigora", name: "Каримбердиева Нигора", initials: "Н", role: "manager", color: "blue", status: "active" },
       { id: "bakhtiyor", name: "Самугов Бахтиёр", initials: "Б", role: "employee", color: "blue", status: "active" },
+      { id: "feruza", name: "Шокирова Феруза", initials: "Ф", role: "employee", color: "blue", status: "active" },
+      { id: "temur", name: "Алмазов Темур", initials: "Т", role: "employee", color: "blue", status: "active" },
     ]} tasks={[]} onImported={vi.fn().mockResolvedValue(undefined)} onClose={vi.fn()} />
   </FluentProvider>);
   fireEvent.change(screen.getByLabelText("Файл плана"), {
@@ -105,12 +107,24 @@ it("uses the weekly leader for both columns and applies reviewed row co-assignee
   fireEvent.click(screen.getByRole("button", { name: "Подтвердить и создать план" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Проверьте ответственного");
   expect(confirmTaskPlanImport).not.toHaveBeenCalled();
+  const bulkParticipants = screen.getByLabelText("Набор соисполнителей для массового назначения по строке");
+  fireEvent.change(bulkParticipants, {
+    target: { value: "temur", selectedOptions: [{ value: "bakhtiyor" }, { value: "temur" }] },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Применить к пунктам этой строки" }));
+  const assignees = screen.getAllByLabelText("Ответственный / исполнитель");
+  if (!assignees[1]) throw new Error("Second responsible person selector is missing");
+  fireEvent.change(assignees[1], { target: { value: "feruza" } });
+  fireEvent.click(screen.getByRole("button", { name: "Изменить соисполнителей пункта 2" }));
+  fireEvent.change(screen.getByLabelText("Соисполнители пункта 2"), {
+    target: { value: "bakhtiyor", selectedOptions: [{ value: "bakhtiyor" }] },
+  });
   fireEvent.click(screen.getByRole("checkbox"));
   fireEvent.click(screen.getByRole("button", { name: "Подтвердить и создать план" }));
   await waitFor(() => expect(confirmTaskPlanImport).toHaveBeenCalledTimes(1));
   const items = vi.mocked(confirmTaskPlanImport).mock.calls[0]?.[1].items;
-  expect(items?.map((item) => item.assigneeId)).toEqual(["nigora", "nigora"]);
-  expect(items?.map((item) => item.coAssigneeIds)).toEqual([["bakhtiyor"], ["bakhtiyor"]]);
+  expect(items?.map((item) => item.assigneeId)).toEqual(["nigora", "feruza"]);
+  expect(items?.map((item) => item.coAssigneeIds)).toEqual([["bakhtiyor", "temur"], ["bakhtiyor"]]);
 });
 
 it("does not silently assign a structured plan to the importer when the leader is unknown", async () => {

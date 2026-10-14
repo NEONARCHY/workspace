@@ -13,6 +13,7 @@ type ReviewRow = {
   warning: string | null;
   mode: "create" | "link" | "skip";
   assigneeId: string;
+  coAssigneeIds: string[];
   dueDate: string;
   taskId: string;
   assigneeHint: string | null;
@@ -57,6 +58,7 @@ export function TaskPlanImportView({
   const [preview, setPreview] = useState<TaskPlanImportPreview | null>(null);
   const [rows, setRows] = useState<ReviewRow[]>([]);
   const [groupParticipants, setGroupParticipants] = useState<Record<string, string[]>>({});
+  const [expandedParticipantsRow, setExpandedParticipantsRow] = useState<number | null>(null);
   const [participantsReviewed, setParticipantsReviewed] = useState(false);
   const [operationId, setOperationId] = useState("");
   const [title, setTitle] = useState("");
@@ -83,19 +85,24 @@ export function TaskPlanImportView({
     try {
       const result = await previewTaskPlanImport(token, file);
       setPreview(result);
-      setRows(result.rows.map((row) => ({
-        ...row, mode: "create",
-        assigneeId: row.groupKey
+      setRows(result.rows.map((row) => {
+        const assigneeId = row.groupKey
           ? row.assigneeHint ? matchingPersonId(row.assigneeHint, activePeople) ?? "" : ""
-          : currentUserId,
-        dueDate: "", taskId: "", assigneeHint: row.assigneeHint ?? null,
-        coexecutorsHint: row.coexecutorsHint ?? null, groupKey: row.groupKey ?? null,
-      })));
+          : currentUserId;
+        return {
+          ...row, mode: "create", assigneeId,
+          coAssigneeIds: row.coexecutorsHint
+            ? suggestedCoAssignees(row.coexecutorsHint, activePeople).filter((id) => id !== assigneeId) : [],
+          dueDate: "", taskId: "", assigneeHint: row.assigneeHint ?? null,
+          coexecutorsHint: row.coexecutorsHint ?? null, groupKey: row.groupKey ?? null,
+        };
+      }));
       setGroupParticipants(Object.fromEntries([...new Map(result.rows.filter((row) => row.groupKey)
         .map((row) => [row.groupKey!, row.coexecutorsHint ?? ""]))].map(([key, hint]) => [
         key, suggestedCoAssignees(hint, activePeople),
       ])));
       setParticipantsReviewed(false);
+      setExpandedParticipantsRow(null);
       setTitle(result.suggestedTitle);
       setOperationId(crypto.randomUUID());
     } catch (reason) {
@@ -118,9 +125,10 @@ export function TaskPlanImportView({
       setError("Проверьте ответственного и соисполнителей по строкам документа, затем подтвердите проверку.");
       return;
     }
-    if (included.some((row) => row.mode === "create" && row.groupKey
-      && (groupParticipants[row.groupKey] ?? []).includes(row.assigneeId))) {
-      setError("Ответственный не может быть одновременно соисполнителем в той же строке плана.");
+    const duplicateRoleIndex = rows.findIndex((row) => row.mode === "create"
+      && row.coAssigneeIds.includes(row.assigneeId));
+    if (duplicateRoleIndex !== -1) {
+      setError(`Пункт ${duplicateRoleIndex + 1}: ответственный не может быть соисполнителем этой задачи.`);
       return;
     }
     if (periodStart && periodEnd && periodEnd < periodStart) {
@@ -135,8 +143,7 @@ export function TaskPlanImportView({
         mode: row.mode === "link" ? "link" : "create",
         taskId: row.mode === "link" ? row.taskId : null,
         assigneeId: row.mode === "create" ? row.assigneeId : null,
-        coAssigneeIds: row.mode === "create" && row.groupKey
-          ? groupParticipants[row.groupKey] ?? [] : [],
+        coAssigneeIds: row.mode === "create" ? row.coAssigneeIds : [],
         dueAt: row.mode === "create" && row.dueDate
           ? new Date(`${row.dueDate}T18:00:00+05:00`).toISOString() : null,
       })),
@@ -161,7 +168,8 @@ export function TaskPlanImportView({
         <label>Файл плана <input type="file" accept=".pdf,.docx,.xlsx,.txt" disabled={busy} onChange={(event) => {
           setFile(event.target.files?.[0] ?? null);
           setPreview(null); setRows([]); setGroupParticipants({});
-          setParticipantsReviewed(false); setOperationId(""); setError("");
+          setParticipantsReviewed(false); setExpandedParticipantsRow(null);
+          setOperationId(""); setError("");
         }} /></label>
         <Button appearance="secondary" disabled={!file || busy} onClick={() => void analyze()}>{busy && !preview ? "Разбираем…" : "Разобрать документ"}</Button>
       </div>
@@ -175,7 +183,7 @@ export function TaskPlanImportView({
         </div>
         {hasStructuredAssignments ? <section className="task-plan-import-assignments" aria-label="Назначения из документа">
           <h4>Назначения из недельного плана</h4>
-          <p>Ответственный из заголовка предложен для всех пунктов обеих рабочих колонок. Если сотрудник не найден однозначно, выберите его ниже — автору плана задача автоматически не назначается. Соисполнители относятся ко всем пунктам своей строки недели. Названия отделов не превращаются в сотрудников автоматически.</p>
+          <p>Ответственный из заголовка предложен для пунктов обеих рабочих колонок. Если сотрудник не найден однозначно, выберите его ниже — автору плана задача автоматически не назначается. Ответственного и соисполнителей можно изменить отдельно у каждой задачи. Названия отделов не превращаются в сотрудников автоматически.</p>
           <p>В заголовке: {rows.find((row) => row.assigneeHint)?.assigneeHint ?? "ответственный не указан"}</p>
           <label>Ответственный для всех новых задач
             <WorkspaceSelect value={rows.find((row) => row.mode === "create")?.assigneeId ?? ""} onChange={(event) => {
@@ -187,21 +195,38 @@ export function TaskPlanImportView({
           </label>
           <div className="task-plan-import-groups">{groups.map(([groupKey, hint]) => <div key={groupKey}>
             <strong>{groupKey}</strong><span>В документе: {hint || "не указаны"}</span>
-            <label>Соисполнители для этой строки
+            <label>Набор соисполнителей для массового назначения по строке
               <WorkspaceSelect multiple value={groupParticipants[groupKey] ?? []} onChange={(event) => {
                 setGroupParticipants((current) => ({ ...current, [groupKey]: event.currentTarget.selectedOptions.map((option) => option.value) }));
-                setParticipantsReviewed(false);
               }}>{activePeople.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</WorkspaceSelect>
             </label>
+            <Button appearance="secondary" onClick={() => {
+              const selected = groupParticipants[groupKey] ?? [];
+              setRows((current) => current.map((row) => row.groupKey === groupKey && row.mode === "create"
+                ? { ...row, coAssigneeIds: selected.filter((id) => id !== row.assigneeId) } : row));
+              setParticipantsReviewed(false);
+            }}>Применить к пунктам этой строки</Button>
           </div>)}</div>
-          <label className="task-plan-import-review"><input type="checkbox" checked={participantsReviewed} onChange={(event) => setParticipantsReviewed(event.target.checked)} />Я проверил ответственного и соисполнителей по документу; отделы и неясные имена сопоставлены вручную или сознательно не назначены.</label>
+          <label className="task-plan-import-review"><input type="checkbox" checked={participantsReviewed} onChange={(event) => setParticipantsReviewed(event.target.checked)} />Я проверил ответственного и соисполнителей для каждого включённого пункта; отделы и неясные имена сопоставлены вручную или сознательно не назначены.</label>
         </section> : null}
         <div className="task-plan-import-rows">{rows.map((row, index) => <fieldset key={`${row.source}-${index}`}>
           <legend>Пункт {index + 1} · {row.source}</legend>
           {row.warning ? <p className="task-plan-import-warning">{row.warning}</p> : null}
           <label>Действие<WorkspaceSelect value={row.mode} onChange={(event) => updateRow(index, { mode: event.target.value as ReviewRow["mode"] })}><option value="create">Создать задачу</option><option value="link">Привязать существующую</option><option value="skip">Не включать</option></WorkspaceSelect></label>
           {row.mode !== "skip" ? <label>Название задачи<Input value={row.title} maxLength={240} onChange={(_, data) => updateRow(index, { title: data.value })} /></label> : null}
-          {row.mode === "create" ? <><label>Ответственный<WorkspaceSelect value={row.assigneeId} onChange={(event) => { updateRow(index, { assigneeId: event.target.value }); setParticipantsReviewed(false); }}><option value="">Выберите сотрудника</option>{activePeople.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</WorkspaceSelect></label><label>Срок, если указан в плане<input type="date" value={row.dueDate} onChange={(event) => updateRow(index, { dueDate: event.target.value })} /></label></> : null}
+          {row.mode === "create" ? <><label>Ответственный / исполнитель<WorkspaceSelect value={row.assigneeId} onChange={(event) => { updateRow(index, { assigneeId: event.target.value, coAssigneeIds: row.coAssigneeIds.filter((id) => id !== event.target.value) }); setParticipantsReviewed(false); }}><option value="">Выберите сотрудника</option>{activePeople.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</WorkspaceSelect></label><label>Срок, если указан в плане<input type="date" value={row.dueDate} onChange={(event) => updateRow(index, { dueDate: event.target.value })} /></label>
+            <div className="task-plan-import-participants">
+              <span>Соисполнители: {row.coAssigneeIds.length
+                ? row.coAssigneeIds.map((id) => activePeople.find((person) => person.id === id)?.name ?? id).join(", ")
+                : "не выбраны"}</span>
+              <Button appearance="secondary" aria-expanded={expandedParticipantsRow === index} onClick={() => setExpandedParticipantsRow((current) => current === index ? null : index)}>Изменить соисполнителей пункта {index + 1}</Button>
+              {expandedParticipantsRow === index ? <label>Соисполнители пункта {index + 1}
+                <WorkspaceSelect multiple value={row.coAssigneeIds} onChange={(event) => {
+                  updateRow(index, { coAssigneeIds: event.currentTarget.selectedOptions.map((option) => option.value).filter((id) => id !== row.assigneeId) });
+                  setParticipantsReviewed(false);
+                }}>{activePeople.map((person) => <option key={person.id} value={person.id} disabled={person.id === row.assigneeId}>{person.name}</option>)}</WorkspaceSelect>
+              </label> : null}
+            </div></> : null}
           {row.mode === "link" ? <label>Существующая задача<WorkspaceSelect value={row.taskId} onChange={(event) => updateRow(index, { taskId: event.target.value })}><option value="">Выберите задачу</option>{tasks.map((task) => <option key={task.id} value={task.id}>{task.title}</option>)}</WorkspaceSelect></label> : null}
         </fieldset>)}</div>
         <div className="task-plan-import-footer"><Button appearance="primary" disabled={busy || rows.every((row) => row.mode === "skip")} onClick={() => void confirm()}>{busy ? "Сохраняем…" : "Подтвердить и создать план"}</Button><Button disabled={busy} onClick={onClose}>Отмена</Button></div>
