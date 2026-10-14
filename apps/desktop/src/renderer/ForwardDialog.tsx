@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Avatar, Button, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Input } from "@fluentui/react-components";
+import { Avatar, Button, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle } from "@fluentui/react-components";
+import { Input } from "./WorkspaceInput";
 import type { ChatMessage, ChatSummary, ForwardSource } from "@yuksalish/contracts";
 import { WorkspaceDialog } from "./WorkspaceDialog";
 

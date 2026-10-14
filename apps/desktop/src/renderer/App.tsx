@@ -101,6 +101,7 @@ import { LoginView } from "./LoginView";
 import { EmbeddedConversation, MessengerView } from "./MessengerView";
 import { NotificationCenter } from "./NotificationCenter";
 import { WorkdayControl } from "./WorkdayControl";
+import { WorkingUserIdsContext } from "./TaskParticipantAvatar";
 import { AdaptiveNavigation } from "./AdaptiveNavigation";
 import { AiModulesNavigation, groupAiNavigation } from "./AiModulesNavigation";
 import { RecoveryBoundary } from "./RecoveryBoundary";
@@ -243,6 +244,7 @@ interface WorkspaceState {
   readonly tripRequests: readonly TripRequest[];
   readonly absenceRequests: readonly AbsenceRequest[];
   readonly presenceSummary: readonly PresenceSummaryItem[];
+  readonly workingUserIds?: readonly string[];
   readonly feedPosts: readonly FeedPost[];
   readonly calendarEvents: readonly CalendarEvent[];
   readonly notifications: readonly WorkspaceNotification[];
@@ -808,6 +810,24 @@ export function App() {
       }
     }, reportError);
   }, [refreshWorkspace, reportError, session, activeApiOrigin]);
+
+  useEffect(() => {
+    if (!session || activeSection !== "tasks") return;
+    const refresh = () => {
+      if (document.visibilityState !== "hidden") {
+        void refreshWorkspace(session.accessToken).catch(reportError);
+      }
+    };
+    refresh();
+    const timer = window.setInterval(refresh, 60_000);
+    window.addEventListener("yuksalish:workday-changed", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("yuksalish:workday-changed", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [activeSection, refreshWorkspace, reportError, session]);
 
   const personalMutation = async (operation: (token: string) => Promise<PersonalPreferences>) => {
     if (!session) throw new Error("Войдите снова");
@@ -2053,7 +2073,11 @@ export function App() {
               setFocusNotification(undefined);
               setFocusTarget(undefined); setActiveSection(key);
             }} />
-            <div className="workspace-top-context"><ConnectionIndicator detail={connectionDetail} error={Boolean(backgroundError)} updateAvailable={webUpdateAvailable} onSwitchNetwork={supportsDualApiOrigins() ? handleSwitchNetwork : undefined} switchingNetwork={switchingNetwork} /><WorkdayControl token={session.accessToken} />
+            <div className="workspace-top-context">
+              <div className="workspace-workday-status">
+                <ConnectionIndicator detail={connectionDetail} error={Boolean(backgroundError)} updateAvailable={webUpdateAvailable} onSwitchNetwork={supportsDualApiOrigins() ? handleSwitchNetwork : undefined} switchingNetwork={switchingNetwork} />
+                <WorkdayControl token={session.accessToken} />
+              </div>
               <ColorThemeToggle userId={session.user.id} />
               {canUseAssistant && <YuksalishAssistant key={session.user.id} token={session.accessToken}
                 onOpenReference={openAssistantReference} onPrepareAction={prepareAssistantAction} />}
@@ -2193,6 +2217,7 @@ export function App() {
               />
             ) : null}
             {displayedSection === "tasks" ? (
+              <WorkingUserIdsContext.Provider value={workspace.workingUserIds ?? []}>
               <TasksView
                 key={focusTarget?.revision}
                 token={session.accessToken}
@@ -2235,6 +2260,7 @@ export function App() {
                 onDownloadAttachment={handleDownloadAttachment}
                 focusTaskId={focusTarget?.section === "tasks" ? focusTarget.entityId : undefined}
               />
+              </WorkingUserIdsContext.Provider>
             ) : null}
             {displayedSection === "team_overview" ? (
               <section className="workspace-view tasks-view bp5-tasks dashboard-mode" aria-label="Обзор команды">

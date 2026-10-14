@@ -27,6 +27,17 @@ UUID return 409.
 
 ## Calculation contract
 
+### Workspace layout refinement — 14 October 2026
+
+The library and import share an aligned top row; results span the full width below.
+Panels use the same spacing. Search
+is constrained to the library width in both split states. A keyboard-accessible
+native file input covers the styled drop target; drag-and-drop and browsing share
+the same format/10 MiB validation and create/busy/dirty guards. File selection is
+local until explicit import; uncertain retries retain the request UUID. No survey
+calculation, ownership, storage or export contract changes. Compact layouts stack
+the library above the workspace; dark panels and drop targets use real satin borders.
+
 - One nonblank source row is one **assumed**, not verified, respondent. Source row numbers
   are preserved. Blank rows and rows before the confirmed header are explicitly excluded.
 - Blank strings are missing. Literal `null`, `undefined`, `0` and negative answers are not

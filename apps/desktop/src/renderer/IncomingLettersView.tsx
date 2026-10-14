@@ -1,3 +1,4 @@
+import { Input } from "./WorkspaceInput";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   EdoIncomingDetail, EdoIncomingFilter, EdoIncomingLetter, EdoIncomingPage, WorkspacePerson,
@@ -231,7 +232,7 @@ export function IncomingLettersView({ token, people, currentUserId, canEdit, foc
     </div>
     <div className="edo-incoming-controls">
       <label>Поиск по номеру или краткому описанию
-        <input type="search" value={searchInput} maxLength={100} onChange={(event) => {
+        <Input aria-label="Поиск входящих писем" type="search" value={searchInput} maxLength={100} onChange={(event) => {
           setSearchInput(event.target.value); setPage(1);
         }} placeholder="Номер или слова из описания" />
       </label>

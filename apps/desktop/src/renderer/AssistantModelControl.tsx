@@ -4,7 +4,7 @@ import { Brain } from "lucide-react";
 import type { AssistantModel } from "@yuksalish/contracts";
 
 const levels = [
-  { value: "flash-lite", label: "Лёгкая", description: "Повседневные вопросы · экономный режим" },
+  { value: "flash-lite", label: "Лёгкая", description: "Повседневные вопросы" },
   { value: "flash", label: "Средняя", description: "Задачи, тексты и документы" },
   { value: "pro", label: "Сильная", description: "Более сложные вопросы" },
 ] as const;

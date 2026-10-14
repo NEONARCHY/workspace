@@ -29,7 +29,7 @@ export function WorkspaceIdentity({ person, token, onProfile, onSupport, support
     }} positioning="below-end" withArrow>
       <PopoverTrigger disableButtonEnhancement>
         <button className="workspace-identity-menu" type="button" aria-label={`Открыть меню профиля: ${person.name}${supportIndicator ? `. Есть ${supportUnreadCount || 1} ${supportIndicator === "negative" ? "отклонённых" : "новых"} ответов по обращениям` : ""}`}>
-          <ProfileAvatar person={person} token={token} size={32} />
+          <ProfileAvatar person={person} token={token} size={40} />
           <span className="workspace-identity-name">{person.name}</span>
           {supportIndicator ? <i className={`identity-support-indicator tone-${supportIndicator}`} title={supportIndicator === "negative" ? "Есть отклонённое обращение" : "Есть новый ответ по обращению"} /> : null}
           <ChevronDown16Regular />

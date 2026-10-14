@@ -1,0 +1,43 @@
+/* Telegram-inspired outgoing bubbles; keep message geometry/metadata flow. */
+@media (forced-colors: none) {
+  html body .messenger-view {
+    --chat-outgoing-fill: #e5eff9;
+    --chat-outgoing-ink: #263c54;
+    --chat-outgoing-meta: #4b6c8d;
+    --chat-outgoing-check: #3485b8;
+    --chat-outgoing-link: #196b9e;
+  }
+  html[data-color-theme="dark"] body .messenger-view {
+    --chat-outgoing-fill: #2b5278;
+    --chat-outgoing-ink: #ffffff;
+    --chat-outgoing-meta: #a6c8e5;
+    --chat-outgoing-check: #63b8ef;
+    --chat-outgoing-link: #b3ddff;
+  }
+  html[data-color-theme] body .messenger-view .message.own .message-body {
+    background: var(--chat-outgoing-fill);
+    color: var(--chat-outgoing-ink);
+    border-color: transparent;
+    box-shadow: none;
+    border-radius: 17px 17px 5px 17px;
+  }
+  html body .messenger-view .message-row.is-group-first .message.own .message-body { border-bottom-right-radius: 4px; }
+  html body .messenger-view .message-row.is-group-middle .message.own .message-body { border-top-right-radius: 4px; border-bottom-right-radius: 4px; }
+  html body .messenger-view .message-row.is-group-last .message.own .message-body { border-top-right-radius: 4px; }
+  /* Only the final bubble in a group gets the small, matching curved tail. */
+  html body .messenger-view .message-row:not(.is-group-first):not(.is-group-middle) .message.own .message-body::before {
+    content: "";
+    position: absolute;
+    right: -7px;
+    bottom: -1px;
+    width: 8px;
+    height: 10px;
+    background: var(--chat-outgoing-fill);
+    clip-path: path("M 0 0 C 1 5 3 8 8 10 L 0 10 Z");
+    pointer-events: none;
+  }
+  html body .messenger-view .message.own .message-meta { color: var(--chat-outgoing-meta); }
+  html body .messenger-view .message.own .message-delivery,
+  html body .messenger-view .message.own .message-delivery.is-read { color: var(--chat-outgoing-check); }
+  html body .messenger-view .message.own .message-body > p a { color: var(--chat-outgoing-link); }
+}

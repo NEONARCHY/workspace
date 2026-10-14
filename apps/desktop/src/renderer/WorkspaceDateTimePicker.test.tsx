@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
 import { WorkspaceFileDropzone } from "./WorkspaceFileDropzone";
+import * as timeMotion from "./time-wheel-motion";
 
 describe("workspace date and file inputs", () => {
   afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
@@ -16,6 +17,14 @@ describe("workspace date and file inputs", () => {
   });
 
   it("routes a latched wheel event by cursor position and preserves the other value", () => {
+    const createMotion = timeMotion.createTimeWheelMotion;
+    const scrolls = new Map<string, ReturnType<typeof vi.fn>>();
+    vi.spyOn(timeMotion, "createTimeWheelMotion").mockImplementation((wheel, reduced) => {
+      const motion = createMotion(wheel, reduced);
+      const moveTo = vi.fn(motion.moveTo);
+      scrolls.set(wheel.dataset.wheel!, moveTo);
+      return { ...motion, moveTo };
+    });
     function Controlled() {
       const [value, setValue] = useState("14:10");
       return <WorkspaceDateTimePicker ariaLabel="Время" mode="time" value={value} onChange={setValue} />;
@@ -24,22 +33,21 @@ describe("workspace date and file inputs", () => {
     fireEvent.click(screen.getByRole("button", { name: "Время: открыть выбор" }));
     const hours = screen.getByRole("listbox", { name: "Часы" });
     const minutes = screen.getByRole("listbox", { name: "Минуты" });
-    const hourScroll = vi.fn(), minuteScroll = vi.fn();
-    Object.defineProperty(hours, "scrollTo", { configurable: true, value: hourScroll });
-    Object.defineProperty(minutes, "scrollTo", { configurable: true, value: minuteScroll });
+    const hourScroll = scrolls.get("hour")!, minuteScroll = scrolls.get("minute")!;
+    hourScroll.mockClear(); minuteScroll.mockClear();
     const originalHitTest = document.elementFromPoint;
     const hitTest = vi.fn().mockReturnValue(minutes);
     Object.defineProperty(document, "elementFromPoint", { configurable: true, value: hitTest });
     try {
       fireEvent.wheel(minutes, { deltaY: 34 });
       expect(screen.getByRole("button", { name: "Время: открыть выбор" })).toHaveTextContent("14:11");
-      expect(minuteScroll).toHaveBeenCalledWith({ top: 374, behavior: "smooth" });
+      expect(minuteScroll).toHaveBeenCalledWith(374, false);
       expect(hourScroll).not.toHaveBeenCalled();
       // Chromium still dispatches to minutes while the cursor is over hours.
       hitTest.mockReturnValue(hours);
       fireEvent.wheel(minutes, { deltaY: 34, clientX: 10, clientY: 10 });
       expect(screen.getByRole("button", { name: "Время: открыть выбор" })).toHaveTextContent("15:11");
-      expect(hourScroll).toHaveBeenCalledWith({ top: 510, behavior: "smooth" });
+      expect(hourScroll).toHaveBeenCalledWith(510, false);
       expect(minuteScroll).toHaveBeenCalledTimes(1);
       hitTest.mockReturnValue(minutes);
       fireEvent.wheel(hours, { deltaY: -34 });
@@ -51,10 +59,36 @@ describe("workspace date and file inputs", () => {
       expect(screen.getByRole("button", { name: "Время: открыть выбор" })).toHaveTextContent("14:10");
       vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: true }));
       fireEvent.wheel(hours, { deltaY: 34 });
-      expect(hourScroll).toHaveBeenLastCalledWith({ top: 510, behavior: "instant" });
+      expect(hourScroll).toHaveBeenLastCalledWith(510, true);
     } finally {
       Object.defineProperty(document, "elementFromPoint", { configurable: true, value: originalHitTest });
     }
+  });
+
+  it("advances one step per coarse mouse notch for both hours and minutes", () => {
+    function Controlled() {
+      const [value, setValue] = useState("09:10");
+      return <WorkspaceDateTimePicker ariaLabel="Время" mode="time" value={value} onChange={setValue} />;
+    }
+    render(<Controlled />);
+    const trigger = screen.getByRole("button", { name: "Время: открыть выбор" });
+    fireEvent.click(trigger);
+    const hours = screen.getByRole("listbox", { name: "Часы" });
+    const minutes = screen.getByRole("listbox", { name: "Минуты" });
+    fireEvent.wheel(hours, { deltaY: 100 });
+    expect(trigger).toHaveTextContent("10:10");
+    fireEvent.wheel(hours, { deltaY: 120 });
+    expect(trigger).toHaveTextContent("11:10");
+    fireEvent.wheel(hours, { deltaY: -120 });
+    expect(trigger).toHaveTextContent("10:10");
+    fireEvent.wheel(minutes, { deltaY: 100 });
+    expect(trigger).toHaveTextContent("10:11");
+    fireEvent.wheel(minutes, { deltaY: -120 });
+    expect(trigger).toHaveTextContent("10:10");
+    fireEvent.wheel(hours, { deltaY: 3, deltaMode: 1 });
+    expect(trigger).toHaveTextContent("11:10");
+    fireEvent.wheel(minutes, { deltaY: 1, deltaMode: 2 });
+    expect(trigger).toHaveTextContent("11:11");
   });
 
   it("accumulates fine wheel deltas, respects bounds and retains PM in 12-hour mode", () => {
@@ -105,6 +139,49 @@ describe("workspace date and file inputs", () => {
     expect(change).toHaveBeenCalledWith(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}T09:00`);
   });
 
+  it("selects the exact clicked digit without capturing a click as a drag", () => {
+    class TestPointerEvent extends MouseEvent {
+      pointerId: number;
+      constructor(type: string, init: MouseEventInit & { pointerId?: number }) {
+        super(type, init);
+        this.pointerId = init.pointerId ?? 1;
+      }
+    }
+    vi.stubGlobal("PointerEvent", TestPointerEvent);
+    const capture = vi.fn();
+    Element.prototype.setPointerCapture = capture;
+    const change = vi.fn();
+    function Controlled() {
+      const [value, setValue] = useState("09:10");
+      return <WorkspaceDateTimePicker ariaLabel="Время" mode="time" value={value} onChange={next => { change(next); setValue(next); }} />;
+    }
+    render(<Controlled />);
+    fireEvent.click(screen.getByRole("button", { name: "Время: открыть выбор" }));
+    const hours = screen.getByRole("listbox", { name: "Часы" });
+    const minutes = screen.getByRole("listbox", { name: "Минуты" });
+    const clickDigit = (wheel: HTMLElement, digit: string) => {
+      const option = within(wheel).getByRole("option", { name: digit });
+      fireEvent.pointerDown(option, { button: 0, pointerId: 1, clientY: 100 });
+      fireEvent.pointerMove(option, { pointerId: 1, clientY: 102 });
+      fireEvent.pointerUp(option, { pointerId: 1, clientY: 102 });
+      fireEvent.click(option);
+    };
+    clickDigit(hours, "10");
+    expect(change).toHaveBeenLastCalledWith("10:10");
+    clickDigit(hours, "23");
+    expect(change).toHaveBeenLastCalledWith("23:10");
+    clickDigit(minutes, "57");
+    expect(change).toHaveBeenLastCalledWith("23:57");
+    clickDigit(hours, "03");
+    expect(change).toHaveBeenLastCalledWith("03:57");
+    fireEvent.click(screen.getByRole("button", { name: "12" }));
+    fireEvent.click(screen.getByRole("button", { name: "PM" }));
+    clickDigit(hours, "11");
+    expect(change).toHaveBeenLastCalledWith("23:57");
+    expect(capture).not.toHaveBeenCalled();
+    expect(change).toHaveBeenCalledTimes(6);
+  });
+
   it("selects time by dragging the minute wheel", () => {
     const change = vi.fn();
     class TestPointerEvent extends MouseEvent {
@@ -121,6 +198,7 @@ describe("workspace date and file inputs", () => {
     const wheel = screen.getByRole("listbox", { name: "Минуты" });
     fireEvent.pointerDown(wheel, { button: 0, pointerId: 1, clientY: 100 });
     fireEvent.pointerMove(wheel, { pointerId: 1, clientY: 32 });
+    expect(Element.prototype.setPointerCapture).toHaveBeenCalledWith(1);
     fireEvent.pointerUp(wheel, { pointerId: 1, clientY: 32 });
     expect(change).toHaveBeenCalledWith("09:02");
     vi.unstubAllGlobals();

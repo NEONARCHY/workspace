@@ -5,7 +5,8 @@ import type {
   AIReferentIncomingRuleMode,
   WorkspacePerson,
 } from "@yuksalish/contracts";
-import { Button, Checkbox, Input, Spinner } from "@fluentui/react-components";
+import { Button, Checkbox, Spinner } from "@fluentui/react-components";
+import { Input } from "./WorkspaceInput";
 import { WorkspaceSelect } from "./WorkspaceSelect";
 import { loadAIReferentIncomingAccess, saveAIReferentIncomingAccess } from "./workspace-api";
 

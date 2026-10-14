@@ -12,7 +12,6 @@ import { Dialog, DialogSurface, FluentProvider, webLightTheme } from "@fluentui/
 import type { ChatMessage, ChatSummary } from "@yuksalish/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ChatManagement, type ChatActions } from "./ChatManagement";
-import { getMessageParticleTiming } from "./MessageVanishOverlay";
 import { initialChats, initialMessages, initialTasks, people } from "./test-fixtures/demo-data";
 import { EmbeddedConversation, MessengerView } from "./MessengerView";
 import { rewriteMessengerDraft } from "./workspace-api";
@@ -107,6 +106,10 @@ describe("Private messenger", () => {
     renderMessenger();
     const text = initialMessages[0]!.body;
     openMessageMenu(text);
+    const menu = document.querySelector(".message-context-menu")!;
+    const buttons = [...menu.querySelectorAll("button")];
+    expect(buttons[0]).toHaveTextContent("Ответить");
+    expect(buttons.every(button => button.querySelector(".fui-Button__icon svg"))).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Копировать" }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(text));
     const input = screen.getByLabelText("Новое сообщение");
@@ -358,6 +361,28 @@ describe("Private messenger", () => {
     await act(() => vi.advanceTimersByTimeAsync(1));
     expect(mode === "self" ? chatActions.dismiss : chatActions.delete).toHaveBeenCalledWith("baxtiyor");
     expect(mode === "self" ? chatActions.delete : chatActions.dismiss).not.toHaveBeenCalled();
+  });
+  it("keeps the direct chat snapshot during closing and refreshes it on the next opening", async () => {
+    vi.useFakeTimers();
+    const chatActions = actions();
+    const chat = { ...initialChats[1]!, canDelete: true };
+    const next = { ...chat, id: "next-direct", title: "Другой диалог", canDelete: false };
+    renderMessenger({ chats: [chat, next], chatActions });
+    openChatMenu(chat.id);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Удалить чат" }));
+    const dialog = screen.getByRole("dialog", { name: "Удалить личный чат?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Отмена" }));
+    expect(dialog).toHaveTextContent(`Выберите, что сделать с диалогом «${chat.title}»`);
+    expect(dialog).toHaveTextContent("Диалог исчезнет у обоих участников");
+    expect(dialog).not.toHaveTextContent("Удаление для обоих недоступно");
+    await act(() => vi.advanceTimersByTimeAsync(300));
+    openChatMenu(next.id);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Удалить чат" }));
+    const reopened = screen.getByRole("dialog", { name: "Удалить личный чат?" });
+    expect(reopened).toHaveTextContent("Другой диалог");
+    expect(within(reopened).getByRole("button", { name: /^Удалить у обоих/ })).toBeDisabled();
+    expect(chatActions.dismiss).not.toHaveBeenCalled();
+    expect(chatActions.delete).not.toHaveBeenCalled();
   });
   it("cancels direct deletion before sending either kind of request", async () => {
     vi.useFakeTimers();
@@ -910,144 +935,44 @@ describe("Private messenger", () => {
     ));
   });
 
-  it("reveals a sent message only after the composer particle transition finishes", async () => {
-    vi.useFakeTimers();
-    vi.spyOn(window.navigator, "userAgent", "get").mockReturnValue("Chrome");
-    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) =>
-      window.setTimeout(() => callback(performance.now()), 16));
-    vi.stubGlobal("cancelAnimationFrame", (id: number) => window.clearTimeout(id));
-    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
-      x: 0,
-      y: 0,
-      top: 0,
-      right: 240,
-      bottom: 44,
-      left: 0,
-      width: 240,
-      height: 44,
-      toJSON: () => undefined,
-    });
-    const canvasContext = {
-      arc: vi.fn(),
-      beginPath: vi.fn(),
-      clearRect: vi.fn(),
-      clip: vi.fn(),
-      drawImage: vi.fn(),
-      fill: vi.fn(),
-      fillText: vi.fn(),
-      getImageData: vi.fn((_x: number, _y: number, width: number, height: number) => {
-        const data = new Uint8ClampedArray(width * height * 4);
-        for (let x = 24; x < Math.min(width, 120); x += 3) {
-          const index = (12 * width + x) * 4;
-          data[index] = 41;
-          data[index + 1] = 58;
-          data[index + 2] = 85;
-          data[index + 3] = 255;
-        }
-        return { data, width, height, colorSpace: "srgb" } as ImageData;
-      }),
-      measureText: vi.fn((value: string) => ({
-        width: value.length * 7,
-        actualBoundingBoxAscent: 10,
-        actualBoundingBoxDescent: 3,
-      })),
-      rect: vi.fn(),
-      restore: vi.fn(),
-      save: vi.fn(),
-      setTransform: vi.fn(),
-      fillStyle: "",
-      font: "",
-      textBaseline: "alphabetic",
-    };
-    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(
-      canvasContext as unknown as CanvasRenderingContext2D,
-    );
-
-    function TransitionHarness() {
+  it("shows sent text with blur instead of hiding it behind a particle canvas", async () => {
+    const visible = vi.spyOn(HTMLElement.prototype, "getClientRects").mockReturnValue({ length: 1 } as DOMRectList);
+    const defaults = renderMessenger().props;
+    cleanup();
+    function Harness() {
       const [messages, setMessages] = useState<readonly ChatMessage[]>(initialMessages);
-      const onSendMessage = async (chatId: string, body: string) => {
-        const message: ChatMessage = {
-          id: "particle-message",
-          chatId,
-          authorId: "aziza",
-          body,
-          time: "12:00",
-          own: true,
-        };
-        setMessages((current) => [...current, message]);
-        return message;
-      };
-      return (
-        <FluentProvider theme={webLightTheme}>
-          <MessengerView
-            {...renderMessengerDefaults}
-            messages={messages}
-            onSendMessage={onSendMessage}
-          />
-        </FluentProvider>
-      );
+      return <FluentProvider theme={webLightTheme}><MessengerView {...defaults} messages={messages}
+        onSendMessage={async (chatId, body) => {
+          const message: ChatMessage = { id: "blur-message", chatId, authorId: "aziza", body, time: "12:00" };
+          setMessages(current => [...current, message]);
+          return message;
+        }} /></FluentProvider>;
     }
-
-    const renderMessengerDefaults: Parameters<typeof MessengerView>[0] = {
-      token: "access-token",
-      currentUserId: "aziza",
-      currentUserRole: "employee",
-      chats: initialChats,
-      messages: initialMessages,
-      tasks: initialTasks,
-      people,
-      attachments: [],
-      chatActions: actions(),
-      onSendMessage: vi.fn(),
-      onSendVoiceMessage: vi.fn(),
-      onReactMessage: vi.fn(),
-      onPinMessage: vi.fn(),
-      onEditMessage: vi.fn(),
-      onDeleteMessage: vi.fn(),
-      onCreateTaskFromMessage: vi.fn(),
-      onDownloadAttachment: vi.fn(),
-      onLoadAttachment: vi.fn(),
-      onMarkRead: vi.fn(),
-    };
-
-    render(<TransitionHarness />);
-    fireEvent.change(screen.getByLabelText("Новое сообщение"), {
-      target: { value: "Собираюсь из частиц" },
-    });
+    render(<Harness />);
+    fireEvent.change(screen.getByLabelText("Новое сообщение"), { target: { value: "Плавное появление" } });
     fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
-    await act(async () => undefined);
+    await waitFor(() => expect(document.querySelector('[data-message-id="blur-message"]')).not.toBeNull());
+    const message = document.querySelector('[data-message-id="blur-message"]')!;
+    expect(message.parentElement).not.toHaveAttribute("hidden");
+    expect(message).not.toHaveAttribute("aria-hidden", "true");
+    expect(message.querySelector('[data-text-animation="enter"]')).not.toBeNull();
+    expect(document.querySelector('[data-text-animation="exit"]')).not.toBeNull();
+    expect(document.querySelector(".message-reveal-canvas, .message-vanish-canvas")).toBeNull();
+    await waitFor(() => expect(document.querySelector(".composer-send-text")).toBeNull(), { timeout: 2500 });
+    expect(message.querySelector(".message-text")).toHaveTextContent("Плавное появление");
+    visible.mockRestore();
+  });
 
-    const message = screen.getByText("Собираюсь из частиц").closest(".message");
-    expect(message).toHaveClass("message-awaiting-reveal");
-    expect(message?.parentElement).toHaveAttribute("hidden");
-
-    const transitionMs = getMessageParticleTiming("Собираюсь из частиц").totalMs;
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(transitionMs + 20);
-    });
-    expect(message).toHaveClass("message-particle-revealing");
-    expect(message?.parentElement).not.toHaveAttribute("hidden");
-    expect(canvasContext.textBaseline).toBe("alphabetic");
-    expect(canvasContext.fillText.mock.calls.at(-1)?.[2]).toBeGreaterThan(10);
-
-    canvasContext.drawImage.mockClear();
-    canvasContext.fill.mockClear();
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(16);
-    });
-    expect(canvasContext.drawImage).not.toHaveBeenCalled();
-    expect(canvasContext.fill).not.toHaveBeenCalled();
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(transitionMs + 20);
-    });
-    expect(message).not.toHaveClass("message-awaiting-reveal");
-    expect(message).not.toHaveClass("message-particle-revealing");
-    // The canvas stays intact while React commits the visible real text.
-    expect(canvasContext.drawImage.mock.invocationCallOrder.at(-1)).toBeGreaterThan(
-      canvasContext.clearRect.mock.invocationCallOrder.at(-1)!,
-    );
-    expect(message?.querySelector(".message-reveal-canvas")).toBeNull();
+  it("reveals remote incoming text with the same blur without a local send or history replay", () => {
+    const visible = vi.spyOn(HTMLElement.prototype, "getClientRects").mockReturnValue({ length: 1 } as DOMRectList);
+    const { props, rerender } = renderMessenger();
+    expect(document.querySelector('[data-text-animation="enter"]')).toBeNull();
+    const incoming: ChatMessage = { id: "remote-blur", chatId: initialMessages[0]!.chatId, authorId: "other", body: "Входящее сообщение", time: "12:00" };
+    // Use the current conversation, without invoking its send callback.
+    rerender(<FluentProvider theme={webLightTheme}><MessengerView {...props} messages={[...initialMessages, incoming]} /></FluentProvider>);
+    expect(document.querySelector('[data-message-id="remote-blur"] [data-text-animation="enter"]')).not.toBeNull();
+    expect(props.onSendMessage).not.toHaveBeenCalled();
+    visible.mockRestore();
   });
 
   it("restores the draft when an animated send fails", async () => {
@@ -1105,6 +1030,47 @@ describe("Private messenger", () => {
     expect(screen.queryByText(/Сообщение будет удалено через/)).not.toBeInTheDocument();
   });
 
+  it("opens app-wide confirmation and cancels without deleting or changing the draft", async () => {
+    // Give this frame-based focus handoff its own clock after fake-timer undo cases.
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => window.setTimeout(() => callback(performance.now()), 0));
+    vi.stubGlobal("cancelAnimationFrame", (handle: number) => window.clearTimeout(handle));
+    const message: ChatMessage = { id: "confirm-only", chatId: "finance", authorId: "aziza", body: "Не удалять", time: "12:00", canDelete: true };
+    const onDeleteMessage = vi.fn();
+    renderMessenger({ messages: [message], onDeleteMessage });
+    const pane = screen.getByRole("region", { name: /^Чат:/ });
+    const composer = screen.getByRole("textbox", { name: "Новое сообщение" });
+    const restoreFocus = vi.spyOn(composer, "focus");
+    fireEvent.change(composer, { target: { value: "Мой черновик" } });
+    openMessageMenu(message.body);
+    fireEvent.click(screen.getByRole("button", { name: "Удалить" }));
+    const dialog = await screen.findByRole("dialog", { name: "Удалить это сообщение?" });
+    restoreFocus.mockClear();
+    expect(pane).not.toContainElement(dialog);
+    expect(document.querySelector(".chat-confirmation")).toBeNull();
+    expect(within(dialog).getByText(/История изменений сохранится для аудита/)).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Отмена" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Удалить это сообщение?" })).not.toBeInTheDocument());
+    expect(composer).toHaveValue("Мой черновик");
+    expect(onDeleteMessage).not.toHaveBeenCalled();
+    await waitFor(() => expect(restoreFocus).toHaveBeenCalledWith({ preventScroll: true }));
+    openMessageMenu(message.body);
+    fireEvent.click(screen.getByRole("button", { name: "Удалить" }));
+    fireEvent.keyDown(await screen.findByRole("dialog", { name: "Удалить это сообщение?" }), { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Удалить это сообщение?" })).not.toBeInTheDocument());
+    expect(onDeleteMessage).not.toHaveBeenCalled();
+    expect(composer).toHaveValue("Мой черновик");
+  });
+  it("restores a message when confirmed deletion fails", async () => {
+    const message: ChatMessage = { id: "failed-delete", chatId: "finance", authorId: "aziza", body: "Останется в чате", time: "12:00", canDelete: true };
+    const onDeleteMessage = vi.fn().mockRejectedValue(new Error("Удаление не разрешено"));
+    renderMessenger({ messages: [message], onDeleteMessage });
+    openMessageMenu(message.body);
+    fireEvent.click(screen.getByRole("button", { name: "Удалить" }));
+    fireEvent.click(screen.getByRole("button", { name: "Удалить для всех" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Удаление не разрешено");
+    expect(screen.getByText(message.body).closest(".message-row")).not.toHaveClass("is-removing");
+    expect(onDeleteMessage).toHaveBeenCalledTimes(1);
+  });
   it("removes an own message from an open chat with a collapsing row", async () => {
     const message: ChatMessage = { id: "own-to-remove", chatId: "finance", authorId: "aziza", body: "Удаляемое сообщение", time: "12:00", canEdit: true };
     const onDeleteMessage = vi.fn().mockResolvedValue(undefined);

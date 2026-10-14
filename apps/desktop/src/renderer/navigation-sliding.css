@@ -6,7 +6,6 @@
   background: radial-gradient(circle at 12% 50%, rgb(0 145 168 / 10%), transparent 42%), linear-gradient(100deg, var(--ws-theme-surface-soft, #e1f1ee), var(--ws-theme-surface-soft, #eaf3f2));
   box-shadow: 0 8px 20px -16px rgb(41 58 85 / 30%), inset 0 1px rgb(var(--ws-theme-highlight-rgb, 255 255 255) / 0.82);
   box-sizing: border-box;
-  transition: transform 260ms var(--ws-ease-physical);
 }
 .navigation-sliding > :is(div, button) { position: relative; z-index: 1; }
 .account-settings-redesigned .navigation-sliding button { background: transparent; border-radius: 14px; }

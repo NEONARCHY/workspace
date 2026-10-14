@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { workspaceTheme } from "./workspace-theme";
 import { ConnectionIndicator, WorkspaceIdentity } from "./WorkspaceIdentity";
+import * as profileAvatar from "./ProfileAvatar";
 
 const person = {
   id: "person-1",
@@ -15,10 +16,11 @@ const person = {
   jobTitle: "Руководитель проекта",
 };
 
-afterEach(() => { cleanup(); vi.useRealTimers(); });
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
 
 describe("WorkspaceIdentity", () => {
   it("opens profile, settings and logout actions from one avatar menu", () => {
+    const avatar = vi.spyOn(profileAvatar, "ProfileAvatar");
     const onProfile = vi.fn();
     const onSettings = vi.fn();
     const onLogout = vi.fn();
@@ -28,7 +30,9 @@ describe("WorkspaceIdentity", () => {
       </FluentProvider>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Открыть меню профиля: Малика Нурова" }));
+    const profileButton = screen.getByRole("button", { name: "Открыть меню профиля: Малика Нурова" });
+    expect(avatar).toHaveBeenCalledWith(expect.objectContaining({ size: 40 }), undefined);
+    fireEvent.click(profileButton);
     expect(document.querySelector(".identity-popover")).not.toHaveClass("is-opening");
     expect(document.querySelector(".identity-popover")).not.toHaveClass("is-closing");
     expect(screen.getByRole("button", { name: "Профиль сотрудника" })).toBeInTheDocument();

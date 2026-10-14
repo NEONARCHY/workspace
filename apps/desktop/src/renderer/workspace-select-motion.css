@@ -1,0 +1,73 @@
+/* Dark triggers keep their rising fill. Light triggers reveal the focus border
+   upwards over the neutral boundary without changing the field's geometry. */
+@property --ws-select-border-rise {
+  syntax: "<length-percentage>";
+  inherits: false;
+  initial-value: 100%;
+}
+@property --ws-select-border-join {
+  syntax: "<length-percentage>";
+  inherits: false;
+  initial-value: 0%;
+}
+@media (forced-colors: none) {
+  html body .app-provider .workspace-select.workspace-select:not(.workspace-priority-select) {
+    --ws-select-hover-fill: #fff;
+  }
+  html[data-color-theme="dark"] body .app-provider .workspace-select.workspace-select:not(.workspace-priority-select) {
+    --ws-select-hover-fill: var(--ws-button-hover, #33353f);
+  }
+  html[data-color-theme="dark"] body .app-provider .workspace-select.workspace-select:not(.workspace-priority-select):is(:hover, :focus-within):not([aria-disabled="true"]):not(:has(:disabled)) {
+    background-color: var(--ws-button-surface);
+  }
+  html[data-color-theme="dark"] body .app-provider .workspace-select.workspace-select:not(.workspace-priority-select):not([aria-disabled="true"]):not(:has(:disabled)) > .fui-Dropdown__button {
+    border-radius: inherit;
+    background-color: transparent;
+    background-image: linear-gradient(to top, var(--ws-select-hover-fill) 0%, var(--ws-select-hover-fill) calc(100% - 12px), transparent 100%);
+    background-repeat: no-repeat;
+    background-position: center bottom;
+    background-size: 100% 0%;
+    transition: background-size 320ms cubic-bezier(.2, 0, 0, 1);
+  }
+  html[data-color-theme="dark"] body .app-provider .workspace-select.workspace-select:not(.workspace-priority-select):is(:hover, :focus-within):not([aria-disabled="true"]):not(:has(:disabled)) > .fui-Dropdown__button {
+    background-size: 100% calc(100% + 12px);
+  }
+  html:not([data-color-theme="dark"]) body .app-provider .workspace-select.workspace-select:not(.workspace-priority-select):not([aria-disabled="true"]):not(:has(:disabled)):not([aria-invalid="true"]):not(:has([aria-invalid="true"])) {
+    --ws-select-neutral-border: color-mix(in srgb, var(--ws-control-line) 72%, var(--ws-theme-line, white));
+    position: relative;
+    border-color: var(--ws-select-neutral-border);
+  }
+  html:not([data-color-theme="dark"]) body .app-provider .workspace-select.workspace-select:not(.workspace-priority-select):not([aria-disabled="true"]):not(:has(:disabled)):not([aria-invalid="true"]):not(:has([aria-invalid="true"]))::before {
+    content: "";
+    display: block;
+    position: absolute;
+    inset: -1px;
+    box-sizing: border-box;
+    border: 1px solid var(--ws-field-focus-border);
+    border-radius: inherit;
+    background: transparent;
+    box-shadow: none;
+    pointer-events: none;
+    --ws-select-border-rise: 100%;
+    --ws-select-border-join: 0%;
+    clip-path: polygon(0 100%, 100% 100%, 100% var(--ws-select-border-rise),
+      calc(100% - var(--ws-select-border-join)) var(--ws-select-border-rise),
+      calc(100% - var(--ws-select-border-join)) max(1px, var(--ws-select-border-rise)),
+      var(--ws-select-border-join) max(1px, var(--ws-select-border-rise)),
+      var(--ws-select-border-join) var(--ws-select-border-rise), 0 var(--ws-select-border-rise));
+    transition: --ws-select-border-rise 240ms cubic-bezier(.2, 0, 0, 1),
+      --ws-select-border-join 220ms cubic-bezier(.2, 0, 0, 1);
+  }
+  html:not([data-color-theme="dark"]) body .app-provider .workspace-select.workspace-select:not(.workspace-priority-select):not([aria-disabled="true"]):not(:has(:disabled)):not([aria-invalid="true"]):not(:has([aria-invalid="true"])):hover::before {
+    --ws-select-border-rise: calc(100% - 10px);
+  }
+  html:not([data-color-theme="dark"]) body .app-provider .workspace-select.workspace-select:not(.workspace-priority-select):not([aria-disabled="true"]):not(:has(:disabled)):not([aria-invalid="true"]):not(:has([aria-invalid="true"])):focus-within::before {
+    --ws-select-border-rise: 0%;
+    --ws-select-border-join: 50%;
+    transition-delay: 0ms, 200ms;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-color-theme="dark"] body .app-provider .workspace-select.workspace-select:not(.workspace-priority-select):not([aria-disabled="true"]):not(:has(:disabled)) > .fui-Dropdown__button { transition: none; }
+  html:not([data-color-theme="dark"]) body .app-provider .workspace-select.workspace-select:not(.workspace-priority-select):not([aria-disabled="true"]):not(:has(:disabled)):not([aria-invalid="true"]):not(:has([aria-invalid="true"]))::before { transition: none; }
+}

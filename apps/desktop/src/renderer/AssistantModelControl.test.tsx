@@ -19,6 +19,8 @@ it("opens only on request and maps exactly three positions to valid models", () 
   const slider = screen.getByRole("slider", { name: "Мощность модели" });
   expect(slider).toHaveValue("0");
   expect(document.querySelector(".assistant-model-heading")).toHaveTextContent(/^Мощность модели$/);
+  expect(screen.getByText("Повседневные вопросы")).toBeInTheDocument();
+  expect(screen.queryByText(/экономный режим/i)).not.toBeInTheDocument();
   expect(slider).toHaveAttribute("step", "1");
   for (const [value, model, label] of [["1", "flash", "Средняя"], ["2", "pro", "Сильная"], ["0", "flash-lite", "Лёгкая"]]) {
     fireEvent.change(slider, { target: { value } });

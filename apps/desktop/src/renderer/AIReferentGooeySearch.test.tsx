@@ -1,103 +1,30 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
-
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
-
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { AIReferentGooeySearch } from "./AIReferentGooeySearch";
 
-describe("AI Referent gooey search", () => {
+describe("AI Referent shared search", () => {
   afterEach(cleanup);
-
-  it("expands on focus and preserves accessible controlled input behavior", () => {
-    const { container, rerender } = render(
-      <AIReferentGooeySearch
-        ariaLabel="Поиск писем"
-        onValueChange={(value) => rerender(
-          <AIReferentGooeySearch
-            ariaLabel="Поиск писем"
-            onValueChange={() => undefined}
-            placeholder="Номер или тема"
-            value={value}
-          />
-        )}
-        placeholder="Номер или тема"
-        value=""
-      />,
-    );
-
-    const root = container.querySelector(".ai-gooey-search");
-    expect(root).toHaveAttribute("data-expanded", "false");
-    expect(root).toHaveAttribute("data-has-value", "false");
-    const visualPlaceholder = container.querySelector(".ai-gooey-search-placeholder");
-    expect(visualPlaceholder).toHaveTextContent("Номер или тема");
-
-    fireEvent.click(screen.getByRole("button", { name: "Открыть: поиск писем" }));
-    expect(root).toHaveAttribute("data-expanded", "true");
-    expect(container.querySelector(".ai-gooey-search-placeholder")).toBe(visualPlaceholder);
+  it("has exactly one placeholder and expands the real field on focus", () => {
+    const onValueChange = vi.fn();
+    const { container } = render(<AIReferentGooeySearch ariaLabel="Поиск писем" onValueChange={onValueChange} placeholder="Номер или тема" value="" />);
     const input = screen.getByRole("textbox", { name: "Поиск писем" });
+    expect(container.querySelectorAll('[placeholder="Номер или тема"]')).toHaveLength(1);
+    expect(screen.queryByText("Номер или тема")).not.toBeInTheDocument();
+    expect(container.querySelector(".workspace-search")).toHaveAttribute("data-expanded", "false");
+    const icon = container.querySelector(".fui-Input__contentBefore");
+    fireEvent.focus(input);
+    expect(container.querySelector(".fui-Input__contentBefore")).toBe(icon);
+    expect(container.querySelector(".workspace-search")).toHaveAttribute("data-expanded", "true");
     fireEvent.change(input, { target: { value: "042" } });
-    expect(screen.getByRole("textbox", { name: "Поиск писем" })).toHaveValue("042");
-    expect(root).toHaveAttribute("data-has-value", "true");
+    expect(onValueChange).toHaveBeenCalledWith("042");
+    fireEvent.blur(input);
+    expect(container.querySelector(".workspace-search")).toHaveAttribute("data-expanded", "false");
   });
-
-  it("stays expanded while a query is present", () => {
-    const { container } = render(
-      <AIReferentGooeySearch
-        ariaLabel="Поиск писем"
-        onValueChange={() => undefined}
-        placeholder="Номер или тема"
-        value="проект"
-      />,
-    );
-
-    expect(container.querySelector(".ai-gooey-search")).toHaveAttribute("data-expanded", "true");
-  });
-
-  it("keeps one field width and moves the field and placeholder together", () => {
-    const { container } = render(
-      <AIReferentGooeySearch
-        ariaLabel="Поиск писем"
-        collapsedWidth={320}
-        expandedOffset={48}
-        onValueChange={() => undefined}
-        placeholder="Номер или тема"
-        value=""
-      />,
-    );
-
-    const root = container.querySelector<HTMLElement>(".ai-gooey-search");
-    expect(root?.style.getPropertyValue("--ai-gooey-collapsed")).toBe("320px");
-    expect(root?.style.getPropertyValue("--ai-gooey-offset")).toBe("48px");
-
-    const css = readFileSync(
-      resolve(process.cwd(), "src/renderer/ai-referent-workspace.css"),
-      "utf8",
-    ).replaceAll("\r\n", "\n");
-    expect(css).not.toContain("--ai-gooey-expanded");
-    expect(css).toContain(
-      '.ai-gooey-search[data-expanded="true"] .ai-gooey-search-placeholder {\n  width: max(0px, calc(min(var(--ai-gooey-collapsed), 100%) - var(--ai-gooey-active-text-inset) - 17px));\n  transform: translateX(calc(var(--ai-gooey-offset) - var(--ai-gooey-text-compensation)));',
-    );
-    expect(css).toContain("--ai-gooey-text-inset: 48px;");
-    expect(css).toContain("--ai-gooey-active-text-inset: 16px;");
-    expect(css).toContain(
-      '.app-provider .ai-gooey-search[data-expanded="true"] input.ai-gooey-search-input {\n  padding-left: var(--ai-gooey-active-text-inset);',
-    );
-    expect(css).toContain(
-      '.ai-gooey-search[data-expanded="true"] .ai-gooey-search-row {\n  transform: translateX(var(--ai-gooey-offset));',
-    );
-    expect(css).toContain(
-      '.ai-referent-view .ai-referent-toolbar > .ai-gooey-search[data-expanded="true"] + .ai-referent-toolbar-actions {\n  transform: translateX(var(--ai-toolbar-search-shift));',
-    );
-    expect(css).toContain(
-      ".ai-referent-view .ai-referent-toolbar {\n  --ai-toolbar-search-shift: 51px;",
-    );
-    expect(css).toContain("  justify-content: flex-start;\n  gap: 8px;");
-    expect(css).toContain("flex: 0 0 var(--ai-gooey-collapsed);");
-    expect(css).toContain("padding: 4px 0 0;");
-    expect(css).toContain(
-      '.ai-referent-view .ai-referent-summary button[aria-pressed="true"] { transform: translateY(-2px);',
-    );
-    expect(css).not.toContain("width 520ms");
+  it("keeps a query open and retains configurable layout width", () => {
+    const { container } = render(<AIReferentGooeySearch ariaLabel="Поиск писем" collapsedWidth={320} expandedOffset={48} onValueChange={() => undefined} placeholder="Номер или тема" value="проект" />);
+    const root = container.querySelector<HTMLElement>(".workspace-search");
+    expect(root).toHaveAttribute("data-expanded", "true");
+    expect(root?.style.getPropertyValue("--search-width")).toBe("320px");
+    expect(root?.style.getPropertyValue("--search-growth")).toBe("48px");
   });
 });

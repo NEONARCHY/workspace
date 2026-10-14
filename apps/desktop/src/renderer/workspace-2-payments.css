@@ -2,6 +2,7 @@
 /* Opaque light control surfaces separate the queue tools from the ambient canvas.
    Keep these local to the working toolbar, never the coloured module header. */
 @media (forced-colors: none) {
+  html:not([data-color-theme="dark"]) .trips-view,
   html:not([data-color-theme="dark"]) .approvals-view {
     --approval-summary-surface: #ffffff;
     --approval-control-surface: #d6e3e6;
@@ -22,22 +23,27 @@
   html:not([data-color-theme="dark"]) .approvals-view .approval-metric-actionable[aria-pressed="true"] {
     background: var(--approval-action-selected);
   }
+  html:not([data-color-theme="dark"]) .trips-view .trip-commandbar .ws2-segmented,
   html:not([data-color-theme="dark"]) .approvals-view .approval-view-toolbar .ws2-segmented {
     --sliding-indicator-background: var(--approval-control-selected);
     border-color: transparent;
     background: var(--approval-control-surface);
     box-shadow: none;
   }
+  html:not([data-color-theme="dark"]) .trips-view .trip-commandbar .ws2-segmented > button,
   html:not([data-color-theme="dark"]) .approvals-view .approval-view-toolbar .ws2-segmented > button {
     color: var(--ws-text);
   }
+  html:not([data-color-theme="dark"]) .trips-view .trip-commandbar .ws2-segmented .approval-filter-count,
   html:not([data-color-theme="dark"]) .approvals-view .approval-view-toolbar .ws2-segmented .approval-filter-count {
     color: var(--ws-link);
     background: var(--approval-action-surface);
   }
+  html:not([data-color-theme="dark"]) .trips-view .trip-commandbar .ws2-segmented > button:not([aria-pressed="true"]):hover,
   html:not([data-color-theme="dark"]) .approvals-view .approval-view-toolbar .ws2-segmented > button:not([aria-pressed="true"]):hover {
     background: var(--approval-control-hover);
   }
+  html:not([data-color-theme="dark"]) .trips-view .trip-commandbar .ws2-segmented > button:focus-visible,
   html:not([data-color-theme="dark"]) .approvals-view :is(.approval-view-toolbar .ws2-segmented > button, .approval-metric-actionable):focus-visible {
     outline: 2px solid var(--ws-link);
     outline-offset: 2px;

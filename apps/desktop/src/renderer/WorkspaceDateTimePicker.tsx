@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type MouseEvent, type PointerEven
 
 import { Popover, PopoverSurface, PopoverTrigger } from "@fluentui/react-components";
 import { SlidingSegmented } from "./SlidingSegmented";
+import { createTimeWheelMotion } from "./time-wheel-motion";
 import {
   CalendarLtr20Regular,
   ChevronLeft20Regular,
@@ -99,6 +100,7 @@ export function WorkspaceDateTimePicker({
   const minuteWheel = useRef<HTMLDivElement>(null);
   const dialsRef = useRef<HTMLDivElement>(null);
   const wheelDelta = useRef({ hour: 0, minute: 0 });
+  const wheelMotion = useRef<{ hour?: ReturnType<typeof createTimeWheelMotion>; minute?: ReturnType<typeof createTimeWheelMotion> }>({});
   const wheelPlacement = useRef<{ clockMode: number; hour: number; minute: number } | null>(null);
   const wheelDrag = useRef<{ pointerId: number; startY: number; lastY: number; moved: boolean } | null>(null);
   const suppressWheelClick = useRef(false);
@@ -106,19 +108,32 @@ export function WorkspaceDateTimePicker({
   const minimumDate = datePart(min ?? "");
 
   useEffect(() => {
+    if (!open || mode === "date") return;
+    const media = window.matchMedia?.("(prefers-reduced-motion: reduce), (forced-colors: active)");
+    const motions = {
+      hour: hourWheel.current ? createTimeWheelMotion(hourWheel.current, media?.matches) : undefined,
+      minute: minuteWheel.current ? createTimeWheelMotion(minuteWheel.current, media?.matches) : undefined,
+    };
+    wheelMotion.current = motions;
+    const update = () => { motions.hour?.setStatic(media?.matches ?? false); motions.minute?.setStatic(media?.matches ?? false); };
+    media?.addEventListener?.("change", update);
+    return () => { media?.removeEventListener?.("change", update); motions.hour?.dispose(); motions.minute?.dispose(); wheelMotion.current = {}; };
+  }, [open, mode, clockMode]);
+
+  useEffect(() => {
     if (!open || mode === "date") { wheelPlacement.current = null; return; }
     const hourIndex = clockMode === 24 ? hour : (hour % 12 || 12) - 1;
     const previous = wheelPlacement.current;
     const initial = !previous || previous.clockMode !== clockMode;
     if (initial) wheelDelta.current = { hour: 0, minute: 0 };
-    const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
-    const place = (wheel: HTMLDivElement | null, index: number) => {
+    const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce), (forced-colors: active)").matches ?? false;
+    const place = (wheel: HTMLDivElement | null, index: number, kind: "hour" | "minute") => {
       if (!wheel) return;
-      if (typeof wheel.scrollTo === "function") wheel.scrollTo({ top: index * 34, behavior: initial || reduced ? "instant" : "smooth" });
+      if (wheelMotion.current[kind]) wheelMotion.current[kind]?.moveTo(index * 34, initial || reduced);
       else wheel.scrollTop = index * 34;
     };
-    if (initial || previous.hour !== hourIndex) place(hourWheel.current, hourIndex);
-    if (initial || previous.minute !== minute) place(minuteWheel.current, minute);
+    if (initial || previous.hour !== hourIndex) place(hourWheel.current, hourIndex, "hour");
+    if (initial || previous.minute !== minute) place(minuteWheel.current, minute, "minute");
     wheelPlacement.current = { clockMode, hour: hourIndex, minute };
   }, [open, mode, clockMode, hour, minute]);
 
@@ -138,9 +153,11 @@ export function WorkspaceDateTimePicker({
       const delta = event.deltaY * (event.deltaMode === 1 ? 34 : event.deltaMode === 2 ? 168 : 1);
       if (Math.sign(wheelDelta.current[kind]) !== Math.sign(delta)) wheelDelta.current[kind] = 0;
       wheelDelta.current[kind] += delta;
-      const steps = Math.trunc(wheelDelta.current[kind] / 34);
+      // Mouse notches often report 100–120 px, not one row (34 px).
+      // Advance once per event; retain accumulation only for fine trackpad deltas.
+      const steps = Math.sign(Math.trunc(wheelDelta.current[kind] / 34));
       if (!steps) return;
-      wheelDelta.current[kind] -= steps * 34;
+      wheelDelta.current[kind] = 0;
       const current = kind === "minute" ? minute : clockMode === 24 ? hour : (hour % 12 || 12) - 1;
       const index = Math.max(0, Math.min(kind === "minute" ? 59 : clockMode === 24 ? 23 : 11, current + steps));
       if (index === current) return;
@@ -166,15 +183,19 @@ export function WorkspaceDateTimePicker({
   };
   const handleWheelPointerDown = (event: PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return;
-    event.currentTarget.scrollTo?.({ top: event.currentTarget.scrollTop, behavior: "instant" });
     wheelDrag.current = { pointerId: event.pointerId, startY: event.clientY, lastY: event.clientY, moved: false };
-    event.currentTarget.classList.add("is-dragging");
-    event.currentTarget.setPointerCapture(event.pointerId);
   };
   const handleWheelPointerMove = (event: PointerEvent<HTMLDivElement>) => {
     const drag = wheelDrag.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
-    if (Math.abs(event.clientY - drag.startY) > 4) drag.moved = true;
+    if (!drag.moved && Math.abs(event.clientY - drag.startY) > 4) {
+      drag.moved = true;
+      wheelMotion.current[event.currentTarget.dataset.wheel === "hour" ? "hour" : "minute"]?.stop();
+      event.currentTarget.classList.add("is-dragging");
+      // Capture only actual drags: capturing pointerdown retargets the digit's
+      // click to the wheel container and prevents direct time selection.
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }
     if (drag.moved) {
       event.preventDefault();
       event.currentTarget.scrollTop -= event.clientY - drag.lastY;
@@ -191,8 +212,7 @@ export function WorkspaceDateTimePicker({
     suppressWheelClick.current = true;
     window.setTimeout(() => { suppressWheelClick.current = false; }, 0);
     const index = Math.max(0, Math.min(kind === "hour" ? visibleHours.length - 1 : 59, Math.round(event.currentTarget.scrollTop / 34)));
-    const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
-    if (typeof event.currentTarget.scrollTo === "function") event.currentTarget.scrollTo({ top: index * 34, behavior: reducedMotion ? "instant" : "smooth" });
+    if (wheelMotion.current[kind]) wheelMotion.current[kind]?.moveTo(index * 34);
     else event.currentTarget.scrollTop = index * 34;
     if (kind === "minute") updateTime(hour, index);
     else {
@@ -280,10 +300,10 @@ export function WorkspaceDateTimePicker({
           <div className="ws-time-wheel" ref={hourWheel} role="listbox" aria-label="Часы" data-wheel="hour" onPointerDown={handleWheelPointerDown} onPointerMove={handleWheelPointerMove} onPointerUp={handleWheelPointerUp} onPointerCancel={handleWheelPointerCancel} onClickCapture={handleWheelClickCapture}>{visibleHours.map((item) => {
             const selected = clockMode === 24 ? item === hour : item === twelveHour;
             const nextHour = clockMode === 24 ? item : (item % 12) + (period === "PM" ? 12 : 0);
-            return <button type="button" role="option" aria-selected={selected} key={item} onClick={() => updateTime(nextHour, minute)}>{two(item)}</button>;
+            return <button type="button" role="option" aria-selected={selected} key={item} onClick={() => updateTime(nextHour, minute)}><span className="ws-time-digit">{two(item)}</span></button>;
           })}</div>
           <span className="ws-time-separator">:</span>
-          <div className="ws-time-wheel" ref={minuteWheel} role="listbox" aria-label="Минуты" data-wheel="minute" onPointerDown={handleWheelPointerDown} onPointerMove={handleWheelPointerMove} onPointerUp={handleWheelPointerUp} onPointerCancel={handleWheelPointerCancel} onClickCapture={handleWheelClickCapture}>{Array.from({ length: 60 }, (_, item) => <button type="button" role="option" aria-selected={item === minute} key={item} onClick={() => updateTime(hour, item)}>{two(item)}</button>)}</div>
+          <div className="ws-time-wheel" ref={minuteWheel} role="listbox" aria-label="Минуты" data-wheel="minute" onPointerDown={handleWheelPointerDown} onPointerMove={handleWheelPointerMove} onPointerUp={handleWheelPointerUp} onPointerCancel={handleWheelPointerCancel} onClickCapture={handleWheelClickCapture}>{Array.from({ length: 60 }, (_, item) => <button type="button" role="option" aria-selected={item === minute} key={item} onClick={() => updateTime(hour, item)}><span className="ws-time-digit">{two(item)}</span></button>)}</div>
           </div>
           {clockMode === 12 ? <SlidingSegmented className="ws-time-period" role="group" aria-label="Половина дня"><button type="button" aria-pressed={period === "AM"} onClick={() => updateTime(hour % 12, minute)}>AM</button><button type="button" aria-pressed={period === "PM"} onClick={() => updateTime((hour % 12) + 12, minute)}>PM</button></SlidingSegmented> : null}
         </div>

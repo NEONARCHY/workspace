@@ -7,7 +7,8 @@ import type {
   WorkspacePerson,
   WorkspaceTask,
 } from "@yuksalish/contracts";
-import { Avatar, Button, Checkbox, DialogSurface, Input, Textarea } from "@fluentui/react-components";
+import { Avatar, Button, Checkbox, DialogSurface, Textarea } from "@fluentui/react-components";
+import { Input } from "./WorkspaceInput";
 import { Add20Regular } from "@fluentui/react-icons";
 
 import { EmployeeProfileLink } from "./EmployeeProfileLink";

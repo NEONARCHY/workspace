@@ -27,6 +27,11 @@ The calendar shows tasks on their local due date, preserves the active state/rol
 filters and text search, and keeps tasks without a deadline in a separate visible
 queue. Month navigation never changes task data.
 
+The «Мои» filter and its count include tasks where the current user is the author,
+primary assignee, co-assignee or observer; overlapping roles count a task only once.
+The role picker, plan filter and search further narrow that dataset. Task statuses
+and server-side access rules are unchanged.
+
 Each task card contains:
 
 - a primary assignee plus `co_assignee` and `observer` participants;

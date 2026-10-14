@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { NavigationKey } from "@yuksalish/contracts";
-import { Button, DialogBody, DialogContent, DialogSurface, DialogTitle, Input } from "@fluentui/react-components";
+import { Button, DialogBody, DialogContent, DialogSurface, DialogTitle } from "@fluentui/react-components";
+import { Input } from "./WorkspaceInput";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import { Dismiss20Regular, Search20Regular } from "@fluentui/react-icons";
 
@@ -43,8 +44,9 @@ export function SectionJump({ items, onNavigate, commands = [] }: {
   const resultList = useRef<HTMLDivElement>(null);
   useEffect(() => { resultList.current?.querySelector(".command-active")?.scrollIntoView?.({ block: "nearest" }); }, [cursor]);
   return <>
-    <button ref={trigger} className="section-jump-trigger" type="button" onClick={show} aria-label="Перейти в раздел" aria-haspopup="dialog" aria-expanded={open}>
-      <Search20Regular /><span>Поиск и быстрый переход</span><kbd>Ctrl K</kbd>
+    <button ref={trigger} className="section-jump-trigger" type="button" onClick={show} aria-label="Перейти в раздел" title="Поиск и быстрый переход · Ctrl+K" aria-haspopup="dialog" aria-expanded={open}>
+      <Search20Regular aria-hidden="true" />
+      <span>Поиск и быстрый переход</span><kbd>Ctrl K</kbd>
     </button>
     <Dialog open={open} onOpenChange={(_, data) => { if (!data.open) close(); }}>
       <DialogSurface className="section-jump-dialog">

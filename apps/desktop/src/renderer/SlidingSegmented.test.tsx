@@ -1,4 +1,5 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { readFileSync } from "node:fs";
 import { Profiler, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SlidingSegmented } from "./SlidingSegmented";
@@ -27,6 +28,31 @@ function Example({ initial = "central" }: { readonly initial?: string }) {
 }
 
 describe("SlidingSegmented", () => {
+  it("transitions position and both dimensions on one clock, including sidebar navigation", () => {
+    const css = readFileSync("src/renderer/sliding-segmented.css", "utf8");
+    for (const property of ["transform", "width", "height"]) {
+      expect(css).toContain(`${property} 260ms var(--ws-ease-physical, cubic-bezier(.2, 0, 0, 1))`);
+    }
+    const navigation = readFileSync("src/renderer/navigation-sliding.css", "utf8");
+    expect(navigation).not.toContain("transition: transform 260ms");
+    expect(navigation).toContain("transition: none;");
+  });
+  it("keeps selection animation enabled when rapidly reversing between differently sized buttons", () => {
+    vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(function (this: HTMLElement) {
+      return this.textContent === "Регионы" ? 90 : 160;
+    });
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(function (this: HTMLElement) {
+      return this.textContent === "Регионы" ? 32 : 44;
+    });
+    const view = render(<Example />);
+    const indicator = view.container.querySelector<HTMLElement>(".sliding-segmented-indicator");
+    fireEvent.click(screen.getByRole("button", { name: "Регионы" }));
+    expect(indicator).toHaveStyle({ width: "90px", height: "32px" });
+    expect(indicator?.style.transition).toBe("");
+    fireEvent.click(screen.getByRole("button", { name: "Центральный аппарат" }));
+    expect(indicator).toHaveStyle({ width: "160px", height: "44px" });
+    expect(indicator?.style.transition).toBe("");
+  });
   it("tracks an expanding slot without rerendering labels or changing the active page", () => {
     let measure: (() => void) | undefined;
     let followingTop = 45;

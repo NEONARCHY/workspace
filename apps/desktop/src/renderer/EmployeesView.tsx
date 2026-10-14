@@ -15,7 +15,8 @@ import type {
   WorkspaceRole,
   RecognitionSettings,
 } from "@yuksalish/contracts";
-import { Avatar, Button, Checkbox, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input, Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Spinner, Switch, Textarea, useRestoreFocusTarget } from "@fluentui/react-components";
+import { Avatar, Button, Checkbox, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Spinner, Switch, Textarea, useRestoreFocusTarget } from "@fluentui/react-components";
+import { Input } from "./WorkspaceInput";
 import { Add24Regular, Chat24Regular, Delete24Regular, Dismiss20Regular, MoreHorizontal20Regular, PeopleTeam24Regular, PersonEdit24Regular, Search20Regular } from "@fluentui/react-icons";
 import { EmployeeRecords, employeeRoleLabels, employeeStatusLabel } from "./EmployeeRecords";
 import { DepartmentManagement } from "./DepartmentManagement";

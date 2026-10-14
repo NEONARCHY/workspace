@@ -14,7 +14,7 @@
 
 /* Selection changes the surface, not the labels' width or the group's position. */
 .tasks-view .view-switch > button { font-weight: 600; }
-.tasks-view .task-calendar-navigation-slot { flex: 0 0 140px; min-height: 42px; }
+.tasks-view .task-calendar-navigation-slot { flex: 0 0 auto; min-height: 36px; }
 .tasks-view .task-toolbar-actions { flex-wrap: nowrap; }
 .app-provider .tasks-view .workspace-select.task-role-filter { height: 36px; min-height: 36px; padding: 0; }
 .app-provider .tasks-view .workspace-select.task-role-filter { flex: 0 0 184px; width: 184px; }

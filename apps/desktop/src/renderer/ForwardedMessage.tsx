@@ -1,9 +1,11 @@
 import type { ChatMessage } from "@yuksalish/contracts";
 import { ArrowForward20Regular, News20Regular } from "@fluentui/react-icons";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
+import { MessageTextAnimate } from "./MessageTextAnimate";
 
-export function ForwardedMessage({ message, onOpenPost }: {
+export function ForwardedMessage({ message, onOpenPost, animateText = false, motionDisabled = false }: {
   readonly message: ChatMessage; readonly onOpenPost?: (id: string) => void | Promise<void>;
+  readonly animateText?: boolean; readonly motionDisabled?: boolean;
 }) {
   const origin = message.forwarded;
   if (!origin) return null;
@@ -16,7 +18,7 @@ export function ForwardedMessage({ message, onOpenPost }: {
     {origin.kind === "feed" ? <button type="button" className="message-feed-preview" disabled={!origin.available || !onOpenPost || !origin.postId}
       onClick={() => { if (origin.available && origin.postId) void onOpenPost?.(origin.postId); }}>
       <News20Regular aria-hidden="true" /><span><strong>{origin.available ? origin.title : "Оригинал недоступен"}</strong>
-        {origin.available && <small>{message.body}</small>}<em>{origin.available ? "Открыть в ленте →" : "Объявление удалено или доступ ограничен"}</em></span>
-    </button> : <p className="message-text">{message.body}</p>}
+        {origin.available && <small><MessageTextAnimate key={`${message.id}:${animateText}`} enabled={animateText} disabled={motionDisabled}>{message.body}</MessageTextAnimate></small>}<em>{origin.available ? "Открыть в ленте →" : "Объявление удалено или доступ ограничен"}</em></span>
+    </button> : <p className="message-text"><MessageTextAnimate key={`${message.id}:${animateText}`} enabled={animateText} disabled={motionDisabled}>{message.body}</MessageTextAnimate></p>}
   </section>;
 }

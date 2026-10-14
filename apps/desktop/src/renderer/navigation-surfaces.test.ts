@@ -3,8 +3,16 @@ import { expect, it } from "vitest";
 
 const headerCss = readFileSync("src/renderer/section-headers.css", "utf8");
 const messengerCss = readFileSync("src/renderer/workspace-2-messenger.css", "utf8");
-const approvalsCss = readFileSync("src/renderer/workspace-2-payments.css", "utf8");
+const approvalsCss = readFileSync("src/renderer/workspace-2-payments.css", "utf8").replaceAll("\r\n", "\n");
 const tabs = ".ws-section-header :is(.view-switch, .process-view-tabs, .approval-mode-switch, .ws2-segmented)";
+it("shares the payment toolbar treatment with trip view, filter and count buttons", () => {
+  const trip = 'html:not([data-color-theme="dark"]) .trips-view .trip-commandbar .ws2-segmented';
+  const payment = 'html:not([data-color-theme="dark"]) .approvals-view .approval-view-toolbar .ws2-segmented';
+  for (const suffix of ["", " > button", " .approval-filter-count", ' > button:not([aria-pressed="true"]):hover']) {
+    expect(approvalsCss).toContain(`${trip}${suffix},\n  ${payment}${suffix} {`);
+  }
+  expect(readFileSync("src/renderer/TripApprovalsView.tsx", "utf8")).toContain('<span className="approval-filter-count">{filterCounts[key]}</span>');
+});
 function block(css: string, selector: string) {
   const start = css.indexOf(`${selector} {`);
   if (start < 0) throw new Error(`Missing style: ${selector}`);
@@ -27,7 +35,7 @@ it("keeps header tabs readable with a strong selected state and shared typograph
     expect((Math.max(a, b) + .05) / (Math.min(a, b) + .05)).toBeGreaterThanOrEqual(4.5);
   }
   expect(idle).toContain("font-weight: 600;");
-  expect(selected).toContain("font-weight: 700;");
+  expect(selected).toContain("font-weight: 600;");
   expect(headerCss).toContain(`${tabs} button:focus-visible`);
   expect(headerCss).toContain("background: Highlight; border-color: Highlight;");
 });

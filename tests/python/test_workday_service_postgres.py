@@ -16,6 +16,7 @@ from yuksalish_api.workday_service import (
     load_team,
     save_schedule,
     start_workday,
+    working_user_ids,
 )
 
 
@@ -68,7 +69,13 @@ async def test_workday_checkin_schedule_scope_and_automatic_close() -> None:
                     WorkdayScheduleWrite(starts_at=time(10), ends_at=time(19)),
                 )
                 first_at = datetime(2026, 9, 26, 5, tzinfo=UTC)  # 10:00 Saturday, Tashkent
+                assert await working_user_ids(connection, [employee_id, manager_id]) == []
                 started = await start_workday(connection, employee, now=first_at)
+                assert await working_user_ids(connection, [employee_id, manager_id]) == [
+                    employee_id
+                ]
+                assert await working_user_ids(connection, [manager_id]) == []
+                assert await working_user_ids(connection, []) == []
                 assert started.status == "working"
                 assert started.session is not None and started.session.is_weekend
                 assert started.schedule.starts_at == time(10)
@@ -89,6 +96,7 @@ async def test_workday_checkin_schedule_scope_and_automatic_close() -> None:
                     connection, employee, now=datetime(2026, 9, 26, 7, tzinfo=UTC)
                 )
                 assert finished.status == "finished"
+                assert await working_user_ids(connection, [employee_id, manager_id]) == []
                 assert finished.session is not None
                 assert finished.session.close_source == "manual"
                 await start_workday(
@@ -108,6 +116,7 @@ async def test_workday_checkin_schedule_scope_and_automatic_close() -> None:
                 ).order_by(workday_sessions.c.started_at))).mappings().all()
                 assert len(sessions) == 2
                 assert sessions[-1]["close_source"] == "automatic"
+                assert await working_user_ids(connection, [employee_id, manager_id]) == []
                 assert sessions[-1]["ended_at"] == sessions[-1]["scheduled_end_at"]
                 auto_audit = (await connection.execute(select(audit_events).where(
                     audit_events.c.target_id == sessions[-1]["id"],

@@ -18,7 +18,9 @@
   box-shadow: 0 4px 12px rgb(31 62 72 / 10%);
   opacity: 0;
   pointer-events: none;
-  transition: transform 260ms var(--ws-ease-physical, cubic-bezier(.2, 0, 0, 1));
+  transition: transform 260ms var(--ws-ease-physical, cubic-bezier(.2, 0, 0, 1)),
+    width 260ms var(--ws-ease-physical, cubic-bezier(.2, 0, 0, 1)),
+    height 260ms var(--ws-ease-physical, cubic-bezier(.2, 0, 0, 1));
 }
 
 /* Legacy active backgrounds would cover the moving surface. Keep their text colours. */

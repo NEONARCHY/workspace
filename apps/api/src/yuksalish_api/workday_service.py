@@ -140,6 +140,23 @@ async def load_me(
     )
 
 
+async def working_user_ids(
+    connection: AsyncConnection, visible_user_ids: list[UUID]
+) -> list[UUID]:
+    """Public avatar signal only; no session history or personal schedules."""
+    if not visible_user_ids:
+        return []
+    return list((await connection.execute(
+        select(workday_sessions.c.user_id).join(
+            users, users.c.id == workday_sessions.c.user_id
+        ).where(
+            workday_sessions.c.user_id.in_(visible_user_ids),
+            workday_sessions.c.ended_at.is_(None),
+            users.c.status == "active",
+        ).distinct().order_by(workday_sessions.c.user_id)
+    )).scalars().all())
+
+
 async def start_workday(
     connection: AsyncConnection, current_user: AuthenticatedUser, *, now: datetime | None = None
 ) -> WorkdayMeResponse:

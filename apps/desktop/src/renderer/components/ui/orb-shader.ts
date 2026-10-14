@@ -107,10 +107,10 @@ export const orbFragmentShader = /* glsl */ `
       float n0 = snoise3(vec3(uv * noiseScale, iTime * 0.5)) * 0.5 + 0.5;
       float r0 = mix(mix(innerRadius, 1.0, 0.4), mix(innerRadius, 1.0, 0.6), n0);
       float d0 = distance(uv, (r0 * invLen) * uv);
-      float v0 = light1(1.0, 10.0, d0);
+      float v0 = light1(1.0, 8.0, d0);
 
       v0 *= (1.0 - smoothstep(r0, r0 * 1.05, len));
-      float innerFade = smoothstep(r0 * 0.8, r0 * 0.95, len);
+      float innerFade = smoothstep(r0 * 0.76, r0 * 0.94, len);
       v0 *= mix(innerFade, 1.0, bgLuminance * 0.7);
       float cl = cos(ang + iTime * 0.9) * 0.5 + 0.5;
 
@@ -118,7 +118,7 @@ export const orbFragmentShader = /* glsl */ `
       vec2 pos = vec2(cos(a), sin(a)) * r0;
       float d = distance(uv, pos);
       float v1 = light2(1.5, 5.0, d);
-      v1 *= light1(1.0, 50.0, d0);
+      v1 *= light1(1.0, 40.0, d0);
 
       float v2 = (1.0 - smoothstep(mix(innerRadius, 1.0, n0 * 0.5), 1.0, len));
       float v3 = smoothstep(innerRadius, mix(innerRadius, 1.0, 0.5), len);

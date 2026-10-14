@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Button, DialogBody, DialogContent, DialogSurface, DialogTitle, Input, Spinner } from "@fluentui/react-components";
+import { Button, DialogBody, DialogContent, DialogSurface, DialogTitle, Spinner } from "@fluentui/react-components";
+import { Input } from "./WorkspaceInput";
 import { ArrowDownload20Regular, Dismiss20Regular, Add20Regular, Subtract20Regular, ArrowLeft20Regular, ArrowRight20Regular, ArrowClockwise20Regular } from "@fluentui/react-icons";
 import type { OfficeFilePreview, WorkspaceAttachment } from "@yuksalish/contracts";
 import { WorkspaceDialog } from "./WorkspaceDialog";

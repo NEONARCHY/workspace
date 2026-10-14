@@ -67,6 +67,7 @@ from .tables import (
     workspace_notifications,
     workspace_projects,
 )
+from .workday_service import working_user_ids
 from .workspace_schemas import (
     ApprovalActionHistoryResponse,
     ApprovalActionRequest,
@@ -2895,6 +2896,9 @@ async def load_workspace(
         else [],
         absence_requests=absence_responses,
         presence_summary=presence_responses,
+        working_user_ids=await working_user_ids(
+            connection, [row["id"] for row in people_rows]
+        ) if can("tasks") else [],
         feed_posts=[
             _feed_post(
                 row,

@@ -68,7 +68,7 @@ describe("Scoped work-panel surfaces", () => {
     expect(read("scrollbars.css")).toContain(".approvals-view .approval-kanban::-webkit-scrollbar { height: 10px; }");
     expect(read("scrollbars.css")).toContain(".approvals-view .approval-kanban { scrollbar-width: auto; }");
   });
-  it("preserves the original shell background behind white pages and their gutter", () => {
+  it("keeps the subtly darkened shell behind white pages and their transparent gutter", () => {
     const css = read("page-canvas.css");
     const shell = css.match(/^\.app-shell \{([^}]+)\}/m)?.[1];
     const content = css.match(/^\.app-shell \.app-content \{([^}]+)\}/m)?.[1];
@@ -76,7 +76,10 @@ describe("Scoped work-panel surfaces", () => {
     expect(content).toBeDefined();
     expect(shell).not.toMatch(/background(?:-color|-image)?\s*:/);
     expect(content).not.toMatch(/background(?:-color|-image)?\s*:/);
-    expect(read("spatial-workspace.css")).toContain("background: radial-gradient(ellipse at 84% 0%, var(--ws-theme-surface-soft, #dfedea) 0, transparent 48%), var(--ws-canvas)");
+    expect(read("spatial-workspace.css")).toContain("--ws-canvas: var(--ws-theme-surface-soft, #eaf0ef)");
+    expect(read("spatial-workspace.css")).toContain("background: radial-gradient(ellipse at 84% 0%, var(--ws-theme-surface-soft, #dbe9e6) 0, transparent 48%), var(--ws-canvas)");
+    expect(read("spatial-workspace.css")).toContain("--ws-surface: var(--ws-theme-surface, #fcfdfd)");
+    expect(read("dark-theme.css")).toContain("--ws-canvas: #101115");
   });
   it("lets the shell show through page-local washes without repainting work panels", () => {
     const css = read("page-canvas.css");

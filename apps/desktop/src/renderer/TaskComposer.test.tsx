@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { FluentProvider, webLightTheme } from "@fluentui/react-components";
 import { afterEach, expect, it, vi } from "vitest";
 
@@ -15,6 +15,18 @@ const taskDepartments: readonly WorkspaceDepartment[] = [{
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+});
+
+it("keeps the complete deadline in its nonbreaking summary row when hours change", () => {
+  render(<FluentProvider theme={webLightTheme}><TaskComposer open people={people} tasks={[]}
+    currentUserId="aziza" initialDueAt="2026-10-20T10:02"
+    onClose={vi.fn()} onSubmit={vi.fn()} /></FluentProvider>);
+  const summary = document.querySelector(".task-composer-preview .record-summary-deadline dd")!;
+  expect(summary).toHaveTextContent("10:02");
+  fireEvent.click(screen.getByRole("button", { name: "Срок новой задачи: открыть выбор" }));
+  fireEvent.click(within(screen.getByRole("listbox", { name: "Часы" })).getByRole("option", { name: "09" }));
+  expect(summary).toHaveTextContent("09:02");
+  expect(summary).toHaveTextContent("2026");
 });
 
 it("reports a rejected save inside the form and preserves fields for retry", async () => {
