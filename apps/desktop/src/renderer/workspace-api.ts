@@ -2290,6 +2290,55 @@ export function actOnWorkspaceTripRequest(
   );
 }
 
+export function uploadWorkspaceTripBrief(
+  token: string, requestId: string, file: File,
+): Promise<TripRequest> {
+  if (!file.size || file.size > 10 * 1024 * 1024) {
+    return Promise.reject(new Error("Билдирги должна быть не больше 10 МиБ."));
+  }
+  const query = new URLSearchParams({ fileName: file.name });
+  return boundedRequest(
+    `${getApiBaseUrl()}/api/v1/trip-requests/${encodeURIComponent(requestId)}/brief-attachment?${query}`,
+    { method: "PUT", headers: {
+      Authorization: `Bearer ${token}`, "Content-Type": file.type || "application/octet-stream",
+    }, body: file },
+    (response) => response.json() as Promise<TripRequest>, 120_000,
+  );
+}
+
+export function removeWorkspaceTripBrief(token: string, requestId: string): Promise<TripRequest> {
+  return apiRequest<TripRequest>(
+    `/trip-requests/${encodeURIComponent(requestId)}/brief-attachment`,
+    { method: "DELETE" }, token,
+  );
+}
+
+export function uploadWorkspaceTripSignature(
+  token: string, requestId: string, signature: Blob,
+): Promise<TripRequest> {
+  if (!signature.size || signature.size > 1024 * 1024) {
+    return Promise.reject(new Error("Подпись должна быть не больше 1 МиБ."));
+  }
+  return boundedRequest(
+    `${getApiBaseUrl()}/api/v1/trip-requests/${encodeURIComponent(requestId)}/signature`,
+    { method: "PUT", headers: {
+      Authorization: `Bearer ${token}`, "Content-Type": "image/png",
+    }, body: signature },
+    (response) => response.json() as Promise<TripRequest>, 120_000,
+  );
+}
+
+export function downloadWorkspaceTripDocument(
+  token: string, requestId: string,
+  kind: "attachment" | "brief" | "order" | "order-preview",
+): Promise<Blob> {
+  return boundedRequest(
+    `${getApiBaseUrl()}/api/v1/trip-requests/${encodeURIComponent(requestId)}/documents/${kind}`,
+    { headers: { Authorization: `Bearer ${token}` } },
+    (response) => response.blob(), 120_000,
+  );
+}
+
 export function createWorkspaceAbsence(token: string, payload: AbsenceRequestInput): Promise<AbsenceRequest> {
   return apiRequest<AbsenceRequest>("/absence-requests", { method: "POST", body: JSON.stringify(payload) }, token);
 }

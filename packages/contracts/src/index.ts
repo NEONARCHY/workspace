@@ -1891,11 +1891,20 @@ export interface TripRequest {
   readonly id: string;
   readonly number: string;
   readonly requesterUserId: string;
+  readonly workflowVersion?: number;
   readonly purpose: string;
   readonly destination: string;
   readonly startDate: string;
   readonly endDate: string;
   readonly employeeIds: readonly string[];
+  readonly briefText?: string;
+  readonly expenseSource?: string;
+  readonly briefAttachmentName?: string | null;
+  readonly hasEmployeeSignature?: boolean;
+  readonly hasSignedBrief?: boolean;
+  readonly orderNumber?: string | null;
+  readonly orderIssuedAt?: string | null;
+  readonly hasOrderPdf?: boolean;
   readonly stage: TripStage;
   readonly stageLabel: string;
   readonly status: TripStatus;
@@ -1916,6 +1925,8 @@ export interface TripRequestInput {
   readonly startDate: string;
   readonly endDate: string;
   readonly employeeIds: readonly string[];
+  readonly briefText?: string;
+  readonly expenseSource?: string;
 }
 
 export type ApprovalNodeKind =

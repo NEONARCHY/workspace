@@ -92,6 +92,24 @@ describe("Trip approvals interaction", async () => {
     expect(column("manager_approval").querySelector(".trip-board-card")).not.toBeNull();
     expect(await screen.findByRole("alert")).toHaveTextContent("Не удалось изменить стадию");
   });
+  it("routes a new signed trip directly to approved without showing the legacy HR column", async () => {
+    const modern = { ...request, workflowVersion: 2, hasSignedBrief: true, hasEmployeeSignature: true };
+    const { onAction } = setup(modern);
+    expect(column("hr")).toBeNull();
+    await drop("approved");
+    await waitFor(() => expect(onAction).toHaveBeenCalledExactlyOnceWith(modern, "approve", undefined));
+    expect(column("manager_approval").querySelector(".trip-board-card")).not.toBeNull();
+  });
+  it("does not let a new trip be sent without a fresh graphical signature", () => {
+    const modern = { ...request, workflowVersion: 2, stage: "launch" as const,
+      status: "draft" as const, allowedActions: ["submit"] as TripRequest["allowedActions"],
+      canEdit: true, briefText: "Тестовая билдирги", expenseSource: "Проект",
+      hasEmployeeSignature: false };
+    setup(modern);
+    fireEvent.click(card().querySelector(".approval-card-open")!);
+    expect(screen.getByRole("button", { name: "Отправить председателю" })).toBeDisabled();
+    expect(screen.getByText(/После исправления заявки подпись нужно поставить снова/)).toBeInTheDocument();
+  });
   it("blocks skipped stages and cards without permission", async () => {
     const { onAction } = setup({ ...request, stage: "launch", status: "draft", allowedActions: [] });
     expect(card()).not.toHaveAttribute("draggable", "true");

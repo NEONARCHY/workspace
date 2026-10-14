@@ -27,6 +27,7 @@ import "./spatial-workspace.css";
 import "./workspace-2-payments.css";
 import "./workspace-2-workflow.css";
 import "./workspace-2-projects-trips.css";
+import "./trip-documents.css";
 import "./workspace-2-tasks.css";
 import "./task-plans.css";
 import "./workspace-2-interactions.css";
