@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState, type MouseEvent } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import type { WorkspacePerson, ZoomInvitation } from "@yuksalish/contracts";
 import { Check, ChevronDown, Clock3, ExternalLink, Video, X } from "lucide-react";
 import { ProfileAvatar } from "./ProfileAvatar";
@@ -13,6 +13,8 @@ export function ZoomInvitationCard({ messageId, invitation, people, token }: {
   readonly people: readonly WorkspacePerson[]; readonly token: string;
 }) {
   const panelId = useId();
+  const primaryId = useId();
+  const returnFocus = useRef(false);
   const [expanded, setExpanded] = useState(false);
   const [membersMounted, setMembersMounted] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -20,6 +22,11 @@ export function ZoomInvitationCard({ messageId, invitation, people, token }: {
   const [now, setNow] = useState(() => Date.now());
   const [saved, setSaved] = useState<{ source: string; value: ZoomInvitation }>();
   const source = JSON.stringify(invitation);
+  useLayoutEffect(() => {
+    if (!returnFocus.current) return;
+    returnFocus.current = false;
+    if (saved?.source === source) document.getElementById(primaryId)?.focus({ preventScroll: true });
+  }, [saved, source, primaryId]);
   const card = saved?.source === source ? saved.value : invitation;
   const start = new Date(card.startsAt), end = new Date(card.endsAt);
   const format = (options: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat("ru-RU", { ...options, timeZone: card.timezone });
@@ -36,12 +43,14 @@ export function ZoomInvitationCard({ messageId, invitation, people, token }: {
   const members = [...(card.organizerId ? [{ userId: card.organizerId, response: "organizer" }] : []), ...card.participants.filter(p => p.userId !== card.organizerId)];
   const personById = useMemo(() => new Map<string, WorkspacePerson>(people.map(person => [person.id, person])), [people]);
   function toggleMembers() { setMembersMounted(true); setExpanded(!expanded); }
-  async function reply(response: "accepted" | "declined") {
+  async function reply(response: "accepted" | "declined", trigger: HTMLButtonElement) {
     if (busy) return;
+    const ownedFocus = document.activeElement === trigger;
     setBusy(true); setError("");
     try {
       const result = await respondToZoomInvitation(token, messageId, response);
       if (!result.zoomInvitation) throw new Error("Сервер не подтвердил ответ. Обновите чат.");
+      returnFocus.current = ownedFocus && (document.activeElement === trigger || document.activeElement === document.body);
       setSaved({ source, value: result.zoomInvitation });
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Не удалось ответить. Попробуйте ещё раз.");
@@ -90,10 +99,10 @@ export function ZoomInvitationCard({ messageId, invitation, people, token }: {
       </>}
       {scheduled && <>
         <div className="zoom-invitation-actions">
-          {canReply && card.response !== "accepted" ? <button type="button" className="zoom-invitation-primary" disabled={busy} onClick={() => void reply("accepted")}>
+          {canReply && card.response !== "accepted" ? <button id={primaryId} type="button" className="zoom-invitation-primary" disabled={busy} onClick={event => void reply("accepted", event.currentTarget)}>
             <Check size={16} aria-hidden="true" />{busy ? "Сохраняем…" : "Принять"}</button>
-            : joinUrl ? <a className="zoom-invitation-primary" href={joinUrl} onClick={join} target="_blank" rel="noopener noreferrer"><Video size={16} aria-hidden="true" />Войти в Zoom</a> : null}
-          {canReply && <button type="button" className="zoom-invitation-decline" data-declined={card.response === "declined"} disabled={busy || card.response === "declined"} onClick={() => void reply("declined")}>
+            : joinUrl ? <a id={primaryId} className="zoom-invitation-primary" href={joinUrl} onClick={join} target="_blank" rel="noopener noreferrer"><Video size={16} aria-hidden="true" />Войти в Zoom</a> : null}
+          {canReply && <button type="button" className="zoom-invitation-decline" data-declined={card.response === "declined"} disabled={busy || card.response === "declined"} onClick={event => void reply("declined", event.currentTarget)}>
             <X size={16} aria-hidden="true" />{card.response === "declined" ? "Отказались" : "Отказаться"}</button>}
         </div>
         {card.response === "accepted" && <p className="zoom-invitation-response" role="status"><Check size={14} aria-hidden="true" />Вы участвуете</p>}

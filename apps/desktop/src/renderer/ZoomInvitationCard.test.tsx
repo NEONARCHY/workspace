@@ -43,6 +43,13 @@ describe("Zoom invitation", () => {
     expect(await screen.findByRole("button", { name: "Отказались" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Принять" })).toBeEnabled();
   });
+  it("retains keyboard focus on the primary action after acceptance", async () => {
+    vi.mocked(respondToZoomInvitation).mockResolvedValue({ zoomInvitation: { ...invitation, response: "accepted" } } as ChatMessage);
+    mount();
+    const accept = screen.getByRole("button", { name: "Принять" });
+    accept.focus(); fireEvent.click(accept);
+    await waitFor(() => expect(screen.getByRole("link", { name: "Войти в Zoom" })).toHaveFocus());
+  });
   it("keeps the pending state and retry controls after a failed response", async () => {
     vi.mocked(respondToZoomInvitation).mockRejectedValue(new Error("Сеть недоступна"));
     mount(); fireEvent.click(screen.getByRole("button", { name: "Принять" }));
