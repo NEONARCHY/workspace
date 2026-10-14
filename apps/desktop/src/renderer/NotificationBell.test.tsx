@@ -6,7 +6,8 @@ import { NotificationBell } from "./NotificationBell";
 it("opens notifications without marking them read and decorates only unread state", () => {
   const onOpen = vi.fn();
   const { rerender } = render(<NotificationBell unreadCount={2} active={false} onOpen={onOpen} />);
-  const bell = screen.getByRole("button", { name: "Уведомления: непрочитанных 2" });
+  const bell = screen.getByRole("button", { name: "Уведомления" });
+  expect(bell).toHaveAttribute("aria-description", "Уведомления: непрочитанных 2");
   expect(bell).toHaveAttribute("data-unread", "true");
   expect(bell.querySelector(".notification-bell-dot")).not.toBeNull();
   fireEvent.click(bell);

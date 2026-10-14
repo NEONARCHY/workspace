@@ -1289,10 +1289,11 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.click(screen.getByRole("button", { name: /Ещё, \d+ разделов/ }));
     const drawer = screen.getByRole("complementary", { name: "Другие разделы" });
     expect(drawer.querySelector("header")).toHaveTextContent(/^Другие разделы$/);
-    expect(within(drawer).getByRole("button", { name: "Уведомления" }).querySelector(".rail-badge")).toHaveTextContent("2");
+    expect(within(drawer).queryByRole("button", { name: "Уведомления" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Уведомления" })).toHaveAttribute("aria-description", "Уведомления: непрочитанных 2");
     expect(within(drawer).getByRole("button", { name: "Задачи" }).querySelector(".rail-badge")).toHaveTextContent(String(initialTasks.filter(task => !["completed", "cancelled"].includes(task.status)).length));
     expect(within(drawer).getByRole("button", { name: "Календарь" }).querySelector(".rail-badge")).toBeNull();
-    fireEvent.click(within(drawer).getByRole("button", { name: "Уведомления" }));
+    fireEvent.click(screen.getByRole("button", { name: "Уведомления" }));
     expect(await screen.findByRole("heading", { name: "Требует моего внимания" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Ещё, \d+ разделов/ })).toHaveAttribute("aria-expanded", "false");
   });
@@ -1305,7 +1306,8 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.click(screen.getByRole("button", { name: "Уведомления" }));
     expect(screen.getByRole("heading", { name: "Требует моего внимания" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Новые уведомления/ })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByText("2", { selector: ".rail-badge" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Уведомления" })).toHaveAttribute("aria-description", "Уведомления: непрочитанных 2");
+    expect(document.querySelector(".notification-bell-dot")).not.toBeNull();
     expect(screen.getByText("1", { selector: ".notification-metrics strong" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByText("Задача требует внимания").closest("button")!);
@@ -2193,7 +2195,6 @@ describe("corporate workspace authentication alpha", () => {
       "Zoom-конференции",
       "Сотрудники",
       "Аналитика опросов",
-      "Уведомления",
       "Настройки",
     ]);
     fireEvent.click(screen.getByRole("button", { name: "ИИ-модули" }));
