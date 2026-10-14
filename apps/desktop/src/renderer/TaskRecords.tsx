@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Badge, useRestoreFocusTarget } from "@fluentui/react-components";
-import type { TaskStatus, WorkspacePerson, WorkspaceTask } from "@yuksalish/contracts";
+import type { TaskPlan, TaskStatus, WorkspacePerson, WorkspaceTask } from "@yuksalish/contracts";
 import { RecordMobileLabel, RecordTablePager, SortHeading, tableCollator, useTablePage, type TableSort } from "./RecordTableTools";
 import { TaskParticipantAvatar } from "./TaskParticipantAvatar";
 import { isTaskOverdue, taskDeadlineTone } from "./task-deadline";
@@ -8,8 +8,9 @@ import { useTaskDeadlineClock } from "./useTaskDeadlineClock";
 
 const statuses: Record<TaskStatus, string> = { new: "Новая", in_progress: "В работе", awaiting_review: "На проверке", completed: "Завершена", overdue: "Просрочена", cancelled: "Отменена" };
 
-export function TaskRecords({ tasks, people, token, currentUserId, selectedId, filterKey, onSelect }: {
-  tasks: readonly WorkspaceTask[]; people: readonly WorkspacePerson[]; token?: string; currentUserId?: string; selectedId?: string;
+export function TaskRecords({ tasks, plans = [], plansLoading = false, plansError = "", people, token, currentUserId, selectedId, filterKey, onSelect }: {
+  tasks: readonly WorkspaceTask[]; plans?: readonly TaskPlan[]; plansLoading?: boolean; plansError?: string;
+  people: readonly WorkspacePerson[]; token?: string; currentUserId?: string; selectedId?: string;
   filterKey: string; onSelect: (id: string) => void;
 }) {
   const [sort, setSort] = useState<TableSort>({ key: "", descending: false });
@@ -17,10 +18,23 @@ export function TaskRecords({ tasks, people, token, currentUserId, selectedId, f
   const restoreFocusTarget = useRestoreFocusTarget();
   const peopleById = useMemo(() => new Map(people.map(person => [person.id, person])), [people]);
   const names = useMemo(() => new Map(people.map(person => [person.id, person.name])), [people]);
+  const planNamesByTask = useMemo(() => {
+    const linked = new Map<string, string[]>();
+    for (const plan of plans) for (const taskId of plan.taskIds) {
+      const names = linked.get(taskId) ?? [];
+      names.push(plan.title);
+      linked.set(taskId, names);
+    }
+    return linked;
+  }, [plans]);
+  const planLabel = useCallback((taskId: string) => planNamesByTask.get(taskId)?.join(", ")
+    ?? (plansLoading ? "Загружаем…" : plansError ? "Не удалось загрузить" : "Без плана"),
+  [planNamesByTask, plansLoading, plansError]);
   const sorted = useMemo(() => {
     const text = (task: WorkspaceTask) => sort.key === "author" ? names.get(task.authorId) ?? ""
       : sort.key === "assignee" ? names.get(task.assigneeId) ?? ""
-      : sort.key === "project" ? task.project : sort.key === "status" ? statuses[task.status] : task.title;
+      : sort.key === "plan" ? planLabel(task.id)
+        : sort.key === "project" ? task.project : sort.key === "status" ? statuses[task.status] : task.title;
     if (!sort.key) return tasks;
     return [...tasks].sort((a, b) => {
       if (sort.key === "due") {
@@ -31,7 +45,7 @@ export function TaskRecords({ tasks, people, token, currentUserId, selectedId, f
       }
       return tableCollator.compare(text(a), text(b)) * (sort.descending ? -1 : 1);
     });
-  }, [tasks, sort, names]);
+  }, [tasks, sort, names, planLabel]);
   const paging = useTablePage(sorted.length, `${filterKey}:${sort.key}:${sort.descending}`);
   const onSort = (key: string) => setSort({ key, descending: sort.key === key && !sort.descending });
   const participants = (task: WorkspaceTask) => [
@@ -41,10 +55,10 @@ export function TaskRecords({ tasks, people, token, currentUserId, selectedId, f
   return <div className="record-table-frame task-records">
     <div className="record-table-scroll" role="region" aria-label="Список задач" tabIndex={0}>
       <table role="table" className="record-table task-record-table" aria-label="Задачи">
-        <thead role="rowgroup"><tr role="row">{[["title", "Название"], ["assignee", "Участники"], ["status", "Статус"], ["due", "Крайний срок"], ["author", "Постановщик"], ["project", "Проект"]].map(([column, label]) => <SortHeading key={column} column={column!} sort={sort} onSort={onSort}>{label}</SortHeading>)}</tr></thead>
+        <thead role="rowgroup"><tr role="row">{[["title", "Название"], ["assignee", "Участники"], ["status", "Статус"], ["due", "Крайний срок"], ["author", "Постановщик"], ["plan", "План"], ["project", "Проект"]].map(([column, label]) => <SortHeading key={column} column={column!} sort={sort} onSort={onSort}>{label}</SortHeading>)}</tr></thead>
         <tbody role="rowgroup">{sorted.slice(paging.start, paging.start + paging.size).map(task => <tr role="row" key={task.id} data-deadline={taskDeadlineTone(task, now)} className={`task-row record-row ${selectedId === task.id ? "selected" : ""}`} onClick={event => { if (!(event.target as HTMLElement).closest("button")) { event.currentTarget.querySelector("button")?.focus(); onSelect(task.id); } }}>
           <td role="cell" className="record-title"><span className="list-row-hover-wash" aria-hidden="true" /><button {...restoreFocusTarget} className="record-open" type="button" aria-haspopup="dialog" aria-label={`Открыть задачу: ${task.title}`} onClick={() => onSelect(task.id)}><strong>{task.title}</strong></button>
-            <div className="record-secondary">{task.checklistTotal > 0 && <span>План {task.checklistDone}/{task.checklistTotal}</span>}{task.comments.length > 0 && <span>Обсуждение · {task.comments.length}</span>}{task.cycle && <span>Повторяется</span>}</div>
+            <div className="record-secondary">{task.checklistTotal > 0 && <span>Чек-лист {task.checklistDone}/{task.checklistTotal}</span>}{task.comments.length > 0 && <span>Обсуждение · {task.comments.length}</span>}{task.cycle && <span>Повторяется</span>}</div>
             {task.checklistTotal > 0 ? <span className="task-record-progress" aria-hidden="true"><i style={{ width: `${Math.round(task.checklistDone / task.checklistTotal * 100)}%` }} /></span> : null}
           </td>
           <td role="cell"><RecordMobileLabel>Участники</RecordMobileLabel><div className="task-participant-group" aria-label="Участники задачи">{participants(task).map(({ userId, role }) =>
@@ -52,7 +66,9 @@ export function TaskRecords({ tasks, people, token, currentUserId, selectedId, f
           )}</div></td>
           <td role="cell"><RecordMobileLabel>Статус</RecordMobileLabel><Badge className="record-status-badge" data-status={task.status} appearance="tint" color={task.status === "overdue" ? "danger" : task.status === "completed" ? "success" : task.status === "awaiting_review" ? "warning" : "brand"}>{task.status === "awaiting_review" ? task.authorId === currentUserId ? "Ждёт вашей проверки" : "Ждёт проверки постановщиком" : statuses[task.status]}</Badge>{["high", "urgent"].includes(task.priority) && <small className="record-priority">{task.priority === "urgent" ? "Срочный приоритет" : "Высокий приоритет"}</small>}</td>
           <td role="cell" className={isTaskOverdue(task, now) ? "record-deadline overdue" : "record-deadline"}><RecordMobileLabel>Крайний срок</RecordMobileLabel>{task.dueLabel}{isTaskOverdue(task, now) && task.status !== "overdue" ? <small className="record-priority">Срок истёк</small> : null}</td>
-          <td role="cell"><RecordMobileLabel>Постановщик</RecordMobileLabel><div className="task-participant-group"><TaskParticipantAvatar person={peopleById.get(task.authorId)} role="Постановщик" token={token} /></div></td><td role="cell" className="record-project"><RecordMobileLabel>Проект</RecordMobileLabel>{task.project || "Без проекта"}</td>
+          <td role="cell"><RecordMobileLabel>Постановщик</RecordMobileLabel><div className="task-participant-group"><TaskParticipantAvatar person={peopleById.get(task.authorId)} role="Постановщик" token={token} /></div></td>
+          <td role="cell" className="record-plan"><RecordMobileLabel>План</RecordMobileLabel><span title={planLabel(task.id)}>{planLabel(task.id)}</span></td>
+          <td role="cell" className="record-project"><RecordMobileLabel>Проект</RecordMobileLabel>{task.project || "Без проекта"}</td>
         </tr>)}</tbody>
       </table>
       {!tasks.length && <div className="record-table-empty"><strong>В этом разделе задач нет</strong><span>Измените поиск, переключите фильтр или создайте задачу.</span></div>}
