@@ -43,6 +43,7 @@ class TaskPlanImportRow(ApiModel):
     assignee_hint: str | None = Field(default=None, max_length=240)
     coexecutors_hint: str | None = Field(default=None, max_length=1000)
     group_key: str | None = Field(default=None, max_length=120)
+    due_date_hint: date | None = None
 
 
 class TaskPlanImportPreview(ApiModel):

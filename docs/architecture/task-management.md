@@ -27,6 +27,15 @@ The calendar shows tasks on their local due date, preserves the active state/rol
 filters and text search, and keeps tasks without a deadline in a separate visible
 queue. Month navigation never changes task data.
 
+The plan-document preview reads task titles and reviewable participant/deadline hints
+from DOCX table rows. A dedicated responsible-person cell takes precedence; in
+weekly tables with separate work columns, each column's named person applies only
+to tasks in that column. Exact dates are suggested directly. A week range may use
+its final day only when the document heading supplies one unambiguous year. The
+desktop matches names only when exactly one active employee fits; unresolved names
+and dates remain editable and are not silently assigned to the importer. Nothing
+is created until the reviewed plan is confirmed.
+
 Each task card contains:
 
 - a primary assignee plus `co_assignee` and `observer` participants;

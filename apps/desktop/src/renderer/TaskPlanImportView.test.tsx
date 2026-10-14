@@ -79,10 +79,10 @@ it("allows different responsible people and co-assignees for tasks in the same w
     suggestedTitle: "Weekly plan", rows: [
       { title: "Manager activity", source: "DOCX, таблица 1, строка 2, столбец 3", warning: null,
         assigneeHint: "Н. Каримбердиева", coexecutorsHint: "Б. Самугов; Матбуот хизмати",
-        groupKey: "DOCX, таблица 1, строка 2" },
+        groupKey: "DOCX, таблица 1, строка 2", dueDateHint: "2026-10-02" },
       { title: "Specialist activity", source: "DOCX, таблица 1, строка 2, столбец 4", warning: null,
-        assigneeHint: "Н. Каримбердиева", coexecutorsHint: "Б. Самугов; Матбуот хизмати",
-        groupKey: "DOCX, таблица 1, строка 2" },
+        assigneeHint: "Ф. Шокирова", coexecutorsHint: "Б. Самугов; Матбуот хизмати",
+        groupKey: "DOCX, таблица 1, строка 2", dueDateHint: "2026-10-03" },
     ],
   });
   vi.mocked(confirmTaskPlanImport).mockResolvedValue({
@@ -104,6 +104,8 @@ it("allows different responsible people and co-assignees for tasks in the same w
   });
   fireEvent.click(screen.getByRole("button", { name: "Разобрать документ" }));
   expect(await screen.findByText("В документе: Б. Самугов; Матбуот хизмати")).toBeInTheDocument();
+  expect(screen.getAllByLabelText("Срок, если указан в плане").map((input) =>
+    (input as HTMLInputElement).value)).toEqual(["2026-10-02", "2026-10-03"]);
   fireEvent.click(screen.getByRole("button", { name: "Подтвердить и создать план" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Проверьте ответственного");
   expect(confirmTaskPlanImport).not.toHaveBeenCalled();
@@ -112,9 +114,6 @@ it("allows different responsible people and co-assignees for tasks in the same w
     target: { value: "temur", selectedOptions: [{ value: "bakhtiyor" }, { value: "temur" }] },
   });
   fireEvent.click(screen.getByRole("button", { name: "Применить к пунктам этой строки" }));
-  const assignees = screen.getAllByLabelText("Ответственный / исполнитель");
-  if (!assignees[1]) throw new Error("Second responsible person selector is missing");
-  fireEvent.change(assignees[1], { target: { value: "feruza" } });
   fireEvent.click(screen.getByRole("button", { name: "Изменить соисполнителей пункта 2" }));
   fireEvent.change(screen.getByLabelText("Соисполнители пункта 2"), {
     target: { value: "bakhtiyor", selectedOptions: [{ value: "bakhtiyor" }] },
@@ -125,6 +124,43 @@ it("allows different responsible people and co-assignees for tasks in the same w
   const items = vi.mocked(confirmTaskPlanImport).mock.calls[0]?.[1].items;
   expect(items?.map((item) => item.assigneeId)).toEqual(["nigora", "feruza"]);
   expect(items?.map((item) => item.coAssigneeIds)).toEqual([["bakhtiyor", "temur"], ["bakhtiyor"]]);
+  expect(items?.map((item) => item.dueAt)).toEqual([
+    "2026-10-02T13:00:00.000Z", "2026-10-03T13:00:00.000Z",
+  ]);
+});
+
+it("matches a full name from each table row without assigning an ambiguous name", async () => {
+  vi.mocked(previewTaskPlanImport).mockResolvedValue({
+    suggestedTitle: "Plan", rows: [
+      { title: "First task", source: "DOCX, таблица 1, строка 2", warning: null,
+        assigneeHint: "Самугов Бахтиёр", coexecutorsHint: "Шокирова Феруза",
+        groupKey: "DOCX, таблица 1, строка 2", dueDateHint: "2026-10-02" },
+      { title: "Second task", source: "DOCX, таблица 1, строка 3", warning: null,
+        assigneeHint: "Н. Каримбердиева", groupKey: "DOCX, таблица 1, строка 3" },
+    ],
+  });
+  render(<FluentProvider theme={webLightTheme}><TaskPlanImportView
+    token="token" currentUserId="me" people={[
+      { id: "me", name: "Автор плана", initials: "А", role: "manager", color: "blue", status: "active" },
+      { id: "bakhtiyor", name: "Самугов Бахтиёр", initials: "Б", role: "manager", color: "blue", status: "active" },
+      { id: "feruza", name: "Шокирова Феруза", initials: "Ф", role: "employee", color: "blue", status: "active" },
+      { id: "nigora-1", name: "Каримбердиева Нигора", initials: "Н", role: "employee", color: "blue", status: "active" },
+      { id: "nigora-2", name: "Каримбердиева Нилуфар", initials: "Н", role: "employee", color: "blue", status: "active" },
+    ]} tasks={[]} onImported={vi.fn()} onClose={vi.fn()} />
+  </FluentProvider>);
+  fireEvent.change(screen.getByLabelText("Файл плана"), {
+    target: { files: [new File(["content"], "plan.docx")] },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Разобрать документ" }));
+  await screen.findByDisplayValue("First task");
+  const assignees = screen.getAllByLabelText("Ответственный / исполнитель");
+  expect(assignees[0]).toHaveAttribute("value", "bakhtiyor");
+  expect(assignees[1]).toHaveAttribute("value", "");
+  expect(screen.getByText("Соисполнители: Шокирова Феруза")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("checkbox"));
+  fireEvent.click(screen.getByRole("button", { name: "Подтвердить и создать план" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("проверьте каждый включённый пункт");
+  expect(confirmTaskPlanImport).not.toHaveBeenCalled();
 });
 
 it("does not silently assign a structured plan to the importer when the leader is unknown", async () => {
