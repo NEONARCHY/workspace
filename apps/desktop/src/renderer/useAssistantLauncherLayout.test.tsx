@@ -3,20 +3,23 @@ import { useRef } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useAssistantLauncherLayout } from "./useAssistantLauncherLayout";
 
-function Header({ vacated = false, disabled = false }) {
+function Header({ vacated = false, disabled = false, paired = false }) {
   const launcher = useRef<HTMLButtonElement>(null);
   useAssistantLauncherLayout(launcher, vacated, disabled, 1, "desktop");
   return <div className="global-bar"><div className="workspace-top-context" style={{ columnGap: 12 }}>
     <div className="color-theme-toggle-wrap"><button className="color-theme-toggle"><svg /></button></div>
     <span className="assistant-launcher-space" data-vacated={vacated || undefined}><button ref={launcher} /></span>
-    <div className="workspace-identity"><button className="workspace-identity-menu"><span className="fui-Avatar" /></button></div>
+    {paired ? <div className="workspace-workday-person"><button className="workday-control">Начать работу</button>
+      <div className="workspace-identity"><button className="workspace-identity-menu"><span className="fui-Avatar" /></button></div>
+    </div> : <div className="workspace-identity"><button className="workspace-identity-menu"><span className="fui-Avatar" /></button></div>}
   </div></div>;
 }
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 function fixture() {
   vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
     const vacated = Boolean(document.querySelector("[data-vacated]"));
-    const x = this.matches("svg") ? (vacated ? 172 : 112)
+    const x = this.matches(".fui-Avatar") && document.querySelector(".workspace-workday-person") ? 400
+      : this.matches("svg") ? (vacated ? 172 : 112)
       : this.matches(".color-theme-toggle-wrap, .color-theme-toggle") ? (vacated ? 160 : 100)
       : this.matches(".assistant-launcher-space") ? (vacated ? 212 : 152) : 212;
     return new DOMRect(x, this.matches("svg") ? 12 : 0, this.matches("svg") ? 16 : this.matches(".assistant-launcher-space") ? 48 : 40,
@@ -28,6 +31,11 @@ function fixture() {
   return { animate, cancel };
 }
 describe("assistant header layout", () => {
+  it("stays in its gap before the workday/profile pair, not over the workday button", () => {
+    fixture();
+    const view = render(<Header paired />);
+    expect(view.container.querySelector(".assistant-launcher-space button")).toHaveStyle("--assistant-launcher-offset: 0px");
+  });
   it("aligns the real button with the orb and translates neighbours without scaling", () => {
     const { animate } = fixture();
     const view = render(<Header />);

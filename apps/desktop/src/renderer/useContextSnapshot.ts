@@ -14,7 +14,8 @@ export function useContextSnapshot<T>(token: string,
     const read = () => {
       if (document.visibilityState === "hidden" || running) return;
       running = true;
-      setState(current => ({ token, value: current.token === token ? current.value : undefined, pending: true }));
+      setState(current => ({ token, value: current.token === token ? current.value : undefined,
+        error: current.token === token ? current.error : undefined, pending: true }));
       void load(token, abort.signal).then(value => {
         if (active) { lastRead = Date.now(); setState({ token, value, pending: false }); }
       }).catch((error: unknown) => {

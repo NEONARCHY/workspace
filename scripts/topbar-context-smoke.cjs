@@ -87,6 +87,13 @@ fs.mkdirSync(output, { recursive: true });
         await page.getByRole('button', { name: 'Начать работу', exact: true }).waitFor();
         await page.waitForTimeout(300);
         assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'extra header overflow');
+        if (item.query.includes('assistant')) {
+          assert(await page.evaluate(() => {
+            const launcher = document.querySelector('.assistant-launcher').getBoundingClientRect();
+            const workday = document.querySelector('.workday-control').getBoundingClientRect();
+            return launcher.right <= workday.left + 1 || launcher.bottom <= workday.top || launcher.top >= workday.bottom;
+          }), 'assistant overlaps workday');
+        }
         await page.screenshot({ path: path.join(output, `${engine}-${item.id}-header.png`), fullPage: true });
         await (item.id === 'air-unavailable' ? page.getByRole('button', { name: /^Погода в Ташкенте:/ }) : trigger).click();
         await page.locator('.topbar-context-surface:visible').waitFor();

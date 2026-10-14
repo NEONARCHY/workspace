@@ -64,4 +64,17 @@ describe("topbar insights", () => {
     expect(await screen.findByText("Данные качества воздуха временно недоступны.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Погода: Ташкент" })).toHaveTextContent("13°");
   });
+  it("does not call the last failed read fresh while a retry is pending", async () => {
+    mount();
+    fireEvent.click(await screen.findByRole("button", { name: /Курсы валют: 1 USD — 12.*000/ }));
+    vi.mocked(loadExchangeRates).mockRejectedValueOnce(new Error("Источник недоступен"));
+    fireEvent.click(screen.getByRole("button", { name: "Обновить" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Источник недоступен");
+    let finish!: (value: typeof contextRates) => void;
+    vi.mocked(loadExchangeRates).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    fireEvent.click(screen.getByRole("button", { name: "Обновить" }));
+    expect(screen.getByRole("button", { name: /Курсы валют.*Данные устарели/ })).toHaveAttribute("data-stale", "true");
+    finish(contextRates);
+    await waitFor(() => expect(screen.getByRole("button", { name: /^Курсы валют:/ })).not.toHaveAttribute("data-stale"));
+  });
 });
