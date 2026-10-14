@@ -1352,7 +1352,7 @@ class NotificationResponse(ApiModel):
 class NotificationPreferencesResponse(ApiModel):
     feed_enabled: bool = True
     sound_enabled: bool = True
-    sound_volume: int = Field(default=20, ge=0, le=100)
+    sound_volume: int = Field(default=100, ge=0, le=100)
     desktop_enabled: bool = True
     messages_enabled: bool = True
     tasks_enabled: bool = True

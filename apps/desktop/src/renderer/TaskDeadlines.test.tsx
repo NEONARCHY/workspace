@@ -74,6 +74,21 @@ describe("My tasks participation filter", () => {
 });
 
 describe("Task list deadline colours and overdue filter", () => {
+  it("removes a formerly overdue task after rescheduling and places it in the working Kanban lane", () => {
+    freeze();
+    const original = task("rescheduled", -1, { status: "overdue" });
+    const p = props([original]);
+    const view = render(wrap(<TasksView {...p} />));
+    const overdue = screen.getByRole("button", { name: "Просроченные" });
+    fireEvent.click(overdue);
+    expect(row(original.id)).toBeInTheDocument();
+    view.rerender(wrap(<TasksView {...p} tasks={[task(original.id, 7, { status: "overdue" })]} />));
+    expect(overdue).toHaveTextContent("0");
+    expect(screen.queryByRole("button", { name: `Открыть задачу: ${original.id}` })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Активные" }));
+    fireEvent.click(screen.getByRole("button", { name: "Kanban" }));
+    expect(screen.getByText(original.id).closest(".kanban-column")).toHaveAttribute("data-task-status", "in_progress");
+  });
   it("updates the open card from the approved exact deadline, ignoring a stale server label", () => {
     const original = task("extension", 1, { dueAt: new Date(2026, 9, 13, 13).toISOString(), dueLabel: "13.10.2026, 13:00" });
     const p = {...props([original]), focusTaskId: original.id};

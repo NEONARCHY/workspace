@@ -752,7 +752,7 @@ export function TasksView(props: TasksViewProps) {
           <div className="task-kanban" role="region" tabIndex={0} aria-label="Kanban задач: горизонтальная прокрутка">
             {kanbanStatuses.map((status) => {
               const columnTasks = visibleTasks.filter((task) =>
-                (isTaskOverdue(task, deadlineNow) ? "overdue" : task.status) === status);
+                (isTaskOverdue(task, deadlineNow) ? "overdue" : task.status === "overdue" ? "in_progress" : task.status) === status);
               return <SpatialLane id={status} className="kanban-column" data-task-status={status} key={status}>
                 <header><strong>{statusLabels[status]}</strong><Badge appearance="filled">{columnTasks.length}</Badge></header>
                 <div className="kanban-stack" role="region" tabIndex={0} aria-label={`${statusLabels[status]}: задачи`}>

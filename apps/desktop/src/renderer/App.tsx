@@ -118,7 +118,7 @@ import {
 } from "./workspace-module-preload";
 import { clearProfilePreload } from "./profile-preload";
 import { createRefreshQueue } from "./refresh-queue";
-import { initialKnownNotificationIds, isObsoleteHisobotNotification } from "./notification-delivery";
+import { deliverNotificationOnce, initialKnownNotificationIds, isObsoleteHisobotNotification } from "./notification-delivery";
 import { useCompactWindow } from "./use-compact-window";
 import { useBrowserCompactLayout } from "./browser-layout";
 import { BrowserNavigation } from "./BrowserNavigation";
@@ -763,22 +763,25 @@ export function App() {
       birthday: preferences.calendarEnabled,
       feed: preferences.feedEnabled !== false,
     };
-    for (const notification of workspace.notifications) {
-      if (known.has(notification.id)) continue;
+    const newNotifications = workspace.notifications.filter(item => !known.has(item.id))
+      .sort((a, b) => Date.parse(b.occurredAt) - Date.parse(a.occurredAt));
+    // Consume the batch together, including muted items, so reconnecting or
+    // changing preferences never replays older events one by one.
+    for (const item of newNotifications) known.add(item.id);
+    for (const notification of newNotifications.slice(0, 1)) {
       if (
         (notification.kind !== "hisobot" && !preferences.desktopEnabled)
         || !kindEnabled[notification.kind]
         || (notification.kind !== "hisobot" && notification.isReminder && !preferences.remindersEnabled)
       ) continue;
-      known.add(notification.id);
       if (notification.desktopDeliveredAt || notification.readAt || isObsoleteHisobotNotification(notification)) continue;
-      void workspacePlatform.showNotification({
+      void deliverNotificationOnce(session.user.id, notification.id, () => workspacePlatform.showNotification({
         id: notification.id,
         title: "Yuksalish Workspace",
         body: `${notification.title}\n${notification.body}`,
         section: notification.section,
         entityId: notification.entityId ?? undefined,
-      }).then((shown) => {
+      })).then((shown) => {
         if (!shown) {
           known?.delete(notification.id);
           return;

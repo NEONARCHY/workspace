@@ -11,7 +11,10 @@ export function taskDeadlineLabel(task: Pick<WorkspaceTask, "dueAt" | "dueLabel"
 
 export function isTaskOverdue(task: DeadlineTask, now: number): boolean {
   if (task.status === "completed" || task.status === "cancelled") return false;
-  return task.status === "overdue" || Boolean(task.dueAt && Date.parse(task.dueAt) < now);
+  const deadline = task.dueAt ? Date.parse(task.dueAt) : NaN;
+  // A rescheduled deadline is authoritative, even while an older server still
+  // reports the historical overdue status. Keep the legacy no-date fallback.
+  return Number.isFinite(deadline) ? deadline < now : task.status === "overdue";
 }
 
 export function taskDeadlineTone(task: DeadlineTask, now: number): "warning" | "danger" | undefined {

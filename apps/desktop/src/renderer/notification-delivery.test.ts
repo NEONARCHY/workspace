@@ -1,6 +1,6 @@
 import type { WorkspaceNotification } from "@yuksalish/contracts";
-import { describe, expect, it } from "vitest";
-import { initialKnownNotificationIds, isObsoleteHisobotNotification } from "./notification-delivery";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { deliverNotificationOnce, initialKnownNotificationIds, isObsoleteHisobotNotification } from "./notification-delivery";
 
 const now = new Date("2026-10-02T10:00:00Z").getTime();
 
@@ -14,9 +14,9 @@ function notification(id: string, overrides: Partial<WorkspaceNotification> = {}
 }
 
 describe("initialKnownNotificationIds", () => {
-  it("replays recent unread and undelivered events, but not old or resolved events", () => {
+  it("replays the latest unread event but not older or obsolete events", () => {
     const items = [
-      notification("recent"),
+      notification("recent", { occurredAt: new Date(now - 1000).toISOString() }),
       notification("read", { readAt: new Date(now).toISOString() }),
       notification("delivered", { desktopDeliveredAt: new Date(now).toISOString() }),
       notification("old", { occurredAt: new Date(now - 3 * 60 * 60_000).toISOString() }),
@@ -28,13 +28,25 @@ describe("initialKnownNotificationIds", () => {
     expect(["read", "delivered", "old"].every((id) => known.has(id))).toBe(true);
   });
 
-  it("bounds the normal notification backlog to the five most recent events", () => {
+  it("replays only the latest event from a whole backlog", () => {
     const items = Array.from({ length: 8 }, (_, index) => notification(`event-${index}`, {
       occurredAt: new Date(now - index * 60_000).toISOString(),
     }));
     const known = initialKnownNotificationIds(items, now);
     expect(items.filter((item) => !known.has(item.id)).map((item) => item.id))
-      .toEqual(["event-0", "event-1", "event-2", "event-3", "event-4"]);
+      .toEqual(["event-0"]);
+  });
+
+  it("keeps yesterday's latest event eligible but never falls back to older events after acknowledgement", () => {
+    const items = [notification("yesterday", { occurredAt: new Date(now - 24 * 60 * 60_000).toISOString() }), notification("earlier", { occurredAt: new Date(now - 48 * 60 * 60_000).toISOString() })];
+    expect([...initialKnownNotificationIds(items, now)]).toEqual(["earlier"]);
+    for (const acknowledgement of [{ readAt: new Date(now).toISOString() }, { desktopDeliveredAt: new Date(now).toISOString() }]) {
+      expect(initialKnownNotificationIds([{ ...items[0]!, ...acknowledgement }, items[1]!], now).size).toBe(2);
+    }
+  });
+  it("shares one replay slot between regular and Hisobot events, ignoring invalid timestamps", () => {
+    const items = [notification("regular", { occurredAt: new Date(now - 1000).toISOString() }), notification("hisobot", { kind: "hisobot" }), notification("invalid", { occurredAt: "invalid" })];
+    expect([...initialKnownNotificationIds(items, now)]).toEqual(["hisobot", "invalid"]);
   });
 
   it("replays only the latest current Hisobot reminder, not five accumulated slots", () => {
@@ -65,5 +77,25 @@ describe("initialKnownNotificationIds", () => {
     expect(isObsoleteHisobotNotification(item, Date.parse("2026-10-08T19:00:00Z"))).toBe(true);
     expect(isObsoleteHisobotNotification({ ...item, occurredAt: "invalid" }, now)).toBe(true);
     expect(isObsoleteHisobotNotification({ ...item, kind: "task" }, now)).toBe(false);
+  });
+});
+
+describe("deliverNotificationOnce", () => {
+  afterEach(() => { localStorage.removeItem("yuksalish:desktop-notifications:first"); localStorage.removeItem("yuksalish:desktop-notifications:second"); vi.restoreAllMocks(); });
+  it("shows an event once across reloads while isolating employees", async () => {
+    const show = vi.fn().mockResolvedValue(true);
+    await deliverNotificationOnce("first", "event", show);
+    await deliverNotificationOnce("first", "event", show);
+    expect(show).toHaveBeenCalledOnce();
+    await deliverNotificationOnce("second", "event", show);
+    expect(show).toHaveBeenCalledTimes(2);
+  });
+  it("does not remember denied or failed attempts", async () => {
+    const show = vi.fn().mockResolvedValueOnce(false).mockRejectedValueOnce(new Error("offline")).mockResolvedValue(true);
+    expect(await deliverNotificationOnce("first", "event", show)).toBe(false);
+    await expect(deliverNotificationOnce("first", "event", show)).rejects.toThrow("offline");
+    expect(await deliverNotificationOnce("first", "event", show)).toBe(true);
+    await deliverNotificationOnce("first", "event", show);
+    expect(show).toHaveBeenCalledTimes(3);
   });
 });

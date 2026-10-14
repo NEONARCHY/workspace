@@ -1,5 +1,6 @@
 import type { NavigationKey, ProjectHubProject, WorkspaceBootstrap, WorkspaceTask, ZoomMeeting } from "@yuksalish/contracts";
 import { isObsoleteHisobotNotification } from "./notification-delivery";
+import { isTaskOverdue } from "./task-deadline";
 
 export type HomeWorkspace = Pick<WorkspaceBootstrap, "currentUser" | "people" | "departments" | "tasks" | "projects" | "tripRequests" | "notifications" | "chats" | "messages" | "feedPosts" | "calendarEvents" | "personalPreferences">;
 export interface HomeTarget { readonly section: NavigationKey; readonly entityId?: string; readonly messageId?: string; readonly incomingReferent?: boolean }
@@ -39,10 +40,10 @@ export function buildPersonalHome(workspace: HomeWorkspace, canView: (key: Navig
     if (task.status === "awaiting_review") continue;
     const signal = deadlineSignal(task.id, task.title, "tasks", task.dueAt, now, ["high", "urgent"].includes(task.priority));
     if (signal) signals.push(signal);
-    else if (task.status === "overdue" || ["high", "urgent"].includes(task.priority)) signals.push({
+    else if (isTaskOverdue(task, now) || ["high", "urgent"].includes(task.priority)) signals.push({
       id: "tasks:" + task.id, entityId: task.id, section: "tasks", title: task.title,
-      note: task.status === "overdue" ? "Отмечена как просроченная" : "Высокий приоритет",
-      score: task.status === "overdue" ? 1000 : 700, tone: task.status === "overdue" ? "danger" : "warning",
+      note: isTaskOverdue(task, now) ? "Отмечена как просроченная" : "Высокий приоритет",
+      score: isTaskOverdue(task, now) ? 1000 : 700, tone: isTaskOverdue(task, now) ? "danger" : "warning",
     });
   }
   if (canView("tasks")) for (const task of workspace.tasks.filter(t => t.authorId === userId && t.status === "awaiting_review")) signals.push({

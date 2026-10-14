@@ -1,7 +1,5 @@
 import type { WorkspaceNotification } from "@yuksalish/contracts";
 
-const replayWindowMs = 2 * 60 * 60 * 1000;
-const replayLimit = 5;
 const reportDate = new Intl.DateTimeFormat("en-GB", {
   timeZone: "Asia/Tashkent", year: "numeric", month: "2-digit", day: "2-digit",
 });
@@ -21,21 +19,36 @@ export function isObsoleteHisobotNotification(item: WorkspaceNotification, now =
     || reportClock.format(current) >= "18:30";
 }
 
-/** Replay a small recent backlog after login without flooding Windows with old events. */
+/** Only the latest event may replay: never walk backwards through the backlog
+ * on subsequent logins after its delivery/read acknowledgement. */
 export function initialKnownNotificationIds(
   notifications: readonly WorkspaceNotification[],
   now = Date.now(),
 ): Set<string> {
-  const pending = notifications.filter((item) => !item.readAt && !item.desktopDeliveredAt);
-  const recent = pending
-    .filter((item) => item.kind !== "hisobot" && new Date(item.occurredAt).getTime() >= now - replayWindowMs)
-    .sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime())
-    .slice(0, replayLimit);
-  const replayIds = new Set([
-    ...recent.map((item) => item.id),
-    ...pending.filter((item) => item.kind === "hisobot" && !isObsoleteHisobotNotification(item, now))
-      .sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime())
-      .slice(0, 1).map((item) => item.id),
-  ]);
-  return new Set(notifications.filter((item) => !replayIds.has(item.id)).map((item) => item.id));
+  const latest = notifications.filter(item => {
+    const occurred = Date.parse(item.occurredAt);
+    return Number.isFinite(occurred) && occurred <= now + 5000 && !isObsoleteHisobotNotification(item, now);
+  }).sort((a, b) => Date.parse(b.occurredAt) - Date.parse(a.occurredAt))[0];
+  return new Set(notifications.filter(item => item.id !== latest?.id || item.readAt || item.desktopDeliveredAt).map(item => item.id));
+}
+
+/** Persist successful native delivery across reloads/tabs even if the server
+ * acknowledgement fails. Failed/permission-denied attempts remain retryable. */
+export async function deliverNotificationOnce(userId: string, id: string, show: () => Promise<boolean>): Promise<boolean> {
+  const key = `yuksalish:desktop-notifications:${userId}`;
+  const deliver = async () => {
+    let ids: string[] = [];
+    try {
+      const stored: unknown = JSON.parse(localStorage.getItem(key) ?? "[]");
+      if (Array.isArray(stored)) ids = stored.filter((value): value is string => typeof value === "string");
+    } catch { /* The server acknowledgement and session IDs remain a fallback. */ }
+    if (ids.includes(id)) return true;
+    const shown = await show();
+    if (shown) {
+      try { localStorage.setItem(key, JSON.stringify([...ids.slice(-255), id])); }
+      catch { /* Storage can be unavailable in restricted browser profiles. */ }
+    }
+    return shown;
+  };
+  return navigator.locks ? navigator.locks.request(key, deliver) : deliver();
 }

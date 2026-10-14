@@ -1,5 +1,5 @@
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 import type {
   NotificationKind,
@@ -9,7 +9,8 @@ import type {
   WorkspaceNotification,
 } from "@yuksalish/contracts";
 import { workspacePlatform } from "./platform-adapter";
-import { workspaceSounds } from "./workspace-sounds";
+import { defaultNotificationVolume, workspaceSounds } from "./workspace-sounds";
+import "./notification-sound-settings.css";
 import { SlidingSegmented } from "./SlidingSegmented";
 import { useContextMotion } from "./useContextMotion";
 import { SwipeRow } from "./SwipeRow";
@@ -109,7 +110,8 @@ export function NotificationCenter({
   const streamMotion = useContextMotion(`${filter}:${kindFilter}`);
   const [savingPreferences, setSavingPreferences] = useState(false);
   const [volumeDraft, setVolumeDraft] = useState<{ base: number; value: number }>();
-  const volume = volumeDraft?.base === (preferences.soundVolume ?? 20) ? volumeDraft.value : preferences.soundVolume ?? 20;
+  const savedVolume = preferences.soundVolume ?? defaultNotificationVolume;
+  const volume = volumeDraft?.base === savedVolume ? volumeDraft.value : savedVolume;
   const [soundStatus, setSoundStatus] = useState<{ message: string; error: boolean }>();
   const [testingNotification, setTestingNotification] = useState(false);
   const [testStatus, setTestStatus] = useState<{ readonly message: string; readonly error: boolean }>();
@@ -347,24 +349,36 @@ export function NotificationCenter({
               </label>
             ))}
           </div>
-          <div className="notification-sound-settings">
-            <Switch label="Звуки уведомлений" checked={preferences.soundEnabled !== false} disabled={savingPreferences}
+          <section className="notification-sound-settings" aria-label="Настройки звука">
+            <div className="notification-sound-heading">
+              <span><strong>Звуки уведомлений</strong><small>{preferences.soundEnabled === false ? "Выключены" : "Новые события сопровождаются звуком"}</small></span>
+              <Switch aria-label="Звуки уведомлений" checked={preferences.soundEnabled !== false} disabled={savingPreferences}
               onChange={(_, data) => void updatePreference("soundEnabled", data.checked)} />
-            <label><span>Громкость: {volume}%</span><input type="range" aria-label="Громкость уведомлений" min={0} max={100} step={5}
-              value={volume} onChange={event => setVolumeDraft({ base: preferences.soundVolume ?? 20, value: Number(event.target.value) })} /></label>
-            <div><Button size="small" disabled={savingPreferences || volume === (preferences.soundVolume ?? 20)} onClick={() => {
+            </div>
+            <label className="notification-volume">
+              <span className="notification-volume-heading"><span>Громкость</span><span className="notification-volume-value" aria-hidden="true">{volume}%</span></span>
+              <input type="range" aria-label="Громкость уведомлений" aria-valuetext={`${volume}%`} min={0} max={100} step={5}
+                disabled={savingPreferences} style={{ "--notification-volume": `${volume}%` } as CSSProperties}
+                value={volume} onChange={event => { setVolumeDraft({ base: savedVolume, value: Number(event.target.value) }); setSoundStatus(undefined); }} />
+              <span className="notification-volume-scale" aria-hidden="true"><span>Без звука</span><span>Максимум</span></span>
+            </label>
+            <div className="notification-sound-actions"><Button size="small" appearance="primary" aria-label="Сохранить громкость" disabled={savingPreferences || volume === savedVolume} onClick={() => {
               setSavingPreferences(true); setSoundStatus(undefined);
             void Promise.resolve().then(() => onUpdatePreferences({ ...preferences, soundVolume: volume })).then(() => {
                 setSoundStatus({ message: "Громкость сохранена", error: false });
               }).catch((failure: unknown) => setSoundStatus({ message: failure instanceof Error ? failure.message : "Не удалось сохранить громкость", error: true }))
                 .finally(() => setSavingPreferences(false));
-            }}>Сохранить громкость</Button> <Button size="small" onClick={() => {
+            }}>{savingPreferences ? "Сохраняем…" : "Сохранить"}</Button><Button size="small" aria-label="Прослушать звук" onClick={() => {
               void workspaceSounds.preview(volume).then(() => setSoundStatus({ message: "Звук воспроизведён", error: false }))
                 .catch((failure: unknown) => setSoundStatus({ message: failure instanceof Error ? failure.message : "Не удалось воспроизвести звук", error: true }));
-            }}>Проверить звук</Button></div>
-            {soundStatus && <p role={soundStatus.error ? "alert" : "status"}>{soundStatus.message}</p>}
-          </div>
+            }}>Прослушать</Button></div>
+            <div className="notification-sound-feedback" aria-live="polite">
+              {soundStatus ? <p role={soundStatus.error ? "alert" : "status"}>{soundStatus.message}</p> : <small>Изменения применятся после сохранения</small>}
+            </div>
+          </section>
           {onTestSystemNotification ? <div className="notification-test">
+            <strong>Проверка доставки</strong>
+            <small>Убедитесь, что системный баннер появляется</small>
             <Button size="small" disabled={testingNotification} onClick={() => {
               setTestingNotification(true);
               setTestStatus(undefined);
@@ -376,9 +390,11 @@ export function NotificationCenter({
             }}>{testingNotification ? "Проверяем…" : "Проверить уведомление"}</Button>
             {testStatus ? <p role={testStatus.error ? "alert" : "status"}>{testStatus.message}</p> : null}
           </div> : null}
-          <p className="notification-settings-note">
-            Отключение звука не удаляет события. Отключение канала ленты останавливает новые уведомления о публикациях. Системные уведомления приходят, пока сайт открыт; нужны HTTPS и разрешение браузера.
-          </p>
+          <details className="notification-settings-help">
+            <summary>Как работают уведомления</summary>
+            <p>Отключение звука не удаляет события. Отключение канала ленты останавливает новые уведомления о публикациях.</p>
+            <p>Системные уведомления приходят, пока сайт открыт; нужны HTTPS и разрешение браузера. После входа показывается только последнее событие, а вся история остаётся в этом разделе.</p>
+          </details>
         </aside>
       </div>
       {!undo.isShared ? <UndoActionsToast manager={undo} /> : null}

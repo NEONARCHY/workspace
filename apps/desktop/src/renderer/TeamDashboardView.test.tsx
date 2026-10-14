@@ -220,4 +220,12 @@ describe("TeamDashboardView", () => {
       if (count === 0) expect(within(drawer).getByText("В этой категории задач нет")).toBeInTheDocument();
     }
   });
+  it("does not count a historical overdue status after its deadline was rescheduled", () => {
+    const tasks = [task({ id: "rescheduled", title: "Перенесённая задача", assigneeId: "employee", status: "overdue", dueAt: "2026-09-20T09:00:00Z" })];
+    render(<FluentProvider theme={workspaceTheme}><TeamDashboardView token="test-token" tasks={tasks} people={people} currentUserId="manager" efficiency={efficiency} efficiencyLoading={false} onSelectTask={vi.fn()} /></FluentProvider>);
+    const statuses = screen.getByRole("group", { name: "Задачи по статусам" });
+    expect(within(statuses).getByRole("button", { name: "В работе 1" })).toBeInTheDocument();
+    fireEvent.click(within(statuses).getByRole("button", { name: "Просрочены 0" }));
+    expect(within(screen.getByRole("dialog", { name: "Просрочены" })).queryByText("Перенесённая задача")).toBeNull();
+  });
 });

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { NotificationPreferences, WorkspaceNotification } from "@yuksalish/contracts";
-import { notificationSoundEnabled, playNotificationOnce, workspaceSounds } from "./workspace-sounds";
+import { defaultNotificationVolume, notificationSoundEnabled, playNotificationOnce, workspaceSounds } from "./workspace-sounds";
 
 export function useNotificationSounds(userId: string | undefined,
   notifications: readonly WorkspaceNotification[], prefs: NotificationPreferences): void {
@@ -22,12 +22,15 @@ export function useNotificationSounds(userId: string | undefined,
       return; // Loaded history must never produce a choir after login/reload.
     }
     if (prefs.soundEnabled === false || prefs.soundVolume === 0) workspaceSounds.stop();
-    for (const item of notifications) {
-      if (known.current.ids.has(item.id)) continue;
-      known.current.ids.add(item.id);
+    const knownIds = known.current.ids;
+    const fresh = notifications.filter(item => !knownIds.has(item.id));
+    for (const item of fresh) knownIds.add(item.id);
+    // Polling/reconnection can deliver a whole batch; never play its history.
+    const item = fresh.sort((a, b) => Date.parse(b.occurredAt) - Date.parse(a.occurredAt))[0];
+    if (item) {
       const age = Date.now() - Date.parse(item.occurredAt);
-      if (item.readAt || !Number.isFinite(age) || age < -5000 || age > 60_000 || !notificationSoundEnabled(item, prefs)) continue;
-      void playNotificationOnce(userId, item.id, prefs.soundVolume ?? 20).catch(() => undefined);
+      if (item.readAt || !Number.isFinite(age) || age < -5000 || age > 60_000 || !notificationSoundEnabled(item, prefs)) return;
+      void playNotificationOnce(userId, item.id, prefs.soundVolume ?? defaultNotificationVolume).catch(() => undefined);
     }
   }, [userId, notifications, prefs]);
 }
