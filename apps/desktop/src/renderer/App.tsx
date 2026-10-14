@@ -1420,24 +1420,22 @@ export function App() {
     try {
       await uploadFiles("approval_request", request.id, primaryFiles, "primary");
       await uploadFiles("approval_request", request.id, additionalFiles, "additional");
-      await updateWorkspaceApproval(session.accessToken, request.id, {
+      const corrected = await updateWorkspaceApproval(session.accessToken, request.id, {
         ...payload,
-        currency: request.currency,
-        changeComment: "Исправлено после возврата",
+        changeComment: payload.changeComment ?? "Исправлено после возврата",
       });
-      const resubmitted = await actOnWorkspaceApproval(
-        session.accessToken,
-        request.id,
-        "resubmit",
+      const resubmitted = request.status === "needs_revision" ? await actOnWorkspaceApproval(
+        session.accessToken, request.id, "resubmit",
         { comment: "Исправленная версия отправлена повторно" },
-      );
+      ) : corrected;
       setWorkspace((current) => ({
         ...current,
         requests: current.requests.map((item) =>
           item.id === resubmitted.id ? resubmitted : item,
         ),
       }));
-      setConnectionDetail("Исправленная заявка отправлена повторно");
+      setConnectionDetail(request.status === "needs_revision"
+        ? "Исправленная заявка отправлена повторно" : "Заявка обновлена; текущий этап сохранён");
       return resubmitted;
     } catch (error) {
       reportError(error);
@@ -2316,6 +2314,7 @@ export function App() {
                   ["admin", "superadmin"].includes(workspace.currentUser.role)
                   && (modulePermissions.payment_requests?.admin ?? true)
                 }
+                isSuperadmin={workspace.currentUser.role === "superadmin"}
                 canCreateRequest={workspace.canCreatePaymentRequests}
                 currentUserId={workspace.currentUser.id}
                 people={workspace.people}

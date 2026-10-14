@@ -25,35 +25,33 @@ function select(name: string, option: string) {
   fireEvent.click(screen.getByRole("option", { name: option }));
 }
 describe("payment budget selection", () => {
-  it("only offers articles matching the selected project and currency", () => {
+  it("offers project articles in any currency without changing the payment currency", () => {
     render(<Harness />);
     expect(screen.getByRole("combobox", { name: "бюджетная статья" })).toBeDisabled();
     select("проект", "P1 · First");
     fireEvent.click(screen.getByRole("combobox", { name: "бюджетная статья" }));
-    expect(screen.queryByRole("option", { name: /Services · остаток 100.25 USD/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /Services · остаток 100.25 USD/ })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: /Local services/ })).toBeInTheDocument();
-    expect(screen.getByText(/Статьи в другой валюте скрыты/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("option", { name: "Local services · остаток 1000 UZS" }));
+    fireEvent.click(screen.getByRole("option", { name: "Services · остаток 100.25 USD" }));
     expect(screen.getByRole("combobox", { name: "валюта оплаты" })).toHaveTextContent("UZS");
+    expect(screen.getByText(/Валюта оплаты отличается от валюты плана статьи/)).toBeInTheDocument();
     select("валюта оплаты", "USD");
-    select("бюджетная статья", "Services · остаток 100.25 USD");
     expect(screen.getByRole("combobox", { name: "валюта оплаты" })).toHaveTextContent("USD");
     expect(screen.getByRole("combobox", { name: "бюджетная статья" })).toHaveTextContent("Services");
     select("проект", "P2 · Other");
     expect(screen.getByRole("combobox", { name: "бюджетная статья" })).toHaveTextContent("Без статьи");
     fireEvent.click(screen.getByRole("combobox", { name: "бюджетная статья" }));
     expect(screen.queryByRole("option", { name: /Services/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole("option", { name: /Private other/ })).not.toBeInTheDocument();
-    select("валюта оплаты", "UZS");
-    fireEvent.click(screen.getByRole("combobox", { name: "бюджетная статья" }));
     expect(screen.getByRole("option", { name: /Private other/ })).toBeInTheDocument();
+    select("валюта оплаты", "UZS");
+    expect(screen.getByRole("combobox", { name: "бюджетная статья" })).toHaveTextContent("Без статьи");
   });
-  it("clears the article when payment currency is explicitly changed", () => {
+  it("keeps the selected article when payment currency is explicitly changed", () => {
     render(<Harness />);
     select("проект", "P1 · First");
     select("валюта оплаты", "USD");
     select("бюджетная статья", "Services · остаток 100.25 USD");
     select("валюта оплаты", "UZS");
-    expect(screen.getByRole("combobox", { name: "бюджетная статья" })).toHaveTextContent("Без статьи");
+    expect(screen.getByRole("combobox", { name: "бюджетная статья" })).toHaveTextContent("Services");
   });
 });

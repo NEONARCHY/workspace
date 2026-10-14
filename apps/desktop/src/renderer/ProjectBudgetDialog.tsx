@@ -71,11 +71,13 @@ export function ProjectBudgetDialog({ token, project, onClose }: Props) {
           <h3>Фактические расходы по валютам</h3>
           {summary.actualByCurrency.length ? summary.actualByCurrency.map((total) => <p key={total.currency}>{exactBudgetMoney(total.amount, total.currency)}</p>) : <p>Учтённых оплат пока нет.</p>}
           <h3>Бюджетные статьи</h3>
-          <div className="project-budget-table"><table><thead><tr><th>Статья</th><th>План</th><th>Факт</th><th>Остаток</th></tr></thead>
+          <div className="project-budget-table"><table><thead><tr><th>Статья</th><th>План</th><th>Факт по валютам</th><th>Остаток в валюте плана</th></tr></thead>
             <tbody>{summary.articles.map((row) => <tr key={row.id}><th scope="row">{row.title}<small>{row.funding === "donor" ? "Донор" : row.funding === "own" ? "Собственный вклад" : "Источник уточняется"}</small></th>
-              <td>{exactBudgetMoney(row.amount, row.currency)}</td><td>{exactBudgetMoney(row.actualAmount, row.currency)}</td><td>{exactBudgetMoney(row.remainingAmount, row.currency)}</td></tr>)}</tbody></table></div>
+              <td>{exactBudgetMoney(row.amount, row.currency)}</td><td>{row.actualByCurrency?.length
+                ? row.actualByCurrency.map((total) => <div key={total.currency}>{exactBudgetMoney(total.amount, total.currency)}</div>)
+                : exactBudgetMoney(row.actualAmount, row.currency)}</td><td>{exactBudgetMoney(row.remainingAmount, row.currency)}</td></tr>)}</tbody></table></div>
           {!summary.articles.length ? <p>Статей пока нет. Их можно добавить вручную или из проверенного импорта.</p> : null}
-          <p>В общих расходах учитываются и оплаты без статьи. Валюты не конвертируются. Исторические завершённые заявки и прежние проектные согласования не пересчитаны.</p>
+          <p>В общих расходах учитываются и оплаты без статьи. Расходы в другой валюте показаны отдельно и не уменьшают остаток плана без согласованного курса. Исторические завершённые заявки и прежние проектные согласования не пересчитаны.</p>
         </> : null}
         {adding && project.canEdit ? <form ref={articleFormRef} onSubmit={(event) => { event.preventDefault(); void save(); }}>
           <label>Название статьи<Input required maxLength={500} disabled={busy} value={article.title} onChange={(_, data) => setArticle({ ...article, title: data.value })} /></label>

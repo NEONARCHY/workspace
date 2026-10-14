@@ -6237,7 +6237,7 @@ async def create_approval_request(
     from .project_budget_service import validate_article_link
 
     article_title = await validate_article_link(
-        connection, payload.budget_article_id, payload.project_id, payload.currency,
+        connection, payload.budget_article_id, payload.project_id,
     )
     request_id = uuid4()
     now = datetime.now(UTC)
@@ -6374,16 +6374,25 @@ async def update_approval_request(
     )
     if row is None:
         raise WorkspaceRepositoryError(404, "Request was not found")
-    if row["status"] != "needs_revision":
-        raise WorkspaceRepositoryError(409, "Only a returned request can be edited")
-    can_revise = row["requester_user_id"] == current_user.id or any(
-        [
-            await _can_act_on_node(connection, current_user, row, node_key)
-            for node_key in row["active_node_keys"] or []
-        ]
+    if row["status"] not in {"running", "needs_revision"}:
+        raise WorkspaceRepositoryError(409, "Only an active request can be edited")
+    can_revise = (
+        current_user.role == "superadmin"
+        or row["requester_user_id"] == current_user.id
+        or (
+            row["status"] == "needs_revision"
+            and any(
+                [
+                    await _can_act_on_node(connection, current_user, row, node_key)
+                    for node_key in row["active_node_keys"] or []
+                ]
+            )
+        )
     )
     if not can_revise:
-        raise WorkspaceRepositoryError(403, "This user cannot edit the returned request")
+        raise WorkspaceRepositoryError(403, "This user cannot edit this request")
+    if row["status"] == "running" and not (payload.change_comment or "").strip():
+        raise WorkspaceRepositoryError(422, "Explain why the active request is being changed")
 
     from .project_budget_service import ensure_unbooked, validate_article_link
 
@@ -6422,7 +6431,7 @@ async def update_approval_request(
     if project_id:
         submitted_details.update(project_name=project_name, project_code=project_code)
     submitted_details["budget_article_title"] = await validate_article_link(
-        connection, submitted_details["budget_article_id"], project_id, payload.currency,
+        connection, submitted_details["budget_article_id"], project_id,
     )
     previous_route_payload = row["payload"] or {}
     route_variant_payload = (
@@ -6436,6 +6445,14 @@ async def update_approval_request(
             connection, row["template_id"], project_id, project_name,
         )
     )
+    if row["status"] == "running" and route_variant_payload != {
+        key: previous_route_payload[key]
+        for key in ("payment_route_variant", "subsidy_approver_user_id")
+        if key in previous_route_payload
+    }:
+        raise WorkspaceRepositoryError(
+            409, "Return this request for revision before changing its approval route",
+        )
     calendar_event_id = await _validated_payment_event_id(
         connection, current_user, submitted_details["calendar_event_id"],
         submitted_details["payment_purpose"], project_id,
@@ -6480,6 +6497,13 @@ async def update_approval_request(
             current_version=next_version,
         )
     )
+    await connection.execute(insert(approval_actions).values(
+        id=uuid4(), request_id=request_id,
+        node_key=(row["active_node_keys"] or ["start"])[0],
+        actor_user_id=current_user.id, delegated_to_user_id=None,
+        action="edit", comment=(payload.change_comment or "").strip() or None,
+        created_at=datetime.now(UTC),
+    ))
     return await _request_response(connection, request_id, current_user)
 
 
@@ -6708,7 +6732,8 @@ async def validate_attachment_owner(
         row is not None
         and row["status"] in {"running", "needs_revision"}
         and (
-            row["requester_user_id"] == current_user.id
+            current_user.role == "superadmin"
+            or row["requester_user_id"] == current_user.id
             or (row["status"] == "needs_revision" and assigned_actor)
         )
     )
@@ -7723,6 +7748,7 @@ async def act_on_request(
         row["status"] != "needs_revision"
         or (
             row["requester_user_id"] != current_user.id
+            and current_user.role != "superadmin"
             and not await _can_act_on_node(connection, current_user, row, active_node)
         )
     ):
