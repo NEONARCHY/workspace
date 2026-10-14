@@ -83,6 +83,19 @@ const allNoteIds = [...entries, ...readdirSync(releasedPath, { withFileTypes: tr
   .flatMap((entry) => readdirSync(join(releasedPath, entry.name)).filter((name) => name.endsWith(".json"))
     .map((name) => JSON.parse(readFileSync(join(releasedPath, entry.name, name), "utf8"))))].map((entry) => entry.id);
 if (new Set(allNoteIds).size !== allNoteIds.length) fail("numbered note IDs must remain unique across pending and released history");
+const consolidationPath = "apps/desktop/release-notes/consolidation.json";
+const consolidation = JSON.parse(readFileSync(consolidationPath, "utf8"));
+if (consolidation.version !== "2.0.000" || consolidation.date !== "2026-10-14"
+  || !Array.isArray(consolidation.noteIds) || !consolidation.noteIds.length
+  || new Set(consolidation.noteIds).size !== consolidation.noteIds.length
+  || consolidation.noteIds.some(id => !allNoteIds.includes(id))) {
+  fail("the 2.0.000 consolidation must reference retained, unique source notes");
+}
+const previousConsolidation = execFileSync("git", ["ls-tree", "--name-only", baseline, "--", consolidationPath], { encoding: "utf8" }).trim();
+if (previousConsolidation) {
+  const previous = JSON.parse(execFileSync("git", ["show", `${baseline}:${consolidationPath}`], { encoding: "utf8" }));
+  if (JSON.stringify(consolidation) !== JSON.stringify(previous)) fail("do not rewrite the published 2.0.000 consolidation");
+}
 if (base && !/^0+$/.test(base)) {
   const changed = execFileSync("git", ["diff", "--name-only", base, head], { encoding: "utf8" })
     .split(/\r?\n/u).filter(Boolean);

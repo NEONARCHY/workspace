@@ -1,15 +1,5 @@
 /* Dark triggers keep their rising fill. Light triggers reveal the focus border
    upwards over the neutral boundary without changing the field's geometry. */
-@property --ws-select-border-rise {
-  syntax: "<length-percentage>";
-  inherits: false;
-  initial-value: 100%;
-}
-@property --ws-select-border-join {
-  syntax: "<length-percentage>";
-  inherits: false;
-  initial-value: 0%;
-}
 @media (forced-colors: none) {
   html body .app-provider .workspace-select.workspace-select:not(.workspace-priority-select) {
     --ws-select-hover-fill: #fff;
@@ -48,26 +38,26 @@
     background: transparent;
     box-shadow: none;
     pointer-events: none;
-    --ws-select-border-rise: 100%;
-    --ws-select-border-join: 0%;
-    clip-path: polygon(0 100%, 100% 100%, 100% var(--ws-select-border-rise),
-      calc(100% - var(--ws-select-border-join)) var(--ws-select-border-rise),
-      calc(100% - var(--ws-select-border-join)) max(1px, var(--ws-select-border-rise)),
-      var(--ws-select-border-join) max(1px, var(--ws-select-border-rise)),
-      var(--ws-select-border-join) var(--ws-select-border-rise), 0 var(--ws-select-border-rise));
-    transition: --ws-select-border-rise 240ms cubic-bezier(.2, 0, 0, 1),
-      --ws-select-border-join 220ms cubic-bezier(.2, 0, 0, 1);
+    clip-path: polygon(0 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 0 100%, 0 100%, 0 100%);
+    transition: clip-path 240ms cubic-bezier(.2, 0, 0, 1);
   }
   html:not([data-color-theme="dark"]) body .app-provider .workspace-select.workspace-select:not(.workspace-priority-select):not([aria-disabled="true"]):not(:has(:disabled)):not([aria-invalid="true"]):not(:has([aria-invalid="true"])):hover::before {
-    --ws-select-border-rise: calc(100% - 10px);
+    clip-path: polygon(0 100%, 100% 100%, 100% calc(100% - 10px), 100% calc(100% - 10px), 100% calc(100% - 10px), 0 calc(100% - 10px), 0 calc(100% - 10px), 0 calc(100% - 10px));
   }
   html:not([data-color-theme="dark"]) body .app-provider .workspace-select.workspace-select:not(.workspace-priority-select):not([aria-disabled="true"]):not(:has(:disabled)):not([aria-invalid="true"]):not(:has([aria-invalid="true"])):focus-within::before {
-    --ws-select-border-rise: 0%;
-    --ws-select-border-join: 50%;
-    transition-delay: 0ms, 200ms;
+    clip-path: polygon(0 100%, 100% 100%, 100% 0, 50% 0, 50% 1px, 50% 1px, 50% 0, 0 0);
+    animation: ws-select-border-close 420ms cubic-bezier(.2, 0, 0, 1);
   }
+}
+/* Animate the geometry directly rather than repainting registered custom
+   properties each frame. The upper line closes only after the sides rise. */
+@keyframes ws-select-border-close {
+  0% { clip-path: polygon(0 100%, 100% 100%, 100% calc(100% - 10px), 100% calc(100% - 10px), 100% calc(100% - 10px), 0 calc(100% - 10px), 0 calc(100% - 10px), 0 calc(100% - 10px)); }
+  48% { clip-path: polygon(0 100%, 100% 100%, 100% 0, 100% 0, 100% 1px, 0 1px, 0 0, 0 0); }
+  100% { clip-path: polygon(0 100%, 100% 100%, 100% 0, 50% 0, 50% 1px, 50% 1px, 50% 0, 0 0); }
 }
 @media (prefers-reduced-motion: reduce) {
   html[data-color-theme="dark"] body .app-provider .workspace-select.workspace-select:not(.workspace-priority-select):not([aria-disabled="true"]):not(:has(:disabled)) > .fui-Dropdown__button { transition: none; }
   html:not([data-color-theme="dark"]) body .app-provider .workspace-select.workspace-select:not(.workspace-priority-select):not([aria-disabled="true"]):not(:has(:disabled)):not([aria-invalid="true"]):not(:has([aria-invalid="true"]))::before { transition: none; }
+  html:not([data-color-theme="dark"]) body .app-provider .workspace-select.workspace-select:not(.workspace-priority-select):not([aria-disabled="true"]):not(:has(:disabled)):not([aria-invalid="true"]):not(:has([aria-invalid="true"])):focus-within::before { animation: none; }
 }

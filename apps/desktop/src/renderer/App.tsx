@@ -90,6 +90,7 @@ import { WebUpdateNotice } from "./WebUpdateNotice";
 import { workspaceTheme, workspaceDarkTheme } from "./workspace-theme";
 import { useColorTheme } from "./color-theme";
 import { ColorThemeToggle } from "./ColorThemeToggle";
+import { NotificationBell } from "./NotificationBell";
 import { SectionJump } from "./SectionJump";
 import { ConnectionIndicator, WorkspaceIdentity } from "./WorkspaceIdentity";
 import { CompanyLogo } from "./CompanyLogo";
@@ -1956,7 +1957,7 @@ export function App() {
     notifications: workspace.notifications.filter((item) => !item.readAt).length,
   };
   const orderedNavItems = visibleNavigation(workspace.personalPreferences.navigationOrder, workspace.personalPreferences.hiddenNavigationKeys, canView)
-    .filter((key) => key !== "project_funding")
+    .filter((key) => key !== "project_funding" && key !== "notifications")
     .map((key) => navItems.find((item) => item.key === key)!);
   const sidebarItems = groupAiNavigation(orderedNavItems);
   const aiModuleGroup = sidebarItems.find((item) => item.key === "ai_modules");
@@ -2100,6 +2101,8 @@ export function App() {
                 <ConnectionIndicator detail={connectionDetail} error={Boolean(backgroundError)} updateAvailable={webUpdateAvailable} onSwitchNetwork={supportsDualApiOrigins() ? handleSwitchNetwork : undefined} switchingNetwork={switchingNetwork} />
                 <WorkdayControl token={session.accessToken} />
               </div>
+              <NotificationBell unreadCount={badgeBySection.notifications ?? 0} active={activeSection === "notifications"}
+                onOpen={() => { setPreparedAction(undefined); setFocusNotification(undefined); setFocusTarget(undefined); setActiveSection("notifications"); }} />
               <ColorThemeToggle userId={session.user.id} />
               {canUseAssistant && <YuksalishAssistant key={session.user.id} token={session.accessToken}
                 onOpenReference={openAssistantReference} onPrepareAction={prepareAssistantAction} />}

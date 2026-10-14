@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 import { defineConfig } from "vitest/config";
 
-import { compareReleaseVersions, numberUpdateNotes } from "./src/renderer/release-versions.mts";
+import { compareReleaseVersions, consolidateUpdateNotes, numberUpdateNotes, type ReleaseConsolidation } from "./src/renderer/release-versions.mts";
 import { readReleaseNoteOrder } from "./release-note-order.mts";
 import { cspConnectSources } from "./csp-connect-sources.mts";
 
@@ -73,9 +73,10 @@ const versionedNotes = numberUpdateNotes(numberedNotes, lastGroupedVersion, file
 const pendingNames = new Set(pendingEntries.map((entry) => entry.fileName));
 const pendingItems = [...versionedNotes].reverse().filter((entry) => pendingNames.has(entry.fileName))
   .flatMap((entry) => entry.items);
-const updateEntries = versionedNotes.map((entry) => ({
+const consolidation = JSON.parse(readFileSync(new URL("./release-notes/consolidation.json", import.meta.url), "utf8")) as ReleaseConsolidation;
+const updateEntries = consolidateUpdateNotes(versionedNotes.map((entry) => ({
   id: entry.id, date: noteDate(entry.fileName), version: entry.version, items: entry.items,
-}));
+})), consolidation);
 const currentWebVersion = updateEntries[0]?.version ?? packageJson.version;
 const releasedCurrentItems = releaseHistory.find((entry) => entry.version === packageJson.version)?.items ?? [];
 // The upload endpoint accepts at most 50 summary lines. The complete history
@@ -121,7 +122,7 @@ export default defineConfig(({ mode }) => ({
   base: mode === "web" ? "/" : "./",
   define: {
     __YUKSALISH_BUILD_ID__: JSON.stringify(buildId),
-    __YUKSALISH_APP_VERSION__: JSON.stringify(mode === "web" ? currentWebVersion : packageJson.version),
+    __YUKSALISH_APP_VERSION__: JSON.stringify(mode === "web" ? currentWebVersion : packageJson.version.replace(/\.(\d+)$/, (_, patch: string) => `.${patch.padStart(3, "0")}`)),
     __YUKSALISH_RELEASE_NOTES__: JSON.stringify({ title: releaseNotes.title, items: releaseNoteItems }),
     __YUKSALISH_UPDATE_ENTRIES__: JSON.stringify(updateEntries),
     __YUKSALISH_RELEASE_HISTORY__: JSON.stringify(releaseHistory),

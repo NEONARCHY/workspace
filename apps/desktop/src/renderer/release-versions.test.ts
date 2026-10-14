@@ -1,8 +1,25 @@
 import { describe, expect, it } from "vitest";
 
-import { compareReleaseVersions, nextUpdateVersion, numberUpdateNotes } from "./release-versions.mts";
+import { compareReleaseVersions, consolidateUpdateNotes, nextUpdateVersion, numberUpdateNotes } from "./release-versions.mts";
 
 describe("release version ordering", () => {
+  it("starts the new displayed sequence at 2.0.000 and advances to 2.0.001", () => {
+    expect(nextUpdateVersion("2.0.000")).toBe("2.0.001");
+    expect(nextUpdateVersion("2.0.999")).toBe("2.1.000");
+    expect(compareReleaseVersions("2.0.000", "2.0.0")).toBe(0);
+  });
+  it("groups complete launch notes while retaining older history and ordering later merges", () => {
+    const old = { id: "old", date: "2026-10-13", version: "1.0.20", items: ["Old change"] };
+    const first = { id: "my", date: "2026-10-14", version: "1.0.21", items: ["My tasks change"] };
+    const second = { id: "ui", date: "2026-10-14", version: "1.0.22", items: Array.from({ length: 60 }, (_, i) => `Change ${i}`) };
+    const group = { id: "launch", date: "2026-10-14", version: "2.0.000", noteIds: [first.id, second.id] };
+    const future = { id: "baxtiyor", date: "2026-10-01", version: "1.0.23", items: ["Later merge"] };
+    const entries = consolidateUpdateNotes([future, second, first, old], group);
+    expect(entries.map(entry => [entry.id, entry.version])).toEqual([["baxtiyor", "2.0.001"], ["launch", "2.0.000"], ["old", "1.0.20"]]);
+    expect(entries[1]?.items).toHaveLength(61);
+    expect(entries[1]?.items[0]).toBe("My tasks change");
+    expect(() => consolidateUpdateNotes([first, old], group)).toThrow("complete and unique");
+  });
   it("sorts numeric version segments instead of comparing version strings", () => {
     const versions = ["1.0.2", "1.0.18", "1.0.9", "1.0.10", "1.0.100", "1.1.0"];
     expect(versions.sort((left, right) => compareReleaseVersions(right, left))).toEqual([

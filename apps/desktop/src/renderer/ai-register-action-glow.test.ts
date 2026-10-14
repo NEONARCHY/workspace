@@ -20,7 +20,7 @@ it("tunes both themes and disables decorative motion for reduced motion and forc
   expect(css).toContain(".ai-referent-register-action:not(:disabled)::after { animation: none; opacity: .35; }");
 });
 it("uses visible downward breathing shadows only in light theme, preserving the dark halo", () => {
-  const light = css.match(/html:not\(\[data-color-theme="dark"\]\) \.ai-referent-register-actions \.ai-referent-register-action:not\(:disabled\)::after \{([\s\S]*?)\n  \}/)?.[1];
+  const light = css.match(/html:not\(\[data-color-theme="dark"\]\) \.ai-referent-register-actions \.ai-referent-register-action:not\(:disabled\)::after \{([\s\S]*?)\n {2}\}/)?.[1];
   expect(light).toContain("0 5px 8px -3px rgb(35 65 88 / .28)");
   expect(light).toContain("0 11px 18px -4px rgb(35 65 88 / .38)");
   expect(light).not.toMatch(/animation|transform|filter/);

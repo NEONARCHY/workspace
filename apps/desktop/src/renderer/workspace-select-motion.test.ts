@@ -15,15 +15,12 @@ it("reveals only the light focus border upwards from the hover underline", () =>
   expect(css).toContain("border: 1px solid var(--ws-field-focus-border);");
   expect(css).toContain("inset: -1px;");
   expect(css).toContain("pointer-events: none;");
-  expect(css).toContain("--ws-select-border-rise: calc(100% - 10px);");
-  expect(css).toContain("--ws-select-border-rise: 0%;");
-  expect(css).toContain("--ws-select-border-join: 50%;");
+  expect(css).toContain("calc(100% - 10px)");
+  expect(css).toContain("50% 0, 50% 1px, 50% 1px, 50% 0");
   expect(css).toContain("clip-path: polygon(");
-  expect(css).toContain("max(1px, var(--ws-select-border-rise))");
-  expect(css).toContain("--ws-select-border-join 220ms cubic-bezier(.2, 0, 0, 1)");
-  expect(css).toContain("transition-delay: 0ms, 200ms;");
-  expect(css).toContain("@property --ws-select-border-rise");
-  expect(css).toContain("@property --ws-select-border-join");
+  expect(css).toContain("animation: ws-select-border-close 420ms");
+  expect(css).toContain("48% { clip-path: polygon");
+  expect(css).not.toContain("@property");
   expect(css).toContain(':not([aria-invalid="true"]):not(:has([aria-invalid="true"]))');
 });
 it("supports both themes, reduced motion and disabled fields while retaining priority colours", () => {
