@@ -1,4 +1,6 @@
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
+import { workspacePlatform } from "./platform-adapter";
+import { validatedZoomLink } from "../shared/zoom-link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type {
@@ -279,6 +281,17 @@ export function ZoomView({
   [bucket, meetings, openedAt]);
   const selected = meetings.find((meeting) => meeting.id === selectedId);
 
+  const connect = () => {
+    const url = validatedZoomLink(selected?.joinUrl);
+    setActionError("");
+    if (!url) { setActionError("Ссылка Zoom недоступна. Обновите данные конференции."); return; }
+    if (workspacePlatform.kind !== "electron") { window.open(url, "_blank", "noopener,noreferrer"); return; }
+    if (!workspacePlatform.openZoomMeeting) { setActionError("Обновите приложение или откройте скопированную ссылку в браузере."); return; }
+    void workspacePlatform.openZoomMeeting(url).then(opened => {
+      if (!opened) setActionError("Не удалось открыть Zoom. Скопируйте ссылку и откройте её в браузере.");
+    }).catch(() => setActionError("Не удалось открыть Zoom. Попробуйте ещё раз."));
+  };
+
   const copy = async (text: string, confirmation: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -529,6 +542,7 @@ export function ZoomView({
               </label>
               <fieldset className="zoom-participants">
                 <legend>Кого пригласить · выбрано {draft.participantIds.length}</legend>
+                <p className="zoom-invite-hint">После сохранения каждому выбранному сотруднику придёт личное приглашение от организатора в мессенджере.</p>
                 {departments ? <EmployeeScopeSwitch value={participantScope} onChange={setParticipantScope} label="Группа участников Zoom" /> : null}
                 <div className="zoom-participant-list">
                   {people
@@ -613,7 +627,7 @@ export function ZoomView({
                     <Button
                       appearance="primary"
                       icon={<Open20Regular />}
-                      onClick={() => window.open(selected.joinUrl ?? "", "_blank", "noopener,noreferrer")}
+                      onClick={connect}
                     >
                       Подключиться
                     </Button>

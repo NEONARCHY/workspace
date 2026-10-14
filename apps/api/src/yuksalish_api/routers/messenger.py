@@ -27,6 +27,7 @@ from yuksalish_api.workspace_schemas import (
     TransferChatOwnerRequest,
     UpdateChatAvatarRequest,
     UpdateChatRequest,
+    ZoomInvitationReplyRequest,
 )
 
 router = APIRouter(tags=["messenger"])
@@ -61,6 +62,20 @@ async def changed(connection: AsyncConnection, request: Request) -> None:
     await cast(WorkspaceEventBus, request.app.state.event_bus).publish(
         {"type": "messenger.changed"}
     )
+
+
+@router.post("/messages/{message_id}/zoom-response", response_model=ChatMessageResponse)
+async def zoom_response(
+    message_id: UUID, payload: ZoomInvitationReplyRequest, user: User,
+    connection: Connection, request: Request,
+) -> ChatMessageResponse:
+    try:
+        result = await service.respond_zoom_invitation(connection, user, message_id, payload)
+    except WorkspaceRepositoryError as error:
+        raise HTTPException(error.status_code, error.detail) from error
+    await changed(connection, request)
+    await request.app.state.event_bus.publish({"type": "zoom.updated"})
+    return result
 
 
 @router.post("/chats/{chat_id}/forwards", response_model=ChatMessageResponse, status_code=201)

@@ -703,6 +703,10 @@ export function cancelZoomMeeting(token: string, meetingId: string): Promise<Zoo
   return apiRequest<ZoomMeeting>(`/zoom-meetings/${meetingId}/cancel`, { method: "POST" }, token);
 }
 
+export function respondToZoomInvitation(token: string, messageId: string, response: "accepted" | "declined"): Promise<ChatMessage> {
+  return apiRequest<ChatMessage>(`/messages/${messageId}/zoom-response`, { method: "POST", body: JSON.stringify({ response }) }, token);
+}
+
 export function loadDesktopReleases(token: string): Promise<readonly DesktopRelease[]> {
   return apiRequest<DesktopRelease[]>("/updates/releases", {}, token);
 }

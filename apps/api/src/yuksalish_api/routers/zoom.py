@@ -87,6 +87,7 @@ async def post_zoom_meeting(
     except ZoomServiceError as error:
         raise _translate(error) from error
     await request.app.state.event_bus.publish({"type": "zoom.created", "entityId": result.id})
+    await request.app.state.event_bus.publish({"type": "messenger.changed"})
     return result
 
 
@@ -109,6 +110,7 @@ async def patch_zoom_meeting(
     except ZoomServiceError as error:
         raise _translate(error) from error
     await request.app.state.event_bus.publish({"type": "zoom.updated", "entityId": result.id})
+    await request.app.state.event_bus.publish({"type": "messenger.changed"})
     return result
 
 
@@ -125,4 +127,5 @@ async def post_zoom_meeting_cancel(
     except ZoomServiceError as error:
         raise _translate(error) from error
     await request.app.state.event_bus.publish({"type": "zoom.updated", "entityId": result.id})
+    await request.app.state.event_bus.publish({"type": "messenger.changed"})
     return result

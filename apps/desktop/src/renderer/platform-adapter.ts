@@ -37,6 +37,7 @@ export interface ReleaseHistoryEntry {
 }
 
 export interface WorkspacePlatform {
+  readonly openZoomMeeting?: (url: string) => Promise<boolean>;
   readonly kind: "electron" | "web";
   readonly platform: string;
   readonly version: string;
@@ -138,6 +139,7 @@ function electronPlatform(): WorkspacePlatform | undefined {
   const bridge = window.yuksalish;
   if (!bridge) return undefined;
   return {
+    openZoomMeeting: bridge.openZoomMeeting,
     kind: "electron",
     platform: bridge.platform,
     version: bridge.version,

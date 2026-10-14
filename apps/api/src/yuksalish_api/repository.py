@@ -2627,6 +2627,9 @@ async def load_workspace(
     forward_map = await messenger_service.forward_detail_map(
         connection, current_user, list(message_rows)
     )
+    invitations = await messenger_service.invitation_detail_map(
+        connection, current_user, list(message_rows)
+    )
     read_ids = await messenger_service.read_message_ids(
         connection, current_user, [row["id"] for row in message_rows]
     )
@@ -2639,6 +2642,7 @@ async def load_workspace(
             reactions=reaction_map.get(row["id"]),
             pin=pin_map.get(row["id"]),
             forwarded=forward_map.get(row["id"]),
+            zoom_invitation=invitations.get(row["id"]),
             read_by_recipient=row["id"] in read_ids,
         )
         for row in message_rows
@@ -3070,6 +3074,9 @@ async def search_messages(
         connection, current_user, [row["id"] for row in rows]
     )
     forward_map = await messenger_service.forward_detail_map(connection, current_user, list(rows))
+    invitations = await messenger_service.invitation_detail_map(
+        connection, current_user, list(rows)
+    )
     read_ids = await messenger_service.read_message_ids(
         connection, current_user, [row["id"] for row in rows]
     )
@@ -3082,6 +3089,7 @@ async def search_messages(
             reactions=reaction_map.get(row["id"]),
             pin=pin_map.get(row["id"]),
             forwarded=forward_map.get(row["id"]),
+            zoom_invitation=invitations.get(row["id"]),
             read_by_recipient=row["id"] in read_ids,
         )
         for row in rows

@@ -83,6 +83,17 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("Zoom conference booking", () => {
+  it("joins a conference from desktop through the restricted Zoom capability", async () => {
+    const previous = window.yuksalish;
+    const openZoomMeeting = vi.fn().mockResolvedValue(true);
+    try {
+      window.yuksalish = { platform: "win32", version: "2.0.0", openZoomMeeting };
+      mount();
+      fireEvent.click(await screen.findByRole("button", { name: /Планёрка отдела/ }));
+      fireEvent.click(screen.getByRole("button", { name: "Подключиться" }));
+      await waitFor(() => expect(openZoomMeeting).toHaveBeenCalledWith(meeting.joinUrl));
+    } finally { window.yuksalish = previous; }
+  });
   it("shows the shared schedule and the connection details of an own meeting", async () => {
     mount();
     fireEvent.click(await screen.findByRole("button", { name: /Планёрка отдела/ }));

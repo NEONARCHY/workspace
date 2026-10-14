@@ -48,7 +48,11 @@ from .workspace_schemas import (
     TransferChatOwnerRequest,
     UpdateChatAvatarRequest,
     UpdateChatRequest,
+    ZoomInvitationReplyRequest,
+    ZoomInvitationResponse,
 )
+from .zoom_invitations import invitation_detail_map as invitation_detail_map
+from .zoom_invitations import reply_to_zoom_invitation
 
 Record = Mapping[Any, Any]
 
@@ -324,6 +328,7 @@ async def chat_summary(
     preview = (
         "Сообщений пока нет"
         if latest is None
+        else "Приглашение на Zoom" if latest.get("zoom_meeting_id")
         else latest["body"]
     )
     return ChatSummaryResponse(
@@ -907,6 +912,7 @@ def message_response(
     pin: Record | None = None,
     forwarded: ForwardedContentResponse | None = None,
     read_by_recipient: bool = False,
+    zoom_invitation: ZoomInvitationResponse | None = None,
 ) -> ChatMessageResponse:
     own = row["author_user_id"] == user.id
     deleted = row["deleted_at"] is not None
@@ -915,10 +921,12 @@ def message_response(
         chat_id=str(row["chat_id"]),
         author_id=str(row["author_user_id"]),
         body=(
-            "" if deleted else "Объявление недоступно"
+            "" if deleted else "Приглашение недоступно"
+            if zoom_invitation and not zoom_invitation.available else "Объявление недоступно"
             if forwarded and not forwarded.available else row["body"]
         ),
         forwarded=None if deleted else forwarded,
+        zoom_invitation=None if deleted else zoom_invitation,
         system_kind=row["system_kind"],
         own=own,
         read_by_recipient=own and read_by_recipient,
@@ -933,6 +941,7 @@ def message_response(
         and not deleted
         and row["system_kind"] is None
         and not row.get("forwarded")
+        and not row.get("zoom_meeting_id")
         and can_send
         and datetime.now(UTC) < row["created_at"] + timedelta(hours=24),
         can_delete=not deleted and row["system_kind"] is None and (
@@ -960,6 +969,7 @@ async def message_with_details(
     reactions, pins = await message_detail_maps(connection, user, [row["id"]])
     forwards = await forward_detail_map(connection, user, [row])
     read_ids = await read_message_ids(connection, user, [row["id"]])
+    invitations = await invitation_detail_map(connection, user, [row])
     return message_response(
         row,
         user,
@@ -969,7 +979,24 @@ async def message_with_details(
         pin=pins.get(row["id"]),
         forwarded=forwards.get(row["id"]),
         read_by_recipient=row["id"] in read_ids,
+        zoom_invitation=invitations.get(row["id"]),
     )
+
+
+async def respond_zoom_invitation(
+    connection: AsyncConnection, user: AuthenticatedUser, message_id: UUID,
+    payload: ZoomInvitationReplyRequest,
+) -> ChatMessageResponse:
+    row = (await connection.execute(select(messages).where(
+        messages.c.id == message_id, messages.c.deleted_at.is_(None),
+    ))).mappings().first()
+    if row is None or not row["zoom_meeting_id"]:
+        raise WorkspaceRepositoryError(404, "Приглашение недоступно")
+    chat, member = await chat_access(connection, user, row["chat_id"])
+    if not message_visible_to_member(row, member):
+        raise WorkspaceRepositoryError(404, "Приглашение недоступно")
+    await reply_to_zoom_invitation(connection, user, row["zoom_meeting_id"], payload.response)
+    return await message_with_details(connection, user, row, chat, member)
 
 
 async def validate_mentions(
@@ -1026,7 +1053,8 @@ async def notify_message(
                 kind="message",
                 priority="attention" if mentioned else "normal",
                 title=f"{notice} · {chat['title'] or author_name}"[:240],
-                body=f"{author_name}: {row['body']}"[:4000],
+                body=(f"{author_name}: Приглашение на Zoom"
+                      if row.get("zoom_meeting_id") else f"{author_name}: {row['body']}")[:4000],
                 section="messenger",
                 entity_id=chat["id"],
                 requires_action=False,
@@ -1045,6 +1073,7 @@ async def send_chat_message(
     *,
     message_id: UUID | None = None,
     forwarded: dict[str, Any] | None = None,
+    zoom_meeting_id: UUID | None = None,
 ) -> ChatMessageResponse:
     chat, member = await chat_access(connection, user, chat_id, lock=True)
     if not member_permissions(member).send_messages:
@@ -1073,6 +1102,7 @@ async def send_chat_message(
                     author_user_id=user.id,
                     body=payload.body,
                     forwarded=forwarded,
+                    zoom_meeting_id=zoom_meeting_id,
                     reply_to_message_id=payload.reply_to_message_id,
                     mention_user_ids=mentions,
                     created_at=now,

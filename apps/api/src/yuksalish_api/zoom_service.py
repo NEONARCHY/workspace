@@ -28,14 +28,16 @@ from fastapi import HTTPException
 from sqlalchemy import delete, insert, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import RowMapping
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from .access_control import ensure_module_action
 from .auth import AuthenticatedUser
+from .errors import WorkspaceRepositoryError
 from .settings import Settings
 from .tables import users, workspace_notifications, zoom_meeting_participants, zoom_meetings
 from .zoom_client import ZoomClient, ZoomError, ZoomHostBooking
+from .zoom_invitations import deliver_zoom_invitations
 from .zoom_schemas import (
     SLOT_MINUTES,
     ZoomAvailabilityResponse,
@@ -385,14 +387,17 @@ async def _read_meeting(
 async def _replace_participants(
     connection: AsyncConnection, meeting_id: UUID, participant_ids: Iterable[UUID]
 ) -> None:
+    selected = list(participant_ids)
     await connection.execute(
         delete(zoom_meeting_participants).where(
-            zoom_meeting_participants.c.meeting_id == meeting_id
+            zoom_meeting_participants.c.meeting_id == meeting_id,
+            zoom_meeting_participants.c.user_id.not_in(selected),
         )
     )
-    values = [{"meeting_id": meeting_id, "user_id": user_id} for user_id in participant_ids]
+    values = [{"meeting_id": meeting_id, "user_id": user_id} for user_id in selected]
     if values:
-        await connection.execute(insert(zoom_meeting_participants), values)
+        await connection.execute(pg_insert(zoom_meeting_participants).values(values)
+                                 .on_conflict_do_nothing())
 
 
 async def create_zoom_meeting(
@@ -428,6 +433,7 @@ async def create_zoom_meeting(
                     status="provisioning",
                     source="workspace",
                     reminders_enabled=True,
+                    messenger_invitations_enabled=True,
                     created_at=now,
                     updated_at=now,
                 )
@@ -469,7 +475,20 @@ async def create_zoom_meeting(
                 updated_at=datetime.now(UTC),
             )
         )
-        return await _read_meeting(connection, current_user, meeting_id)
+        result = await _read_meeting(connection, current_user, meeting_id)
+    await _deliver_pending_invitations(engine, meeting_id)
+    return result
+
+
+async def _deliver_pending_invitations(engine: AsyncEngine, meeting_id: UUID) -> None:
+    # Persist the Zoom result/outbox before attempting messenger delivery. A
+    # temporary messenger failure must not lose an already-created Zoom call.
+    try:
+        async with engine.begin() as connection:
+            await deliver_zoom_invitations(connection, meeting_id)
+    except (WorkspaceRepositoryError, SQLAlchemyError) as error:
+        logger.warning("zoom_invitation_delivery_pending", meeting_id=str(meeting_id),
+                       error_type=type(error).__name__)
 
 
 async def _mark_failed(engine: AsyncEngine, meeting_id: UUID, error: Exception) -> None:
@@ -566,8 +585,6 @@ async def update_zoom_meeting(
             raise
         if moved.rowcount == 0:
             raise ZoomServiceError(409, "Конференция изменилась в другом окне. Обновите данные.")
-        await _replace_participants(connection, meeting_id, participant_ids)
-
     try:
         await client.update_meeting(
             zoom_meeting_id,
@@ -595,7 +612,10 @@ async def update_zoom_meeting(
 
     reset_host_calendar_cache()
     async with engine.begin() as connection:
-        return await _read_meeting(connection, current_user, meeting_id)
+        await _replace_participants(connection, meeting_id, participant_ids)
+        result = await _read_meeting(connection, current_user, meeting_id)
+    await _deliver_pending_invitations(engine, meeting_id)
+    return result
 
 
 async def cancel_zoom_meeting(
@@ -693,6 +713,12 @@ async def materialize_zoom_reminders(
     if not rows:
         return 0
     participants = await _participants_by_meeting(connection, [row["id"] for row in rows])
+    declined = set((await connection.execute(select(
+        zoom_meeting_participants.c.meeting_id, zoom_meeting_participants.c.user_id,
+    ).where(
+        zoom_meeting_participants.c.meeting_id.in_([row["id"] for row in rows]),
+        zoom_meeting_participants.c.response == "declined",
+    ))).all())
     zone = _zone(settings)
     created = 0
     for row in rows:
@@ -703,7 +729,7 @@ async def materialize_zoom_reminders(
         recipients.extend(
             UUID(value)
             for value in participants.get(row["id"], [])
-            if UUID(value) != organizer_id
+            if UUID(value) != organizer_id and (row["id"], UUID(value)) not in declined
         )
         if not recipients:
             continue

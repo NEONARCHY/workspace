@@ -1,5 +1,6 @@
 interface Window {
   yuksalish?: {
+    readonly openZoomMeeting?: (url: string) => Promise<boolean>;
     readonly platform: string;
     readonly version: string;
     readonly reportDiagnostic?: (payload: { category: string; name: string; frames: string }) => Promise<void>;

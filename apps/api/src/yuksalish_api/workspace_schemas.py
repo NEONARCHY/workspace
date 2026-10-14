@@ -173,12 +173,38 @@ class ForwardMessageRequest(ApiModel):
     source_id: UUID
 
 
+class ZoomInvitationParticipant(ApiModel):
+    user_id: str
+    response: Literal["pending", "accepted", "declined"] = "pending"
+
+
+class ZoomInvitationResponse(ApiModel):
+    meeting_id: str
+    topic: str
+    starts_at: datetime
+    ends_at: datetime
+    timezone: str
+    status: str
+    organizer_id: str | None
+    participants: list[ZoomInvitationParticipant] = Field(default_factory=list)
+    join_url: str | None = None
+    passcode: str | None = None
+    response: Literal["pending", "accepted", "declined"] | None = None
+    can_respond: bool = False
+    available: bool = True
+
+
+class ZoomInvitationReplyRequest(ApiModel):
+    response: Literal["accepted", "declined"]
+
+
 class ChatMessageResponse(ApiModel):
     id: str
     chat_id: str
     author_id: str
     body: str
     forwarded: ForwardedContentResponse | None = None
+    zoom_invitation: ZoomInvitationResponse | None = None
     system_kind: Literal[
         "member_left", "ownership_transferred", "task_deadline_request"
     ] | None = None

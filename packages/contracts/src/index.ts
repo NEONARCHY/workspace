@@ -431,6 +431,7 @@ export interface ChatMessage {
   readonly authorId: string;
   readonly body: string;
   readonly forwarded?: ForwardedContent | null;
+  readonly zoomInvitation?: ZoomInvitation | null;
   readonly systemKind?: "member_left" | "ownership_transferred" | "task_deadline_request" | null;
   readonly time: string;
   readonly createdAt?: string;
@@ -449,6 +450,22 @@ export interface ChatMessage {
   readonly pinnedAt?: string | null;
   readonly pinnedByUserId?: string | null;
   readonly canPin?: boolean;
+}
+
+export interface ZoomInvitation {
+  readonly meetingId: string;
+  readonly topic: string;
+  readonly startsAt: string;
+  readonly endsAt: string;
+  readonly timezone: string;
+  readonly status: string;
+  readonly organizerId: string | null;
+  readonly participants: readonly { readonly userId: string; readonly response: "pending" | "accepted" | "declined" }[];
+  readonly joinUrl: string | null;
+  readonly passcode: string | null;
+  readonly response: "pending" | "accepted" | "declined" | null;
+  readonly canRespond: boolean;
+  readonly available: boolean;
 }
 
 /** Provenance is set by the server, never inferred from message text. */

@@ -16,6 +16,7 @@ from .messenger_service import (
 )
 from .tables import chats, feed_posts, messages, users
 from .workspace_schemas import ChatMessageResponse, ForwardMessageRequest, SendMessageRequest
+from .zoom_invitations import invitation_detail_map
 
 
 async def forward_message(
@@ -126,6 +127,10 @@ async def forward_message(
         )
         if source is None or not message_visible_to_member(source, source_member):
             raise WorkspaceRepositoryError(404, "Сообщение для пересылки недоступно")
+        if source.get("zoom_meeting_id"):
+            invitation = (await invitation_detail_map(connection, user, [source])).get(source["id"])
+            if invitation is None or not invitation.available:
+                raise WorkspaceRepositoryError(404, "Приглашение для пересылки недоступно")
         body = source["body"]
         if source["forwarded"]:
             forwarded = dict(source["forwarded"])
