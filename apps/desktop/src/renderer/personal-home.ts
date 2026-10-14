@@ -58,7 +58,7 @@ export function buildPersonalHome(workspace: HomeWorkspace, canView: (key: Navig
     if (signal) signals.push(signal);
   }
   if (canView("trip_approvals")) for (const trip of workspace.tripRequests.filter(t => !["rejected", "cancelled"].includes(t.status) && (t.requesterUserId === userId || t.employeeIds.includes(userId)))) {
-    const signal = deadlineSignal(trip.id, trip.purpose, "trip_approvals", trip.startDate + "T00:00:00+05:00", now);
+    const signal = deadlineSignal(trip.id, trip.purpose || trip.destination, "trip_approvals", trip.startDate + "T00:00:00+05:00", now);
     if (signal && timestamp(trip.endDate + "T23:59:59+05:00") >= now) signals.push({ ...signal, note: "Поездка · " + trip.destination + " · " + homeDate.format(timestamp(trip.startDate + "T00:00:00+05:00")), tone: "brand", score: 600 });
   }
   const notifications = workspace.notifications.filter(n => canView("notifications") && canView(n.section) && !isObsoleteHisobotNotification(n, now) && (!n.resolvedAt || !n.requiresAction))

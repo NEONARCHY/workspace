@@ -1113,7 +1113,7 @@ class TripRequestResponse(ApiModel):
 
 
 class TripWriteRequest(ApiModel):
-    purpose: str = Field(min_length=1, max_length=4000)
+    purpose: str = Field(default="", max_length=4000)
     destination: str = Field(min_length=1, max_length=240)
     start_date: date
     end_date: date
@@ -1121,13 +1121,18 @@ class TripWriteRequest(ApiModel):
     brief_text: str = Field(default="", max_length=6000)
     expense_source: str = Field(default="", max_length=300)
 
-    @field_validator("purpose", "destination")
+    @field_validator("destination")
     @classmethod
-    def trip_text_must_not_be_blank(cls, value: str) -> str:
+    def trip_destination_must_not_be_blank(cls, value: str) -> str:
         stripped = value.strip()
         if not stripped:
-            raise ValueError("Trip purpose and destination must not be blank")
+            raise ValueError("Trip destination must not be blank")
         return stripped
+
+    @field_validator("purpose")
+    @classmethod
+    def strip_trip_purpose(cls, value: str) -> str:
+        return value.strip()
 
     @model_validator(mode="after")
     def validate_trip_dates(self) -> "TripWriteRequest":

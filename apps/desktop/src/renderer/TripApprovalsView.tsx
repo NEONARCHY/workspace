@@ -34,7 +34,7 @@ const moveLabels: Readonly<Record<TripAction, string>> = {
 const dateLabel = (value: string) => new Date(`${value}T00:00:00`).toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
 const isFinished = (request: TripRequest) => request.stage === "approved" || request.stage === "rejected";
 const needsNewSignature = (request: TripRequest) => (request.workflowVersion ?? 1) === 2 &&
-  (!request.hasEmployeeSignature || (!request.briefText && !request.briefAttachmentName) || !request.expenseSource);
+  (!request.hasEmployeeSignature || (!request.briefText && !request.briefAttachmentName));
 
 interface TripApprovalsViewProps {
   readonly assistantDraft?: AssistantActionDraft;
@@ -81,7 +81,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
   const [formOpen, setFormOpen] = useState(assistantDraft?.kind === "trip");
   const [form, setForm] = useState<TripFormState>(() =>
     assistantDraft?.kind === "trip" ? {
-      purpose: assistantDraft.fields.purpose ?? "",
+      purpose: "",
       destination: assistantDraft.fields.destination ?? "",
       startDate: (assistantDraft.fields.startDate ?? "").slice(0, 10),
       endDate: (assistantDraft.fields.endDate ?? "").slice(0, 10),
@@ -151,8 +151,8 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
 
   const save = async () => {
     if (busyRef.current) return;
-    if (!form.purpose.trim() || !form.destination.trim() || !form.startDate || !form.endDate || !form.employeeIds.length) {
-      setError("Укажите цель, место, даты и хотя бы одного участника поездки."); return;
+    if (!form.destination.trim() || !form.startDate || !form.endDate || !form.employeeIds.length) {
+      setError("Укажите место, даты и хотя бы одного участника поездки."); return;
     }
     if (form.endDate < form.startDate) { setError("Дата окончания не может быть раньше даты начала."); return; }
     busyRef.current = true; setBusy(true); setError("");
@@ -291,11 +291,11 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
                 {items.map((request) => {
                   const forward = request.allowedActions.find((action) => action === "submit" || action === "resubmit" || action === "approve");
                   const movable = !busy && displayTripColumns.some((target) => { const action = tripDropAction(request, target.key, isAdministrator); return action && !((action === "submit" || action === "resubmit") && needsNewSignature(request)); });
-                  return <SpatialCard id={request.id} lane={column.key} label={request.purpose} disabled={!movable} key={request.id} data-trip-id={request.id} className={`approval-board-card trip-board-card ${movable ? "movable" : ""}`}>
-                    <button type="button" className="approval-card-open" aria-label={`Открыть поездку ${request.number}: ${request.purpose}`} onClick={() => openRequest(request.id)}>
+                  return <SpatialCard id={request.id} lane={column.key} label={request.purpose || request.destination} disabled={!movable} key={request.id} data-trip-id={request.id} className={`approval-board-card trip-board-card ${movable ? "movable" : ""}`}>
+                    <button type="button" className="approval-card-open" aria-label={`Открыть поездку ${request.number}: ${request.purpose || request.destination}`} onClick={() => openRequest(request.id)}>
                       <span className="approval-card-topline"><span>{request.number}</span>{request.status === "needs_revision" ? <em>Доработка</em> : null}</span>
-                      <strong>{request.purpose}</strong>
-                      <span className="trip-card-destination">{request.destination}</span>
+                      <strong>{request.purpose || request.destination}</strong>
+                      {request.purpose ? <span className="trip-card-destination">{request.destination}</span> : null}
                       <span className="approval-card-project">{dateLabel(request.startDate)} — {dateLabel(request.endDate)}</span>
                       {personLink(request.requesterUserId, <><Avatar size={24} name={personName(request.requesterUserId)} color="colorful" /><span>{personName(request.requesterUserId)}</span></>, "approval-card-owner")}
                       <span className="approval-card-meta"><span>{request.stageLabel}</span><span>{request.employeeIds.length} участн.</span></span>
@@ -311,7 +311,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
         </SpatialBoard>
       ) : (
         <div className="trip-list" aria-label="Список поездок">{visibleRequests.map((request) => <button className="trip-list-item" key={request.id} onClick={() => openRequest(request.id)} type="button">
-          <span><strong>{request.number}</strong><Badge appearance="tint">{request.stageLabel}</Badge></span><b>{request.destination}</b><p>{request.purpose}</p><small>{request.startDate} — {request.endDate} · {request.employeeIds.length} сотруд. · {request.statusLabel}</small>
+          <span><strong>{request.number}</strong><Badge appearance="tint">{request.stageLabel}</Badge></span><b>{request.destination}</b>{request.purpose ? <p>{request.purpose}</p> : null}<small>{request.startDate} — {request.endDate} · {request.employeeIds.length} сотруд. · {request.statusLabel}</small>
         </button>)}</div>
       )}
       </>}
@@ -328,12 +328,12 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
             <div className="trip-detail-stages" aria-label="Маршрут согласования">{displayTripColumns.filter((column) => (selected.workflowVersion ?? 1) !== 2 || column.key !== "hr").filter((column) => column.key !== (selected.stage === "rejected" ? "approved" : "rejected")).map((column) => <span key={column.key} aria-current={selected.stage === column.key ? "step" : undefined} style={{ "--approval-stage-color": column.color } as CSSProperties}>{column.label}</span>)}</div>
             {feedback}
             {pendingDecision?.id === selected.id ? <DecisionReason key={`${selected.id}:${pendingDecision.action}`} title={pendingDecision.action === "return" ? "Что нужно исправить?" : "Причина отклонения"} onCancel={() => setPendingDecision(undefined)} onConfirm={(reason) => commitAction(selected, pendingDecision.action, reason)} /> : null}
-            <div className="trip-purpose"><span>Цель поездки</span><p>{selected.purpose}</p></div>
+            {selected.purpose ? <div className="trip-purpose"><span>Цель поездки</span><p>{selected.purpose}</p></div> : null}
             <dl className="bp7-facts"><div><dt>Инициатор</dt><dd>{personLink(selected.requesterUserId, personName(selected.requesterUserId))}</dd></div><div><dt>Период</dt><dd>{selected.startDate} — {selected.endDate}</dd></div></dl>
             <div className="trip-employees"><h3>Сотрудники</h3>{selected.employeeIds.map((id) => <span key={id}>{personLink(id, personName(id), "trip-employee-link")}</span>)}</div>
             {(selected.workflowVersion ?? 1) === 2 ? <section className="trip-document-panel" aria-label="Документы поездки">
               <div className="trip-document-heading"><div><h3>Билдирги и приказ</h3><p>Проверьте данные, оригинал и подпись до отправки председателю.</p></div>{selected.orderNumber ? <Badge appearance="tint" color="success">Приказ № {selected.orderNumber}</Badge> : null}</div>
-              <dl className="trip-document-facts"><div><dt>Источник расходов</dt><dd>{selected.expenseSource || "Не указан"}</dd></div><div><dt>Текст билдирги</dt><dd>{selected.briefText || (selected.briefAttachmentName ? "См. приложенный оригинал" : "Не добавлен")}</dd></div></dl>
+              <dl className="trip-document-facts">{selected.expenseSource ? <div><dt>Источник расходов</dt><dd>{selected.expenseSource}</dd></div> : null}<div><dt>Текст билдирги</dt><dd>{selected.briefText || (selected.briefAttachmentName ? "См. приложенный оригинал" : "Не добавлен")}</dd></div></dl>
               <div className="trip-document-files">
                 {selected.canEdit && onUploadBrief ? <><input ref={briefFileRef} className="sr-only" type="file" accept=".pdf,.docx,.jpg,.jpeg,.png" aria-label="Загрузить оригинал билдирги" onChange={(event) => { const file = event.target.files?.[0]; if (file) void changeBrief(selected, file); }} /><Button type="button" disabled={busy} onClick={() => briefFileRef.current?.click()}>{selected.briefAttachmentName ? "Заменить оригинал" : "Прикрепить оригинал"}</Button></> : null}
                 {selected.briefAttachmentName ? <><Button type="button" disabled={busy} onClick={() => void downloadDocument(selected, "attachment")}>Оригинал · {selected.briefAttachmentName}</Button>{selected.canEdit && onRemoveBrief ? <Button type="button" disabled={busy} onClick={() => void changeBrief(selected, undefined, true)}>Убрать оригинал</Button> : null}</> : null}
@@ -342,7 +342,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
                 {selected.hasOrderPdf ? <Button type="button" appearance="primary" disabled={busy} onClick={() => void downloadDocument(selected, "order")}>Скачать утверждённый приказ PDF</Button> : null}
               </div>
               {selected.canEdit && onUploadSignature ? <TripSignaturePad saved={selected.hasEmployeeSignature} disabled={busy} onSave={(content) => saveSignature(selected, content)} /> : null}
-              {selected.canEdit && !selected.hasEmployeeSignature ? <p className="trip-document-reminder">Перед отправкой добавьте текст или оригинал билдирги, источник расходов и свою подпись. После исправления заявки подпись нужно поставить снова.</p> : null}
+              {selected.canEdit && !selected.hasEmployeeSignature ? <p className="trip-document-reminder">Перед отправкой добавьте текст или оригинал билдирги и свою подпись. После исправления заявки подпись нужно поставить снова.</p> : null}
               {selected.status === "approved" ? <p role="status" className="trip-document-approved">Приказ зарегистрирован и подписан председателем. Участникам направлены уведомления.</p> : null}
             </section> : selected.stage === "hr" ? <p className="trip-document-reminder">Эта поездка проходит прежний маршрут через кадровую службу.</p> : null}
             <div className="bp7-actions">
@@ -357,18 +357,14 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
               hint="После сохранения проверьте билдирги, поставьте подпись и отправьте председателю."
               stages={<div className="record-stages" tabIndex={0} role="region" aria-label="Маршрут согласования">{displayTripColumns.filter((column) => column.key !== "rejected" && column.key !== "hr").map((column) => <span key={column.key} aria-current={column.key === (formMode === "edit" ? selected?.stage : "launch") ? "step" : undefined} style={{ "--record-stage-color": column.color } as CSSProperties}>{column.label}</span>)}</div>}
               aside={<>
-                <RecordSummary title="Сводка поездки"><div className="record-summary-title">{form.destination.trim() || "Место поездки не указано"}</div><p>{form.purpose.trim() || "Добавьте цель поездки"}</p>
-                  <dl className="record-summary-facts"><div><dt>Даты</dt><dd>{form.startDate || "Не указано"} — {form.endDate || "Не указано"}</dd></div><div><dt>Источник расходов</dt><dd>{form.expenseSource.trim() || "Не указан"}</dd></div><div><dt>Инициатор</dt><dd>{formMode === "edit" && selected ? personLink(selected.requesterUserId, personName(selected.requesterUserId)) : personLink(currentUser.id, currentUser.name)}</dd></div><div><dt>Участников</dt><dd>{form.employeeIds.length}</dd></div></dl>
+                <RecordSummary title="Сводка поездки"><div className="record-summary-title">{form.destination.trim() || "Место поездки не указано"}</div>
+                  <dl className="record-summary-facts"><div><dt>Даты</dt><dd>{form.startDate || "Не указано"} — {form.endDate || "Не указано"}</dd></div><div><dt>Инициатор</dt><dd>{formMode === "edit" && selected ? personLink(selected.requesterUserId, personName(selected.requesterUserId)) : personLink(currentUser.id, currentUser.name)}</dd></div><div><dt>Участников</dt><dd>{form.employeeIds.length}</dd></div></dl>
                   <ul className="record-summary-people">{form.employeeIds.map((id) => <EmployeeProfileLink as="li" key={id} userId={people.some((person) => person.id === id) ? id : undefined} personName={personName(id)}>{personName(id)}</EmployeeProfileLink>)}</ul>
                 </RecordSummary>
                 <section className="record-summary-card record-summary-note"><h3>Что произойдёт дальше</h3><p>Выбранный оригинал билдирги загрузится вместе с черновиком. Затем проверьте пакет и нарисуйте подпись. Председатель сможет подтвердить поездку, вернуть на уточнение или отклонить.</p><p>При утверждении приказ получит отдельный номер серии WS и появится в карточке.</p></section>
               </>}>
-              <RecordSection title="Общее" description="Укажите цель, место и источник расходов отдельно — их увидят согласующие."><div className="record-field-grid">
-                <label className="record-field-wide">Цель поездки<Textarea aria-label="Цель поездки" aria-required autoFocus resize="vertical" value={form.purpose} onChange={(_, data) => setForm({ ...form, purpose: data.value })} /></label>
-                <label className="record-field-wide">Куда едем<Input aria-label="Куда едем" aria-required placeholder="Город, страна или место встречи" value={form.destination} onChange={(_, data) => setForm({ ...form, destination: data.value })} /></label>
-                <label className="record-field-wide">Источник покрытия расходов<Input aria-label="Источник покрытия расходов" placeholder="Например: лойиҳа маблағлари" value={form.expenseSource} onChange={(_, data) => setForm({ ...form, expenseSource: data.value })} /></label>
-              </div></RecordSection>
-              <RecordSection title="Билдирги" description="Напишите текст или выберите готовый оригинал сейчас. Файл загрузится при сохранении черновика."><div className="record-field-grid">
+              <RecordSection title="Билдирги" description="Укажите место поездки, напишите текст или выберите готовый оригинал. Файл загрузится при сохранении черновика."><div className="record-field-grid">
+                <label className="record-field-wide">Куда едем<Input aria-label="Куда едем" aria-required autoFocus placeholder="Город, страна или место встречи" value={form.destination} onChange={(_, data) => setForm({ ...form, destination: data.value })} /></label>
                 <div className="record-field-wide trip-composer-brief-file">
                   <WorkspaceFileDropzone label="Оригинал билдирги" hint="PDF, DOCX, JPG или PNG · до 10 МиБ" actionLabel={briefFile ? "Заменить файл" : "Выбрать файл"} files={briefFile ? [briefFile] : []} accept=".pdf,.docx,.jpg,.jpeg,.png" disabled={busy} ariaLabel="Загрузить билдирги" onFiles={(files) => chooseBriefFile(files[0])} />
                   {briefFile ? <Button type="button" appearance="subtle" onClick={() => { setBriefFile(undefined); setError(""); }}>Убрать выбранный файл</Button> : null}
