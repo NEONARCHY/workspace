@@ -754,6 +754,8 @@ export function PaymentFields({ form, targets, calendarEvents, people, departmen
   ));
   const tripPeople = people.filter((person) => !departments || employeeScope(person.departmentId, departments) === tripScope);
   const tripPeopleIds = new Set(tripPeople.map((person) => person.id));
+  const projectBudgetArticles = (targets.budgetArticles ?? []).filter((article) => article.projectId === form.projectId);
+  const matchingBudgetArticles = projectBudgetArticles.filter((article) => article.currency === form.currency);
   const update = <Key extends keyof PaymentFormState>(
     key: Key,
     value: PaymentFormState[Key],
@@ -796,11 +798,10 @@ export function PaymentFields({ form, targets, calendarEvents, people, departmen
             <option>UZS</option><option>USD</option><option>EUR</option>
           </WorkspaceSelect></label>
           <label>Бюджетная статья · необязательно<WorkspaceSelect aria-label={`${prefix}бюджетная статья`} value={form.budgetArticleId} disabled={!form.projectId}
-            onChange={(event) => onChange({ ...form, budgetArticleId: event.target.value,
-              currency: targets.budgetArticles?.find((article) => article.id === event.target.value)?.currency ?? form.currency })}>
+            onChange={(event) => update("budgetArticleId", event.target.value)}>
             <option value="">Без статьи</option>
             {form.budgetArticleId && !targets.budgetArticles?.some((article) => article.id === form.budgetArticleId) ? <option value={form.budgetArticleId}>Ранее выбранная статья</option> : null}
-            {(targets.budgetArticles ?? []).filter((article) => article.projectId === form.projectId).map((article) => <option key={article.id} value={article.id}>
+            {matchingBudgetArticles.map((article) => <option key={article.id} value={article.id}>
               {article.title} · остаток {article.remainingAmount} {article.currency}
             </option>)}
           </WorkspaceSelect></label>
@@ -817,6 +818,9 @@ export function PaymentFields({ form, targets, calendarEvents, people, departmen
             {targets.items.filter((row) => row.workstreamId === form.workstreamId).map((row) => <option value={row.id} key={row.id}>{row.kind === "task" ? "Задача" : "Мероприятие"} · {row.title}</option>)}
           </WorkspaceSelect></label>
         </div>
+        {projectBudgetArticles.length > matchingBudgetArticles.length ? (
+          <p className="payment-currency-hint">Статьи в другой валюте скрыты. Для их выбора сначала измените валюту оплаты; сумма автоматически не конвертируется.</p>
+        ) : null}
         {isSubsidyProjectSelection(form.projectId, targets) ? (
           <p className="payment-subsidy-route-hint">Для проекта «Субсидия» этап руководства согласует первый исполнительный директор Аскар Маматханов.</p>
         ) : null}
@@ -1899,7 +1903,7 @@ export function ApprovalsView({
                   })}</div>}
                   aside={<>
                     <RecordSummary title="Сводка заявки"><div className="record-summary-title">{requestTitle.trim() || "Новая заявка"}</div>
-                      <strong className="record-summary-amount">{requestAmount.trim() && Number.isFinite(Number(requestAmount.replace(/\s/g, ""))) && Number(requestAmount.replace(/\s/g, "")) > 0 ? `${new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 }).format(Number(requestAmount.replace(/\s/g, "")))} UZS` : "Укажите сумму"}</strong>
+                      <strong className="record-summary-amount">{requestAmount.trim() && Number.isFinite(Number(requestAmount.replace(/\s/g, ""))) && Number(requestAmount.replace(/\s/g, "")) > 0 ? `${new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 }).format(Number(requestAmount.replace(/\s/g, "")))} ${requestDetails.currency}` : "Укажите сумму"}</strong>
                       <dl className="record-summary-facts"><div><dt>Проект</dt><dd>{requestDetails.projectName || "Не указан"}</dd></div><div><dt>Ответственный</dt><dd>{personLink(requestDetails.responsibleUserId, people.find((person) => person.id === requestDetails.responsibleUserId)?.name || "Не указан")}</dd></div><div><dt>Документы</dt><dd>{requestFiles.length + requestAdditionalFiles.length}</dd></div><div><dt>Приоритет</dt><dd>{requestDetails.requestPriority === "urgent" ? "Срочная" : "Обычная"}</dd></div></dl>
                     </RecordSummary>
                     <section className="record-summary-card record-summary-note"><h3>Запуск согласования</h3><p>Проверьте реквизиты и приложите документы. Кнопка «Отправить по маршруту» создаст заявку и запустит действующий процесс согласования.</p><p>Условия и ответственных определяет маршрут. История появится после отправки.</p></section>
@@ -2159,7 +2163,7 @@ export function ApprovalsView({
                       <section className="approval-revision-editor detail-overview" aria-label="Редактирование возвращённой заявки">
                         <h3>Исправленная версия</h3>
                         <label>Название<Input aria-label="Исправленное название заявки" value={editTitle} onChange={(_event, data) => setEditTitle(data.value)} /></label>
-                        <label>Сумма<Input aria-label="Исправленная сумма заявки" inputMode="numeric" value={editAmount} onChange={(_event, data) => setEditAmount(data.value)} /></label>
+                        <label>Сумма в {editDetails.currency}<Input aria-label="Исправленная сумма заявки" inputMode="numeric" value={editAmount} onChange={(_event, data) => setEditAmount(data.value)} /></label>
                         <label>Назначение<Textarea aria-label="Исправленное назначение платежа" value={editPurpose} onChange={(_event, data) => setEditPurpose(data.value)} /></label>
                         <PaymentFields form={editDetails} targets={paymentTargets} calendarEvents={calendarEvents} people={people} departments={departments} onChange={setEditDetails} revision />
                         <PendingFilePicker files={editFiles} onChange={setEditFiles} label="Добавить исправленные документы" />
