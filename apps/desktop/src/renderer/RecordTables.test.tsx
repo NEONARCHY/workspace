@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { FluentProvider } from "@fluentui/react-components";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { DirectoryEmployee } from "@yuksalish/contracts";
+import type { DirectoryEmployee, TaskPlan } from "@yuksalish/contracts";
 import { TaskRecords } from "./TaskRecords";
 import { EmployeeRecords } from "./EmployeeRecords";
 import { EmployeeProfileProvider } from "./EmployeeProfileLink";
@@ -48,16 +48,43 @@ describe("Corporate record tables", () => {
     });
     const taskRows = within(screen.getByRole("table", { name: "Задачи" })).getAllByRole("row").slice(1);
     const employeeRows = within(screen.getByRole("table", { name: "Сотрудники" })).getAllByRole("row").slice(1);
-    taskRows.forEach(row => expect(within(row).getAllByRole("cell")).toHaveLength(6));
+    taskRows.forEach(row => expect(within(row).getAllByRole("cell")).toHaveLength(7));
     employeeRows.forEach(row => expect(within(row).getAllByRole("cell")).toHaveLength(7));
   });
   it("shows a semantic task table with real participants and no fictitious activity dates", () => {
     render(wrap(<TaskRecords tasks={tasks} people={people} filterKey="all" onSelect={vi.fn()} />));
     const table = screen.getByRole("table", { name: "Задачи" });
-    expect(within(table).getAllByRole("columnheader")).toHaveLength(6);
+    expect(within(table).getAllByRole("columnheader")).toHaveLength(7);
     expect(within(table).getAllByRole("row")).toHaveLength(26);
     expect(within(table).getByRole("columnheader", { name: /Постановщик/ })).toBeInTheDocument();
     expect(screen.queryByText("Активность")).not.toBeInTheDocument();
+  });
+  it("shows all linked plans before the project and sorts by plan name", () => {
+    const plans: TaskPlan[] = [
+      { id: "beta", title: "Бета", kind: "work", periodStart: null, periodEnd: null,
+        createdByUserId: "author", createdAt: "2026-10-14T00:00:00Z", updatedAt: "2026-10-14T00:00:00Z", taskIds: ["t-0"] },
+      { id: "alpha", title: "Альфа", kind: "work", periodStart: null, periodEnd: null,
+        createdByUserId: "author", createdAt: "2026-10-14T00:00:00Z", updatedAt: "2026-10-14T00:00:00Z", taskIds: ["t-0", "t-1"] },
+    ];
+    render(wrap(<TaskRecords tasks={tasks.slice(0, 3)} plans={plans} people={people} filterKey="all" onSelect={vi.fn()} />));
+    const table = screen.getByRole("table", { name: "Задачи" });
+    const headings = within(table).getAllByRole("columnheader");
+    expect(within(headings[5]!).getByRole("button", { name: "План" })).toBeInTheDocument();
+    expect(within(headings[6]!).getByRole("button", { name: "Проект" })).toBeInTheDocument();
+    const rows = within(table).getAllByRole("row").slice(1);
+    expect(within(rows[0]!).getAllByRole("cell")[5]).toHaveTextContent("Бета, Альфа");
+    expect(within(rows[1]!).getAllByRole("cell")[5]).toHaveTextContent("Альфа");
+    expect(within(rows[2]!).getAllByRole("cell")[5]).toHaveTextContent("Без плана");
+    fireEvent.click(within(table).getByRole("button", { name: /План/ }));
+    expect(within(table).getAllByRole("button", { name: /^Открыть задачу:/ })[0]).toHaveTextContent("Задача 2");
+  });
+  it("does not report a task as unplanned while its plans are loading or unavailable", () => {
+    const onSelect = vi.fn();
+    const view = render(wrap(<TaskRecords tasks={tasks.slice(0, 1)} plansLoading people={people} filterKey="all" onSelect={onSelect} />));
+    expect(screen.getByRole("cell", { name: /Загружаем/ })).toBeInTheDocument();
+    view.rerender(wrap(<TaskRecords tasks={tasks.slice(0, 1)} plansError="Не удалось загрузить планы." people={people} filterKey="all" onSelect={onSelect} />));
+    expect(screen.getByRole("cell", { name: /Не удалось загрузить/ })).toBeInTheDocument();
+    expect(screen.queryByText("Без плана")).not.toBeInTheDocument();
   });
   it("shows every task role as an avatar and opens profiles from avatars and their popovers", async () => {
     const onSelect = vi.fn(); const onOpenProfile = vi.fn();
