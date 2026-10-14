@@ -28,6 +28,7 @@ import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
 import { SlidingSegmented } from "./SlidingSegmented";
 import { employeeScope, type EmployeeScope } from "./employee-scope";
 import { useHorizontalBoardScroll } from "./useHorizontalBoardScroll";
+import { isTaskOverdue as deadlineIsOverdue } from "./task-deadline";
 
 interface TeamDashboardViewProps {
   readonly token: string;
@@ -85,8 +86,7 @@ function validDueDate(task: WorkspaceTask): Date | undefined {
 
 function isTaskOverdue(task: WorkspaceTask, now: Date): boolean {
   if (!activeStatuses.has(task.status)) return false;
-  const due = validDueDate(task);
-  return task.status === "overdue" || Boolean(due && due.getTime() < now.getTime());
+  return deadlineIsOverdue(task, now.getTime());
 }
 
 function pluralForm(value: number, forms: readonly [string, string, string]): string {
@@ -219,7 +219,7 @@ export function TeamDashboardView({
   const maximumDayCount = Math.max(1, ...horizon.map((day) => day.count));
   const flowParts: readonly { readonly key: FlowStatusKey; readonly label: string; readonly value: number }[] = [
     { key: "new", label: "Новые", value: activeTasks.filter((task) => task.status === "new" && !isTaskOverdue(task, now)).length },
-    { key: "progress", label: "В работе", value: activeTasks.filter((task) => task.status === "in_progress" && !isTaskOverdue(task, now)).length },
+    { key: "progress", label: "В работе", value: activeTasks.filter((task) => ["in_progress", "overdue"].includes(task.status) && !isTaskOverdue(task, now)).length },
     { key: "review", label: "На проверке", value: reviewTasks.filter(task => !isTaskOverdue(task, now)).length },
     { key: "overdue", label: "Просрочены", value: overdueTasks.length },
   ];
@@ -229,7 +229,7 @@ export function TeamDashboardView({
       if (flowSelection.key === "overdue") return isTaskOverdue(task, now);
       if (isTaskOverdue(task, now)) return false;
       if (flowSelection.key === "new") return task.status === "new";
-      if (flowSelection.key === "progress") return task.status === "in_progress";
+      if (flowSelection.key === "progress") return task.status === "in_progress" || task.status === "overdue";
       return task.status === "awaiting_review";
     })
     : flowSelection?.kind === "day"

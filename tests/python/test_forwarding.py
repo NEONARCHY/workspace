@@ -93,7 +93,7 @@ def test_forwarded_message_cannot_be_edited_and_hidden_feed_is_redacted() -> Non
 
 def test_notification_defaults_and_legacy_preference_updates() -> None:
     defaults = NotificationPreferencesResponse()
-    assert defaults.feed_enabled and defaults.sound_enabled and defaults.sound_volume == 20
+    assert defaults.feed_enabled and defaults.sound_enabled and defaults.sound_volume == 100
     legacy = defaults.model_dump(exclude={"feed_enabled", "sound_enabled", "sound_volume"})
     update = NotificationPreferencesUpdate.model_validate(legacy)
     assert "feed_enabled" not in update.model_dump(exclude_none=True)

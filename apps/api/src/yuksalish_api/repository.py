@@ -1657,7 +1657,7 @@ async def get_notification_preferences(
     now = datetime.now(UTC)
     await connection.execute(
         pg_insert(workspace_notification_preferences)
-        .values(user_id=current_user.id, updated_at=now)
+        .values(user_id=current_user.id, sound_volume=100, updated_at=now)
         .on_conflict_do_nothing(index_elements=[workspace_notification_preferences.c.user_id])
     )
     row = (

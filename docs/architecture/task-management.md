@@ -140,6 +140,14 @@ request. An accepted extension records the same efficiency deadline event as a
 direct change. Extending an already missed deadline does not erase that prior
 late event from EFF-2 history.
 
+The current valid deadline, not a historical `overdue` status, determines the
+current overdue filter and counters. After rescheduling into the future, the
+task leaves that filter and returns to the working Kanban lane even while a
+legacy server reports the old status. If the new deadline expires, it becomes
+overdue again. Missing/invalid dates retain the explicit-status fallback;
+completed and cancelled tasks remain excluded. This does not erase historical
+efficiency events or change result-review transitions.
+
 Relevant endpoints:
 
 - `POST /api/v1/tasks`

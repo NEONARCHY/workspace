@@ -129,6 +129,20 @@ it("previews the selected sound volume from an explicit action", async () => {
   render(center([]));
   fireEvent.click(screen.getByRole("button", { name: "Проверить звук" }));
   await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Звук воспроизведён"));
-  expect(preview).toHaveBeenCalledWith(20);
+  expect(preview).toHaveBeenCalledWith(100);
   preview.mockRestore();
+});
+it("defaults to 100%, keeps saved choices and exposes a labelled native slider", () => {
+  const view = render(center([]));
+  const slider = screen.getByRole("slider", { name: "Громкость уведомлений" });
+  expect(slider).toHaveValue("100");
+  expect(slider).toHaveAttribute("aria-valuetext", "100%");
+  expect(screen.getByRole("button", { name: "Сохранить громкость" })).toBeDisabled();
+  expect(screen.getByText("Как работают уведомления").closest("details")).not.toHaveAttribute("open");
+  view.rerender(<FluentProvider theme={workspaceTheme}><NotificationCenter {...props} preferences={{ ...preferences, soundVolume: 20 }} notifications={[]} /></FluentProvider>);
+  expect(slider).toHaveValue("20");
+  fireEvent.change(slider, { target: { value: "55" } });
+  expect(slider).toHaveAttribute("aria-valuetext", "55%");
+  expect(slider.style.getPropertyValue("--notification-volume")).toBe("55%");
+  expect(screen.getByRole("button", { name: "Сохранить громкость" })).toBeEnabled();
 });

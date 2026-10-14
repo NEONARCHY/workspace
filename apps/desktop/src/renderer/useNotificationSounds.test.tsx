@@ -4,7 +4,7 @@ import type { NotificationPreferences, WorkspaceNotification } from "@yuksalish/
 import { useNotificationSounds } from "./useNotificationSounds";
 import { playNotificationOnce, workspaceSounds } from "./workspace-sounds";
 
-vi.mock("./workspace-sounds", () => ({ workspaceSounds: { unlock: vi.fn(), stop: vi.fn() },
+vi.mock("./workspace-sounds", () => ({ defaultNotificationVolume: 100, workspaceSounds: { unlock: vi.fn(), stop: vi.fn() },
   playNotificationOnce: vi.fn().mockResolvedValue(undefined),
   notificationSoundEnabled: (item: WorkspaceNotification, prefs: NotificationPreferences) => prefs.soundEnabled !== false && (item.kind !== "feed" || prefs.feedEnabled !== false),
 }));
@@ -34,4 +34,15 @@ it("does not replay a muted event after re-enabling or switching accounts", () =
   rerender({ user: "second", notices: [item("new-account")], preferences: { ...prefs, feedEnabled: true } });
   expect(playNotificationOnce).not.toHaveBeenCalled();
   expect(workspaceSounds.stop).toHaveBeenCalled();
+});
+it("plays only the newest event in a reconnect batch, using the 100% fallback", () => {
+  const { rerender } = renderHook(({ notices }) => useNotificationSounds("user", notices, { ...prefs, soundVolume: undefined }), {
+    initialProps: { notices: [] as WorkspaceNotification[] },
+  });
+  const newest = item("latest");
+  const older = item("older", { occurredAt: new Date(Date.now() - 1000).toISOString() });
+  rerender({ notices: [older, newest] });
+  rerender({ notices: [newest, older] });
+  expect(playNotificationOnce).toHaveBeenCalledOnce();
+  expect(playNotificationOnce).toHaveBeenCalledWith("user", "latest", 100);
 });
