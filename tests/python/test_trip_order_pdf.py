@@ -1,0 +1,121 @@
+"""Synthetic trip documents only; no personnel records or real signatures."""
+
+import asyncio
+from datetime import date
+from io import BytesIO
+from unittest.mock import AsyncMock
+from uuid import uuid4
+
+import pytest
+from PIL import Image, ImageDraw
+from pypdf import PdfReader
+
+from yuksalish_api import trip_document_service
+from yuksalish_api.auth import AuthenticatedUser
+from yuksalish_api.errors import WorkspaceRepositoryError
+from yuksalish_api.repository import _trip_allowed_actions
+from yuksalish_api.trip_document_service import validate_attachment
+from yuksalish_api.trip_order_pdf import brief_pdf, order_pdf
+
+
+def signature() -> bytes:
+    image = Image.new("RGBA", (300, 90), (0, 0, 0, 0))
+    ImageDraw.Draw(image).line([(12, 65), (80, 10), (170, 70), (280, 25)], fill="blue", width=4)
+    output = BytesIO()
+    image.save(output, format="PNG")
+    return output.getvalue()
+
+
+def text_of(content: bytes) -> str:
+    return " ".join(page.extract_text() for page in PdfReader(BytesIO(content)).pages)
+
+
+def test_employee_cover_and_chair_order_keep_separate_signatures() -> None:
+    employee_signature = signature()
+    cover = brief_pdf(
+        requester="Testova Zebo", chair="Testov Rais",
+        purpose="Учрашув", destination="Нукус",
+        start=date(2026, 10, 15), end=date(2026, 10, 16),
+        employees=["Testova Zebo", "Testov Ali"],
+        expense_source="лойиҳа маблағлари", brief_text="Сафарга рухсат сўрайман.",
+        attachment_name="original.pdf", signature=employee_signature,
+        signed_on=date(2026, 10, 14),
+    )
+    preview = order_pdf(
+        order_number="000-WS", issued=date(2026, 10, 14), purpose="Учрашув",
+        destination="Нукус", start=date(2026, 10, 15), end=date(2026, 10, 16),
+        employees=[("Testova Zebo", "мутахассис"), ("Testov Ali", "директор")],
+        expense_source="лойиҳа маблағлари", requester="Testova Zebo",
+        chair="Testov Rais", signature=None,
+    )
+    issued = order_pdf(
+        order_number="001-WS", issued=date(2026, 10, 14), purpose="Учрашув",
+        destination="Нукус", start=date(2026, 10, 15), end=date(2026, 10, 16),
+        employees=[("Testova Zebo", "мутахассис"), ("Testov Ali", "директор")],
+        expense_source="лойиҳа маблағлари", requester="Testova Zebo",
+        chair="Testov Rais", signature=employee_signature,
+    )
+    assert all(content.startswith(b"%PDF-") for content in (cover, preview, issued))
+    assert len(PdfReader(BytesIO(cover)).pages) == 1
+    assert len(PdfReader(BytesIO(issued)).pages) == 1
+    assert "original.pdf" in text_of(cover)
+    assert "001-WS-сон а/ф" in text_of(issued)  # noqa: RUF001
+    assert "Нукус" in text_of(issued) and "лойиҳа маблағлари" in text_of(issued)
+    assert len(PdfReader(BytesIO(cover)).pages[0].images) == 2  # logo + employee mark
+    assert len(PdfReader(BytesIO(preview)).pages[0].images) == 1  # logo, no chair mark
+    assert len(PdfReader(BytesIO(issued)).pages[0].images) == 2  # logo + chair mark
+
+
+def test_generated_text_is_not_interpreted_as_markup() -> None:
+    content = order_pdf(
+        order_number="002-WS", issued=date(2026, 10, 14),
+        purpose="<b>Чиқиш</b> & учрашув", destination="Навои",
+        start=date(2026, 10, 15), end=date(2026, 10, 15),
+        employees=[("Тест <i>Али</i>", "мутахассис")],
+        expense_source="лойиҳа", requester="Testova Zebo",
+        chair="Testov Rais", signature=signature(),
+    )
+    assert "<b>Чиқиш</b> & учрашув" in text_of(content)
+    assert "Тест <i>Али</i>" in text_of(content)
+
+
+def test_source_upload_rejects_invalid_type_and_mismatched_extension() -> None:
+    with pytest.raises(WorkspaceRepositoryError):
+        validate_attachment(b"bad", "original.pdf")
+    with pytest.raises(WorkspaceRepositoryError):
+        validate_attachment(signature(), "original.jpg")
+    with pytest.raises(WorkspaceRepositoryError):
+        validate_attachment(signature(), "../original.png")
+
+
+def test_only_appointed_chair_can_decide_new_trip_and_legacy_route_remains() -> None:
+    requester_id, chair_id, admin_id = uuid4(), uuid4(), uuid4()
+    chair = AuthenticatedUser(chair_id, "chair", "Chair", None, None, "employee")
+    admin = AuthenticatedUser(admin_id, "admin", "Admin", None, None, "admin")
+    row = {
+        "requester_user_id": requester_id,
+        "workflow_version": 2,
+        "stage": "manager_approval",
+        "status": "running",
+    }
+    assert _trip_allowed_actions(row, chair, chair_id) == ["approve", "return", "reject"]
+    assert _trip_allowed_actions(row, admin, chair_id) == []
+    assert _trip_allowed_actions(row | {"workflow_version": 1}, admin, chair_id) == [
+        "approve", "return", "reject",
+    ]
+    assert _trip_allowed_actions(row | {"stage": "hr"}, admin, chair_id) == []
+
+
+def test_non_chair_cannot_issue_order_before_number_is_allocated(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    chair_id, other_id = uuid4(), uuid4()
+    monkeypatch.setattr(trip_document_service, "_row", AsyncMock(return_value={
+        "workflow_version": 2, "stage": "manager_approval",
+    }))
+    connection = AsyncMock()
+    connection.scalar.return_value = chair_id
+    user = AuthenticatedUser(other_id, "other", "Other", None, None, "admin")
+    with pytest.raises(WorkspaceRepositoryError, match="только назначенный председатель"):
+        asyncio.run(trip_document_service.issue_order(connection, user, AsyncMock(), uuid4()))
+    assert connection.execute.await_count == 0

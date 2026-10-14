@@ -7,7 +7,7 @@ describe("Trip board", () => {
     expect(tripColumns).toEqual([
       { key: "launch", label: "Запуск", color: "#72b9dc" },
       { key: "manager_approval", label: "Утверждение руководителем", color: "#849fd0" },
-      { key: "hr", label: "Кадровая служба", color: "#50bec8" },
+      { key: "hr", label: "Кадровая служба · прежний маршрут", color: "#50bec8" },
       { key: "approved", label: "Утверждено", color: "#62bd72" },
       { key: "rejected", label: "Отклонено", color: "#d97878" },
     ]);
@@ -27,6 +27,13 @@ describe("Trip board", () => {
   it("uses resubmit for the correction cycle", () => {
     expect(tripDropAction({ stage: "launch", status: "needs_revision", allowedActions: ["resubmit"] }, "manager_approval")).toBe("resubmit");
     expect(tripDropAction({ stage: "launch", status: "needs_revision", allowedActions: ["submit"] }, "manager_approval")).toBeUndefined();
+  });
+  it("routes new trips straight from the chair to approval without an HR bypass", () => {
+    const request = { workflowVersion: 2, stage: "manager_approval" as const,
+      status: "running" as const, allowedActions: ["approve" as const] };
+    expect(tripDropAction(request, "approved")).toBe("approve");
+    expect(tripDropAction(request, "hr")).toBeUndefined();
+    expect(tripDropAction(request, "approved", true)).toBe("approve");
   });
   it("never grants an action absent from the server response", () => {
     for (const from of tripColumns) for (const to of tripColumns) {

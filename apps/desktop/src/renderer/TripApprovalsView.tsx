@@ -19,6 +19,7 @@ import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
 import { SlidingSegmented } from "./SlidingSegmented";
 import { employeeScope, type EmployeeScope } from "./employee-scope";
 import { assistantPeopleIds } from "./assistant-form-handoff";
+import { TripSignaturePad } from "./TripSignaturePad";
 
 const actionLabels: Readonly<Record<TripAction, string>> = {
   submit: "Отправить руководителю", resubmit: "Отправить повторно", approve: "Согласовать",
@@ -30,6 +31,8 @@ const moveLabels: Readonly<Record<TripAction, string>> = {
 };
 const dateLabel = (value: string) => new Date(`${value}T00:00:00`).toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
 const isFinished = (request: TripRequest) => request.stage === "approved" || request.stage === "rejected";
+const needsNewSignature = (request: TripRequest) => (request.workflowVersion ?? 1) === 2 &&
+  (!request.hasEmployeeSignature || (!request.briefText && !request.briefAttachmentName) || !request.expenseSource);
 
 interface TripApprovalsViewProps {
   readonly assistantDraft?: AssistantActionDraft;
@@ -41,6 +44,10 @@ interface TripApprovalsViewProps {
   readonly onCreate: (payload: TripRequestInput) => Promise<TripRequest | undefined>;
   readonly onUpdate: (request: TripRequest, payload: TripRequestInput) => Promise<TripRequest | undefined>;
   readonly onAction: (request: TripRequest, action: TripAction, comment?: string, targetStage?: TripStage) => Promise<TripRequest | undefined>;
+  readonly onUploadBrief?: (requestId: string, file: File) => Promise<TripRequest | undefined>;
+  readonly onRemoveBrief?: (requestId: string) => Promise<TripRequest | undefined>;
+  readonly onUploadSignature?: (requestId: string, content: Blob) => Promise<TripRequest | undefined>;
+  readonly onDownloadDocument?: (requestId: string, kind: "attachment" | "brief" | "order" | "order-preview") => Promise<Blob | undefined>;
   readonly onOpenChat?: (chatId: string) => void;
   readonly renderTripChat?: (request: TripRequest) => ReactNode;
   readonly workflow?: WorkflowDefinition;
@@ -51,14 +58,16 @@ interface TripApprovalsViewProps {
 }
 interface TripFormState {
   chatIconKey?: ChatAvatarIconKey;
-  purpose: string; destination: string; startDate: string; endDate: string; employeeIds: readonly string[];
+  purpose: string; destination: string; startDate: string; endDate: string;
+  employeeIds: readonly string[]; briefText: string; expenseSource: string;
 }
 function emptyForm(currentUserId: string): TripFormState {
   const today = new Date().toISOString().slice(0, 10);
-  return { purpose: "", destination: "", startDate: today, endDate: today, employeeIds: [currentUserId] };
+  return { purpose: "", destination: "", startDate: today, endDate: today,
+    employeeIds: [currentUserId], briefText: "", expenseSource: "" };
 }
 
-export function TripApprovalsView({ focusRequestId, requests, people, departments, currentUser, onCreate, onUpdate, onAction, onOpenChat, renderTripChat, workflow, positions = [], canManageWorkflow = false, onSaveWorkflow, onPublishWorkflow, assistantDraft }: TripApprovalsViewProps) {
+export function TripApprovalsView({ focusRequestId, requests, people, departments, currentUser, onCreate, onUpdate, onAction, onUploadBrief, onRemoveBrief, onUploadSignature, onDownloadDocument, onOpenChat, renderTripChat, workflow, positions = [], canManageWorkflow = false, onSaveWorkflow, onPublishWorkflow, assistantDraft }: TripApprovalsViewProps) {
   const boardPan = useMiddleMousePan<HTMLDivElement>();
   const restoreFocusTarget = useRestoreFocusTarget();
   const [selectedId, setSelectedId] = useState(focusRequestId ?? "");
@@ -76,6 +85,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
       endDate: (assistantDraft.fields.endDate ?? "").slice(0, 10),
       employeeIds: assistantDraft.fields.employees?.trim()
         ? assistantPeopleIds(assistantDraft.fields, "employees", people, currentUser.id) : [currentUser.id],
+      briefText: "", expenseSource: "",
     } : emptyForm(currentUser.id));
   const [employeeListScope, setEmployeeListScope] = useState<EmployeeScope>("central");
   const [view, setView] = useState<"kanban" | "list">("kanban");
@@ -85,6 +95,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
   const [employeeQuery, setEmployeeQuery] = useState("");
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
+  const briefFileRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState("");
   const selected = requests.find((request) => request.id === selectedId);
   const canChooseOthers = ["manager", "admin", "superadmin"].includes(currentUser.role);
@@ -92,7 +103,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
   const workflowTripNodes = workflow?.nodes
     .filter((node) => tripColumns.some((column) => column.key === node.id))
     .sort((left, right) => left.positionX - right.positionX);
-  const displayTripColumns = workflowTripNodes?.length === tripColumns.length
+  const allTripColumns = workflowTripNodes?.length === tripColumns.length
     ? workflowTripNodes.map((node) => ({
         ...tripColumns.find((column) => column.key === node.id)!,
         label: node.label,
@@ -102,6 +113,8 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
         ),
       }))
     : tripColumns;
+  const displayTripColumns = allTripColumns.filter((column) => column.key !== "hr" ||
+    requests.some((request) => (request.workflowVersion ?? 1) === 1 && !isFinished(request)));
   const personName = (id: string) => people.find((person) => person.id === id)?.name ?? "Сотрудник";
   const personLink = (id: string, children: ReactNode, className?: string) => <EmployeeProfileLink userId={people.some((person) => person.id === id) ? id : undefined} personName={personName(id)} className={className}>{children}</EmployeeProfileLink>;
   const runningCount = requests.filter((request) => !isFinished(request)).length;
@@ -137,6 +150,51 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
     finally { busyRef.current = false; setBusy(false); }
   };
 
+  const changeBrief = async (request: TripRequest, file?: File, remove = false) => {
+    if (busyRef.current || (!remove && !file)) return;
+    if (file && (!file.size || file.size > 10 * 1024 * 1024)) {
+      setError("Файл билдирги должен быть не больше 10 МиБ."); return;
+    }
+    busyRef.current = true; setBusy(true); setError("");
+    try {
+      const updated = remove
+        ? await onRemoveBrief?.(request.id)
+        : file ? await onUploadBrief?.(request.id, file) : undefined;
+      if (!updated) setError("Не удалось сохранить документ. Проверьте формат файла и подключение.");
+    } catch { setError("Не удалось сохранить документ. Попробуйте ещё раз."); }
+    finally { busyRef.current = false; setBusy(false); if (briefFileRef.current) briefFileRef.current.value = ""; }
+  };
+  const saveSignature = async (request: TripRequest, content: Blob): Promise<boolean> => {
+    if (busyRef.current || !onUploadSignature) return false;
+    busyRef.current = true; setBusy(true); setError("");
+    try {
+      const updated = await onUploadSignature(request.id, content);
+      if (!updated) { setError("Не удалось сохранить подпись. Проверьте формат PNG."); return false; }
+      return true;
+    } catch { setError("Не удалось сохранить подпись. Попробуйте ещё раз."); return false; }
+    finally { busyRef.current = false; setBusy(false); }
+  };
+  const downloadDocument = async (
+    request: TripRequest, kind: "attachment" | "brief" | "order" | "order-preview",
+  ) => {
+    if (!onDownloadDocument || busyRef.current) return;
+    busyRef.current = true; setBusy(true); setError("");
+    try {
+      const content = await onDownloadDocument(request.id, kind);
+      if (!content) { setError("Документ не удалось открыть. Повторите попытку."); return; }
+      const url = URL.createObjectURL(content);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = kind === "attachment" ? request.briefAttachmentName ?? "bildirgi"
+        : kind === "brief" ? "bildirgi-signed.pdf"
+          : kind === "order" ? `prikaz-${request.orderNumber ?? request.number}.pdf`
+            : "prikaz-preview.pdf";
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch { setError("Не удалось скачать документ. Попробуйте ещё раз."); }
+    finally { busyRef.current = false; setBusy(false); }
+  };
+
   const commitAction = async (request: TripRequest, action: TripAction, comment?: string, targetStage?: TripStage) => {
     if (busyRef.current || (action === "move" ? !isAdministrator || !targetStage : !request.allowedActions.includes(action))) return false;
     busyRef.current = true; setBusy(true); setError("");
@@ -165,7 +223,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
         <Button {...restoreFocusTarget} className="ws-section-header-primary" appearance="primary" icon={<Add24Regular />} onClick={create}>Новая командировка</Button>
       </WorkspaceSectionHeader>
 
-      {section === "designer" && workflow && onSaveWorkflow && onPublishWorkflow ? <ProcessWorkflowDesigner workflow={workflow} processName="Маршрут поездок" accent="trip" people={people} departments={departments} positions={positions} onSave={onSaveWorkflow} onPublish={onPublishWorkflow} /> : <>
+      {section === "designer" && workflow && onSaveWorkflow && onPublishWorkflow ? <><p className="trip-document-reminder">Новые поездки идут напрямую от председателя к приказу. Кадровый этап и его настройки относятся только к старым заявкам; конструктор не меняет защищённые права нового маршрута.</p><ProcessWorkflowDesigner workflow={workflow} processName="Маршрут поездок" accent="trip" people={people} departments={departments} positions={positions} onSave={onSaveWorkflow} onPublish={onPublishWorkflow} /></> : <>
       <section className="ws2-process-overview trip-overview" aria-label="Сводка по командировкам">
         <button type="button" className="ws2-process-focus" onClick={() => setFilter("running")}>
           <strong>{actionableCount}</strong>
@@ -191,7 +249,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
       {feedback}
       {visibleRequests.length === 0 ? <p className="trip-board-help">{requests.length ? "По выбранным фильтрам поездок нет. Измените поиск или выберите «Все»." : "Поездок пока нет. Создайте первую командировку — она появится в колонке «Запуск»."}</p> : null}
       {view === "kanban" ? (
-        <SpatialBoard canDrop={(id, target) => { const request = requests.find(item => item.id === id); return !busy && !!request && !!tripDropAction(request, target as TripStage, isAdministrator); }} onMove={async (id, target) => { const request = requests.find(item => item.id === id); const targetStage = target as TripStage; const action = request && tripDropAction(request, targetStage, isAdministrator); if (request && action) { if (action === "move") await commitAction(request, action, `Перенос на этап «${displayTripColumns.find((column) => column.key === targetStage)?.label ?? targetStage}»`, targetStage); else await act(request, action); } }}>
+        <SpatialBoard canDrop={(id, target) => { const request = requests.find(item => item.id === id); const action = request && tripDropAction(request, target as TripStage, isAdministrator); return !busy && !!action && !(request && (action === "submit" || action === "resubmit") && needsNewSignature(request)); }} onMove={async (id, target) => { const request = requests.find(item => item.id === id); const targetStage = target as TripStage; const action = request && tripDropAction(request, targetStage, isAdministrator); if (request && action && !((action === "submit" || action === "resubmit") && needsNewSignature(request))) { if (action === "move") await commitAction(request, action, `Перенос на этап «${displayTripColumns.find((column) => column.key === targetStage)?.label ?? targetStage}»`, targetStage); else await act(request, action); } }}>
         <div className="approval-kanban trip-kanban middle-pan-surface" role="region" tabIndex={0} aria-label="Стадии поездок" aria-busy={busy} {...boardPan}>
           {displayTripColumns.map((column) => {
             const items = visibleRequests.filter((request) => request.stage === column.key);
@@ -203,7 +261,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
               <div className="approval-column-stack" tabIndex={0} aria-label={`Поездки на этапе «${column.label}»`}>
                 {items.map((request) => {
                   const forward = request.allowedActions.find((action) => action === "submit" || action === "resubmit" || action === "approve");
-                  const movable = !busy && displayTripColumns.some((target) => tripDropAction(request, target.key, isAdministrator));
+                  const movable = !busy && displayTripColumns.some((target) => { const action = tripDropAction(request, target.key, isAdministrator); return action && !((action === "submit" || action === "resubmit") && needsNewSignature(request)); });
                   return <SpatialCard id={request.id} lane={column.key} label={request.purpose} disabled={!movable} key={request.id} data-trip-id={request.id} className={`approval-board-card trip-board-card ${movable ? "movable" : ""}`}>
                     <button type="button" className="approval-card-open" aria-label={`Открыть поездку ${request.number}: ${request.purpose}`} onClick={() => openRequest(request.id)}>
                       <span className="approval-card-topline"><span>{request.number}</span>{request.status === "needs_revision" ? <em>Доработка</em> : null}</span>
@@ -213,7 +271,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
                       {personLink(request.requesterUserId, <><Avatar size={24} name={personName(request.requesterUserId)} color="colorful" /><span>{personName(request.requesterUserId)}</span></>, "approval-card-owner")}
                       <span className="approval-card-meta"><span>{request.stageLabel}</span><span>{request.employeeIds.length} участн.</span></span>
                     </button>
-                    <footer><span>{movable ? "Можно перенести" : request.statusLabel}</span>{request.chatId && onOpenChat ? <Button size="small" className="context-chat-button" appearance="subtle" icon={<Chat24Regular />} aria-label={`Открыть чат поездки ${request.number}`} onClick={() => onOpenChat(request.chatId!)} /> : null}{forward ? <Button size="small" appearance="subtle" disabled={busy} aria-label={`${actionLabels[forward]}: ${request.number}`} onClick={() => void act(request, forward)}>{moveLabels[forward]}</Button> : null}</footer>
+                    <footer><span>{movable ? "Можно перенести" : request.statusLabel}</span>{request.chatId && onOpenChat ? <Button size="small" className="context-chat-button" appearance="subtle" icon={<Chat24Regular />} aria-label={`Открыть чат поездки ${request.number}`} onClick={() => onOpenChat(request.chatId!)} /> : null}{forward ? <Button size="small" appearance="subtle" disabled={busy || ((forward === "submit" || forward === "resubmit") && needsNewSignature(request))} aria-label={`${actionLabels[forward]}: ${request.number}`} onClick={() => void act(request, forward)}>{moveLabels[forward]}</Button> : null}</footer>
                   </SpatialCard>;
                 })}
                 {!items.length ? <div className="approval-column-empty">Нет поездок</div> : null}
@@ -238,33 +296,51 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
           {formMode === null && selected ? <div className="context-record-workspace"><article className="trip-detail">
             <header><div><span>{selected.number}</span><DialogTitle>{selected.destination}</DialogTitle><p>{selected.startDate} — {selected.endDate}</p></div><Button autoFocus appearance="subtle" icon={<Dismiss20Regular />} disabled={busy} onClick={closeDetail} aria-label="Закрыть карточку поездки" /></header>
             <Badge className="trip-detail-status" appearance="tint" color={selected.status === "rejected" ? "danger" : selected.status === "approved" ? "success" : "informative"}>{selected.statusLabel}</Badge>
-            <div className="trip-detail-stages" aria-label="Маршрут согласования">{displayTripColumns.filter((column) => column.key !== (selected.stage === "rejected" ? "approved" : "rejected")).map((column) => <span key={column.key} aria-current={selected.stage === column.key ? "step" : undefined} style={{ "--approval-stage-color": column.color } as CSSProperties}>{column.label}</span>)}</div>
+            <div className="trip-detail-stages" aria-label="Маршрут согласования">{displayTripColumns.filter((column) => (selected.workflowVersion ?? 1) !== 2 || column.key !== "hr").filter((column) => column.key !== (selected.stage === "rejected" ? "approved" : "rejected")).map((column) => <span key={column.key} aria-current={selected.stage === column.key ? "step" : undefined} style={{ "--approval-stage-color": column.color } as CSSProperties}>{column.label}</span>)}</div>
             {feedback}
             {pendingDecision?.id === selected.id ? <DecisionReason key={`${selected.id}:${pendingDecision.action}`} title={pendingDecision.action === "return" ? "Что нужно исправить?" : "Причина отклонения"} onCancel={() => setPendingDecision(undefined)} onConfirm={(reason) => commitAction(selected, pendingDecision.action, reason)} /> : null}
             <div className="trip-purpose"><span>Цель поездки</span><p>{selected.purpose}</p></div>
             <dl className="bp7-facts"><div><dt>Инициатор</dt><dd>{personLink(selected.requesterUserId, personName(selected.requesterUserId))}</dd></div><div><dt>Период</dt><dd>{selected.startDate} — {selected.endDate}</dd></div></dl>
             <div className="trip-employees"><h3>Сотрудники</h3>{selected.employeeIds.map((id) => <span key={id}>{personLink(id, personName(id), "trip-employee-link")}</span>)}</div>
+            {(selected.workflowVersion ?? 1) === 2 ? <section className="trip-document-panel" aria-label="Документы поездки">
+              <div className="trip-document-heading"><div><h3>Билдирги и приказ</h3><p>Проверьте данные, оригинал и подпись до отправки председателю.</p></div>{selected.orderNumber ? <Badge appearance="tint" color="success">Приказ № {selected.orderNumber}</Badge> : null}</div>
+              <dl className="trip-document-facts"><div><dt>Источник расходов</dt><dd>{selected.expenseSource || "Не указан"}</dd></div><div><dt>Текст билдирги</dt><dd>{selected.briefText || (selected.briefAttachmentName ? "См. приложенный оригинал" : "Не добавлен")}</dd></div></dl>
+              <div className="trip-document-files">
+                {selected.canEdit && onUploadBrief ? <><input ref={briefFileRef} className="sr-only" type="file" accept=".pdf,.docx,.jpg,.jpeg,.png" aria-label="Загрузить оригинал билдирги" onChange={(event) => { const file = event.target.files?.[0]; if (file) void changeBrief(selected, file); }} /><Button type="button" disabled={busy} onClick={() => briefFileRef.current?.click()}>{selected.briefAttachmentName ? "Заменить оригинал" : "Прикрепить оригинал"}</Button></> : null}
+                {selected.briefAttachmentName ? <><Button type="button" disabled={busy} onClick={() => void downloadDocument(selected, "attachment")}>Оригинал · {selected.briefAttachmentName}</Button>{selected.canEdit && onRemoveBrief ? <Button type="button" disabled={busy} onClick={() => void changeBrief(selected, undefined, true)}>Убрать оригинал</Button> : null}</> : null}
+                {selected.hasSignedBrief ? <Button type="button" disabled={busy} onClick={() => void downloadDocument(selected, "brief")}>Подписанная билдирги PDF</Button> : null}
+                {selected.stage === "manager_approval" ? <Button type="button" disabled={busy} onClick={() => void downloadDocument(selected, "order-preview")}>Предпросмотр приказа</Button> : null}
+                {selected.hasOrderPdf ? <Button type="button" appearance="primary" disabled={busy} onClick={() => void downloadDocument(selected, "order")}>Скачать утверждённый приказ PDF</Button> : null}
+              </div>
+              {selected.canEdit && onUploadSignature ? <TripSignaturePad saved={selected.hasEmployeeSignature} disabled={busy} onSave={(content) => saveSignature(selected, content)} /> : null}
+              {selected.canEdit && !selected.hasEmployeeSignature ? <p className="trip-document-reminder">Перед отправкой добавьте текст или оригинал билдирги, источник расходов и свою подпись. После исправления заявки подпись нужно поставить снова.</p> : null}
+              {selected.status === "approved" ? <p role="status" className="trip-document-approved">Приказ зарегистрирован и подписан председателем. Участникам направлены уведомления.</p> : null}
+            </section> : selected.stage === "hr" ? <p className="trip-document-reminder">Эта поездка проходит прежний маршрут через кадровую службу.</p> : null}
             <div className="bp7-actions">
-              {selected.canEdit ? <Button disabled={busy || Boolean(pendingDecision)} icon={<Edit24Regular />} onClick={() => { setForm({ purpose: selected.purpose, destination: selected.destination, startDate: selected.startDate, endDate: selected.endDate, employeeIds: selected.employeeIds }); setEmployeeQuery(""); setError(""); setFormMode("edit"); }}>Изменить</Button> : null}
-              {selected.allowedActions.map((action) => <Button className={`trip-decision-action action-${action}`} disabled={busy || Boolean(pendingDecision)} appearance={action === "approve" || action === "submit" || action === "resubmit" ? "primary" : "secondary"} key={action} onClick={() => void act(selected, action)}>{actionLabels[action]}</Button>)}
-              {isAdministrator ? displayTripColumns.filter((column) => column.key !== selected.stage).map((column) => <Button data-stage={column.key} disabled={busy || Boolean(pendingDecision)} key={`move:${column.key}`} onClick={() => void commitAction(selected, "move", `Перенос на этап «${column.label}»`, column.key)}>{column.label}</Button>) : null}
+              {selected.canEdit ? <Button disabled={busy || Boolean(pendingDecision)} icon={<Edit24Regular />} onClick={() => { setForm({ purpose: selected.purpose, destination: selected.destination, startDate: selected.startDate, endDate: selected.endDate, employeeIds: selected.employeeIds, briefText: selected.briefText ?? "", expenseSource: selected.expenseSource ?? "" }); setEmployeeQuery(""); setError(""); setFormMode("edit"); }}>Изменить</Button> : null}
+              {selected.allowedActions.map((action) => <Button className={`trip-decision-action action-${action}`} disabled={busy || Boolean(pendingDecision) || ((action === "submit" || action === "resubmit") && needsNewSignature(selected))} appearance={action === "approve" || action === "submit" || action === "resubmit" ? "primary" : "secondary"} key={action} onClick={() => void act(selected, action)}>{action === "approve" && (selected.workflowVersion ?? 1) === 2 ? "Утвердить и выпустить приказ" : action === "submit" && (selected.workflowVersion ?? 1) === 2 ? "Отправить председателю" : actionLabels[action]}</Button>)}
+              {isAdministrator && (selected.workflowVersion ?? 1) === 1 ? displayTripColumns.filter((column) => column.key !== selected.stage).map((column) => <Button data-stage={column.key} disabled={busy || Boolean(pendingDecision)} key={`move:${column.key}`} onClick={() => void commitAction(selected, "move", `Перенос на этап «${column.label}»`, column.key)}>{column.label}</Button>) : null}
             </div>
             <div className="bp7-history"><h3>История решений</h3>{[...selected.actions].reverse().map((entry) => <div key={entry.id}><i /><p><strong>{entry.action === "created" ? "Заявка создана" : actionLabels[entry.action]}</strong><span>{personLink(entry.actorUserId, personName(entry.actorUserId))} · {new Date(entry.createdAt).toLocaleString("ru-RU")}</span>{entry.comment ? <small>{entry.comment}</small> : null}</p></div>)}</div>
           </article>{renderTripChat ? renderTripChat(selected) : <div className="embedded-chat-unavailable">Чат поездки недоступен.</div>}</div> : formMode !== null ? (
           <form className="bp7-modal trip-form record-composer" noValidate aria-busy={busy} onSubmit={(event) => { event.preventDefault(); void save(); }}>
             <RecordComposer title={formMode === "create" ? "Создать заявку на поездку" : "Изменить заявку на поездку"} titleId="trip-composer-title" eyebrow="Согласование поездок" busy={busy} error={error} submitLabel="Сохранить" onClose={closeForm}
-              hint="Сохранение не отправляет поездку на согласование. Отправить её можно из карточки."
-              stages={<div className="record-stages" tabIndex={0} role="region" aria-label="Маршрут согласования">{displayTripColumns.filter((column) => column.key !== "rejected").map((column) => <span key={column.key} aria-current={column.key === (formMode === "edit" ? selected?.stage : "launch") ? "step" : undefined} style={{ "--record-stage-color": column.color } as CSSProperties}>{column.label}</span>)}</div>}
+              hint="Сохраните черновик, затем проверьте билдирги, поставьте подпись и отправьте председателю."
+              stages={<div className="record-stages" tabIndex={0} role="region" aria-label="Маршрут согласования">{displayTripColumns.filter((column) => column.key !== "rejected" && column.key !== "hr").map((column) => <span key={column.key} aria-current={column.key === (formMode === "edit" ? selected?.stage : "launch") ? "step" : undefined} style={{ "--record-stage-color": column.color } as CSSProperties}>{column.label}</span>)}</div>}
               aside={<>
                 <RecordSummary title="Сводка поездки"><div className="record-summary-title">{form.destination.trim() || "Место поездки не указано"}</div><p>{form.purpose.trim() || "Добавьте цель поездки"}</p>
                   <dl className="record-summary-facts"><div><dt>Даты</dt><dd>{form.startDate || "Не указано"} — {form.endDate || "Не указано"}</dd></div><div><dt>Инициатор</dt><dd>{formMode === "edit" && selected ? personLink(selected.requesterUserId, personName(selected.requesterUserId)) : personLink(currentUser.id, currentUser.name)}</dd></div><div><dt>Участников</dt><dd>{form.employeeIds.length}</dd></div></dl>
                   <ul className="record-summary-people">{form.employeeIds.map((id) => <EmployeeProfileLink as="li" key={id} userId={people.some((person) => person.id === id) ? id : undefined} personName={personName(id)}>{personName(id)}</EmployeeProfileLink>)}</ul>
                 </RecordSummary>
-                <section className="record-summary-card record-summary-note"><h3>Что произойдёт дальше</h3><p>Сначала сохраните карточку, затем отправьте её руководителю. После его согласования заявка поступит в кадровую службу.</p><p>История решений будет доступна в карточке поездки.</p></section>
+                <section className="record-summary-card record-summary-note"><h3>Что произойдёт дальше</h3><p>После сохранения прикрепите оригинал билдирги при необходимости и нарисуйте подпись. Председатель сможет подтвердить поездку, вернуть на уточнение или отклонить.</p><p>При утверждении приказ получит отдельный номер серии WS и появится в карточке.</p></section>
               </>}>
               <RecordSection title="Общее" description="Укажите цель и место поездки — их увидят согласующие."><div className="record-field-grid">
                 <label className="record-field-wide">Цель поездки<Textarea aria-label="Цель поездки" aria-required autoFocus resize="vertical" value={form.purpose} onChange={(_, data) => setForm({ ...form, purpose: data.value })} /></label>
                 <label className="record-field-wide">Куда едем<Input aria-label="Куда едем" aria-required placeholder="Город, страна или место встречи" value={form.destination} onChange={(_, data) => setForm({ ...form, destination: data.value })} /></label>
+              </div></RecordSection>
+              <RecordSection title="Билдирги и расходы" description="Напишите содержание билдирги здесь либо прикрепите готовый документ после сохранения черновика. Источник расходов нужен для приказа."><div className="record-field-grid">
+                <label className="record-field-wide">Текст билдирги<Textarea aria-label="Текст билдирги" resize="vertical" rows={5} placeholder="Опишите основание, мероприятие и цель поездки" value={form.briefText} onChange={(_, data) => setForm({ ...form, briefText: data.value })} /></label>
+                <label className="record-field-wide">Источник покрытия расходов<Input aria-label="Источник покрытия расходов" placeholder="Например: лойиҳа маблағлари" value={form.expenseSource} onChange={(_, data) => setForm({ ...form, expenseSource: data.value })} /></label>
               </div></RecordSection>
               {formMode === "create" && <RecordSection title="Иконка чата поездки" description="По умолчанию — самолёт. После создания иконку можно изменить в чате."><ChatIconPicker value={form.chatIconKey ?? "plane"} onChange={(chatIconKey) => setForm({ ...form, chatIconKey })} disabled={busy} /></RecordSection>}
               <RecordSection title="Даты поездки"><div className="record-field-grid">

@@ -1085,11 +1085,20 @@ class TripRequestResponse(ApiModel):
     id: str
     number: str
     requester_user_id: str
+    workflow_version: int = 1
     purpose: str
     destination: str
     start_date: date
     end_date: date
     employee_ids: list[str]
+    brief_text: str = ""
+    expense_source: str = ""
+    brief_attachment_name: str | None = None
+    has_employee_signature: bool = False
+    has_signed_brief: bool = False
+    order_number: str | None = None
+    order_issued_at: datetime | None = None
+    has_order_pdf: bool = False
     stage: TripStage
     stage_label: str
     status: TripStatus
@@ -1109,6 +1118,8 @@ class TripWriteRequest(ApiModel):
     start_date: date
     end_date: date
     employee_ids: list[str] = Field(min_length=1, max_length=100)
+    brief_text: str = Field(default="", max_length=6000)
+    expense_source: str = Field(default="", max_length=300)
 
     @field_validator("purpose", "destination")
     @classmethod

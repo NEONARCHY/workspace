@@ -4,19 +4,20 @@ import type { TripAction, TripRequest, TripStage } from "@yuksalish/contracts";
 export const tripColumns: readonly { key: TripStage; label: string; color: string }[] = [
   { key: "launch", label: "Запуск", color: "#72b9dc" },
   { key: "manager_approval", label: "Утверждение руководителем", color: "#849fd0" },
-  { key: "hr", label: "Кадровая служба", color: "#50bec8" },
+  { key: "hr", label: "Кадровая служба · прежний маршрут", color: "#50bec8" },
   { key: "approved", label: "Утверждено", color: "#62bd72" },
   { key: "rejected", label: "Отклонено", color: "#d97878" },
 ];
 
 // UI only proposes an existing action. The server remains the authority on permissions.
-export function tripDropAction(request: Pick<TripRequest, "stage" | "status" | "allowedActions">, target: TripStage, administrator = false): TripAction | undefined {
-  if (administrator && request.stage !== target) return "move";
+export function tripDropAction(request: Pick<TripRequest, "stage" | "status" | "allowedActions" | "workflowVersion">, target: TripStage, administrator = false): TripAction | undefined {
+  const modern = request.workflowVersion === 2;
+  if (administrator && !modern && request.stage !== target) return "move";
   let action: TripAction | undefined;
   if (request.stage === "launch" && target === "manager_approval") {
     action = request.status === "needs_revision" ? "resubmit" : "submit";
-  } else if (request.stage === "manager_approval" || request.stage === "hr") {
-    if (target === (request.stage === "manager_approval" ? "hr" : "approved")) action = "approve";
+  } else if (request.stage === "manager_approval" || (!modern && request.stage === "hr")) {
+    if (target === (request.stage === "manager_approval" && !modern ? "hr" : "approved")) action = "approve";
     else if (target === "launch") action = "return";
     else if (target === "rejected") action = "reject";
   }
