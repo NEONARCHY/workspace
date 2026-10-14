@@ -216,6 +216,7 @@ async def exercise_forwarding(url: str) -> None:
 
                 # Delivery follows recipient preferences and feed access.
                 prefs = await get_notification_preferences(connection, peer)
+                assert prefs.sound_volume == 100
                 await update_notification_preferences(
                     connection,
                     peer,

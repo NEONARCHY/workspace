@@ -2,6 +2,8 @@ import type { NotificationPreferences, WorkspaceNotification } from "@yuksalish/
 import notificationUrl from "./assets/workspace-notification.mp3?url";
 import { isObsoleteHisobotNotification } from "./notification-delivery";
 
+export const defaultNotificationVolume = 100;
+
 export function notificationSoundEnabled(item: WorkspaceNotification, prefs: NotificationPreferences): boolean {
   const channels = {
     message: prefs.messagesEnabled, task: prefs.tasksEnabled, approval: prefs.approvalsEnabled,
@@ -9,7 +11,7 @@ export function notificationSoundEnabled(item: WorkspaceNotification, prefs: Not
     zoom: prefs.zoomEnabled, hisobot: true, support: true, birthday: prefs.calendarEnabled,
     feed: prefs.feedEnabled !== false,
   };
-  return prefs.soundEnabled !== false && (prefs.soundVolume ?? 20) > 0 && channels[item.kind]
+  return prefs.soundEnabled !== false && (prefs.soundVolume ?? defaultNotificationVolume) > 0 && channels[item.kind]
     && (!item.isReminder || item.kind === "hisobot" || prefs.remindersEnabled)
     && !isObsoleteHisobotNotification(item);
 }
@@ -39,7 +41,7 @@ export class WorkspaceSounds {
     if (!preview && (this.playing || Date.now() - this.lastNotification < 2500)) return;
     const context = this.context;
     if (!context || context.state !== "running") {
-      if (preview) throw new Error("Браузер не разрешил звук. Нажмите «Проверить звук» ещё раз.");
+      if (preview) throw new Error("Браузер не разрешил звук. Нажмите «Прослушать» ещё раз.");
       return;
     }
     this.buffer ??= fetch(notificationUrl).then(async response => {

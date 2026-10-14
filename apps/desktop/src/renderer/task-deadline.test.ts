@@ -33,4 +33,12 @@ describe("Task deadline signals", () => {
     expect(isTaskOverdue({ status: "in_progress", dueAt }, deadline)).toBe(false);
     expect(isTaskOverdue({ status: "in_progress", dueAt }, deadline + 1)).toBe(true);
   });
+  it("removes rescheduled work from overdue despite its historical status", () => {
+    expect(isTaskOverdue({ ...task(3), status: "overdue" }, now)).toBe(false);
+    expect(taskDeadlineTone({ ...task(3), status: "overdue" }, now)).toBeUndefined();
+    expect(isTaskOverdue({ ...task(-1), status: "overdue" }, now)).toBe(true);
+    const dueAt = new Date(now + 1).toISOString();
+    expect(isTaskOverdue({ status: "overdue", dueAt }, now)).toBe(false);
+    expect(isTaskOverdue({ status: "overdue", dueAt }, now + 2)).toBe(true);
+  });
 });
