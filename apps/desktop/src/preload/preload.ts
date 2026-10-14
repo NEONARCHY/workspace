@@ -16,6 +16,7 @@ export interface DesktopNotificationNavigation {
 }
 
 export interface DesktopBridge {
+  readonly openZoomMeeting?: (url: string) => Promise<boolean>;
   readonly platform: NodeJS.Platform;
   readonly version: string;
   readonly reportDiagnostic: (payload: { category: string; name: string; frames: string }) => Promise<void>;
@@ -43,6 +44,7 @@ export interface DesktopUpdateStatus {
 }
 
 const bridge: DesktopBridge = Object.freeze({
+  openZoomMeeting: (url: string) => ipcRenderer.invoke("zoom:join", url) as Promise<boolean>,
   platform: process.platform,
   version: ipcRenderer.sendSync("app:version") as string,
   reportDiagnostic: (payload: { category: string; name: string; frames: string }) => ipcRenderer.invoke("diagnostics:record", payload) as Promise<void>,

@@ -48,9 +48,11 @@ from .workspace_schemas import (
     TransferChatOwnerRequest,
     UpdateChatAvatarRequest,
     UpdateChatRequest,
+    ZoomInvitationReplyRequest,
     ZoomInvitationResponse,
 )
 from .zoom_invitations import invitation_detail_map as invitation_detail_map
+from .zoom_invitations import reply_to_zoom_invitation
 
 Record = Mapping[Any, Any]
 
@@ -979,6 +981,22 @@ async def message_with_details(
         read_by_recipient=row["id"] in read_ids,
         zoom_invitation=invitations.get(row["id"]),
     )
+
+
+async def respond_zoom_invitation(
+    connection: AsyncConnection, user: AuthenticatedUser, message_id: UUID,
+    payload: ZoomInvitationReplyRequest,
+) -> ChatMessageResponse:
+    row = (await connection.execute(select(messages).where(
+        messages.c.id == message_id, messages.c.deleted_at.is_(None),
+    ))).mappings().first()
+    if row is None or not row["zoom_meeting_id"]:
+        raise WorkspaceRepositoryError(404, "Приглашение недоступно")
+    chat, member = await chat_access(connection, user, row["chat_id"])
+    if not message_visible_to_member(row, member):
+        raise WorkspaceRepositoryError(404, "Приглашение недоступно")
+    await reply_to_zoom_invitation(connection, user, row["zoom_meeting_id"], payload.response)
+    return await message_with_details(connection, user, row, chat, member)
 
 
 async def validate_mentions(

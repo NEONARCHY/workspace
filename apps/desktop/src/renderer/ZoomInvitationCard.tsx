@@ -1,10 +1,12 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useState, type MouseEvent } from "react";
 import type { WorkspacePerson, ZoomInvitation } from "@yuksalish/contracts";
 import { Check, ChevronDown, Clock3, ExternalLink, Video, X } from "lucide-react";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { respondToZoomInvitation } from "./workspace-api";
 import { useContextMotion } from "./useContextMotion";
+import { validatedZoomLink } from "../shared/zoom-link";
+import { workspacePlatform } from "./platform-adapter";
 import "./zoom-invitation.css";
 
 export function ZoomInvitationCard({ messageId, invitation, people, token }: {
@@ -30,7 +32,7 @@ export function ZoomInvitationCard({ messageId, invitation, people, token }: {
   }, [card.endsAt, now]);
   const finished = end.getTime() <= now;
   const scheduled = card.available && card.status === "scheduled" && !finished;
-  const joinUrl = card.joinUrl && /^https:\/\/(?:[\w-]+\.)?zoom\.(?:us|com)\//i.test(card.joinUrl) ? card.joinUrl : null;
+  const joinUrl = validatedZoomLink(card.joinUrl);
   const canReply = scheduled && card.canRespond;
   const members = [...(card.organizerId ? [{ userId: card.organizerId, response: "organizer" }] : []), ...card.participants.filter(p => p.userId !== card.organizerId)];
   async function reply(response: "accepted" | "declined") {
@@ -43,6 +45,18 @@ export function ZoomInvitationCard({ messageId, invitation, people, token }: {
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Не удалось ответить. Попробуйте ещё раз.");
     } finally { setBusy(false); }
+  }
+  function join(event: MouseEvent<HTMLAnchorElement>) {
+    if (workspacePlatform.kind !== "electron") return;
+    event.preventDefault();
+    setError("");
+    if (!joinUrl || !workspacePlatform.openZoomMeeting) {
+      setError("Обновите приложение или скопируйте ссылку из сообщения и откройте её в браузере.");
+      return;
+    }
+    void workspacePlatform.openZoomMeeting(joinUrl).then(opened => {
+      if (!opened) setError("Не удалось открыть Zoom. Скопируйте ссылку из сообщения и откройте её в браузере.");
+    }).catch(() => setError("Не удалось открыть Zoom. Попробуйте ещё раз."));
   }
   return <section className="zoom-invitation" aria-label={`Приглашение на Zoom: ${card.topic}`}>
     <div className="zoom-invitation-banner"><span><Video size={18} aria-hidden="true" /> Zoom-конференция</span>
@@ -78,12 +92,12 @@ export function ZoomInvitationCard({ messageId, invitation, people, token }: {
         <div className="zoom-invitation-actions">
           {canReply && card.response !== "accepted" ? <button type="button" className="zoom-invitation-primary" disabled={busy} onClick={() => void reply("accepted")}>
             <Check size={16} aria-hidden="true" />{busy ? "Сохраняем…" : "Принять"}</button>
-            : joinUrl ? <a className="zoom-invitation-primary" href={joinUrl} target="_blank" rel="noopener noreferrer"><Video size={16} aria-hidden="true" />Войти в Zoom</a> : null}
+            : joinUrl ? <a className="zoom-invitation-primary" href={joinUrl} onClick={join} target="_blank" rel="noopener noreferrer"><Video size={16} aria-hidden="true" />Войти в Zoom</a> : null}
           {canReply && <button type="button" className="zoom-invitation-decline" data-declined={card.response === "declined"} disabled={busy || card.response === "declined"} onClick={() => void reply("declined")}>
             <X size={16} aria-hidden="true" />{card.response === "declined" ? "Отказались" : "Отказаться"}</button>}
         </div>
         {card.response === "accepted" && <p className="zoom-invitation-response" role="status"><Check size={14} aria-hidden="true" />Вы участвуете</p>}
-        {joinUrl && <a className="zoom-invitation-link" href={joinUrl} target="_blank" rel="noopener noreferrer">Ссылка на конференцию <ExternalLink size={14} aria-hidden="true" /></a>}
+        {joinUrl && <a className="zoom-invitation-link" href={joinUrl} onClick={join} target="_blank" rel="noopener noreferrer">Ссылка на конференцию <ExternalLink size={14} aria-hidden="true" /></a>}
         {card.passcode && <p className="zoom-invitation-passcode">Код доступа: <strong>{card.passcode}</strong></p>}
       </>}
       {error && <p className="zoom-invitation-error" role="alert">{error}</p>}

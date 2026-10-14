@@ -12,11 +12,12 @@ const invitation: ZoomInvitation = {
   meetingId: "meeting", topic: "Обсуждение проекта", startsAt: start.toISOString(),
   endsAt: new Date(start.getTime() + 3600000).toISOString(), timezone: "Asia/Tashkent",
   status: "scheduled", organizerId: "owner", participants: [{ userId: "peer", response: "pending" }],
-  joinUrl: "https://us06web.zoom.us/j/123456", passcode: "abcd", response: "pending", canRespond: true, available: true,
+  joinUrl: "https://us06web.zoom.us/j/123456789", passcode: "abcd", response: "pending", canRespond: true, available: true,
 };
 const mount = (card = invitation) => render(<FluentProvider theme={workspaceTheme}><ZoomInvitationCard messageId="msg" invitation={card} people={[]} token="test" /></FluentProvider>);
-beforeEach(() => vi.resetAllMocks());
-afterEach(cleanup);
+let previousBridge: Window["yuksalish"];
+beforeEach(() => { previousBridge = window.yuksalish; vi.resetAllMocks(); });
+afterEach(() => { cleanup(); window.yuksalish = previousBridge; });
 describe("Zoom invitation", () => {
   it("renders the date, safe link and accessible bounded participant disclosure", () => {
     mount();
@@ -63,5 +64,19 @@ describe("Zoom invitation", () => {
   it("does not follow non-Zoom and non-HTTPS links", () => {
     mount({ ...invitation, joinUrl: "javascript:alert(1)" });
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
+  });
+  it("uses the restricted desktop capability instead of a blocked browser window", async () => {
+    const openZoomMeeting = vi.fn().mockResolvedValue(true);
+    window.yuksalish = { platform: "win32", version: "2.0.0", openZoomMeeting };
+    mount({ ...invitation, response: "accepted" });
+    fireEvent.click(screen.getByRole("link", { name: "Войти в Zoom" }));
+    await waitFor(() => expect(openZoomMeeting).toHaveBeenCalledWith(invitation.joinUrl));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+  it("shows an actionable desktop opening error", async () => {
+    window.yuksalish = { platform: "win32", version: "2.0.0", openZoomMeeting: vi.fn().mockResolvedValue(false) };
+    mount({ ...invitation, response: "accepted" });
+    fireEvent.click(screen.getByRole("link", { name: "Войти в Zoom" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Не удалось открыть Zoom");
   });
 });

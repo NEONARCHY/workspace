@@ -1,4 +1,6 @@
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
+import { workspacePlatform } from "./platform-adapter";
+import { validatedZoomLink } from "../shared/zoom-link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type {
@@ -278,6 +280,17 @@ export function ZoomView({
       : new Date(right.startsAt).getTime() - new Date(left.startsAt).getTime())),
   [bucket, meetings, openedAt]);
   const selected = meetings.find((meeting) => meeting.id === selectedId);
+
+  const connect = () => {
+    const url = validatedZoomLink(selected?.joinUrl);
+    setActionError("");
+    if (!url) { setActionError("Ссылка Zoom недоступна. Обновите данные конференции."); return; }
+    if (workspacePlatform.kind !== "electron") { window.open(url, "_blank", "noopener,noreferrer"); return; }
+    if (!workspacePlatform.openZoomMeeting) { setActionError("Обновите приложение или откройте скопированную ссылку в браузере."); return; }
+    void workspacePlatform.openZoomMeeting(url).then(opened => {
+      if (!opened) setActionError("Не удалось открыть Zoom. Скопируйте ссылку и откройте её в браузере.");
+    }).catch(() => setActionError("Не удалось открыть Zoom. Попробуйте ещё раз."));
+  };
 
   const copy = async (text: string, confirmation: string) => {
     try {
@@ -614,7 +627,7 @@ export function ZoomView({
                     <Button
                       appearance="primary"
                       icon={<Open20Regular />}
-                      onClick={() => window.open(selected.joinUrl ?? "", "_blank", "noopener,noreferrer")}
+                      onClick={connect}
                     >
                       Подключиться
                     </Button>
