@@ -158,8 +158,6 @@ async def put_employee_signature(
     _require_editable(row, user)
     if not row["brief_text"] and not row["brief_attachment_key"]:
         raise Error(422, "Напишите билдирги или прикрепите исходный документ")
-    if not row["expense_source"]:
-        raise Error(422, "Укажите источник покрытия расходов")
     try:
         normalized = await run_in_threadpool(validate_signature, content)
     except ValueError as error:
@@ -213,8 +211,6 @@ async def prepare_signed_brief(
     _require_editable(row, user)
     if not row["brief_text"] and not row["brief_attachment_key"]:
         raise Error(422, "Напишите билдирги или прикрепите исходный документ")
-    if not row["expense_source"]:
-        raise Error(422, "Укажите источник покрытия расходов")
     signature = await _verified(
         storage, row["employee_signature_key"], row["employee_signature_sha256"],
     )

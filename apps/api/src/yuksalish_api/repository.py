@@ -7208,7 +7208,10 @@ async def create_trip_request(
         connection,
         context_type="trip",
         context_id=request_id,
-        title=f"{payload.destination} · {payload.purpose}",
+        title=(
+            f"{payload.destination} · {payload.purpose}"
+            if payload.purpose else payload.destination
+        ),
         description=payload.purpose,
         owner_user_id=current_user.id,
         member_user_ids=employee_ids,
@@ -7239,6 +7242,8 @@ async def update_trip_request(
         raise WorkspaceRepositoryError(403, "Only the requester can edit this trip")
     if row["stage"] != "launch" or row["status"] not in {"draft", "needs_revision"}:
         raise WorkspaceRepositoryError(409, "Only a draft or returned trip can be edited")
+    if row["workflow_version"] == 1 and not payload.purpose:
+        raise WorkspaceRepositoryError(422, "Цель обязательна для поездки прежнего маршрута")
     employee_ids = await _validate_trip_employees(connection, current_user, payload.employee_ids)
     values: dict[str, object] = {
         "purpose": payload.purpose,
@@ -7275,7 +7280,10 @@ async def update_trip_request(
         connection,
         context_type="trip",
         context_id=request_id,
-        title=f"{payload.destination} · {payload.purpose}",
+        title=(
+            f"{payload.destination} · {payload.purpose}"
+            if payload.purpose else payload.destination
+        ),
         description=payload.purpose,
         owner_user_id=row["requester_user_id"],
         member_user_ids=employee_ids,

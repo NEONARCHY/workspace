@@ -2297,11 +2297,10 @@ describe("corporate workspace authentication alpha", () => {
     const form = within(await screen.findByRole("dialog", { name: "Создать заявку на поездку" }));
     // fireEvent.change does not focus an input as typing in the browser would.
     // Keep Fluent/Tabster's active modal aligned with the form being edited.
-    const purpose = form.getByLabelText("Цель поездки");
-    act(() => purpose.focus());
-    await waitFor(() => expect(purpose).toHaveFocus());
-    fireEvent.change(form.getByLabelText("Цель поездки"), { target: { value: "Рабочая встреча BP-7" } });
-    fireEvent.change(form.getByLabelText("Куда едем"), { target: { value: "Бухара" } });
+    const destination = form.getByLabelText("Куда едем");
+    act(() => destination.focus());
+    await waitFor(() => expect(destination).toHaveFocus());
+    fireEvent.change(destination, { target: { value: "Бухара" } });
     fireEvent.click(await form.findByRole("button", { name: "Сохранить" }));
     expect(await screen.findByRole("heading", { name: "Бухара" })).toBeInTheDocument();
 

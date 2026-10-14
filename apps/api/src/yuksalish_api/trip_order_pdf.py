@@ -122,12 +122,14 @@ def brief_pdf(
         Paragraph(f"“Юксалиш” ҳаракати раиси {_text(chair)}га", regular),  # noqa: RUF001
         Paragraph(f"Кимдан: {_text(requester)}", regular),
         Spacer(1, 10),
-        Paragraph(f"Мақсад: {_text(purpose)}", regular),
         Paragraph(f"Манзил: {_text(destination)}", regular),
         Paragraph(f"Муддат: {start:%d.%m.%Y} — {end:%d.%m.%Y}", regular),
         Paragraph("Иштирокчилар: " + "; ".join(_text(name) for name in employees), regular),
-        Paragraph(f"Харажатлар манбаи: {_text(expense_source)}", regular),
     ]
+    if purpose.strip():
+        story.insert(4, Paragraph(f"Мақсад: {_text(purpose)}", regular))
+    if expense_source.strip():
+        story.append(Paragraph(f"Харажатлар манбаи: {_text(expense_source)}", regular))
     if brief_text.strip():
         for paragraph in brief_text.strip().splitlines():
             if paragraph.strip():
@@ -167,7 +169,6 @@ def order_pdf(
         Paragraph(f"{issued.year} йил “{issued.day}” {month} · Тошкент шаҳри", body),
         Spacer(1, 5),
         Paragraph("“Хизмат сафарига юбориш тўғрисида”", bold),
-        Paragraph(_text(purpose), body),
         Spacer(1, 7),
         Paragraph("Б У Ю Р А М А Н :", bold),  # noqa: RUF001
         Paragraph(
@@ -175,15 +176,18 @@ def order_pdf(
             "хизмат сафарига юборилсин:", body,
         ),
     ]
+    if purpose.strip():
+        story.insert(5, Paragraph(_text(purpose), body))
     for index, (name, job_title) in enumerate(employees, start=1):
         suffix = f" — {_text(job_title)}" if job_title else ""
         story.append(Paragraph(f"{index}) {_text(name)}{suffix};", body))
-    story.extend([
-        Paragraph(
+    if expense_source.strip():
+        story.append(Paragraph(
             "2. Хизмат сафари билан боғлиқ харажатлар "
             f"{_text(expense_source)} ҳисобидан қопланиши маълумот учун қабул қилинсин.",
             body,
-        ),
+        ))
+    story.extend([
         Spacer(1, 12),
         Paragraph(f"Асос: {_text(requester)}нинг билдиргиси.", body),  # noqa: RUF001
         Spacer(1, 24),

@@ -16,6 +16,7 @@ from yuksalish_api.errors import WorkspaceRepositoryError
 from yuksalish_api.repository import _trip_allowed_actions
 from yuksalish_api.trip_document_service import validate_attachment
 from yuksalish_api.trip_order_pdf import brief_pdf, order_pdf
+from yuksalish_api.workspace_schemas import CreateTripRequest
 
 
 def signature() -> bytes:
@@ -79,6 +80,35 @@ def test_generated_text_is_not_interpreted_as_markup() -> None:
     assert "Тест <i>Али</i>" in text_of(content)
 
 
+def test_trip_without_purpose_or_expense_source_keeps_documents_factual() -> None:
+    payload = CreateTripRequest(
+        destination="Нукус", start_date=date(2026, 10, 15),
+        end_date=date(2026, 10, 16), employee_ids=[str(uuid4())],
+    )
+    assert payload.purpose == ""
+    assert payload.expense_source == ""
+    cover = brief_pdf(
+        requester="Testova Zebo", chair="Testov Rais",
+        purpose=payload.purpose, destination=payload.destination,
+        start=payload.start_date, end=payload.end_date,
+        employees=["Testova Zebo"], expense_source=payload.expense_source,
+        brief_text="Сафарга рухсат сўрайман.", attachment_name=None,
+        signature=signature(), signed_on=date(2026, 10, 14),
+    )
+    order = order_pdf(
+        order_number="001-WS", issued=date(2026, 10, 14),
+        purpose=payload.purpose, destination=payload.destination,
+        start=payload.start_date, end=payload.end_date,
+        employees=[("Testova Zebo", "мутахассис")],
+        expense_source=payload.expense_source, requester="Testova Zebo",
+        chair="Testov Rais", signature=signature(),
+    )
+    assert "Нукус" in text_of(cover) and "Нукус" in text_of(order)
+    assert "Мақсад:" not in text_of(cover)
+    assert "Харажатлар манбаи:" not in text_of(cover)
+    assert "Хизмат сафари билан боғлиқ харажатлар" not in text_of(order)
+
+
 def test_source_upload_rejects_invalid_type_and_mismatched_extension() -> None:
     with pytest.raises(WorkspaceRepositoryError):
         validate_attachment(b"bad", "original.pdf")
@@ -86,6 +116,55 @@ def test_source_upload_rejects_invalid_type_and_mismatched_extension() -> None:
         validate_attachment(signature(), "original.jpg")
     with pytest.raises(WorkspaceRepositoryError):
         validate_attachment(signature(), "../original.png")
+
+
+def test_employee_can_sign_brief_without_expense_source(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user_id = uuid4()
+    user = AuthenticatedUser(user_id, "requester", "Requester", None, None, "employee")
+    monkeypatch.setattr(trip_document_service, "_row", AsyncMock(return_value={
+        "requester_user_id": user_id, "workflow_version": 2,
+        "stage": "launch", "status": "draft",
+        "brief_text": "Сафарга рухсат сўрайман.", "brief_attachment_key": None,
+        "expense_source": "",
+    }))
+    connection, storage = AsyncMock(), AsyncMock()
+    asyncio.run(trip_document_service.put_employee_signature(
+        connection, user, storage, uuid4(), signature(),
+    ))
+    storage.put.assert_awaited_once()
+    connection.execute.assert_awaited_once()
+
+
+def test_signed_brief_is_prepared_without_expense_source(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user_id = uuid4()
+    user = AuthenticatedUser(user_id, "requester", "Requester", None, None, "employee")
+    monkeypatch.setattr(trip_document_service, "_row", AsyncMock(return_value={
+        "requester_user_id": user_id, "workflow_version": 2,
+        "stage": "launch", "status": "draft",
+        "brief_text": "Сафарга рухсат сўрайман.", "brief_attachment_key": None,
+        "employee_signature_key": "signature.png", "employee_signature_sha256": "sha256",
+        "purpose": "", "destination": "Нукус", "start_date": date(2026, 10, 15),
+        "end_date": date(2026, 10, 16), "expense_source": "",
+        "brief_attachment_name": None,
+    }))
+    monkeypatch.setattr(trip_document_service, "_verified", AsyncMock(return_value=signature()))
+    monkeypatch.setattr(trip_document_service, "_appointed_chair", AsyncMock(
+        return_value=uuid4(),
+    ))
+    monkeypatch.setattr(trip_document_service, "_people", AsyncMock(return_value=[
+        ("Testova Zebo", "мутахассис"),
+    ]))
+    connection, storage = AsyncMock(), AsyncMock()
+    connection.scalar.side_effect = ["Testova Zebo", "Testov Rais"]
+    asyncio.run(trip_document_service.prepare_signed_brief(
+        connection, user, storage, uuid4(),
+    ))
+    storage.put.assert_awaited_once()
+    assert "Харажатлар манбаи:" not in text_of(storage.put.await_args.args[1])
 
 
 def test_only_appointed_chair_can_decide_new_trip_and_legacy_route_remains() -> None:

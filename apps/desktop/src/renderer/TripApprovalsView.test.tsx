@@ -37,7 +37,7 @@ describe("Trip approvals interaction", async () => {
     expect(onCreate).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
     await waitFor(() => expect(onCreate).toHaveBeenCalledWith(expect.objectContaining({
-      purpose: "Рабочая встреча", destination: "Навои", employeeIds: [people[1]!.id, people[2]!.id],
+      purpose: "", destination: "Навои", employeeIds: [people[1]!.id, people[2]!.id],
       startDate: "2030-10-01", endDate: "2030-10-02",
     })));
   });
@@ -51,11 +51,11 @@ describe("Trip approvals interaction", async () => {
         startDate: "2030-10-01", endDate: "2030-10-02",
       } }}
     /></FluentProvider>);
-    expect(screen.getByRole("textbox", { name: "Цель поездки" })).toHaveValue("Встреча в регионе");
+    expect(screen.queryByRole("textbox", { name: "Цель поездки" })).not.toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Куда едем" })).toHaveValue("Навои");
     expect(onCreate).not.toHaveBeenCalled();
   });
-  it("shows separate purpose and expense fields and uploads a selected brief on save", async () => {
+  it("shows only the destination field and uploads a selected brief on save", async () => {
     const saved = { ...request, id: "new-trip", stage: "launch" as const, status: "draft" as const,
       canEdit: true, allowedActions: ["submit"] as TripRequest["allowedActions"] };
     const onCreate = vi.fn(async () => saved);
@@ -65,15 +65,12 @@ describe("Trip approvals interaction", async () => {
       onCreate={onCreate} onUpdate={vi.fn()} onAction={vi.fn()}
       onUploadBrief={onUploadBrief} /></FluentProvider>);
     fireEvent.click(screen.getByRole("button", { name: "Новая командировка" }));
-    const purpose = screen.getByRole("textbox", { name: "Цель поездки" });
-    const expense = screen.getByRole("textbox", { name: "Источник покрытия расходов" });
     const brief = screen.getByLabelText("Загрузить билдирги");
-    expect(purpose).toBeInTheDocument();
-    expect(expense).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "Цель поездки" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "Источник покрытия расходов" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Общее")).not.toBeInTheDocument();
     expect(brief).toHaveAttribute("type", "file");
-    fireEvent.change(purpose, { target: { value: "Встреча с командой" } });
     fireEvent.change(screen.getByRole("textbox", { name: "Куда едем" }), { target: { value: "Термиз" } });
-    fireEvent.change(expense, { target: { value: "Средства проекта" } });
     const file = new File(["%PDF-1.4"], "bildirgi.pdf", { type: "application/pdf" });
     fireEvent.change(brief, { target: { files: [file] } });
     expect(screen.getByText("bildirgi.pdf")).toBeInTheDocument();
@@ -82,7 +79,7 @@ describe("Trip approvals interaction", async () => {
     fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
     await waitFor(() => expect(onUploadBrief).toHaveBeenCalledWith("new-trip", file));
     expect(onCreate).toHaveBeenCalledWith(expect.objectContaining({
-      purpose: "Встреча с командой", expenseSource: "Средства проекта",
+      purpose: "", expenseSource: "",
     }));
   });
   it("retries a failed brief upload without creating another trip", async () => {
@@ -98,18 +95,17 @@ describe("Trip approvals interaction", async () => {
       onCreate={onCreate} onUpdate={onUpdate} onAction={vi.fn()}
       onUploadBrief={onUploadBrief} /></FluentProvider>);
     fireEvent.click(screen.getByRole("button", { name: "Новая командировка" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "Цель поездки" }), { target: { value: "Встреча" } });
     fireEvent.change(screen.getByRole("textbox", { name: "Куда едем" }), { target: { value: "Термиз" } });
     fireEvent.change(screen.getByLabelText("Загрузить билдирги"), { target: {
       files: [new File(["%PDF-1.4"], "bildirgi.pdf", { type: "application/pdf" })],
     } });
     fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Черновик сохранён, но билдирги не загрузилась");
-    expect(screen.getByRole("textbox", { name: "Цель поездки" })).toHaveValue("Встреча");
+    expect(screen.getByRole("textbox", { name: "Куда едем" })).toHaveValue("Термиз");
     fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
     await waitFor(() => expect(onUploadBrief).toHaveBeenCalledTimes(2));
     expect(onCreate).toHaveBeenCalledTimes(1);
-    expect(onUpdate).toHaveBeenCalledExactlyOnceWith(saved, expect.objectContaining({ purpose: "Встреча" }));
+    expect(onUpdate).toHaveBeenCalledExactlyOnceWith(saved, expect.objectContaining({ purpose: "" }));
   });
   it("keeps selected employees while searching and previews the trip without sending it", async () => {
     const { onCreate } = setup();
@@ -221,8 +217,7 @@ describe("Trip approvals interaction", async () => {
     const { onCreate } = setup();
     fireEvent.click(screen.getByRole("button", { name: "Новая командировка" }));
     fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
-    expect(screen.getByRole("dialog")).toHaveTextContent("Укажите цель");
-    fireEvent.change(screen.getByLabelText("Цель поездки"), { target: { value: "Тест" } });
+    expect(screen.getByRole("dialog")).toHaveTextContent("Укажите место");
     fireEvent.change(screen.getByLabelText("Куда едем"), { target: { value: "Бухара" } });
     fireEvent.change(screen.getByLabelText("Дата начала"), { target: { value: "2026-09-20" } });
     fireEvent.change(screen.getByLabelText("Дата окончания"), { target: { value: "2026-09-18" } });
