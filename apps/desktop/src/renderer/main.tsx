@@ -78,6 +78,7 @@ import "./messenger-outgoing.css";
 import "./workspace-select-motion.css";
 import "./workspace-modal-backdrops.css";
 import "./notification-bell.css";
+import "./topbar-insights.css";
 import { initializeColorTheme } from "./color-theme";
 import { observePopupInputMode } from "./popup-input-mode";
 import { workspacePlatform } from "./platform-adapter";

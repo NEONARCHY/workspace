@@ -102,6 +102,7 @@ import { LoginView } from "./LoginView";
 import { EmbeddedConversation, MessengerView } from "./MessengerView";
 import { NotificationCenter } from "./NotificationCenter";
 import { WorkdayControl } from "./WorkdayControl";
+import { TopbarInsights } from "./TopbarInsights";
 import { WorkingUserIdsContext } from "./TaskParticipantAvatar";
 import { AdaptiveNavigation } from "./AdaptiveNavigation";
 import { AiModulesNavigation, groupAiNavigation } from "./AiModulesNavigation";
@@ -2100,14 +2101,17 @@ export function App() {
             <div className="workspace-top-context">
               <div className="workspace-workday-status">
                 <ConnectionIndicator detail={connectionDetail} error={Boolean(backgroundError)} updateAvailable={webUpdateAvailable} onSwitchNetwork={supportsDualApiOrigins() ? handleSwitchNetwork : undefined} switchingNetwork={switchingNetwork} />
-                <WorkdayControl token={session.accessToken} />
+                <TopbarInsights token={session.accessToken} />
               </div>
               <NotificationBell unreadCount={badgeBySection.notifications ?? 0} active={activeSection === "notifications"}
                 onOpen={() => { setPreparedAction(undefined); setFocusNotification(undefined); setFocusTarget(undefined); setActiveSection("notifications"); }} />
               <ColorThemeToggle userId={session.user.id} />
               {canUseAssistant && <YuksalishAssistant key={session.user.id} token={session.accessToken}
                 onOpenReference={openAssistantReference} onPrepareAction={prepareAssistantAction} />}
-              <WorkspaceIdentity person={workspace.currentUser} token={session.accessToken} onProfile={() => setProfileUserId(workspace.currentUser.id)} onSupport={() => { setSupportFocusRequestId(undefined); setSupportOpen(true); }} supportMode={supportRegistry?.mode ?? (isAdmin ? "inbox" : "support")} supportIndicator={supportRegistry?.indicator} supportUnreadCount={supportRegistry?.unreadResponseCount} onSettings={() => setAccountOpen(true)} onLogout={() => void handleLogout()} /></div>
+              <div className="workspace-workday-person">
+                <WorkdayControl token={session.accessToken} />
+                <WorkspaceIdentity person={workspace.currentUser} token={session.accessToken} onProfile={() => setProfileUserId(workspace.currentUser.id)} onSupport={() => { setSupportFocusRequestId(undefined); setSupportOpen(true); }} supportMode={supportRegistry?.mode ?? (isAdmin ? "inbox" : "support")} supportIndicator={supportRegistry?.indicator} supportUnreadCount={supportRegistry?.unreadResponseCount} onSettings={() => setAccountOpen(true)} onLogout={() => void handleLogout()} />
+              </div></div>
           </header>
 
           {backgroundError ? <div className="workspace-feedback" role="alert">

@@ -788,6 +788,58 @@ export type NotificationSection = Extract<
   | "feed"
 > | "notifications";
 
+export interface ExchangeRate {
+  readonly code: string;
+  readonly rateUzs: string;
+  readonly changeUzs: string | null;
+}
+export interface ExchangeSnapshot {
+  readonly effectiveDate: string;
+  readonly fetchedAt: string;
+  readonly stale: boolean;
+  readonly rates: readonly ExchangeRate[];
+}
+export interface WeatherConditions {
+  readonly asOf: string;
+  readonly temperature: number | null;
+  readonly feelsLike: number | null;
+  readonly humidity: number | null;
+  readonly isDay: boolean;
+  readonly code: number;
+  readonly precipitation: number | null;
+  readonly cloudCover: number | null;
+  readonly pressure: number | null;
+  readonly windSpeed: number | null;
+  readonly windDirection: number | null;
+  readonly windGusts: number | null;
+  readonly todayMin: number | null;
+  readonly todayMax: number | null;
+  readonly sunrise: string | null;
+  readonly sunset: string | null;
+}
+export interface AirConditions {
+  readonly asOf: string;
+  readonly usAqi: number | null;
+  readonly pm25: number | null;
+  readonly pm10: number | null;
+  readonly ozone: number | null;
+  readonly nitrogenDioxide: number | null;
+}
+export interface PlaceWeather {
+  readonly id: string;
+  readonly region: string;
+  readonly city: string;
+  readonly weather: WeatherConditions | null;
+  readonly air: AirConditions | null;
+}
+export interface WeatherSnapshot {
+  readonly weatherFetchedAt: string | null;
+  readonly airFetchedAt: string | null;
+  readonly weatherStale: boolean;
+  readonly airStale: boolean;
+  readonly locations: readonly PlaceWeather[];
+}
+
 export interface WorkspaceNotification {
   readonly id: string;
   readonly kind: NotificationKind;
