@@ -56,7 +56,7 @@ import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
 import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
 import { employeeScope, type EmployeeScope } from "./employee-scope";
-import { createTaskPlan, loadTaskPlans, loadTaskProjectOptions, setTaskPlanLink } from "./workspace-api";
+import { createTaskPlan, loadTaskPlans, loadTaskProjectOptions, setTaskPlanLink, setTaskPlanStatus, updateTaskPlan } from "./workspace-api";
 import { isTaskOverdue, taskDeadlineLabel } from "./task-deadline";
 import { useTaskDeadlineClock } from "./useTaskDeadlineClock";
 
@@ -384,6 +384,24 @@ export function TasksView(props: TasksViewProps) {
     const created = await createTaskPlan(props.token, payload);
     setPlansState((current) => current.key === plansRequestKey
       ? { ...current, plans: [created, ...current.plans] } : current);
+  }
+
+  async function updatePlan(planId: string, payload: Parameters<typeof updateTaskPlan>[2]) {
+    if (!props.token) throw new Error("Необходима авторизация");
+    const revised = await updateTaskPlan(props.token, planId, payload);
+    setPlansState((current) => current.key === plansRequestKey ? {
+      ...current, plans: current.plans.map((plan) => plan.id === planId
+        ? { ...revised, taskIds: plan.taskIds } : plan),
+    } : current);
+  }
+
+  async function changePlanStatus(planId: string, status: TaskPlan["status"]) {
+    if (!props.token) throw new Error("Необходима авторизация");
+    const revised = await setTaskPlanStatus(props.token, planId, status);
+    setPlansState((current) => current.key === plansRequestKey ? {
+      ...current, plans: current.plans.map((plan) => plan.id === planId
+        ? { ...revised, taskIds: plan.taskIds } : plan),
+    } : current);
   }
 
   async function changePlanLink(planId: string, taskId: string, linked: boolean) {
@@ -724,7 +742,7 @@ export function TasksView(props: TasksViewProps) {
 
         {mode !== "plans" && plansError ? <div className="task-plan-error" role="alert">{plansError} <Button appearance="secondary" onClick={() => setPlansRevision((revision) => revision + 1)}>Повторить</Button></div> : null}
 
-        {mode === "efficiency" ? <EfficiencyView token={props.token} overview={efficiency} loading={efficiencyLoading} error={efficiencyError} onPeriodChange={onLoadEfficiency} /> : mode === "plans" ? <TaskPlansView plans={plans} tasks={tasks} people={people} token={props.token} currentUserId={currentUserId} loading={plansLoading} error={plansError} onRetry={() => setPlansRevision((revision) => revision + 1)} onCreate={createPlan} onImported={async () => { setPlansRevision((revision) => revision + 1); await props.onRefreshTasks?.(); }} onSelect={(planId) => { setPlanFilter(planId); setFilter("active"); setMode("list"); }} /> : mode === "list" ? <TaskRecords tasks={visibleTasks} plans={plans} plansLoading={plansLoading} plansError={plansError} people={people} token={props.token} currentUserId={currentUserId} selectedId={detailOpen ? selectedTask?.id : undefined} filterKey={`${filter}:${query}:${roleFilter}:${planFilter}`} onSelect={setSelectedId} /> : mode === "calendar" ? <TaskCalendarView tasks={visibleTasks} onSelect={setSelectedId} toolbarTarget={calendarToolbarTarget} /> : (
+        {mode === "efficiency" ? <EfficiencyView token={props.token} overview={efficiency} loading={efficiencyLoading} error={efficiencyError} onPeriodChange={onLoadEfficiency} /> : mode === "plans" ? <TaskPlansView plans={plans} tasks={tasks} people={people} token={props.token} currentUserId={currentUserId} loading={plansLoading} error={plansError} onRetry={() => setPlansRevision((revision) => revision + 1)} onCreate={createPlan} onUpdate={updatePlan} onStatusChange={changePlanStatus} onImported={async () => { setPlansRevision((revision) => revision + 1); await props.onRefreshTasks?.(); }} onSelect={(planId) => { setPlanFilter(planId); setFilter("active"); setMode("list"); }} /> : mode === "list" ? <TaskRecords tasks={visibleTasks} plans={plans} plansLoading={plansLoading} plansError={plansError} people={people} token={props.token} currentUserId={currentUserId} selectedId={detailOpen ? selectedTask?.id : undefined} filterKey={`${filter}:${query}:${roleFilter}:${planFilter}`} onSelect={setSelectedId} /> : mode === "calendar" ? <TaskCalendarView tasks={visibleTasks} onSelect={setSelectedId} toolbarTarget={calendarToolbarTarget} /> : (
           <SpatialBoard canDrop={(id, status) => { const task = visibleTasks.find(item => item.id === id); return !!task && canEditTask(task) && !["awaiting_review", "completed", "cancelled"].includes(task.status) && ["new", "in_progress"].includes(status) && task.status !== status; }} onMove={(id, status) => onChangeStatus(id, status as TaskStatus)}>
           <div className="task-kanban" role="region" tabIndex={0} aria-label="Kanban задач: горизонтальная прокрутка">
             {kanbanStatuses.map((status) => {

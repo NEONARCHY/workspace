@@ -17,10 +17,12 @@ from yuksalish_api.task_plan_schemas import (
     TaskPlanImportConfirm,
     TaskPlanImportPreview,
     TaskPlanResponse,
+    TaskPlanStatusWrite,
     TaskPlanWrite,
 )
 from yuksalish_api.task_plan_service import (
     change_link,
+    change_status,
     confirm_import,
     create_plan,
     list_plans,
@@ -79,6 +81,16 @@ async def put_plan(
 ) -> TaskPlanResponse:
     try:
         return await update_plan(connection, user, plan_id, payload)
+    except WorkspaceRepositoryError as error:
+        raise HTTPException(error.status_code, error.detail) from error
+
+
+@router.patch("/{plan_id}/status", response_model=TaskPlanResponse)
+async def patch_plan_status(
+    plan_id: UUID, payload: TaskPlanStatusWrite, user: User, connection: Connection,
+) -> TaskPlanResponse:
+    try:
+        return await change_status(connection, user, plan_id, payload.status)
     except WorkspaceRepositoryError as error:
         raise HTTPException(error.status_code, error.detail) from error
 

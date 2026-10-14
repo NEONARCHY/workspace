@@ -1629,6 +1629,20 @@ export function createTaskPlan(token: string, payload: TaskPlanWrite): Promise<T
   }, token);
 }
 
+export function updateTaskPlan(token: string, planId: string, payload: TaskPlanWrite): Promise<TaskPlan> {
+  return apiRequest<TaskPlan>(`/task-plans/${encodeURIComponent(planId)}`, {
+    method: "PUT", body: JSON.stringify(payload),
+  }, token);
+}
+
+export function setTaskPlanStatus(
+  token: string, planId: string, status: TaskPlan["status"],
+): Promise<TaskPlan> {
+  return apiRequest<TaskPlan>(`/task-plans/${encodeURIComponent(planId)}/status`, {
+    method: "PATCH", body: JSON.stringify({ status }),
+  }, token);
+}
+
 export function previewTaskPlanImport(token: string, file: File): Promise<TaskPlanImportPreview> {
   if (file.size > 10 * 1024 * 1024) throw new Error("План не должен превышать 10 МБ");
   return boundedRequest(

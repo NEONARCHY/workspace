@@ -3,12 +3,16 @@
 .task-plans-heading h2 { margin: 0 0 5px; color: var(--ws-text); font-size: 22px; }
 .task-plans-heading p { margin: 0; color: var(--ws-muted); }
 .task-plans-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.task-plan-form { display: grid; grid-template-columns: minmax(200px, 2fr) repeat(3, minmax(130px, 1fr)); gap: 14px; padding: 18px; margin-bottom: 20px; border: 1px solid var(--ws-line); border-radius: 18px; background: var(--ws-surface); }
+.task-plan-form { display: grid; grid-template-columns: repeat(2, minmax(200px, 1fr)) repeat(2, minmax(130px, 1fr)); gap: 14px; padding: 18px; margin-bottom: 20px; border: 1px solid var(--ws-line); border-radius: 18px; background: var(--ws-surface); }
 .task-plan-form label { display: grid; gap: 7px; color: var(--ws-text); font-weight: 600; }
 .task-plan-form input[type="date"] { min-height: 34px; border: 1px solid var(--ws-line); border-radius: 8px; background: var(--ws-surface); color: var(--ws-text); padding: 0 8px; font: inherit; }
 .task-plan-form > .task-plans-actions, .task-plan-form > .task-plan-error { grid-column: 1 / -1; }
 .task-plan-error { color: #a4262c; }
 .task-plan-empty { padding: 30px; border: 1px dashed var(--ws-line); border-radius: 16px; color: var(--ws-muted); }
+.task-plan-filters { display: flex; flex-wrap: wrap; align-items: end; gap: 16px; margin-bottom: 16px; }
+.task-plan-filters > label:first-child { display: grid; gap: 6px; width: min(100%, 320px); color: var(--ws-text); font-weight: 600; }
+.task-plan-filters .task-plan-completed-toggle { display: inline-flex; align-items: center; gap: 8px; min-height: 34px; color: var(--ws-text); cursor: pointer; }
+.task-plan-completed-toggle input { accent-color: var(--ws-link); }
 .task-plan-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
 .task-plan-card { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 18px; border: 1px solid var(--ws-line); border-radius: 17px; background: var(--ws-surface); }
 .task-plan-card h3, .task-plan-card p { margin: 0; }
@@ -17,6 +21,10 @@
 .task-plan-card ul { margin: 0; padding-left: 19px; color: var(--ws-muted); }
 .task-plan-card .task-plan-kind { align-self: flex-start; color: var(--ws-link); font-size: 12px; font-weight: 700; }
 .task-plan-card button { align-self: flex-start; margin-top: auto; }
+.task-plan-card-meta, .task-plan-card-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.task-plan-status { color: var(--ws-text); font-size: 12px; font-weight: 600; }
+.task-plan-status-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; border-top: 1px solid var(--ws-line); padding-top: 10px; }
+.task-plan-status-confirm p { flex-basis: 100%; font-size: 12px; }
 .task-plan-links { display: grid; gap: 8px; }
 .task-plan-links ul { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; margin: 0; padding: 0; }
 .task-plan-links li { display: flex; gap: 6px; align-items: center; padding: 5px 8px; border: 1px solid var(--ws-line); border-radius: 9px; }
@@ -29,7 +37,7 @@
 .task-plan-import-upload, .task-plan-import-footer { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; }
 .task-plan-import label { display: grid; gap: 6px; min-width: 0; color: var(--ws-text); font-weight: 600; }
 .task-plan-import input[type="date"], .task-plan-import input[type="file"] { min-height: 34px; max-width: 100%; border: 1px solid var(--ws-line); border-radius: 8px; padding: 6px 8px; background: var(--ws-surface); color: var(--ws-text); font: inherit; }
-.task-plan-import-fields { display: grid; grid-template-columns: minmax(220px, 2fr) repeat(3, minmax(135px, 1fr)); gap: 12px; }
+.task-plan-import-fields { display: grid; grid-template-columns: repeat(2, minmax(200px, 1fr)) repeat(2, minmax(135px, 1fr)); gap: 12px; }
 .task-plan-import-assignments { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--ws-line); border-radius: 12px; background: var(--ws-surface); }
 .task-plan-import-assignments h4 { margin: 0; color: var(--ws-text); font-size: 15px; }
 .task-plan-import-assignments p, .task-plan-import-groups span { color: var(--ws-muted); font-size: 13px; }
