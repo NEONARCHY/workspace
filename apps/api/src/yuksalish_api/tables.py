@@ -447,6 +447,8 @@ task_plans = sa.Table(
     sa.Column("kind", sa.String(24)),
     sa.Column("period_start", sa.Date()),
     sa.Column("period_end", sa.Date()),
+    sa.Column("owner_user_id", uuid_type),
+    sa.Column("status", sa.String(16)),
     sa.Column("created_by_user_id", uuid_type),
     sa.Column("created_at", sa.DateTime(timezone=True)),
     sa.Column("updated_at", sa.DateTime(timezone=True)),

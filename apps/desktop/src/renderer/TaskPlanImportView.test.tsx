@@ -21,7 +21,7 @@ it("keeps extracted rows local until confirmation and supports excluding an item
   });
   vi.mocked(confirmTaskPlanImport).mockResolvedValue({
     id: "plan-1", title: "Work plan", kind: "work", periodStart: null, periodEnd: null,
-    taskIds: ["task-1"], createdByUserId: "me", createdAt: "2026-01-01T00:00:00Z",
+    taskIds: ["task-1"], ownerUserId: "me", status: "active", createdByUserId: "me", createdAt: "2026-01-01T00:00:00Z",
     updatedAt: "2026-01-01T00:00:00Z",
   });
   const onImported = vi.fn().mockResolvedValue(undefined);
@@ -47,6 +47,7 @@ it("keeps extracted rows local until confirmation and supports excluding an item
   const payload = vi.mocked(confirmTaskPlanImport).mock.calls[0]?.[1];
   if (!payload) throw new Error("Import confirmation was not sent");
   expect(payload.items).toHaveLength(1);
+  expect(payload.plan.ownerUserId).toBe("me");
   expect(payload.items[0]?.assigneeId).toBe("me");
   expect(onImported).toHaveBeenCalledTimes(1);
 });
@@ -87,7 +88,7 @@ it("allows different responsible people and co-assignees for tasks in the same w
   });
   vi.mocked(confirmTaskPlanImport).mockResolvedValue({
     id: "plan-2", title: "Weekly plan", kind: "work", periodStart: null, periodEnd: null,
-    taskIds: ["task-1", "task-2"], createdByUserId: "me", createdAt: "2026-01-01T00:00:00Z",
+    taskIds: ["task-1", "task-2"], ownerUserId: "me", status: "active", createdByUserId: "me", createdAt: "2026-01-01T00:00:00Z",
     updatedAt: "2026-01-01T00:00:00Z",
   });
   render(<FluentProvider theme={webLightTheme}><TaskPlanImportView

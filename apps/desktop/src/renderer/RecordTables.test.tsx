@@ -62,9 +62,9 @@ describe("Corporate record tables", () => {
   it("shows all linked plans before the project and sorts by plan name", () => {
     const plans: TaskPlan[] = [
       { id: "beta", title: "Бета", kind: "work", periodStart: null, periodEnd: null,
-        createdByUserId: "author", createdAt: "2026-10-14T00:00:00Z", updatedAt: "2026-10-14T00:00:00Z", taskIds: ["t-0"] },
+        ownerUserId: "author", status: "active", createdByUserId: "author", createdAt: "2026-10-14T00:00:00Z", updatedAt: "2026-10-14T00:00:00Z", taskIds: ["t-0"] },
       { id: "alpha", title: "Альфа", kind: "work", periodStart: null, periodEnd: null,
-        createdByUserId: "author", createdAt: "2026-10-14T00:00:00Z", updatedAt: "2026-10-14T00:00:00Z", taskIds: ["t-0", "t-1"] },
+        ownerUserId: "author", status: "active", createdByUserId: "author", createdAt: "2026-10-14T00:00:00Z", updatedAt: "2026-10-14T00:00:00Z", taskIds: ["t-0", "t-1"] },
     ];
     render(wrap(<TaskRecords tasks={tasks.slice(0, 3)} plans={plans} people={people} filterKey="all" onSelect={vi.fn()} />));
     const table = screen.getByRole("table", { name: "Задачи" });

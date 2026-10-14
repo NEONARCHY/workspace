@@ -70,6 +70,7 @@ export function TaskPlanImportView({
   const [operationId, setOperationId] = useState("");
   const [title, setTitle] = useState("");
   const [kind, setKind] = useState<"work" | "regional" | "other">("work");
+  const [ownerId, setOwnerId] = useState(currentUserId);
   const [periodStart, setPeriodStart] = useState("");
   const [periodEnd, setPeriodEnd] = useState("");
   const [busy, setBusy] = useState(false);
@@ -145,7 +146,8 @@ export function TaskPlanImportView({
     }
     const payload: TaskPlanImportConfirm = {
       operationId,
-      plan: { title: title.trim(), kind, periodStart: periodStart || null, periodEnd: periodEnd || null },
+      plan: { title: title.trim(), kind, periodStart: periodStart || null, periodEnd: periodEnd || null,
+        ownerUserId: ownerId },
       items: included.map((row) => ({
         title: row.title.trim(), source: row.source,
         mode: row.mode === "link" ? "link" : "create",
@@ -185,6 +187,10 @@ export function TaskPlanImportView({
         <p>Найдено {rows.length} возможных пунктов. Удалите лишние, уточните названия, исполнителей и сроки. Ничего не создаётся до подтверждения.</p>
         <div className="task-plan-import-fields">
           <label>Название плана<Input value={title} maxLength={240} onChange={(_, data) => setTitle(data.value)} /></label>
+          <label>Постановщик плана<WorkspaceSelect value={ownerId} onChange={(event) => setOwnerId(event.target.value)}>
+            {!activePeople.some((person) => person.id === currentUserId) ? <option value={currentUserId}>Текущий пользователь</option> : null}
+            {activePeople.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}
+          </WorkspaceSelect></label>
           <label>Вид<WorkspaceSelect value={kind} onChange={(event) => setKind(event.target.value as typeof kind)}><option value="work">Иш режа</option><option value="regional">Региональный план</option><option value="other">Другой план</option></WorkspaceSelect></label>
           <label>Начало периода<input type="date" value={periodStart} onChange={(event) => setPeriodStart(event.target.value)} /></label>
           <label>Конец периода<input type="date" value={periodEnd} onChange={(event) => setPeriodEnd(event.target.value)} /></label>

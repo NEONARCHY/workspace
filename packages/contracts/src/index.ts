@@ -1589,6 +1589,8 @@ export interface TaskPlan {
   readonly kind: "work" | "regional" | "other";
   readonly periodStart: string | null;
   readonly periodEnd: string | null;
+  readonly ownerUserId: string;
+  readonly status: "active" | "completed";
   readonly createdByUserId: string;
   readonly createdAt: string;
   readonly updatedAt: string;
@@ -1600,6 +1602,7 @@ export interface TaskPlanWrite {
   readonly kind: TaskPlan["kind"];
   readonly periodStart?: string | null;
   readonly periodEnd?: string | null;
+  readonly ownerUserId?: string | null;
 }
 
 export interface TaskPlanImportRow {
