@@ -75,6 +75,7 @@
       "package.json"
     ],
     "win": {
+      "icon": "build/app-icon.ico",
       "target": [
         {
           "target": "nsis",
