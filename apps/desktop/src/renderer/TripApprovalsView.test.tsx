@@ -143,20 +143,19 @@ describe("Trip approvals interaction", async () => {
     setup();
     expect(screen.getByLabelText("Стадии поездок")).toBeInTheDocument();
     expect(column("manager_approval")).toHaveStyle({ "--approval-stage-color": "#849fd0" });
-    expect(within(column("manager_approval") as HTMLElement).getByLabelText("1 поездок на этапе «Утверждение руководителем»")).toHaveTextContent("1");
+    expect(within(column("manager_approval") as HTMLElement).getByLabelText("1 поездок на этапе «Утверждение председателем»")).toHaveTextContent("1");
     fireEvent.change(screen.getByLabelText("Поиск поездок"), { target: { value: "нет совпадений" } });
     expect(document.querySelectorAll(".trip-board-card")).toHaveLength(0);
-    expect(within(column("manager_approval") as HTMLElement).getByLabelText("0 поездок на этапе «Утверждение руководителем»")).toHaveTextContent("0");
+    expect(within(column("manager_approval") as HTMLElement).getByLabelText("0 поездок на этапе «Утверждение председателем»")).toHaveTextContent("0");
     fireEvent.change(screen.getByLabelText("Поиск поездок"), { target: { value: "самарканд" } });
     fireEvent.click(screen.getByRole("button", { name: "Список" }));
     expect(screen.getByLabelText("Список поездок").children).toHaveLength(1);
   });
-  it("uses the existing approval action for a permitted drop, with no optimistic stage write", async () => {
-    const { onAction } = setup();
-    await drop("hr");
-    await waitFor(() => expect(onAction).toHaveBeenCalledExactlyOnceWith(request, "approve", undefined));
-    expect(column("manager_approval").querySelector(".trip-board-card")).not.toBeNull();
-    expect(await screen.findByRole("alert")).toHaveTextContent("Не удалось изменить стадию");
+  it("keeps a legacy HR-stage request accessible in the list without an HR lane", () => {
+    setup({ ...request, stage: "hr", stageLabel: "Кадровая служба" });
+    expect(column("hr")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Список" }));
+    expect(screen.getByLabelText("Список поездок")).toHaveTextContent(request.destination);
   });
   it("routes a new signed trip directly to approved without showing the legacy HR column", async () => {
     const modern = { ...request, workflowVersion: 2, hasSignedBrief: true, hasEmployeeSignature: true };
@@ -165,6 +164,21 @@ describe("Trip approvals interaction", async () => {
     await drop("approved");
     await waitFor(() => expect(onAction).toHaveBeenCalledExactlyOnceWith(modern, "approve", undefined));
     expect(column("manager_approval").querySelector(".trip-board-card")).not.toBeNull();
+  });
+  it("opens the order preview inside the shared viewer", async () => {
+    const modern = { ...request, workflowVersion: 3, hasSignedBrief: true };
+    const onDownloadDocument = vi.fn(async () => new Blob(["pdf"], { type: "application/pdf" }));
+    installSpatialGeometry();
+    render(<FluentProvider theme={webLightTheme}><TripApprovalsView
+      requests={[modern]} people={people} currentUser={people[0]!}
+      onCreate={vi.fn()} onUpdate={vi.fn()} onAction={vi.fn()}
+      onDownloadDocument={onDownloadDocument}
+    /></FluentProvider>);
+    fireEvent.click(card().querySelector(".approval-card-open")!);
+    fireEvent.click(screen.getByRole("button", { name: "Предпросмотр приказа" }));
+    expect(await screen.findByText("prikaz-preview.pdf")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Показать файл"));
+    await waitFor(() => expect(onDownloadDocument).toHaveBeenCalledWith(modern.id, "order-preview", expect.any(AbortSignal)));
   });
   it("does not let a new trip be sent without a fresh signature confirmation", () => {
     const modern = { ...request, workflowVersion: 2, stage: "launch" as const,
@@ -247,9 +261,9 @@ describe("Trip approvals interaction", async () => {
   it("does not send a second action while the first is pending", async () => {
     let finish!: (value: TripRequest | undefined) => void;
     const onAction = vi.fn(() => new Promise<TripRequest | undefined>((resolve) => { finish = resolve; }));
-    setup(request, onAction);
-    await drop("hr");
-    await drop("hr");
+    setup({ ...request, workflowVersion: 2 }, onAction);
+    await drop("approved");
+    await drop("approved");
     expect(onAction).toHaveBeenCalledTimes(1);
     expect(screen.getByRole("button", { name: "Согласовать: TR-TEST" })).toBeDisabled();
     finish(undefined);

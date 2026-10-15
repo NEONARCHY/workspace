@@ -21,6 +21,8 @@ from reportlab.platypus import (  # type: ignore[import-untyped]
     Paragraph,
     SimpleDocTemplate,
     Spacer,
+    Table,
+    TableStyle,
 )
 
 _ASSETS = Path(__file__).parent / "hr_assets"
@@ -158,29 +160,51 @@ def order_pdf(
     _fonts()
     body = _style("order-body", size=11, leading=18)
     bold = _style("order-bold", size=11, leading=18, bold=True)
+    centered = _style("order-centered", size=13, leading=19, bold=True)
+    centered.alignment = 1
+    right = _style("order-right", size=11, leading=18)
+    right.alignment = 2
     month = _MONTHS[issued.month - 1]
     period = (
-        f"{start:%d.%m.%Y} куни" if start == end
+        f"{start.day} {_MONTHS[start.month - 1]} куни" if start == end
+        else f"{start.day}-{end.day} {_MONTHS[start.month - 1]} кунлари"
+        if start.month == end.month and start.year == end.year
         else f"{start:%d.%m.%Y} — {end:%d.%m.%Y} кунлари"
     )
+    date_line = Table([[
+        Paragraph(f"{issued.year} йил “{issued.day}” {month}", body),
+        Paragraph("Тошкент шаҳри", right),
+    ]], colWidths=[239, 239])
+    date_line.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+    ]))
     story: list[object] = [
-        Paragraph("БУЙРУҚ", _style("order-title", size=17, leading=22, bold=True)),
-        Paragraph(f"{_text(order_number)}-сон а/ф", bold),  # noqa: RUF001
-        Paragraph(f"{issued.year} йил “{issued.day}” {month} · Тошкент шаҳри", body),
-        Spacer(1, 5),
+        Paragraph("БУЙРУҚ", centered),
+        Paragraph(f"{_text(order_number)}-сон а/ф", centered),  # noqa: RUF001
+        Spacer(1, 12), date_line, Spacer(1, 8),
         Paragraph("“Хизмат сафарига юбориш тўғрисида”", bold),
-        Spacer(1, 7),
-        Paragraph("Б У Ю Р А М А Н :", bold),  # noqa: RUF001
-        Paragraph(
-            f"1. Қуйидаги ходимлар {period} {_text(destination)}га "  # noqa: RUF001
-            "хизмат сафарига юборилсин:", body,
-        ),
+        Spacer(1, 8),
     ]
     if purpose.strip():
-        story.insert(5, Paragraph(_text(purpose), body))
-    for index, (name, job_title) in enumerate(employees, start=1):
-        suffix = f" — {_text(job_title)}" if job_title else ""
-        story.append(Paragraph(f"{index}) {_text(name)}{suffix};", body))
+        story.append(Paragraph(_text(purpose), body))
+    story.extend([Spacer(1, 8), Paragraph("Б У Ю Р А М А Н :", centered), Spacer(1, 6)])  # noqa: RUF001
+    if len(employees) == 1:
+        name, job_title = employees[0]
+        person = f"{_text(job_title)} {_text(name)}" if job_title else _text(name)
+        story.append(Paragraph(
+            f"1. Ҳаракатнинг {person} жорий йилнинг {period} "
+            f"{_text(destination)}га хизмат сафарига юборилсин.", body,  # noqa: RUF001
+        ))
+    else:
+        story.append(Paragraph(
+            f"1. Ҳаракатнинг қуйидаги ходимлари жорий йилнинг {period} "
+            f"{_text(destination)}га хизмат сафарига юборилсин:", body,  # noqa: RUF001
+        ))
+        for index, (name, job_title) in enumerate(employees, start=1):
+            suffix = f" — {_text(job_title)}" if job_title else ""
+            story.append(Paragraph(f"{index}) {_text(name)}{suffix};", body))
     if expense_source.strip():
         story.append(Paragraph(
             "2. Хизмат сафари билан боғлиқ харажатлар "
@@ -192,11 +216,14 @@ def order_pdf(
         Paragraph(f"Асос: {_text(requester)}нинг билдиргиси.", body),  # noqa: RUF001
         Spacer(1, 24),
     ])
-    signature_block: list[object] = [Paragraph("Раис", bold)]
-    if signature is not None:
-        signature_block.append(_signature_image(signature))
-    else:
-        signature_block.append(Spacer(1, 50))
-    signature_block.append(Paragraph(_text(chair), bold))
-    story.append(KeepTogether(signature_block))
+    signature_cell: object = _signature_image(signature) if signature is not None else Spacer(1, 50)
+    signature_row = Table([[
+        Paragraph("Раис", bold), signature_cell, Paragraph(_text(chair), right),
+    ]], colWidths=[150, 150, 178])
+    signature_row.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    story.append(KeepTogether([signature_row]))
     return _build(story)

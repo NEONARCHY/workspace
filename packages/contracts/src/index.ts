@@ -1944,7 +1944,7 @@ export interface ProjectHubOverview {
   readonly requests: readonly ProjectHubRequest[];
 }
 
-export type TripStage = "launch" | "manager_approval" | "hr" | "approved" | "rejected";
+export type TripStage = "launch" | "deputy_approval" | "manager_approval" | "hr" | "approved" | "rejected";
 export type TripStatus = "draft" | "running" | "needs_revision" | "approved" | "rejected";
 export type TripAction = "submit" | "approve" | "return" | "reject" | "resubmit" | "move";
 
