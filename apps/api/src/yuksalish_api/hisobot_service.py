@@ -1,7 +1,7 @@
 """Shared Hisobot state. PostgreSQL is authoritative for submissions from either client."""
 
 from datetime import UTC, date, datetime, time, timedelta
-from typing import Any, cast
+from typing import Any, Literal, cast
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
@@ -41,11 +41,22 @@ from .telegram_access_schemas import HISOBOT_REGIONS
 
 TASHKENT = ZoneInfo("Asia/Tashkent")
 REMINDER_SLOTS = (time(17, 40), time(18, 0), time(18, 10), time(18, 20), time(18, 25))
+REPORT_OPEN = time(12)
+REPORT_DEADLINE = time(18, 30)
+REPORT_CLOSE = time(21)
 
 
 def local_now(now: datetime | None = None) -> datetime:
     value = now or datetime.now(UTC)
     return value.astimezone(TASHKENT)
+
+
+def report_window_status(current: datetime) -> Literal["closed", "on_time", "late"]:
+    local = local_now(current)
+    clock = local.time().replace(tzinfo=None)
+    if local.weekday() >= 5 or not REPORT_OPEN <= clock < REPORT_CLOSE:
+        return "closed"
+    return "late" if clock >= REPORT_DEADLINE else "on_time"
 
 
 def _report(row: object) -> HisobotReport:
@@ -137,7 +148,6 @@ async def profile(connection: AsyncConnection, user: AuthenticatedUser,
             hisobot_unit_reports.c.report_scope == "hudud",
             hisobot_unit_reports.c.region_name == grant["region_name"],
         ).limit(1)))
-    clock = current.time().replace(tzinfo=None)
     absence_kind = next((item.kind for item in await report_exemptions(
         connection, current.date(), current.date()
     ) if item.telegram_id == grant["telegram_id"]), None)
@@ -147,14 +157,13 @@ async def profile(connection: AsyncConnection, user: AuthenticatedUser,
         region_name=grant["region_name"], report_required=bool(grant["report_required"]),
         management_access=bool(grant["hisobot_manager"]), today=current.date(),
         absence_kind=absence_kind,
-        can_submit=bool(grant["report_required"] and current.weekday() < 5
-                        and time(12) <= clock < time(18, 30)
+        can_submit=bool(grant["report_required"] and report_window_status(current) != "closed"
                         and not (
                             today_unit_report and
                             today_unit_report["reporter_telegram_id"] == grant["telegram_id"]
                         )),
-        can_submit_unit=bool(unit and unit.is_lead and current.weekday() < 5
-                             and time(12) <= clock < time(18, 30) and today_report is None
+        can_submit_unit=bool(unit and unit.is_lead and report_window_status(current) != "closed"
+                             and today_report is None
                              and (
                                  today_unit_report is None or
                                  today_unit_report["reporter_telegram_id"] == grant["telegram_id"]
@@ -163,6 +172,8 @@ async def profile(connection: AsyncConnection, user: AuthenticatedUser,
         unit=unit,
         today_unit_report=_unit_report(today_unit_report) if today_unit_report else None,
         covered_by_report=covered,
+        is_overdue=bool(grant["report_required"] and not covered and not absence_kind
+                        and report_window_status(current) == "late"),
     )
 
 
@@ -204,7 +215,7 @@ async def _store_report(connection: AsyncConnection, *, telegram_id: str,
             "region_name": statement.excluded.region_name,
             "content": statement.excluded.content,
             "submitted_at": statement.excluded.submitted_at,
-            "is_late": statement.excluded.is_late,
+            "is_late": hisobot_live_reports.c.is_late,
             "source": statement.excluded.source,
             "updated_at": now,
         },
@@ -221,14 +232,14 @@ async def submit_report(connection: AsyncConnection, user: AuthenticatedUser,
     grant = await _grant(connection, user)
     if not grant["report_required"]:
         raise HTTPException(403, "Для вас сдача отчёта не требуется.")
-    if current.weekday() >= 5 or not time(12) <= current.time().replace(tzinfo=None) < time(18, 30):
-        raise HTTPException(409, "Приём отчётов по будням: 12:00-18:30.")
+    if report_window_status(current) == "closed":
+        raise HTTPException(409, "Приём отчётов по будням: 12:00-21:00.")
     return await _store_report(
         connection, telegram_id=grant["telegram_id"], employee_key=str(user.id),
         full_name=user.full_name, position=user.job_title or "",
         report_scope=grant["report_scope"] or "central", region_name=grant["region_name"],
         report_date=current.date(), content=payload.content, submitted_at=current,
-        is_late=current.time().replace(tzinfo=None) > time(18), source="workspace",
+        is_late=report_window_status(current) == "late", source="workspace",
     )
 
 
@@ -278,7 +289,7 @@ async def _store_unit_report(
             "covered_telegram_ids": statement.excluded.covered_telegram_ids,
             "content": statement.excluded.content,
             "submitted_at": statement.excluded.submitted_at,
-            "is_late": statement.excluded.is_late,
+            "is_late": hisobot_unit_reports.c.is_late,
             "source": statement.excluded.source,
             "updated_at": now,
         },
@@ -299,9 +310,8 @@ async def submit_unit_report(
     connection: AsyncConnection, user: AuthenticatedUser, payload: HisobotReportInput,
 ) -> HisobotUnitReport:
     current = local_now()
-    clock = current.time().replace(tzinfo=None)
-    if current.weekday() >= 5 or not time(12) <= clock < time(18, 30):
-        raise HTTPException(409, "Приём отчётов по будням: 12:00-18:30.")
+    if report_window_status(current) == "closed":
+        raise HTTPException(409, "Приём отчётов по будням: 12:00-21:00.")
     grant = await _grant(connection, user)
     department = (await connection.execute(
         select(departments.c.id, departments.c.name)
@@ -321,7 +331,8 @@ async def submit_unit_report(
         reporter_name=user.full_name, reporter_position=user.job_title or "",
         report_scope=scope, region_name=grant["region_name"],
         covered_telegram_ids=covered_ids, report_date=current.date(),
-        content=payload.content, submitted_at=current, is_late=clock > time(18),
+        content=payload.content, submitted_at=current,
+        is_late=report_window_status(current) == "late",
         source="workspace",
     )
 
@@ -656,7 +667,7 @@ async def collapse_hisobot_notification_backlog(
 ) -> int:
     """Archive expired slots without fabricating read/delivery receipts; keep one dated notice."""
     current = local_now(now)
-    cutoff = current if current.time().replace(tzinfo=None) >= time(18, 30) else (
+    cutoff = current if current.time().replace(tzinfo=None) >= REPORT_DEADLINE else (
         datetime.combine(current.date(), time.min, tzinfo=TASHKENT)
     )
     query = select(workspace_notifications).where(
@@ -718,10 +729,17 @@ async def collapse_hisobot_notification_backlog(
         ).values(resolved_at=utc_now, dismissed_at=utc_now))
         await _upsert_notification(
             connection, user_id=recipient_id, event_key=event_key, kind="hisobot",
-            priority="attention", title="AI Hisobot · пропущен отчёт",
-            body=f"Отчёт за {day:%d.%m.%Y} не отправлен до 18:30. "
-                 "Пожалуйста, в следующий раз следите за напоминаниями системы.",
-            section="ai_hisobot", entity_id=None, requires_action=False,
+            priority="attention",
+            title=("AI Hisobot · опоздавший" if day == current.date()
+                   and current.time().replace(tzinfo=None) < REPORT_CLOSE
+                   else "AI Hisobot · пропущен отчёт"),
+            body=(f"Отчёт за {day:%d.%m.%Y} не отправлен до 18:30. "
+                  "Его ещё можно отправить до 21:00; он войдёт в итоговый PDF с отметкой."  # noqa: RUF001
+                  if day == current.date() and current.time().replace(tzinfo=None) < REPORT_CLOSE
+                  else f"Отчёт за {day:%d.%m.%Y} не отправлен до 21:00."),
+            section="ai_hisobot", entity_id=None,
+            requires_action=(day == current.date()
+                             and current.time().replace(tzinfo=None) < REPORT_CLOSE),
             occurred_at=current, is_reminder=False,
         )
         changed += 1
@@ -733,8 +751,18 @@ async def materialize_hisobot_reminders(connection: AsyncConnection,
     current = local_now(now)
     changed = await collapse_hisobot_notification_backlog(connection, current)
     clock = current.time().replace(tzinfo=None)
+    if clock >= REPORT_CLOSE:
+        await connection.execute(update(workspace_notifications).where(
+            workspace_notifications.c.kind == "hisobot",
+            workspace_notifications.c.event_key == f"hisobot:{current.date().isoformat()}:missed",
+            workspace_notifications.c.resolved_at.is_(None),
+        ).values(
+            title="AI Hisobot · пропущен отчёт",
+            body=f"Отчёт за {current.date():%d.%m.%Y} не отправлен до 21:00.",
+            requires_action=False,
+        ))
     due = [slot for slot in REMINDER_SLOTS if slot <= clock]
-    if current.weekday() >= 5 or clock >= time(18, 30) or not due:
+    if current.weekday() >= 5 or clock >= REPORT_DEADLINE or not due:
         return changed
     slot = due[-1]
     pending = await _unsubmitted_report_members(

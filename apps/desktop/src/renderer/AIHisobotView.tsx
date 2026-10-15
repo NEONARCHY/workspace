@@ -29,7 +29,7 @@ function ReportCard({ report }: { readonly report: HisobotReport }) {
     <h3>{report.reportScope === "hudud" ? report.regionName ?? report.fullName : report.fullName}</h3>
     <p className="hisobot-report-byline">{report.reportScope === "hudud" ? `${report.fullName} · ` : ""}{report.position}</p>
     <p className="hisobot-report-content">{report.content}</p>
-    <div className="hisobot-report-foot">Отправлено {new Date(report.submittedAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Tashkent" })}{report.isLate ? " · после 18:00" : ""}</div>
+    <div className="hisobot-report-foot">Отправлено {new Date(report.submittedAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Tashkent" })}{report.isLate ? " · опоздавший (после 18:30)" : ""}</div>
   </article>;
 }
 
@@ -39,7 +39,7 @@ function UnitReportCard({ report }: { readonly report: HisobotUnitReport }) {
     <h3>{report.departmentName}</h3>
     <p className="hisobot-report-byline">Отправил: {report.reporterName} · {report.reporterPosition}</p>
     <p className="hisobot-report-content">{report.content}</p>
-    <div className="hisobot-report-foot">Отправлено {new Date(report.submittedAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Tashkent" })}</div>
+    <div className="hisobot-report-foot">Отправлено {new Date(report.submittedAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Tashkent" })}{report.isLate ? " · опоздавший (после 18:30)" : ""}</div>
   </article>;
 }
 
@@ -223,10 +223,11 @@ export function AIHisobotView({ token }: { readonly token: string }) {
         </div>
         <aside className="hisobot-panel hisobot-status">
           <span className="hisobot-status-icon"><Clock24Regular /></span>
-          <h2>{profile.absenceKind ? ({ vacation: "Вы в отпуске", sick_leave: "Вы на больничном", personal_time: "У вас отгул" })[profile.absenceKind] : profile.coveredByReport || profile.todayReport ? "Отчёт учтён" : profile.canSubmit ? "Можно отправить отчёт" : "Приём закрыт"}</h2>
-          <p>{profile.absenceKind ? "На время подтверждённого отсутствия отчёт не обязателен и напоминания отключены. Если вы всё же работали, отчёт можно отправить — в PDF будет отметка о работе во время отсутствия." : ownUnitReport ? "Ваш отчёт от лица команды получен. До закрытия приёма его можно отредактировать, но второй отчёт за этот день отправить нельзя." : profile.todayReport ? "Ваш личный отчёт получен. До закрытия приёма его можно отредактировать, но второй отчёт от лица команды отправить нельзя." : profile.coveredByReport ? "За вашу команду уже предоставлен отчёт. При желании вы можете отправить свой личный отчёт." : profile.canSubmit ? "После отправки напоминания в обоих каналах прекратятся." : "Отчёты принимаются по будням с 12:00 до 18:30. Следующий отчёт можно отправить в следующий рабочий день с 12:00."}</p>
-          <div className="hisobot-window"><span>Приём</span><strong>12:00—18:30</strong></div>
-          <div className="hisobot-window"><span>Дедлайн</span><strong>18:30</strong></div>
+          <h2>{profile.absenceKind ? ({ vacation: "Вы в отпуске", sick_leave: "Вы на больничном", personal_time: "У вас отгул" })[profile.absenceKind] : profile.coveredByReport || profile.todayReport ? "Отчёт учтён" : profile.isOverdue ? "Опоздавший · отчёт ещё не сдан" : profile.canSubmit ? "Можно отправить отчёт" : "Приём закрыт"}</h2>
+          <p>{profile.absenceKind ? "На время подтверждённого отсутствия отчёт не обязателен и напоминания отключены. Если вы всё же работали, отчёт можно отправить — в PDF будет отметка о работе во время отсутствия." : ownUnitReport ? "Ваш отчёт от лица команды получен. До закрытия приёма его можно отредактировать, но второй отчёт за этот день отправить нельзя." : profile.todayReport ? "Ваш личный отчёт получен. До закрытия приёма его можно отредактировать, но второй отчёт от лица команды отправить нельзя." : profile.coveredByReport ? "За вашу команду уже предоставлен отчёт. При желании вы можете отправить свой личный отчёт." : profile.isOverdue ? "Первый PDF уже выпущен. Отправьте отчёт до 21:00: он войдёт в итоговый PDF с пометкой об опоздании." : profile.canSubmit ? "После отправки напоминания в обоих каналах прекратятся." : "Отчёты принимаются по будням с 12:00 до 21:00. Следующий отчёт можно отправить в следующий рабочий день с 12:00."}</p>
+          <div className="hisobot-window"><span>Приём</span><strong>{profile.windowOpensAt}—{profile.windowClosesAt}</strong></div>
+          <div className="hisobot-window"><span>Первый PDF / дедлайн</span><strong>{profile.deadlineAt}</strong></div>
+          <div className="hisobot-window"><span>Итоговый PDF</span><strong>{profile.windowClosesAt}</strong></div>
         </aside>
       </div> : null}
 
@@ -255,7 +256,7 @@ export function AIHisobotView({ token }: { readonly token: string }) {
           <section><h3>Личный отчёт</h3><p>Каждый сотрудник может отправить описание своей работы в AI Hisobot или Telegram-боте. Текст остаётся в личной истории и учитывается при подготовке итогового PDF.</p></section>
           <section><h3>Отдел центрального аппарата</h3><p>Администратор, кадровик или руководитель назначает главное лицо среди сотрудников отдела. Только у него появляется действие «Отправить отчёт от лица отдела».</p><p>Такой отчёт заменяет личный отчёт отправителя и закрывает обязанность всех сотрудников отдела на этот день. Если сотрудник отправил только личный отчёт, он засчитывается только ему; остальные продолжают получать напоминания.</p></section>
           <section><h3>Региональное подразделение</h3><p>Для регионального подразделения отчёт может отправить любой сотрудник. Его обычный личный отчёт уже считается отчётом за всё подразделение: остальные сотрудники не попадают в список не сдавших и больше не получают напоминания за этот день.</p><p>Назначенное главное лицо также может выбрать «Отправить отчёт от лица подразделения». Это его единственный отчёт за день, а не дополнительный.</p></section>
-          <section><h3>Сроки и изменения</h3><p>Отчёты принимаются по рабочим дням с 12:00 до 18:30. До закрытия приёма свой текст можно исправить. После 18:30 отчёты за этот день не принимаются.</p><p>В Telegram можно просто отправить текст в чат: бот спросит, как его засчитать, и сохранит отчёт только после подтверждения. Исходное сообщение останется в чате.</p><p>Если сотрудник находится в утверждённом отпуске, на больничном или в отгуле, напоминания на соответствующий период отключаются. При желании он всё равно может отправить отчёт.</p></section>
+          <section><h3>Сроки и изменения</h3><p>Отчёты принимаются по рабочим дням с 12:00 до 21:00. В 18:30 выпускается первый PDF: не сдавшие получают статус «Опоздавший». Отчёты, отправленные с 18:30 до 21:00, принимаются и помечаются как поздние в итоговом PDF, который формируется в 21:00. До закрытия приёма текст можно исправить.</p><p>В Telegram можно просто отправить текст в чат: бот спросит, как его засчитать, и сохранит отчёт только после подтверждения. Исходное сообщение останется в чате.</p><p>Если сотрудник находится в утверждённом отпуске, на больничном или в отгуле, напоминания на соответствующий период отключаются. При желании он всё равно может отправить отчёт.</p></section>
           <section><h3>Где искать старые отчёты</h3><p>Личные и отправленные от лица команды тексты доступны в истории. Руководители с отдельным правом просмотра видят отчёты сотрудников и команд за выбранный период.</p></section>
         </div>
       </aside>

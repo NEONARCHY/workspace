@@ -77,7 +77,9 @@ class HisobotProfile(ApiModel):
     can_submit: bool
     can_submit_unit: bool = False
     window_opens_at: str = "12:00"
-    window_closes_at: str = "18:30"
+    window_closes_at: str = "21:00"
+    deadline_at: str = "18:30"
+    is_overdue: bool = False
     today_report: HisobotReport | None
     unit: HisobotUnit | None = None
     today_unit_report: HisobotUnitReport | None = None
