@@ -1602,19 +1602,21 @@ export function ApprovalsView({
               <button
                 type="button"
                 aria-pressed={mode === "requests"}
+                aria-label="Текущие заявки"
                 className={mode === "requests" ? "active" : ""}
                 onClick={() => setMode("requests")}
               >
-                Текущие заявки
+                <span className="approval-mode-label">Текущие заявки</span><span className="approval-mode-mobile-label" aria-hidden="true">Заявки</span>
               </button>
               {canManage ? (
                 <button
                   type="button"
                   aria-pressed={mode === "designer"}
+                  aria-label="Конструктор маршрутов"
                   className={mode === "designer" ? "active" : ""}
                   onClick={() => setMode("designer")}
                 >
-                  Конструктор маршрутов
+                  <span className="approval-mode-label">Конструктор маршрутов</span><span className="approval-mode-mobile-label" aria-hidden="true">Маршруты</span>
                 </button>
               ) : null}
             </SlidingSegmented>

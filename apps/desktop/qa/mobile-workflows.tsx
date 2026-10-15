@@ -6,6 +6,7 @@ import type { ApprovalRequestSummary, CalendarEvent, ProjectHubOverview, Project
 import { ProjectHubView } from "../src/renderer/ProjectHubView";
 import { ApprovalsView } from "../src/renderer/ApprovalsView";
 import { TripApprovalsView } from "../src/renderer/TripApprovalsView";
+import { ScrollbarEdges } from "../src/renderer/ScrollbarEdges";
 import { CalendarView } from "../src/renderer/CalendarView";
 import { people } from "../src/renderer/test-fixtures/demo-data";
 import { EmployeeProfileProvider } from "../src/renderer/EmployeeProfileLink";
@@ -70,6 +71,12 @@ import "../src/renderer/sidebar-theme.css";
 import "../src/renderer/page-canvas.css";
 import "../src/renderer/browser-responsive.css";
 import "../src/renderer/browser-secondary.css";
+import "../src/renderer/dark-theme.css";
+import "../src/renderer/satin-surfaces.css";
+import "../src/renderer/workspace-search.css";
+import "../src/renderer/workspace-field-borders.css";
+import "../src/renderer/workspace-select-motion.css";
+import "../src/renderer/mobile-density.css";
 
 const now = new Date();
 now.setHours(10, 0, 0, 0);
@@ -117,7 +124,9 @@ const payments: ApprovalRequestSummary[] = Array.from({ length: 12 }, (_, i) => 
 }));
 const trips: TripRequest[] = Array.from({ length: 12 }, (_, i) => ({
   id: `qa-trip-${i}`, number: `TR-QA-${i + 1}`, requesterUserId: people[0]!.id,
-  purpose: "Тестовая встреча с региональной командой", destination: "Самарканд",
+  purpose: new URLSearchParams(location.search).has("scrollbars")
+    ? "Тестовая встреча с региональной командой. Проверка прокрутки длинной заявки без записи в базу. ".repeat(20)
+    : "Тестовая встреча с региональной командой", destination: "Самарканд",
   startDate: "2030-10-01", endDate: "2030-10-02", employeeIds: [people[0]!.id],
   stage: "launch", stageLabel: "Запуск", status: "draft", statusLabel: "Черновик",
   canEdit: true, allowedActions: ["submit"], actions: [], createdAt: stamp, updatedAt: stamp,
@@ -156,7 +165,7 @@ function Fixture() {
   const canManage = new URLSearchParams(location.search).has("workflow");
   const [page, setPage] = useState("projects");
   useEffect(() => { document.documentElement.classList.add("web-platform"); return observeBrowserViewport(); }, []);
-  return <FluentProvider theme={workspaceTheme} className="app-provider"><EmployeeProfileProvider onOpenProfile={() => {}}>
+  return <FluentProvider theme={workspaceTheme} className="app-provider"><ScrollbarEdges /><EmployeeProfileProvider onOpenProfile={() => {}}>
     <div className="app-shell browser-compact"><div className="app-stage">
       <header style={{ display: "flex", flexWrap: "wrap", gap: 4, paddingBottom: 8 }}>
         {["projects", "funding", "payments", "trips", "calendar"].map((key, i) => <Button key={key} onClick={() => setPage(key)} aria-pressed={key === page} style={{ minHeight: 48 }}>{["Проекты", "Проектные", "Оплаты", "Поездки", "Календарь"][i]}</Button>)}

@@ -27,3 +27,12 @@ it("runs one second of transform-only movement every eight seconds and honours r
   expect(app).toContain('key !== "project_funding" && key !== "notifications"');
   expect(app.indexOf("<NotificationBell")).toBeLessThan(app.indexOf("<ColorThemeToggle"));
 });
+it("uses the neighbouring theme button's surface with matching compact corners", () => {
+  const css = readFileSync("src/renderer/notification-bell.css", "utf8");
+  const theme = readFileSync("src/renderer/dark-theme.css", "utf8");
+  const surface = "background: var(--ws-button-hover, var(--ws-surface));";
+  expect(css).toContain(surface);
+  expect(theme).toContain(surface);
+  expect(css).toContain(".browser-compact .global-bar .notification-bell { width: 48px; height: 48px; border-radius: 14px; }");
+  expect(css).toContain("background: ButtonFace; border: 1px solid ButtonText;");
+});

@@ -475,13 +475,13 @@
   background: var(--ws-theme-surface, #f7faf9);
   box-shadow: 0 24px 70px -27px rgb(29 48 62 / 42%);
 }
-.trip-dialog:not(.record-composer-dialog) .trip-detail { max-height: min(760px, calc(100dvh - 80px)); padding: 0 24px 34px; overflow-y: auto; background: transparent; scrollbar-width: thin; }
+.trip-dialog:not(.record-composer-dialog) .trip-detail { max-height: min(760px, calc(100dvh - 80px)); padding: 0 24px 34px; overflow-y: auto; background: transparent; }
 .trip-dialog:not(.record-composer-dialog) .trip-detail > header { position: sticky; z-index: 2; top: 0; min-height: 105px; margin: 0 -24px 14px; padding: 20px 24px 16px; border-color: var(--ws-theme-line, #e1e9e7); background: rgb(var(--ws-theme-surface-rgb, 250 252 251) / 0.94); backdrop-filter: blur(8px); }
 .trip-dialog:not(.record-composer-dialog) .trip-detail > header span { color: var(--ws-theme-ink-teal, #477681); font-size: 11px; letter-spacing: .02em; }
 .trip-dialog:not(.record-composer-dialog) .trip-detail > header h2 { margin-top: 4px; font-size: 27px; font-weight: 600; }
 .trip-dialog:not(.record-composer-dialog) .trip-detail > header p { margin: 5px 0 0; color: var(--ws-theme-muted, #526d79); font-size: 12px; }
 .trip-dialog:not(.record-composer-dialog) .trip-detail > header button { width: 36px; height: 36px; border-radius: 12px; background: var(--ws-theme-surface-soft, #eaf1ef); }
-.trip-dialog:not(.record-composer-dialog) .trip-detail-stages { display: flex; gap: 5px; margin: 16px 0; overflow-x: auto; scrollbar-width: thin; }
+.trip-dialog:not(.record-composer-dialog) .trip-detail-stages { display: flex; gap: 5px; margin: 16px 0; overflow-x: auto; }
 .trip-dialog:not(.record-composer-dialog) .trip-detail-stages > span { flex: 1 0 130px; min-height: 42px; border: 1px solid transparent; border-top: 0; border-radius: 10px; color: var(--ws-theme-muted, #526b77); background: color-mix(in srgb, var(--approval-stage-color) 6%, var(--ws-theme-surface-soft, #e9efee)); }
 .trip-dialog:not(.record-composer-dialog) .trip-detail-stages > span[aria-current="step"] { border-color: color-mix(in srgb, var(--approval-stage-color) 35%, var(--ws-theme-line, #78959a)); color: var(--ws-theme-ink, #203b4a); background: color-mix(in srgb, var(--approval-stage-color) 18%, var(--ws-theme-surface, #f4f8f7)); }
 .trip-dialog:not(.record-composer-dialog) .trip-purpose { padding: 18px; border: 0; border-radius: 17px; background: linear-gradient(110deg, var(--ws-theme-surface-soft, #e5f1ef), var(--ws-theme-surface-soft, #eef1f8)); }
@@ -516,15 +516,10 @@
   overflow-x: hidden;
   overflow-y: scroll;
   background: transparent;
-  scrollbar-color: #9bb5bb #edf3f2;
-  scrollbar-width: thin;
 }
 .trip-dialog.context-record-dialog .context-record-workspace > .trip-detail {
   max-height: none;
 }
-.context-record-workspace > :is(.project-detail, .trip-detail)::-webkit-scrollbar { width: 9px; }
-.context-record-workspace > :is(.project-detail, .trip-detail)::-webkit-scrollbar-track { background: var(--ws-theme-surface-soft, #edf3f2); }
-.context-record-workspace > :is(.project-detail, .trip-detail)::-webkit-scrollbar-thumb { border: 2px solid var(--ws-theme-line, #edf3f2); border-radius: 999px; background: var(--ws-theme-wash-teal, #9bb5bb); }
 .project-dialog.context-record-dialog .project-detail > header,
 .trip-dialog.context-record-dialog .trip-detail > header {
   position: sticky;

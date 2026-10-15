@@ -5,6 +5,8 @@ import { Button, FluentProvider } from "@fluentui/react-components";
 import type { AbsenceRequest, AIReferentRegistry, DirectoryBootstrap, HiringDetail, HiringFields, HiringRegistry, SupportRegistry, AssistantChat, EdoIncomingLetter, EmployeeRecognitionProfile, FeedPost, HisobotProfile, HisobotReport, HrOverview, MembersRegistry, NotificationPreferences, PersonalEfficiency, PersonalEfficiencyTask, TelegramAccessRegistry, WorkspaceNotification, WorkspacePerson, ZoomMeetingsRegistry } from "@yuksalish/contracts";
 import { FeedView } from "../src/renderer/FeedView";
 import { TasksView } from "../src/renderer/TasksView";
+import { WorkingUserIdsContext } from "../src/renderer/TaskParticipantAvatar";
+import { observeFieldCaptionActivation } from "../src/renderer/field-caption-activation";
 import type { WorkspaceAttachment } from "@yuksalish/contracts";
 import { NotificationCenter } from "../src/renderer/NotificationCenter";
 import { EmployeesView } from "../src/renderer/EmployeesView";
@@ -28,6 +30,10 @@ import { BrowserNavigation } from "../src/renderer/BrowserNavigation";
 import { CompanyLogo } from "../src/renderer/CompanyLogo";
 import { SectionJump } from "../src/renderer/SectionJump";
 import { ColorThemeToggle } from "../src/renderer/ColorThemeToggle";
+import { ConnectionIndicator, WorkspaceIdentity } from "../src/renderer/WorkspaceIdentity";
+import { TopbarInsights } from "../src/renderer/TopbarInsights";
+import { WorkdayControl } from "../src/renderer/WorkdayControl";
+import { NotificationBell } from "../src/renderer/NotificationBell";
 import { Home24Regular, TaskListSquareLtr24Regular, People24Regular, Alert24Regular, News24Regular, Video24Regular, Mail24Regular, Briefcase24Regular, Navigation24Regular } from "@fluentui/react-icons";
 import { initialTasks, people } from "../src/renderer/test-fixtures/demo-data";
 import { observeBrowserViewport, useBrowserCompactLayout } from "../src/renderer/browser-layout";
@@ -95,6 +101,14 @@ import "../src/renderer/browser-responsive.css";
 import "../src/renderer/hr-hiring.css";
 import "../src/renderer/incoming-letters.css";
 import "../src/renderer/browser-secondary.css";
+import "../src/renderer/dark-theme.css";
+import "../src/renderer/satin-surfaces.css";
+import "../src/renderer/workspace-search.css";
+import "../src/renderer/workspace-field-borders.css";
+import "../src/renderer/workspace-select-motion.css";
+import "../src/renderer/notification-bell.css";
+import "../src/renderer/topbar-insights.css";
+import "../src/renderer/mobile-density.css";
 const stamp = new Date().toISOString();
 const user: WorkspacePerson = { ...people[0]!, role: "superadmin" };
 if (new URLSearchParams(location.search).has("theme")) {
@@ -256,6 +270,9 @@ window.fetch = async (input, init) => {
   if (route === "/profile/me/efficiency") return Response.json(summary);
   if (route === "/home/reactions") return Response.json({ totalCount: 7, reactions: [{ emoji: "👍", count: 4 }, { emoji: "❤️", count: 3 }] });
   if (route === "/workday/team") return Response.json({ asOf: stamp, workingCount: 4, members: people.map(person => ({ userId: person.id, name: person.name, jobTitle: person.jobTitle, status: "working", schedule: { userId: person.id, startsAt: "09:00:00", endsAt: "18:00:00" }, session: null, absenceKind: null, canEditSchedule: true })) });
+  if (route === "/workday/me") return Response.json({ asOf: stamp, status: "working", schedule: { userId: user.id, startsAt: "09:00:00", endsAt: "18:00:00" }, session: null, absenceKind: null });
+  if (route === "/context/exchange-rates") return Response.json({ rates: [{ code: "USD", rateUzs: "11963.16", changeUzs: "-12.5" }], effectiveDate: stamp.slice(0, 10), fetchedAt: stamp });
+  if (route === "/context/weather") return Response.json({ fetchedAt: stamp, weatherStale: false, airStale: false, locations: [{ id: "tashkent-city", region: "Ташкент", weather: { temperature: 21, weatherCode: 0, isDay: true } }] });
   if (route === "/efficiency") return Response.json(efficiencyOverview);
   if (route === "/hr") return Response.json(hr);
   if (route === "/hr/hiring") return Response.json(hiring);
@@ -291,6 +308,7 @@ window.fetch = async (input, init) => {
 function Fixture() {
   const workspaceTheme = useQaTheme();
   const shell = new URLSearchParams(location.search).has("shell");
+  const density = shell && new URLSearchParams(location.search).has("density");
   const compact = useBrowserCompactLayout(true);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuTrigger = useRef<HTMLButtonElement>(null);
@@ -298,6 +316,7 @@ function Fixture() {
   const navigation = [
     { key: "home", label: "Главная", icon: <Home24Regular /> },
     { key: "tasks", label: "Задачи", icon: <TaskListSquareLtr24Regular /> },
+    { key: "team", label: "Обзор команды", icon: <People24Regular /> },
     { key: "employees", label: "Сотрудники", icon: <People24Regular /> },
     { key: "notifications", label: "Уведомления", icon: <Alert24Regular /> },
     { key: "feed", label: "Лента", icon: <News24Regular /> },
@@ -308,6 +327,7 @@ function Fixture() {
   const sectionKey = (key: string) => key === "incoming_letters" ? "incoming" : key === "zoom_meetings" ? "zoom" : key;
   const navigate = (key: string) => { setSection(sectionKey(key)); setMenuOpen(false); };
   const attachmentQa = new URLSearchParams(location.search).has("attachments");
+  const avatarRingsQa = new URLSearchParams(location.search).has("avatar-rings");
   const [taskFiles, setTaskFiles] = useState<WorkspaceAttachment[]>(() => attachmentQa ? ["Свой документ", "Документ коллеги"].map((name, index) => ({
     id: `qa-file-${index}`, ownerType: "task", ownerId: initialTasks[0]!.id, fileName: `${name}.pdf`,
     contentType: "application/pdf", byteSize: 10240, sha256: "qa", uploadedByUserId: index ? "colleague" : user.id,
@@ -315,9 +335,13 @@ function Fixture() {
   })) : []);
   const taskRecords = attachmentQa ? initialTasks.map((task, index) => index ? task : {
     ...task, dueAt: new Date(2099, 9, 13, 18).toISOString(), dueLabel: "13.10.2099, 13:00",
-  }) : initialTasks;
+  }) : avatarRingsQa ? initialTasks.map(task => ({ ...task, participants: [
+    { userId: people[2]!.id, role: "co_assignee" as const },
+    { userId: people[3]!.id, role: "observer" as const },
+  ] })) : initialTasks;
   useEffect(() => { document.documentElement.classList.add("web-platform"); return observeBrowserViewport(); }, []);
-  return <FluentProvider theme={workspaceTheme} className="app-provider"><EmployeeProfileProvider onOpenProfile={() => setPerson(true)}>
+  useEffect(() => observeFieldCaptionActivation(), []);
+  return <FluentProvider theme={workspaceTheme} className="app-provider"><WorkingUserIdsContext.Provider value={avatarRingsQa ? people.map(person => person.id) : []}><EmployeeProfileProvider onOpenProfile={() => setPerson(true)}>
     <div className={`app-shell${!shell || compact ? " browser-compact" : ""}`}>
       {shell && <BrowserNavigation compact={compact} open={menuOpen} returnFocusRef={menuTrigger} onOpenChange={setMenuOpen}>
         <aside className="app-rail sidebar-palette" data-sidebar-theme="blue-teal" aria-label="Основная навигация">
@@ -331,13 +355,18 @@ function Fixture() {
       {shell ? <header className="global-bar">
         {compact && <button ref={menuTrigger} className="browser-menu-trigger" aria-label="Открыть меню" aria-expanded={menuOpen} onClick={() => setMenuOpen(true)}><Navigation24Regular /></button>}
         <SectionJump items={navigation} onNavigate={navigate} />
-        <div className="workspace-top-context"><ColorThemeToggle userId="qa-theme" /><Button onClick={() => setAccount(true)}>Настройки</Button><Button onClick={() => setPerson(true)}>{user.name}</Button></div>
+        {density ? <div className="workspace-top-context">
+          <div className="workspace-workday-status"><ConnectionIndicator detail="Сервер подключён" error={false} /><TopbarInsights token="qa-only" /></div>
+          <NotificationBell unreadCount={2} active={section === "notifications"} onOpen={() => navigate("notifications")} />
+          <ColorThemeToggle userId="qa-theme" /><YuksalishAssistant token="qa-only" />
+          <div className="workspace-workday-person"><WorkdayControl token="qa-only" /><WorkspaceIdentity person={user} token="qa-only" onProfile={() => setPerson(true)} onSupport={() => setSupportOpen(true)} supportMode="support" onSettings={() => setAccount(true)} onLogout={() => {}} /></div>
+        </div> : <div className="workspace-top-context"><ColorThemeToggle userId="qa-theme" /><Button onClick={() => setAccount(true)}>Настройки</Button><Button onClick={() => setPerson(true)}>{user.name}</Button></div>}
       </header> : <header style={{ display: "flex", flexWrap: "wrap", gap: 4, paddingBottom: 8 }}>
         <select aria-label="QA раздел" value={section} onChange={event => setSection(event.target.value)} style={{ minHeight: 48, minWidth: 0, maxWidth: "100%", fontSize: 16 }}>
           {["feed", "notifications", "hr", "members", "zoom", "absences", "referent", "hisobot", "bots", "incoming", "employees", "tasks", "home", "team", "departments", "access", "components", "login", "surveys", "legacy-projects"].map(key => <option key={key}>{key}</option>)}
         </select><Button onClick={() => setAccount(true)} style={{ minHeight: 48 }}>Настройки</Button><Button onClick={() => setPerson(true)} style={{ minHeight: 48 }}>Профиль</Button><Button onClick={() => setSidebar(true)}>Меню сотрудника</Button><Button onClick={() => setSupportOpen(true)}>Поддержка QA</Button><Button onClick={() => setFileOpen(true)}>Файл QA</Button>
       </header>}<main className="app-content">
-        <ThemeExtraPages section={section} directory={directory} />
+        {section === "team" ? <section className="workspace-view tasks-view bp5-tasks dashboard-mode" aria-label="Обзор команды"><ThemeExtraPages section={section} directory={directory} /></section> : <ThemeExtraPages section={section} directory={directory} />}
         {section === "tasks" && <TasksView token="qa-only" tasks={taskRecords} attachments={taskFiles} people={attachmentQa ? people.map(person => person.id === user.id ? user : person) : people} currentUserId={user.id} efficiency={efficiencyOverview} efficiencyLoading={false} onLoadEfficiency={() => {}}
           onDeleteAttachment={attachmentQa ? async file => { setTaskFiles(current => current.filter(item => item.id !== file.id)); } : undefined}
           onCreateTask={rejectSave} onCreateSubtask={rejectSave} onChangeStatus={rejectSave} onUpdateTask={rejectSave} onDeleteTask={rejectSave}
@@ -363,7 +392,7 @@ function Fixture() {
     {fileOpen && <LocalFileViewer file={localFile} onClose={() => setFileOpen(false)} onLoadOffice={rejectSave} />}
     {account && <AccountPanel token="qa-only" user={user} onClose={() => setAccount(false)} onLogout={() => {}} />}
     <EmployeeProfileDialog token="qa-only" userId={user.id} currentUserId={user.id} people={people} open={person} onOpenChange={setPerson} />
-    <YuksalishAssistant token="qa-only" />
-  </EmployeeProfileProvider></FluentProvider>;
+    {!density && <YuksalishAssistant token="qa-only" />}
+  </EmployeeProfileProvider></WorkingUserIdsContext.Provider></FluentProvider>;
 }
 createRoot(document.getElementById("root")!).render(<Fixture />);

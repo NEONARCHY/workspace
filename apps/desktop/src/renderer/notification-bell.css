@@ -1,5 +1,5 @@
-.global-bar .notification-bell { position: relative; display: grid; place-items: center; flex: none; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%; color: var(--ws-link); background: transparent; cursor: pointer; }
-.global-bar .notification-bell:hover, .global-bar .notification-bell[aria-pressed="true"] { background: rgb(0 145 168 / 8%); }
+.global-bar .notification-bell { position: relative; display: grid; place-items: center; flex: none; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%; color: var(--ws-link); background: var(--ws-button-hover, var(--ws-surface)); cursor: pointer; }
+.global-bar .notification-bell:hover, .global-bar .notification-bell[aria-pressed="true"] { background: var(--ws-selected, var(--ws-button-hover, var(--ws-surface))); }
 .notification-bell:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 2px; }
 .notification-bell-icon { display: flex; transform-origin: 50% 18%; }
 .notification-bell-dot { position: absolute; top: 7px; right: 7px; width: 7px; height: 7px; border-radius: 50%; background: #d84b5c; pointer-events: none; }
@@ -12,7 +12,7 @@
   8% { transform: rotate(4deg); }
   10% { transform: rotate(-2deg); }
 }
-.browser-compact .global-bar .notification-bell { width: 48px; height: 48px; }
+.browser-compact .global-bar .notification-bell { width: 48px; height: 48px; border-radius: 14px; }
 @media (max-width: 600px) {
   .browser-compact .app-stage .global-bar { grid-template-columns: repeat(6, minmax(0, 1fr)); }
   .browser-compact .app-stage .global-bar:not(:has(.assistant-launcher)),
@@ -25,5 +25,6 @@
   .notification-bell[data-unread="true"] .notification-bell-icon { animation: none; }
 }
 @media (forced-colors: active) {
+  .global-bar .notification-bell { background: ButtonFace; border: 1px solid ButtonText; }
   .notification-bell-dot { background: Highlight; outline: 1px solid CanvasText; }
 }

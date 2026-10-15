@@ -70,6 +70,12 @@ import "../src/renderer/sidebar-theme.css";
 import "../src/renderer/page-canvas.css";
 import "../src/renderer/browser-responsive.css";
 import "../src/renderer/browser-secondary.css";
+import "../src/renderer/dark-theme.css";
+import "../src/renderer/satin-surfaces.css";
+import "../src/renderer/workspace-search.css";
+import "../src/renderer/workspace-field-borders.css";
+import "../src/renderer/workspace-select-motion.css";
+import "../src/renderer/mobile-density.css";
 
 const tasks = Array.from({ length: 31 }, (_, i) => ({ ...initialTasks[0]!, id: `mobile-task-${i}`, title: `Тестовая задача ${i + 1}: длинное название для проверки переноса без потери текста` }));
 const employees: DirectoryEmployee[] = Array.from({ length: 31 }, (_, i) => ({ id: `mobile-person-${i}`, name: `Тестовый сотрудник ${i + 1}`, username: `synthetic-${i}`, jobTitle: "Длинная тестовая должность сотрудника регионального подразделения", role: "employee", status: "active" }));

@@ -1,0 +1,253 @@
+/* Compact browser layouts: reclaim whitespace, not touch targets or content.
+   Keep desktop geometry and each module's theme/motion/scroll ownership intact. */
+.workday-control-mobile-label { display: none; }
+.approval-mode-mobile-label { display: none; }
+
+@media (max-width: 1023px), (max-width: 1366px) and (any-pointer: coarse) {
+  .web-platform .app-shell.browser-compact { --ws-view-edge: 0px; }
+  /* One native horizontal strip: icon targets stay 44px even on narrow phones. */
+  .web-platform .browser-compact .app-stage .global-bar:has(.topbar-insights) {
+    display: flex; flex-wrap: nowrap; align-items: center; gap: 6px;
+    width: 100%; min-width: 0; height: auto; min-height: 44px; box-sizing: border-box;
+    padding: 0 0 8px; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin;
+    scrollbar-color: var(--ws-muted) transparent; scroll-padding-inline: 4px;
+  }
+  .web-platform .browser-compact .global-bar:has(.topbar-insights) :is(.workspace-top-context, .workspace-workday-status, .topbar-insights, .workspace-workday-person, .workspace-identity) { display: contents; }
+  .web-platform .browser-compact .app-stage .global-bar:has(.topbar-insights) :is(.browser-menu-trigger, .section-jump-trigger, .notification-bell, .notification-bell-wrap, .color-theme-toggle, .color-theme-toggle-wrap, .assistant-launcher, .assistant-launcher-space, .workspace-identity-menu, .connection-indicator, .context-trigger, .workday-control, .workday-control-mobile-trigger) {
+    flex: 0 0 44px; width: 44px; height: 44px; min-width: 44px; min-height: 44px;
+    max-width: 44px; box-sizing: border-box; margin: 0; border-radius: 14px;
+  }
+  .web-platform .browser-compact .global-bar:has(.topbar-insights) .browser-menu-trigger { order: 1; }
+  .web-platform .browser-compact .global-bar:has(.topbar-insights) .section-jump-trigger { order: 2; }
+  .web-platform .browser-compact .global-bar:has(.topbar-insights) .notification-bell-wrap { order: 3; }
+  .web-platform .browser-compact .global-bar:has(.topbar-insights) .color-theme-toggle-wrap { order: 4; }
+  .web-platform .browser-compact .global-bar:has(.topbar-insights) .assistant-launcher-space { order: 5; }
+  .web-platform .browser-compact .global-bar:has(.topbar-insights) .workspace-identity-menu { order: 6; }
+  .web-platform .browser-compact .global-bar:has(.topbar-insights) .connection-indicator { position: static; order: 7; }
+  .web-platform .browser-compact .global-bar:has(.topbar-insights) .context-currency-trigger { order: 8; }
+  .web-platform .browser-compact .global-bar:has(.topbar-insights) .context-weather-trigger { order: 9; }
+  .web-platform .browser-compact .global-bar:has(.topbar-insights) .workday-control { order: 10; }
+  .web-platform .browser-compact .global-bar:has(.topbar-insights) :is(.section-jump-trigger, .context-trigger, .connection-indicator, .workday-control-mobile-trigger) { justify-content: center; padding: 0; border: 1px solid transparent; color: var(--ws-link); background: var(--ws-button-hover, var(--ws-surface)); }
+  .web-platform .browser-compact .global-bar:has(.topbar-insights) :is(.context-trigger > span, .context-trigger > svg:last-child, .connection-indicator > span, .workday-control-direct) { display: none; }
+  .web-platform .browser-compact .global-bar:has(.topbar-insights) .context-trigger > svg:first-child { display: block; flex: none; width: 22px; height: 22px; }
+  .web-platform .browser-compact .global-bar:has(.topbar-insights) .workspace-identity-menu .fui-Avatar { width: 38px; height: 38px; min-width: 38px; min-height: 38px; }
+  .web-platform .browser-compact .global-bar:has(.topbar-insights) .workday-control-mobile-trigger { display: grid; position: relative; place-items: center; cursor: pointer; }
+  .web-platform .browser-compact .workday-control-mobile-trigger[data-working] i,
+  .web-platform .browser-compact .workday-control-mobile-trigger[data-error] i { position: absolute; width: 6px; height: 6px; top: 7px; right: 7px; border-radius: 50%; background: var(--ws-theme-ink-success, #28886a); }
+  .web-platform .browser-compact .workday-control-mobile-trigger[data-error] i { background: var(--ws-theme-ink-danger, #b54453); }
+  .web-platform .browser-compact .workday-control-mobile-trigger:focus-visible { outline: 2px solid var(--ws-link); outline-offset: -2px; }
+  .web-platform .browser-compact .global-bar:has(.topbar-insights) .context-trigger[aria-expanded="true"] { background: var(--ws-selected); border-color: var(--ws-link); }
+  .web-platform .browser-compact .global-bar:has(.topbar-insights)::-webkit-scrollbar { height: 6px; }
+  .web-platform .browser-compact .global-bar:has(.topbar-insights)::-webkit-scrollbar-thumb { background: var(--ws-muted); border-radius: 999px; }
+  /* Match the real App wrapper, not only the standalone overview QA component. */
+  .web-platform .browser-compact .app-content > .tasks-view.dashboard-mode { display: block; min-height: 0; max-height: 100%; overflow-y: auto; overflow-x: hidden; overscroll-behavior-y: auto; }
+  .web-platform body .app-provider .browser-compact .workspace-search input { font-size: 16px; }
+
+  .web-platform body .app-provider :is(.workspace-view, .team-dashboard, .telegram-access-view) .ws-section-header {
+    min-height: 0; height: auto; margin-bottom: 8px; padding: 12px 14px;
+    gap: 8px 12px; border-radius: 16px; flex-direction: row; align-items: center;
+  }
+  .web-platform body .app-provider :is(.workspace-view, .team-dashboard, .telegram-access-view) .ws-section-header > div:first-of-type { flex-basis: 200px; width: auto; min-width: 0; }
+  .web-platform body .app-provider :is(.workspace-view, .team-dashboard, .telegram-access-view) .ws-section-header :is(h1, h2) { margin: 2px 0 4px; font-size: 23px; line-height: 1.2; }
+  .web-platform body .app-provider :is(.workspace-view, .team-dashboard, .telegram-access-view) .ws-section-header p { font-size: 12px; line-height: 1.4; }
+  .web-platform .ws-section-header :is(.view-kicker, .team-dash-kicker) { margin-bottom: 3px; }
+  .web-platform .ws-section-header :is(.toolbar-actions, .notification-head-actions) { gap: 6px; }
+  .web-platform body .app-provider :is(.workspace-view, .team-dashboard, .telegram-access-view) .ws-section-header :is(.fui-Button, .segmented > button) { min-height: 44px; padding-block: 6px; }
+
+  /* Shared queue chrome: two compact metric rows, then tools and real records. */
+  .web-platform .workflow-process-view { --ws2-process-section-gap: 8px; }
+  .web-platform .approvals-view .approvals-tabs { max-width: 100%; margin-top: 8px; }
+  .web-platform .approvals-view .approval-mode-switch { max-width: 100%; padding: 3px; border-radius: 12px; }
+  .web-platform .approvals-view .approval-mode-switch button { min-height: 44px; padding: 6px 10px; font-size: 12px; white-space: normal; line-height: 1.25; }
+  .web-platform .approvals-view .approval-commandbar { padding: 6px; border-radius: 14px; }
+  .web-platform .approvals-view .approval-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; white-space: normal; }
+  .web-platform .approvals-view .approval-metric { grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 8px; min-width: 0; min-height: 44px; padding: 6px 8px; border-left: 0; border-radius: 9px; font-size: 12px; }
+  .web-platform .approvals-view .approval-metric strong { font-size: 23px; }
+  .web-platform .approvals-view .approval-metric span { white-space: normal; }
+  .web-platform .approvals-view .approval-view-toolbar,
+  .web-platform .workflow-process-view .ws2-process-toolbar { gap: 6px; padding: 6px 0; }
+  .web-platform .app-provider :is(.approvals-view, .trips-view, .projects-view) .ws2-segmented { min-height: 0; padding: 3px; border-radius: 12px; }
+  .web-platform .app-provider :is(.approvals-view, .trips-view, .projects-view) .ws2-segmented > button { min-height: 44px; height: auto; padding: 6px 10px; font-size: 12px; }
+  .web-platform :is(.approvals-view, .trips-view) :is(.approval-search, .trip-search) { min-height: 44px; }
+  .web-platform .workflow-process-view .ws2-process-overview { margin: 0; padding: 6px; gap: 4px; border-radius: 14px; }
+  .web-platform .workflow-process-view .ws2-process-focus { min-width: 0; min-height: 44px; padding: 6px 8px; gap: 4px; }
+  .web-platform .workflow-process-view .ws2-process-metrics > div { min-width: 0; padding: 6px 8px; gap: 4px; }
+  .web-platform .workflow-process-view :is(.ws2-process-focus, .ws2-process-metrics) strong { font-size: 22px; }
+  .web-platform .approvals-view .approval-column > header { min-height: 44px; padding: 9px 10px 6px; }
+  .web-platform .approvals-view .approval-board-card { padding: 0; border-radius: 14px; }
+  .web-platform .approvals-view .approval-card-open { padding: 10px; }
+  .web-platform .approvals-view .approval-card-title { padding-right: 36px; font-size: 14px; }
+  .web-platform .approvals-view .approval-card-quick-action { display: none; }
+  .web-platform .approvals-view .approval-board-card .spatial-grip { width: 44px; height: 44px; top: 0; right: 0; }
+  .web-platform .approvals-view .approval-card-amount { margin-top: 5px; font-size: 18px; }
+  .web-platform .approvals-view :is(.approval-card-statusline, .approval-card-peopleline, .approval-card-context) { margin-top: 6px; }
+  .web-platform .approvals-view .approval-board-card > footer { padding: 6px 10px; line-height: 1.4; }
+  .web-platform .trips-view .approval-card-open { padding: 10px; gap: 5px; }
+  .web-platform .trips-view .trip-board-card > footer { padding: 6px 10px; line-height: 1.4; }
+  .web-platform .tasks-view .task-workbench-summary { gap: 6px; padding-bottom: 8px; }
+  .web-platform .browser-compact .tasks-view .ws-section-header .view-switch { flex-wrap: nowrap; max-width: 100%; overflow-x: auto; }
+  .web-platform .tasks-view .task-focus-object { min-height: 58px; padding: 8px 10px; border-radius: 12px; }
+  .web-platform .tasks-view .task-focus-object > strong { font-size: 24px; }
+  .web-platform .tasks-view .task-filters { margin-bottom: 8px; padding: 4px; }
+  .web-platform .tasks-view .task-filter-tabs { flex-wrap: nowrap; overflow-x: auto; min-height: 0; padding: 3px; gap: 2px; }
+  .web-platform .tasks-view .task-filter-tabs > button { flex: none; min-height: 44px; height: auto; padding: 6px 10px; }
+  .web-platform .tasks-view .spatial-card-open { padding: 10px; gap: 7px; }
+
+  /* Overview: large numbers and status information no longer need large tiles. */
+  .web-platform .workspace-view.personal-home { gap: 8px; padding-bottom: 12px; }
+  .web-platform .personal-home :is(.home-overview, .home-grid) { gap: 8px; }
+  .web-platform .personal-home .home-overview article { min-height: 58px; padding: 10px 12px; gap: 8px; border-radius: 14px; }
+  .web-platform .personal-home .home-overview strong { font-size: 24px; }
+  .web-platform .personal-home .home-panel { padding: 12px; gap: 10px; border-radius: 16px; }
+  .web-platform .personal-home .home-panel-icon { width: 32px; height: 32px; border-radius: 10px; }
+  .web-platform .personal-home .home-list { gap: 6px; }
+  .web-platform .personal-home .home-row { min-height: 52px; padding: 8px 10px; gap: 8px; }
+  .web-platform .personal-home .home-row-copy { gap: 2px; }
+  .web-platform .personal-home .home-efficiency { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 12px; }
+  .web-platform .personal-home .eff-score-gauge { --eff-gauge-size: 96px; }
+  .web-platform .personal-home .eff-history-empty { display: block; min-height: 0; padding-top: 8px; }
+  .web-platform .personal-home .eff-history-empty .eff-empty-chart { display: none; }
+  .web-platform .personal-home .eff-history-empty span { font-size: 12px; }
+  .web-platform .personal-home .home-colleagues .employee-profile-link { min-height: 44px; padding: 6px 8px; }
+  /* The overview grows with its cards; app-content owns page scrolling. */
+  .web-platform .team-dashboard { flex: none; overflow: visible; padding: 0 0 16px; }
+  .web-platform .team-dashboard .team-dash-hero-summary { min-width: 0; padding: 6px 10px; gap: 8px; border-radius: 10px; }
+  .web-platform .team-dashboard .team-dash-hero-summary > div { display: flex; align-items: baseline; gap: 8px; }
+  .web-platform .team-dashboard .team-dash-hero-summary strong { font-size: 22px; }
+  .web-platform .team-dashboard .team-dash-hero-summary svg { width: 20px; height: 20px; }
+  .web-platform .team-dashboard .team-presence-panel { margin-top: 8px; padding: 12px; border-radius: 16px; }
+  .web-platform .team-dashboard .team-presence-heading { gap: 8px; }
+  .web-platform .team-dashboard .team-presence-intro h3 { margin: 4px 0; font-size: 20px; }
+  .web-platform .team-dashboard .team-presence-count { min-width: 0; padding: 6px 10px; gap: 4px 8px; grid-template-columns: 20px auto auto; border-radius: 10px; }
+  .web-platform .team-dashboard .team-presence-count > svg { grid-row: 1; width: 20px; }
+  .web-platform .team-dashboard .team-presence-count strong { font-size: 22px; }
+  .web-platform .team-dashboard .team-presence-toolbar { margin-top: 8px; padding-bottom: 8px; gap: 6px; }
+  .web-platform .team-dashboard .team-presence-person { padding-block: 8px; row-gap: 4px; }
+  .web-platform .team-dashboard :is(.team-dash-attention, .team-dash-flow, .team-dash-workload) { padding: 12px; border-radius: 16px; }
+  .web-platform .team-dashboard :is(.team-dash-main-grid, .team-dash-metrics) { gap: 8px; margin-top: 8px; }
+  .web-platform .team-dashboard .team-dash-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .web-platform .team-dashboard .team-dash-metric { min-height: 72px; padding: 10px; gap: 8px; }
+  .web-platform .team-dashboard .team-dash-panel-heading { gap: 8px; margin-bottom: 10px; }
+  .web-platform .team-dashboard .team-dash-task { min-height: 62px; padding: 8px; gap: 3px 8px; grid-template-columns: 4px minmax(0, 1fr) minmax(0, .85fr) 18px; }
+  .web-platform .team-dashboard .team-dash-task-signal { width: 4px; height: 28px; grid-row: 1 / 3; }
+  .web-platform .team-dashboard .team-dash-task-copy { display: contents; }
+  .web-platform .team-dashboard .team-dash-task-copy strong { grid-column: 2 / 4; grid-row: 1; font-size: 13px; }
+  .web-platform .team-dashboard .team-dash-task-copy small { grid-column: 2; grid-row: 2; font-size: 12px; white-space: normal; }
+  .web-platform .team-dashboard .team-dash-task-person { grid-column: 3; grid-row: 2; min-width: 0; font-size: 12px; }
+  .web-platform .team-dashboard .team-dash-task-person .fui-Avatar { width: 20px; height: 20px; min-width: 20px; font-size: 10px; }
+  .web-platform .team-dashboard .team-dash-task > svg { grid-column: 4; grid-row: 1 / 3; }
+  .web-platform .team-dashboard .team-dash-person { grid-template-columns: 44px minmax(0, 1fr) 48px 16px; min-height: 0; padding: 8px; gap: 5px 8px; }
+  .web-platform .team-dashboard .team-dash-person > .employee-profile-link:first-child .fui-Avatar { width: 32px; height: 32px; font-size: 13px; }
+  .web-platform .team-dashboard .team-dash-person-name { gap: 2px; }
+  .web-platform .team-dashboard .team-dash-person-name strong { font-size: 13px; }
+  .web-platform .team-dashboard .team-dash-person-name small { font-size: 12px; }
+  .web-platform .team-dashboard .team-dash-load { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; }
+  .web-platform .team-dashboard .team-dash-load > span { flex: 1; height: 4px; }
+  .web-platform .team-dashboard .team-dash-load small { font-size: 12px; white-space: nowrap; }
+  .web-platform .team-dashboard .team-dash-person-facts { grid-column: 1 / -1; gap: 4px; }
+  .web-platform .team-dashboard .team-dash-person-facts b { padding: 2px 5px; font-size: 12px; line-height: 1.35; }
+  .web-platform .team-dashboard .team-dash-person-score { grid-column: 3; grid-row: 1; }
+  .web-platform .team-dashboard .team-dash-person > svg { grid-column: 4; grid-row: 1; }
+
+  /* Notifications: context remains the main action, details/time/read in one row. */
+  .web-platform .notifications-view .notification-metrics { gap: 6px; margin-bottom: 8px; }
+  .web-platform .notifications-view .notification-metrics > * { min-height: 66px; padding: 8px 10px; gap: 6px; border-radius: 12px; }
+  .web-platform .notifications-view .notification-metrics strong { font-size: 23px; }
+  .web-platform .notifications-view .notification-metrics { padding-bottom: 0; }
+  .web-platform .notifications-view .notification-progress-card > i { height: 3px; }
+  .web-platform .notifications-view .notification-head-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto; flex-basis: 100%; }
+  .web-platform .notifications-view .notification-head-actions > .workspace-search { width: 100%; }
+  .web-platform .notifications-view .notification-stream-toolbar { padding: 10px; gap: 6px; }
+  .web-platform .notifications-view .notification-stream { padding: 6px; }
+  .web-platform .notifications-view .notification-row { grid-template-columns: 28px minmax(0, 1fr); min-height: 0; padding: 10px; gap: 4px 8px; margin-bottom: 6px; border-radius: 12px; }
+  .web-platform .notifications-view .notification-kind { width: 28px; height: 28px; border-radius: 9px; }
+  .web-platform .notifications-view .notification-kind svg { width: 20px; height: 20px; }
+  .web-platform .notifications-view .notification-open { gap: 3px; min-width: 0; }
+  .web-platform .notifications-view .notification-open > b { font-size: 14px; line-height: 1.35; }
+  .web-platform .notifications-view .notification-open > p { font-size: 13px; line-height: 1.4; margin: 0; }
+  .web-platform .notifications-view .notification-row-meta { flex-wrap: wrap; gap: 4px 8px; }
+  .web-platform .notifications-view .notification-open-label { font-size: 12px; line-height: 1.4; }
+  .web-platform .notifications-view .notification-row-tail { grid-column: 2; display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: 4px 8px; min-width: 0; }
+  .web-platform .notifications-view .notification-row-tail > .fui-Button { min-height: 44px; padding: 4px 10px; font-size: 12px; }
+  .web-platform .notifications-view .notification-row-tail > time { margin-left: auto; }
+  .web-platform .notifications-view .notification-row-tail .notification-read-action { min-width: 44px; width: 44px; min-height: 44px; height: 44px; }
+  .web-platform .notifications-view .notification-settings { padding: 12px; border-radius: 16px; }
+  .web-platform .notifications-view .notification-preference-list > label { min-height: 48px; padding-block: 6px; }
+
+  /* The remaining modules share their headers, but retain domain-specific forms. */
+  .web-platform .feed-view.workspace-view { gap: 8px; }
+  .web-platform .feed-view .feed-card { padding: 12px; border-radius: 16px; }
+  .web-platform .members-view .members-summary { gap: 6px; }
+  .web-platform .members-view .members-summary > div { padding: 10px 12px; }
+  .web-platform .members-view .members-regional-ranking { padding: 12px; }
+  .web-platform .zoom-view { gap: 8px; }
+  .web-platform .hr-view > .fui-TabList { min-height: 44px; }
+  .web-platform .hr-view { gap: 8px; }
+  .web-platform .hr-view :is(.hr-summary, .hr-registers) { gap: 8px; }
+  .web-platform .hr-view :is(.hr-summary > div, .hr-register-card, .hr-alert) { padding: 12px; border-radius: 14px; }
+  .web-platform .hr-view .hr-summary strong { font-size: 24px; margin-bottom: 3px; }
+  .web-platform .hr-view .hr-register-footer { margin-top: 10px; padding-top: 8px; }
+  .web-platform .zoom-view :is(.zoom-list, .zoom-side) { padding: 12px; gap: 8px; }
+  .web-platform .zoom-view .zoom-row { min-height: 48px; padding: 8px 10px; gap: 8px; border-radius: 12px; }
+  .web-platform .project-hub-view :is(.project-hub-canvas, .project-hub-index) { padding: 12px; }
+  .web-platform .project-hub-view :is(.project-hub-project, .project-hub-funding-card, .project-hub-work-row) { padding: 10px; gap: 6px; border-radius: 12px; }
+  .web-platform .project-hub-view :is(.project-hub-metrics, .project-hub-funding-overview) { margin-top: 8px; gap: 6px; }
+  .web-platform .project-hub-view :is(.project-hub-metrics > div, .project-hub-funding-stat) { min-height: 64px; padding: 8px 10px; border-radius: 12px; }
+  .web-platform .project-hub-view .project-hub-workstream-card { min-height: 0; padding: 12px; gap: 6px; }
+  .web-platform .project-hub-view .project-hub-workstream-card strong { font-size: 16px; }
+  .web-platform .ai-referent-view .ai-referent-summary button { min-height: 56px; padding: 8px 10px; border-radius: 12px; }
+  .web-platform .ai-referent-view .ai-referent-row { min-height: 52px; padding: 8px 10px; gap: 6px; border-radius: 12px; }
+  .web-platform .ai-referent-view .ai-referent-register-tabs { display: flex; flex: none; flex-wrap: nowrap; width: 100%; min-width: 0; max-width: 100%; overflow-x: auto; scrollbar-width: thin; scrollbar-color: var(--ws-muted) transparent; }
+  .web-platform .ai-referent-view .ai-referent-register-tabs > button { flex: 0 0 auto; min-height: 44px; white-space: nowrap; }
+  .web-platform .ai-referent-view .ai-referent-register-tabs::-webkit-scrollbar { height: 6px; }
+  .web-platform .ai-referent-view .ai-referent-register-tabs::-webkit-scrollbar-thumb { background: var(--ws-muted); border-radius: 999px; }
+  .web-platform .ai-referent-view .ai-referent-summary { display: flex; flex-wrap: nowrap; gap: 6px; overflow-x: auto; padding: 3px 0; scrollbar-width: thin; }
+  .web-platform .ai-referent-view .ai-referent-summary > button { flex: 0 0 auto; min-height: 44px; padding: 6px 9px; }
+  .web-platform .ai-referent-view .ai-referent-summary button { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto; align-items: center; justify-items: start; gap: 4px 8px; min-width: 0; min-height: 44px; text-align: left; }
+  .web-platform .ai-referent-view .ai-referent-summary button strong { order: 0; grid-column: 1; grid-row: 1; font-size: 23px; }
+  .web-platform .ai-referent-view .ai-referent-summary button > span { grid-column: 2; grid-row: 1; min-width: 0; font-size: 12px; }
+  .web-platform .ai-referent-view .ai-referent-summary button > small { grid-column: 1 / -1; grid-row: 2; }
+  /* The register, not its decorative chrome, owns the remaining phone height. */
+  .web-platform .app-provider .app-content > .ai-referent-view { gap: 6px; padding: 8px 10px; overflow-y: auto; }
+  .web-platform body .app-provider .ai-referent-view .ai-referent-header.ws-section-header { min-height: 0; margin: 0; padding: 4px 2px; background: transparent; border: 0; box-shadow: none; }
+  .web-platform .ai-referent-view .ai-referent-header :is(.view-kicker, p, .ai-referent-header-art) { display: none; }
+  .web-platform body .app-provider .ai-referent-view .ai-referent-header h1 { margin: 0; font-size: 20px; line-height: 1.3; color: var(--ws-text); }
+  .web-platform .ai-referent-view .ai-referent-register-bar { gap: 6px; }
+  .web-platform .ai-referent-view .ai-referent-register-tabs { padding: 2px; min-height: 0; }
+  .web-platform .ai-referent-view .ai-referent-register-actions { gap: 6px; }
+  .web-platform .ai-referent-view .ai-referent-register-actions .ai-referent-register-action { min-height: 44px; height: auto; padding-block: 6px; }
+  .web-platform .ai-referent-view .ai-referent-page { gap: 6px; }
+  .web-platform .ai-referent-view .ai-referent-page:has(> :is(.ai-incoming-table-wrap, .ai-referent-empty, .ai-referent-list)) { flex: 1 1 auto; }
+  .web-platform .ai-referent-view :is(.ai-incoming-table-wrap, .ai-referent-list, .ai-referent-empty) { flex: 1 1 auto; height: auto; min-height: 200px; }
+  .web-platform .ai-referent-view .ai-incoming-toolbar { flex-wrap: nowrap; min-height: 44px; padding: 0; gap: 6px; border: 0; background: transparent; box-shadow: none; }
+  .web-platform .ai-referent-view .ai-incoming-toolbar > .ai-gooey-search { flex: 1 1 0; min-width: 0; width: 0; }
+  .web-platform .ai-referent-view .ai-incoming-toolbar .ai-referent-toolbar-actions { flex: none; width: auto; gap: 4px; overflow: visible; }
+  .web-platform .ai-referent-view .ai-incoming-toolbar .ai-referent-toolbar-actions > .fui-Button { min-width: 44px; width: 44px; height: 44px; padding: 0; font-size: 0; gap: 0; }
+  .web-platform .ai-referent-view .ai-incoming-toolbar .ai-referent-toolbar-actions .fui-Button__icon { margin: 0; font-size: 20px; }
+  .web-platform .ai-referent-view .ai-referent-list-bar { gap: 4px; }
+  .web-platform .trips-view .process-view-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; }
+  .web-platform .trips-view .process-view-tabs > button { min-width: 0; min-height: 44px; padding: 6px 8px; font-size: 12px; line-height: 1.25; white-space: normal; }
+  .web-platform .ai-hisobot-view .hisobot-panel { padding: 12px; border-radius: 14px; }
+  .web-platform .ai-hisobot-view .hisobot-panel-description { margin-bottom: 12px; }
+}
+
+@media (max-width: 600px) {
+  .web-platform .approvals-view .approvals-toolbar .approval-mode-label { display: none; }
+  .web-platform .approvals-view .approvals-toolbar .approval-mode-mobile-label { display: inline; }
+
+  .web-platform .approvals-view .approval-view-toolbar { display: grid; grid-template-columns: 148px minmax(0, 1fr); }
+  .web-platform .approvals-view .approval-view-toolbar > .ws2-segmented:first-child { width: auto; min-width: 0; }
+  .web-platform .approvals-view .approval-view-toolbar .approval-search { min-width: 0; width: 100%; max-width: none; }
+  .web-platform .approvals-view .approval-view-toolbar > .ws2-segmented:last-child { grid-column: 1 / -1; min-width: 0; width: 100%; padding-block: 3px; }
+  .web-platform .tasks-view .task-workbench-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .web-platform .tasks-view .task-focus-object { grid-template-columns: minmax(0, 1fr); gap: 3px; }
+  .web-platform .tasks-view .task-focus-object > strong { grid-row: auto; grid-column: auto; }
+}
+
+@media (min-width: 360px) and (max-width: 600px) {
+  .web-platform body .app-provider .approvals-view .ws-section-header.approvals-toolbar:has(.ws-section-header-primary) { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
+  .web-platform .approvals-view .approvals-toolbar:has(.ws-section-header-primary) > div:first-of-type { display: contents; }
+  .web-platform .approvals-view .approvals-toolbar :is(.view-kicker, h1, p) { grid-column: 1 / -1; margin: 0; }
+  .web-platform .approvals-view .approvals-toolbar .approvals-tabs { grid-column: 1; margin-top: 2px; }
+  .web-platform .approvals-view .approvals-toolbar .toolbar-actions { grid-column: 2; align-self: end; }
+}

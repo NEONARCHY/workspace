@@ -4,6 +4,27 @@
 /* The team drawer's desktop rail clearance must not subtract 300 px on a
    phone where the sidebar is closed. Keep titles and close controls visible. */
 @media (max-width: 1023px), (max-width: 1366px) and (any-pointer: coarse) {
+  /* A last native scroll owner for pages taller than the compact viewport. */
+  .web-platform .app-shell.browser-compact .app-content { overflow-y: auto; }
+  /* The desktop workbench clips its contents. On phones its toolbar can be
+     taller than the viewport, so the page must own that vertical overflow. */
+  .web-platform .tasks-view.bp5-tasks:not(.dashboard-mode, .efficiency-mode) .tasks-main {
+    flex: none; height: auto; overflow: visible;
+  }
+  .web-platform .tasks-view.bp5-tasks:not(.dashboard-mode, .efficiency-mode) .tasks-main > * { flex-shrink: 0; }
+  .web-platform .tasks-view.bp5-tasks .task-kanban { flex: none; height: clamp(360px, 60dvh, 600px); }
+  /* Include the pane gutters in the native chat scroll hit area, without
+     moving the cards; keep a usable list when controls wrap on short screens. */
+  .web-platform .messenger-view .list-pane { overflow-y: auto; }
+  .web-platform .messenger-view .list-pane .chat-list {
+    margin-inline: -14px; padding-inline: 16px;
+    min-height: min(220px, 40dvh);
+  }
+  /* Nested lists may hand a vertical gesture back to the page at their edge.
+     Horizontal board containment and dialog scroll locks remain unchanged. */
+  .web-platform .app-content :is(.record-table-scroll, .notification-stream, .approval-column-stack, .kanban-stack, .project-stack, .project-hub-index-list, .hr-table-wrap, .eff-table-scroll) {
+    overscroll-behavior-y: auto;
+  }
   .web-platform .app-provider .team-dash-flow-drawer { inset-inline: max(12px, env(safe-area-inset-left)) max(12px, env(safe-area-inset-right)); width: auto; max-width: none; }
 }
 .feed-reaction-pair { display: inline-flex; align-items: center; }

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { FluentProvider } from "@fluentui/react-components";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -70,11 +70,32 @@ describe("workday presence", () => {
     expect(finishMyWorkday).toHaveBeenCalledTimes(1);
   });
 
+  it("opens the compact workday menu without changing attendance", async () => {
+    vi.mocked(loadMyWorkday).mockResolvedValue(working);
+    show(<WorkdayControl token="test-token" />);
+    fireEvent.click(await screen.findByRole("button", { name: "Рабочий день: Сейчас в работе" }));
+    const menu = await screen.findByRole("dialog", { name: "Рабочий день" });
+    expect(within(menu).getByRole("button", { name: "Завершить работу" })).toBeEnabled();
+    expect(startMyWorkday).not.toHaveBeenCalled();
+    expect(finishMyWorkday).not.toHaveBeenCalled();
+  });
+
   it("does not offer a start button during approved absence", async () => {
     vi.mocked(loadMyWorkday).mockResolvedValue({ ...initial, status: "approved_absence", absenceKind: "sick_leave" });
     show(<WorkdayControl token="test-token" />);
     expect(await screen.findByText("Отсутствие оформлено")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Начать работу" })).not.toBeInTheDocument();
+  });
+
+  it("retains the complete accessible action when the phone label is shortened", async () => {
+    vi.mocked(loadMyWorkday).mockResolvedValue(working);
+    show(<WorkdayControl token="test-token" />);
+    const finish = await screen.findByRole("button", { name: "Завершить работу" });
+    expect(finish.querySelector(".workday-control-label")).toHaveTextContent("Завершить работу");
+    expect(finish.querySelector(".workday-control-mobile-label")).toHaveTextContent("Завершить");
+    expect(finish.querySelector(".workday-control-mobile-label")).toHaveAttribute("aria-hidden", "true");
+    expect(startMyWorkday).not.toHaveBeenCalled();
+    expect(finishMyWorkday).not.toHaveBeenCalled();
   });
 
   it("keeps the start action available after a failed request", async () => {

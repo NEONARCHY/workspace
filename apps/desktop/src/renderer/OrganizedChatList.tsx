@@ -162,9 +162,9 @@ export function OrganizedChatList({ token, chats, messages, people = [], departm
         <span className="chat-bucket-label">Чаты</span><span>{regularChats.length + scopedPeople.length}</span>
       </button>
       <button type="button" aria-pressed={bucket === "task-chats" && !morePreviewActive} onClick={() => selectBucket("task-chats")}>
-        <TaskListSquareLtr24Regular /><span className="chat-bucket-label">Чаты задач</span><span>{taskChats.length}</span>
+        <TaskListSquareLtr24Regular /><span className="chat-bucket-label">Чаты задач</span>
       </button>
-      <button type="button" aria-pressed={bucket === "archive" && !morePreviewActive} onClick={() => selectBucket("archive")}><Archive20Regular /><span className="chat-bucket-label">Архив</span><span>{archivedRegularChats.length + archivedTaskChats.length}</span>
+      <button type="button" aria-pressed={bucket === "archive" && !morePreviewActive} onClick={() => selectBucket("archive")}><Archive20Regular /><span className="chat-bucket-label">Архив</span>
         {archivedChats.some((chat) => chat.unread > 0) && <i aria-label="В архиве есть непрочитанные сообщения" />}</button>
       <Menu open={moreMenuOpen} onOpenChange={(_event, data) => {
         if (data.open) requestMoreMenu();
