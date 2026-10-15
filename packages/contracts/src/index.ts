@@ -1686,11 +1686,21 @@ export interface TaskPlanImportRow {
   readonly coexecutorsHint?: string | null;
   readonly groupKey?: string | null;
   readonly dueDateHint?: string | null;
+  readonly deadlineText?: string | null;
+  readonly mechanismItems?: readonly string[];
+  readonly completedWorkText?: string | null;
+  readonly originalTitle?: string | null;
+  readonly responsibleText?: string | null;
+  readonly executorsText?: string | null;
+  readonly section?: string | null;
+  readonly greenCompletion?: boolean;
+  readonly deadlineNeedsReview?: boolean;
 }
 
 export interface TaskPlanImportPreview {
   readonly suggestedTitle: string;
   readonly rows: readonly TaskPlanImportRow[];
+  readonly annualWorkPlan?: boolean;
 }
 
 export interface TaskPlanImportItem {
@@ -1699,14 +1709,19 @@ export interface TaskPlanImportItem {
   readonly mode: "create" | "link";
   readonly assigneeId?: string | null;
   readonly coAssigneeIds?: readonly string[];
+  readonly observerIds?: readonly string[];
   readonly dueAt?: string | null;
   readonly taskId?: string | null;
+  readonly description?: string;
+  readonly checklist?: readonly string[];
+  readonly historicalCompleted?: boolean;
 }
 
 export interface TaskPlanImportConfirm {
   readonly operationId: string;
   readonly plan: TaskPlanWrite;
   readonly items: readonly TaskPlanImportItem[];
+  readonly annualWorkPlan?: boolean;
 }
 
 export type EfficiencyHistoryCompleteness = "complete" | "partial" | "unavailable";
@@ -1947,15 +1962,15 @@ export interface ProjectHubOverview {
 }
 
 export type TripStage = "launch" | "deputy_approval" | "manager_approval" | "hr" | "approved" | "rejected";
-export type TripStatus = "draft" | "running" | "needs_revision" | "approved" | "rejected";
-export type TripAction = "submit" | "approve" | "return" | "reject" | "resubmit" | "move";
+export type TripStatus = "draft" | "running" | "needs_revision" | "approved" | "rejected" | "annulled";
+export type TripAction = "submit" | "approve" | "return" | "reject" | "resubmit" | "move" | "withdraw" | "annul";
 
 export interface TripActionHistory {
   readonly id: string;
   readonly actorUserId: string;
   readonly fromStage?: TripStage | null;
   readonly toStage: TripStage;
-  readonly action: "created" | TripAction;
+  readonly action: "created" | "deleted" | TripAction;
   readonly comment?: string | null;
   readonly createdAt: string;
 }
@@ -1986,6 +2001,7 @@ export interface TripRequest {
   readonly status: TripStatus;
   readonly statusLabel: string;
   readonly canEdit: boolean;
+  readonly canDelete?: boolean;
   readonly allowedActions: readonly TripAction[];
   readonly chatId?: string | null;
   readonly actions: readonly TripActionHistory[];

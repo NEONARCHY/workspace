@@ -154,6 +154,7 @@ import {
   createWorkspaceProject,
   createWorkspaceTask,
   createWorkspaceTripRequest,
+  deleteWorkspaceTripRequest,
   createWorkspaceAbsence,
   deleteWorkspaceTaskChecklistItem,
   downloadWorkspaceAttachment,
@@ -1579,6 +1580,20 @@ export function App() {
   const handleUpdateTrip = (tripRequest: TripRequest, payload: TripRequestInput) =>
     runTripMutation((token) => updateWorkspaceTripRequest(token, tripRequest.id, payload));
 
+  const handleDeleteTrip = async (tripRequest: TripRequest): Promise<void> => {
+    if (!session) throw new Error("Сеанс завершён. Войдите повторно.");
+    try {
+      await deleteWorkspaceTripRequest(session.accessToken, tripRequest.id);
+      setWorkspace((current) => ({
+        ...current,
+        tripRequests: current.tripRequests.filter((item) => item.id !== tripRequest.id),
+      }));
+    } catch (error) {
+      reportError(error);
+      throw error;
+    }
+  };
+
   const handleTripAction = (
     tripRequest: TripRequest,
     action: TripAction,
@@ -2491,6 +2506,7 @@ export function App() {
                 onPublishWorkflow={(workflow) => handlePublishProcessWorkflow("tripWorkflow", workflow)}
                 onCreate={handleCreateTrip}
                 onUpdate={handleUpdateTrip}
+                onDelete={handleDeleteTrip}
                 onAction={handleTripAction}
                 onUploadBrief={handleTripBriefUpload}
                 onRemoveBrief={handleTripBriefRemoval}

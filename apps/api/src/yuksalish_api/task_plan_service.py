@@ -1,6 +1,6 @@
 """Shared plans with server-side task permissions and audited links."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 from sqlalchemy import delete, insert, select, update
@@ -10,11 +10,24 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 
 from .access_control import ensure_module_action
 from .auth import AuthenticatedUser
+from .efficiency_service import record_task_event
 from .position_policy import is_executive_leader
 from .repository import WorkspaceRepositoryError, _task_access_row, create_task
-from .tables import audit_events, task_participants, task_plan_links, task_plans, tasks, users
+from .tables import (
+    audit_events,
+    task_checklist_items,
+    task_participants,
+    task_plan_links,
+    task_plans,
+    tasks,
+    users,
+)
 from .task_plan_schemas import PlanStatus, TaskPlanImportConfirm, TaskPlanResponse, TaskPlanWrite
-from .workspace_schemas import CreateTaskRequest, TaskCreateParticipantRequest
+from .workspace_schemas import (
+    CreateTaskRequest,
+    TaskCreateChecklistItemRequest,
+    TaskCreateParticipantRequest,
+)
 
 
 def _response(row: RowMapping, task_ids: list[str] | None = None) -> TaskPlanResponse:
@@ -218,6 +231,10 @@ async def confirm_import(
 
     now = datetime.now(UTC)
     owner_id = await _owner_id(connection, payload.plan.owner_user_id, user)
+    if any(item.historical_completed for item in payload.items) and not payload.annual_work_plan:
+        raise WorkspaceRepositoryError(
+            422, "Historical completion requires annual work-plan import",
+        )
     inserted = (await connection.execute(pg_insert(task_plans).values(
         id=payload.operation_id, title=payload.plan.title, kind=payload.plan.kind,
         period_start=payload.plan.period_start, period_end=payload.plan.period_end,
@@ -239,13 +256,54 @@ async def confirm_import(
             task_id = item.task_id
         else:
             created = await create_task(connection, user, CreateTaskRequest(
-                title=item.title, assignee_id=str(item.assignee_id or user.id),
+                title=item.title, description=item.description,
+                assignee_id=str(item.assignee_id or user.id),
                 due_at=item.due_at,
+                checklist=[TaskCreateChecklistItemRequest(title=step) for step in item.checklist],
                 participants=[TaskCreateParticipantRequest(
                     user_id=str(participant_id), role="co_assignee",
-                ) for participant_id in item.co_assignee_ids],
+                ) for participant_id in item.co_assignee_ids] + [TaskCreateParticipantRequest(
+                    user_id=str(participant_id), role="observer",
+                ) for participant_id in item.observer_ids],
             ), author_user_id=owner_id)
             task_id = UUID(created.id)
+            imported_at = datetime.now(UTC)
+            if payload.annual_work_plan and item.due_at is not None and item.due_at <= now:
+                await _task_access_row(connection, user, task_id, manage=True)
+                await record_task_event(
+                    connection, task_id=task_id, event_type="efficiency_excluded",
+                    occurred_at=imported_at, actor_user_id=user.id,
+                    assignee_user_id=item.assignee_id or user.id, due_at=item.due_at,
+                    new_value={"excluded": True}, reason_code="historical_plan_import",
+                    reason_text="Исторический пункт плана импортирован после срока",
+                )
+            if item.historical_completed:
+                if item.due_at is None or item.due_at > now:
+                    raise WorkspaceRepositoryError(
+                        422, "Historical completion requires a past reviewed deadline",
+                    )
+                await connection.execute(update(tasks).where(tasks.c.id == task_id).values(
+                    status="completed", updated_at=imported_at,
+                ))
+                await connection.execute(update(task_checklist_items).where(
+                    task_checklist_items.c.task_id == task_id,
+                ).values(is_completed=True, completed_at=imported_at,
+                         updated_at=imported_at))
+                await record_task_event(
+                    connection, task_id=task_id, event_type="task_completed",
+                    occurred_at=imported_at + timedelta(microseconds=1),
+                    actor_user_id=user.id,
+                    assignee_user_id=item.assignee_id or user.id, due_at=item.due_at,
+                    old_value={"status": "new"}, new_value={"status": "completed"},
+                    reason_code="historical_plan_import",
+                    reason_text="Зелёный пункт плана подтверждён при импорте",
+                )
+                await connection.execute(insert(audit_events).values(
+                    id=uuid4(), actor_user_id=user.id, action="task.historical_import_completed",
+                    target_type="task", target_id=task_id,
+                    details={"planId": str(payload.operation_id), "source": item.source},
+                    created_at=imported_at,
+                ))
         if task_id is None:
             raise WorkspaceRepositoryError(422, "Select a task to link")
         await connection.execute(insert(task_plan_links).values(
@@ -255,5 +313,6 @@ async def confirm_import(
         task_ids.append(str(task_id))
     await _audit(connection, user, "task_plan.imported", payload.operation_id,
                  {"title": payload.plan.title, "ownerUserId": str(owner_id),
-                  "itemCount": str(len(task_ids))})
+                  "itemCount": str(len(task_ids)),
+                  "annualWorkPlan": str(payload.annual_work_plan)})
     return _response(row, task_ids)

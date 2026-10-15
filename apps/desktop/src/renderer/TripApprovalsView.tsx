@@ -31,13 +31,15 @@ const ExternalFileViewer = lazy(() => import("./FileViewer").then(module => ({ d
 const actionLabels: Readonly<Record<TripAction, string>> = {
   submit: "Отправить первому заместителю", resubmit: "Отправить повторно", approve: "Согласовать",
   return: "Вернуть на доработку", reject: "Отклонить", move: "Перемещено администратором",
+  withdraw: "Отозвать заявку", annul: "Аннулировать приказ",
 };
 const moveLabels: Readonly<Record<TripAction, string>> = {
   submit: "Передать →", resubmit: "Повторно →", approve: "Согласовать →",
   return: "На доработку", reject: "Отклонить", move: "Переместить",
+  withdraw: "Отозвать", annul: "Аннулировать",
 };
 const dateLabel = (value: string) => new Date(`${value}T00:00:00`).toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
-const isFinished = (request: TripRequest) => request.stage === "approved" || request.stage === "rejected";
+const isFinished = (request: TripRequest) => ["approved", "rejected", "annulled"].includes(request.status);
 const needsNewSignature = (request: TripRequest) => (request.workflowVersion ?? 1) >= 2 &&
   (!(request.hasEmployeeSignature || (request.briefAttachmentName && request.originalSignatureConfirmed)) ||
     (!request.briefText && !request.briefAttachmentName));
@@ -51,6 +53,7 @@ interface TripApprovalsViewProps {
   readonly currentUser: WorkspacePerson;
   readonly onCreate: (payload: TripRequestInput) => Promise<TripRequest | undefined>;
   readonly onUpdate: (request: TripRequest, payload: TripRequestInput) => Promise<TripRequest | undefined>;
+  readonly onDelete?: (request: TripRequest) => Promise<void>;
   readonly onAction: (request: TripRequest, action: TripAction, comment?: string, targetStage?: TripStage) => Promise<TripRequest | undefined>;
   readonly onUploadBrief?: (requestId: string, file: File) => Promise<TripRequest | undefined>;
   readonly onRemoveBrief?: (requestId: string) => Promise<TripRequest | undefined>;
@@ -77,12 +80,13 @@ function emptyForm(currentUserId: string): TripFormState {
     employeeIds: [currentUserId], briefText: "", expenseSource: "" };
 }
 
-export function TripApprovalsView({ focusRequestId, requests, people, departments, currentUser, onCreate, onUpdate, onAction, onUploadBrief, onRemoveBrief, onUploadSignature, onSetOriginalSignature, onLoadBriefOffice, onDownloadDocument, onOpenChat, renderTripChat, workflow, positions = [], canManageWorkflow = false, onSaveWorkflow, onPublishWorkflow, assistantDraft }: TripApprovalsViewProps) {
+export function TripApprovalsView({ focusRequestId, requests, people, departments, currentUser, onCreate, onUpdate, onDelete, onAction, onUploadBrief, onRemoveBrief, onUploadSignature, onSetOriginalSignature, onLoadBriefOffice, onDownloadDocument, onOpenChat, renderTripChat, workflow, positions = [], canManageWorkflow = false, onSaveWorkflow, onPublishWorkflow, assistantDraft }: TripApprovalsViewProps) {
   const boardPan = useMiddleMousePan<HTMLDivElement>();
   const restoreFocusTarget = useRestoreFocusTarget();
   const [selectedId, setSelectedId] = useState(focusRequestId ?? "");
   const [detailOpen, setDetailOpen] = useState(Boolean(focusRequestId));
-  const [pendingDecision, setPendingDecision] = useState<{ id: string; action: "return" | "reject" }>();
+  const [pendingDecision, setPendingDecision] = useState<{ id: string; action: "return" | "reject" | "withdraw" | "annul" }>();
+  const [confirmDeleteId, setConfirmDeleteId] = useState("");
   const [formMode, setFormMode] = useState<"create" | "edit" | null>(
     assistantDraft?.kind === "trip" ? "create" : null,
   );
@@ -134,19 +138,21 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
   const personLink = (id: string, children: ReactNode, className?: string) => <EmployeeProfileLink userId={people.some((person) => person.id === id) ? id : undefined} personName={personName(id)} className={className}>{children}</EmployeeProfileLink>;
   const runningCount = requests.filter((request) => !isFinished(request)).length;
   const finishedCount = requests.length - runningCount;
-  const actionableCount = requests.filter((request) => request.allowedActions.length > 0).length;
+  const actionableCount = requests.filter((request) => request.allowedActions.some(
+    (action) => !["withdraw", "annul"].includes(action),
+  )).length;
   const revisionCount = requests.filter((request) => request.status === "needs_revision").length;
-  const filterCounts = { running: runningCount, approved: requests.filter((request) => request.stage === "approved").length, all: requests.length, finished: finishedCount };
+  const filterCounts = { running: runningCount, approved: requests.filter((request) => request.status === "approved").length, all: requests.length, finished: finishedCount };
   const visibleRequests = requests.filter((request) => {
     if (filter === "running" && isFinished(request)) return false;
-    if (filter === "approved" && request.stage !== "approved") return false;
+    if (filter === "approved" && request.status !== "approved") return false;
     if (filter === "finished" && !isFinished(request)) return false;
     return [request.number, request.purpose, request.destination, request.stageLabel, ...request.employeeIds.map(personName)]
       .join(" ").toLocaleLowerCase("ru-RU").includes(query.trim().toLocaleLowerCase("ru-RU"));
   });
 
-  const openRequest = (id: string) => { pendingCreatedRef.current = undefined; setBriefFile(undefined); setDocumentPreview(undefined); setPreviewedBriefVersion(""); setFormOpen(false); setFormMode(null); setSelectedId(id); setDetailOpen(true); setPendingDecision(undefined); setError(""); };
-  const closeDetail = () => { if (!busyRef.current) { setDetailOpen(false); setPendingDecision(undefined); setError(""); } };
+  const openRequest = (id: string) => { pendingCreatedRef.current = undefined; setBriefFile(undefined); setDocumentPreview(undefined); setPreviewedBriefVersion(""); setFormOpen(false); setFormMode(null); setSelectedId(id); setDetailOpen(true); setPendingDecision(undefined); setConfirmDeleteId(""); setError(""); };
+  const closeDetail = () => { if (!busyRef.current) { setDetailOpen(false); setPendingDecision(undefined); setConfirmDeleteId(""); setError(""); } };
   const closeForm = () => { if (!busyRef.current) { if (pendingCreatedRef.current) { setSelectedId(pendingCreatedRef.current.id); setDetailOpen(true); } pendingCreatedRef.current = undefined; setBriefFile(undefined); setFormOpen(false); setFormMode(null); setError(""); } };
   const create = () => { pendingCreatedRef.current = undefined; setBriefFile(undefined); setDetailOpen(false); setForm(emptyForm(currentUser.id)); setEmployeeQuery(""); setFormMode("create"); setFormOpen(true); setError(""); };
 
@@ -277,17 +283,27 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
         ? await onAction(request, action, comment, targetStage)
         : await onAction(request, action, comment);
       if (!updated) { setError("Не удалось изменить стадию. Проверьте подключение и актуальные права на заявку."); return false; }
-      if (updated.stage === "approved") setFilter("approved");
+      if (updated.status === "approved") setFilter("approved");
+      if (updated.status === "annulled") setFilter("finished");
       return true;
     } catch { setError("Не удалось изменить стадию. Карточка остаётся на прежнем месте."); return false; }
     finally { busyRef.current = false; setBusy(false); }
   };
   const act = async (request: TripRequest, action: TripAction) => {
     if (busyRef.current || !request.allowedActions.includes(action)) return;
-    if (action === "return" || action === "reject") {
+    if (action === "return" || action === "reject" || action === "withdraw" || action === "annul") {
       openRequest(request.id); setPendingDecision({ id: request.id, action }); return;
     }
     await commitAction(request, action);
+  };
+  const deleteRequest = async (request: TripRequest) => {
+    if (busyRef.current || !request.canDelete || !onDelete) return;
+    busyRef.current = true; setBusy(true); setError("");
+    try {
+      await onDelete(request);
+      setConfirmDeleteId(""); setSelectedId(""); setDetailOpen(false);
+    } catch { setError("Не удалось удалить заявку. Проверьте подключение и её текущий статус."); }
+    finally { busyRef.current = false; setBusy(false); }
   };
   const feedback = error ? <WorkspaceNotice tone="error" className="trip-feedback error" role="alert"><span>{error}</span></WorkspaceNotice> : null;
 
@@ -298,7 +314,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
         <Button {...restoreFocusTarget} className="ws-section-header-primary" appearance="primary" icon={<Add24Regular />} onClick={create}>Новая командировка</Button>
       </WorkspaceSectionHeader>
 
-      {section === "designer" && workflow && onSaveWorkflow && onPublishWorkflow ? <><WorkspaceNotice tone="warning" className="trip-document-reminder">Новый маршрут: первый заместитель согласует заявку, затем председатель утверждает и подписывает приказ. Старые кадровые решения остаются в истории прежних заявок; конструктор не меняет защищённые права этого маршрута.</WorkspaceNotice><ProcessWorkflowDesigner workflow={currentTripWorkflow(workflow, positions)} processName="Маршрут поездок" accent="trip" people={people} departments={departments} positions={positions} onSave={onSaveWorkflow} onPublish={onPublishWorkflow} /></> : <>
+      {section === "designer" && workflow && onSaveWorkflow && onPublishWorkflow ? <><WorkspaceNotice tone="warning" className="trip-document-reminder">Для этапа «Согласование первого заместителя» выберите должность или конкретного сотрудника, затем сохраните и опубликуйте маршрут. Новые отправки закрепляют выбранного согласующего; уже отправленные заявки сохраняют прежнее назначение. Председатель и подпись приказа по-прежнему определяются настройками HR.</WorkspaceNotice><ProcessWorkflowDesigner workflow={currentTripWorkflow(workflow, positions)} processName="Маршрут поездок" accent="trip" people={people} departments={departments} positions={positions} onSave={onSaveWorkflow} onPublish={onPublishWorkflow} /></> : <>
       <section className="ws2-process-overview trip-overview" aria-label="Сводка по командировкам">
         <button type="button" className="ws2-process-focus" onClick={() => setFilter("running")}>
           <strong>{actionableCount}</strong>
@@ -374,7 +390,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
             <Badge className="trip-detail-status" appearance="tint" color={selected.status === "rejected" ? "danger" : selected.status === "approved" ? "success" : "informative"}>{selected.statusLabel}</Badge>
             <div className="trip-detail-stages" aria-label="Маршрут согласования">{displayTripColumns.filter((column) => selected.workflowVersion === 3 || column.key !== "deputy_approval").filter((column) => column.key !== (selected.stage === "rejected" ? "approved" : "rejected")).map((column) => <span key={column.key} aria-current={selected.stage === column.key ? "step" : undefined} style={{ "--approval-stage-color": column.color } as CSSProperties}>{column.label}</span>)}</div>
             {feedback}
-            {pendingDecision?.id === selected.id ? <DecisionReason key={`${selected.id}:${pendingDecision.action}`} title={pendingDecision.action === "return" ? "Что нужно исправить?" : "Причина отклонения"} onCancel={() => setPendingDecision(undefined)} onConfirm={(reason) => commitAction(selected, pendingDecision.action, reason)} /> : null}
+            {pendingDecision?.id === selected.id ? <DecisionReason key={`${selected.id}:${pendingDecision.action}`} title={pendingDecision.action === "return" ? "Что нужно исправить?" : pendingDecision.action === "withdraw" ? "Причина отзыва заявки" : pendingDecision.action === "annul" ? "Причина аннулирования приказа" : "Причина отклонения"} onCancel={() => setPendingDecision(undefined)} onConfirm={(reason) => commitAction(selected, pendingDecision.action, reason)} /> : null}
             {selected.purpose ? <div className="trip-purpose"><span>Цель поездки</span><p>{selected.purpose}</p></div> : null}
             <dl className="bp7-facts"><div><dt>Инициатор</dt><dd>{personLink(selected.requesterUserId, personName(selected.requesterUserId))}</dd></div><div><dt>Период</dt><dd>{selected.startDate} — {selected.endDate}</dd></div></dl>
             <div className="trip-employees"><h3>Сотрудники</h3>{selected.employeeIds.map((id) => <span key={id}>{personLink(id, personName(id), "trip-employee-link")}</span>)}</div>
@@ -388,17 +404,20 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
                 {selected.stage === "manager_approval" ? <Button type="button" disabled={busy} onClick={() => openDocument(selected, "order-preview")}>Предпросмотр приказа</Button> : null}
                 {selected.hasOrderPdf ? <Button type="button" appearance="primary" disabled={busy} onClick={() => openDocument(selected, "order")}>Открыть утверждённый приказ PDF</Button> : null}
               </div>
-              {selected.canEdit && selected.briefAttachmentName && onSetOriginalSignature ? <div className="trip-original-signature-choice"><Checkbox checked={Boolean(selected.originalSignatureConfirmed)} disabled={busy || (!selected.originalSignatureConfirmed && previewedBriefVersion !== `${selected.id}:${selected.updatedAt}`)} label="Оригинал билдирги уже подписан мной" onChange={(_, data) => void confirmOriginalSignature(selected, Boolean(data.checked))} /><p>{selected.originalSignatureConfirmed ? "Используем прикреплённый оригинал без дополнительной подписи. Снимите отметку, если нужно подписать в системе." : selected.briefAttachmentName.toLowerCase().endsWith(".docx") ? "Откройте документ. Встроенный просмотр Word показывает текст; для проверки подписи скачайте оригинал в просмотрщике." : "Сначала откройте и проверьте оригинал целиком. Если подпись уже есть в файле, подтвердите это здесь."}</p></div> : null}
-              {selected.canEdit && onUploadSignature && !selected.originalSignatureConfirmed ? <TripSignaturePad saved={selected.hasEmployeeSignature} disabled={busy} onSave={(content) => saveSignature(selected, content)} /> : null}
-              {selected.canEdit && needsNewSignature(selected) ? <WorkspaceNotice tone="warning" className="trip-document-reminder">Перед отправкой добавьте текст или оригинал билдирги и подтвердите подпись: в прикреплённом оригинале либо в системе. После исправления заявки подпись нужно подтвердить снова.</WorkspaceNotice> : null}
+              {selected.canEdit && selected.requesterUserId === currentUser.id && selected.briefAttachmentName && onSetOriginalSignature ? <div className="trip-original-signature-choice"><Checkbox checked={Boolean(selected.originalSignatureConfirmed)} disabled={busy || (!selected.originalSignatureConfirmed && previewedBriefVersion !== `${selected.id}:${selected.updatedAt}`)} label="Оригинал билдирги уже подписан мной" onChange={(_, data) => void confirmOriginalSignature(selected, Boolean(data.checked))} /><p>{selected.originalSignatureConfirmed ? "Используем прикреплённый оригинал без дополнительной подписи. Снимите отметку, если нужно подписать в системе." : selected.briefAttachmentName.toLowerCase().endsWith(".docx") ? "Откройте документ. Встроенный просмотр Word показывает текст; для проверки подписи скачайте оригинал в просмотрщике." : "Сначала откройте и проверьте оригинал целиком. Если подпись уже есть в файле, подтвердите это здесь."}</p></div> : null}
+              {selected.canEdit && selected.requesterUserId === currentUser.id && onUploadSignature && !selected.originalSignatureConfirmed ? <TripSignaturePad saved={selected.hasEmployeeSignature} disabled={busy} onSave={(content) => saveSignature(selected, content)} /> : null}
+              {selected.canEdit && needsNewSignature(selected) ? <WorkspaceNotice tone="warning" className="trip-document-reminder">Перед отправкой добавьте текст или оригинал билдирги и подтвердите подпись: в прикреплённом оригинале либо в системе. После исправления заявки подпись нужно подтвердить снова. Если данные менял суперадмин, подпись подтверждает инициатор.</WorkspaceNotice> : null}
               {selected.status === "approved" ? <WorkspaceNotice tone="success" role="status" className="trip-document-approved">Приказ зарегистрирован и подписан председателем. Участникам направлены уведомления.</WorkspaceNotice> : null}
+              {selected.status === "annulled" ? <WorkspaceNotice tone="warning" role="status" className="trip-document-reminder">Приказ аннулирован. Исходный подписанный документ и история решений сохранены.</WorkspaceNotice> : null}
             </section> : selected.stage === "hr" ? <WorkspaceNotice tone="warning" className="trip-document-reminder">Эта поездка проходит прежний маршрут через кадровую службу.</WorkspaceNotice> : null}
             <div className="bp7-actions">
               {selected.canEdit ? <Button disabled={busy || Boolean(pendingDecision)} icon={<Edit24Regular />} onClick={() => { pendingCreatedRef.current = undefined; setBriefFile(undefined); setForm({ purpose: selected.purpose, destination: selected.destination, startDate: selected.startDate, endDate: selected.endDate, employeeIds: selected.employeeIds, briefText: selected.briefText ?? "", expenseSource: selected.expenseSource ?? "" }); setEmployeeQuery(""); setError(""); setFormMode("edit"); }}>Изменить</Button> : null}
+              {selected.canDelete && onDelete ? <Button disabled={busy || Boolean(pendingDecision)} onClick={() => setConfirmDeleteId(selected.id)}>Удалить заявку</Button> : null}
               {selected.allowedActions.map((action) => <Button className={`trip-decision-action action-${action}`} disabled={busy || Boolean(pendingDecision) || ((action === "submit" || action === "resubmit") && needsNewSignature(selected))} appearance={action === "approve" || action === "submit" || action === "resubmit" ? "primary" : "secondary"} key={action} onClick={() => void act(selected, action)}>{action === "approve" && (selected.workflowVersion ?? 1) >= 2 && selected.stage === "manager_approval" ? "Утвердить и выпустить приказ" : action === "approve" && selected.stage === "deputy_approval" ? "Согласовать и передать председателю" : action === "submit" && selected.workflowVersion === 3 ? "Отправить первому заместителю" : action === "submit" && selected.workflowVersion === 2 ? "Отправить председателю" : actionLabels[action]}</Button>)}
               {isAdministrator && (selected.workflowVersion ?? 1) === 1 ? displayTripColumns.filter((column) => column.key !== selected.stage).map((column) => <Button data-stage={column.key} disabled={busy || Boolean(pendingDecision)} key={`move:${column.key}`} onClick={() => void commitAction(selected, "move", `Перенос на этап «${column.label}»`, column.key)}>{column.label}</Button>) : null}
             </div>
-            <div className="bp7-history"><h3>История решений</h3>{[...selected.actions].reverse().map((entry) => <div key={entry.id}><i /><p><strong>{entry.action === "created" ? "Заявка создана" : actionLabels[entry.action]}</strong><span>{personLink(entry.actorUserId, personName(entry.actorUserId))} · {new Date(entry.createdAt).toLocaleString("ru-RU")}</span>{entry.comment ? <small>{entry.comment}</small> : null}</p></div>)}</div>
+            {confirmDeleteId === selected.id ? <div className="trip-delete-confirm" role="group" aria-label="Подтверждение удаления заявки"><p>Удалить заявку из рабочего списка? История и документы останутся в архиве системы.</p><Button appearance="primary" disabled={busy} onClick={() => void deleteRequest(selected)}>Да, удалить</Button><Button disabled={busy} onClick={() => setConfirmDeleteId("")}>Отмена</Button></div> : null}
+            <div className="bp7-history"><h3>История решений</h3>{[...selected.actions].reverse().map((entry) => <div key={entry.id}><i /><p><strong>{entry.action === "created" ? "Заявка создана" : entry.action === "deleted" ? "Заявка удалена" : actionLabels[entry.action]}</strong><span>{personLink(entry.actorUserId, personName(entry.actorUserId))} · {new Date(entry.createdAt).toLocaleString("ru-RU")}</span>{entry.comment ? <small>{entry.comment}</small> : null}</p></div>)}</div>
           </article>{renderTripChat ? renderTripChat(selected) : <div className="embedded-chat-unavailable">Чат поездки недоступен.</div>}</div> : formMode !== null ? (
           <form className="bp7-modal trip-form record-composer" noValidate aria-busy={busy} onSubmit={(event) => { event.preventDefault(); void save(); }}>
             <RecordComposer title={formMode === "create" ? "Создать заявку на поездку" : "Изменить заявку на поездку"} titleId="trip-composer-title" eyebrow="Согласование поездок" busy={busy} error={error} submitLabel="Сохранить" onClose={closeForm}

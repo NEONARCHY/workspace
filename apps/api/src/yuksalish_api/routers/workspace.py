@@ -74,6 +74,7 @@ from yuksalish_api.repository import (
     delete_task,
     delete_task_attachment,
     delete_task_checklist_item,
+    delete_trip_request,
     dismiss_notification,
     extend_task_deadline,
     get_attachment,
@@ -1264,6 +1265,21 @@ async def patch_trip_request(
     return result
 
 
+@router.delete("/trip-requests/{request_id}", status_code=204)
+async def remove_trip_request(
+    request_id: UUID,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> None:
+    await ensure_module_action(connection, current_user, "trip_approvals", "edit")
+    try:
+        await delete_trip_request(connection, current_user, request_id)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await _event_bus(request).publish({"type": "trip.deleted", "entityId": str(request_id)})
+
+
 @router.post("/trip-requests/{request_id}/actions", response_model=TripRequestResponse)
 async def post_trip_action(
     request_id: UUID,
@@ -1273,7 +1289,7 @@ async def post_trip_action(
     connection: Annotated[AsyncConnection, Depends(get_connection)],
 ) -> TripRequestResponse:
     permission_action: ModuleAction = (
-        "edit" if payload.action in {"submit", "resubmit"} else "approve"
+        "edit" if payload.action in {"submit", "resubmit", "withdraw", "annul"} else "approve"
     )
     await ensure_module_action(connection, current_user, "trip_approvals", permission_action)
     try:

@@ -605,12 +605,15 @@ async def _visible_notification_rows(
         approval_requests.c.requester_user_id == user.id,
         approval_requests.c.responsible_user_id == user.id,
     ))
-    trip_ids = select(trip_requests.c.id).where(or_(
-        trip_requests.c.requester_user_id == user.id,
-        trip_requests.c.id.in_(select(trip_request_employees.c.request_id).where(
-            trip_request_employees.c.user_id == user.id
-        )),
-    ))
+    trip_ids = select(trip_requests.c.id).where(
+        trip_requests.c.deleted_at.is_(None),
+        or_(
+            trip_requests.c.requester_user_id == user.id,
+            trip_requests.c.id.in_(select(trip_request_employees.c.request_id).where(
+                trip_request_employees.c.user_id == user.id
+            )),
+        ),
+    )
     chat_ids = select(chat_members.c.chat_id).join(
         chats, chats.c.id == chat_members.c.chat_id
     ).where(chat_members.c.user_id == user.id, chats.c.deleted_at.is_(None))
@@ -699,6 +702,7 @@ async def personal_activity_context(connection: AsyncConnection, user: Authentic
                     approval_requests.c.updated_at,
                 )
                 .where(
+                    trip_requests.c.deleted_at.is_(None),
                     or_(
                         approval_requests.c.requester_user_id == user.id,
                         approval_requests.c.responsible_user_id == user.id,

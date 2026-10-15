@@ -1035,8 +1035,10 @@ class ChangeProjectStageRequest(ApiModel):
 TripStage = Literal[
     "launch", "deputy_approval", "manager_approval", "hr", "approved", "rejected",
 ]
-TripStatus = Literal["draft", "running", "needs_revision", "approved", "rejected"]
-TripAction = Literal["submit", "approve", "return", "reject", "resubmit", "move"]
+TripStatus = Literal["draft", "running", "needs_revision", "approved", "rejected", "annulled"]
+TripAction = Literal[
+    "submit", "approve", "return", "reject", "resubmit", "move", "withdraw", "annul",
+]
 
 AbsenceKind = Literal["vacation", "personal_time", "late_arrival", "sick_leave", "business_event"]
 AbsenceStatus = Literal["draft", "pending", "approved", "acknowledged", "rejected", "cancelled"]
@@ -1106,7 +1108,10 @@ class TripActionHistoryResponse(ApiModel):
     actor_user_id: str
     from_stage: TripStage | None
     to_stage: TripStage
-    action: Literal["created", "submit", "approve", "return", "reject", "resubmit", "move"]
+    action: Literal[
+        "created", "deleted", "submit", "approve", "return", "reject", "resubmit",
+        "move", "withdraw", "annul",
+    ]
     comment: str | None
     created_at: datetime
 
@@ -1137,6 +1142,7 @@ class TripRequestResponse(ApiModel):
     status: TripStatus
     status_label: str
     can_edit: bool
+    can_delete: bool = False
     allowed_actions: list[TripAction]
     chat_id: str | None = None
     actions: list[TripActionHistoryResponse] = Field(default_factory=list)

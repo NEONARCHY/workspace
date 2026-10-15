@@ -2305,6 +2305,10 @@ export function updateWorkspaceTripRequest(
   );
 }
 
+export function deleteWorkspaceTripRequest(token: string, requestId: string): Promise<void> {
+  return apiRequest<void>(`/trip-requests/${encodeURIComponent(requestId)}`, { method: "DELETE" }, token);
+}
+
 export function actOnWorkspaceTripRequest(
   token: string,
   requestId: string,
