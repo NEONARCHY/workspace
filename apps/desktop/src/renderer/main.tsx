@@ -79,8 +79,10 @@ import "./workspace-select-motion.css";
 import "./workspace-modal-backdrops.css";
 import "./notification-bell.css";
 import "./topbar-insights.css";
+import "./mobile-density.css";
 import { initializeColorTheme } from "./color-theme";
 import { observePopupInputMode } from "./popup-input-mode";
+import { observeFieldCaptionActivation } from "./field-caption-activation";
 import { workspacePlatform } from "./platform-adapter";
 import { observeBrowserViewport } from "./browser-layout";
 
@@ -98,6 +100,8 @@ window.addEventListener("error", (event) => reportDiagnostic("window-error", eve
 initializeColorTheme();
 const stopPopupInputMode = observePopupInputMode();
 import.meta.hot?.dispose(stopPopupInputMode);
+const stopFieldCaptionActivation = observeFieldCaptionActivation();
+import.meta.hot?.dispose(stopFieldCaptionActivation);
 window.addEventListener("unhandledrejection", (event) => reportDiagnostic("unhandled-rejection", event.reason));
 
 const root = document.getElementById("root");

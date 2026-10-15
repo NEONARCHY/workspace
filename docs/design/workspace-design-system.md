@@ -18,6 +18,14 @@ visible throughout expansion and collapse. No foreground border sprite is added.
 
 ### Shared field borders — 14 October 2026
 
+Field-caption interaction — 15 October 2026: visible labels above inputs,
+searches, selects and date controls do not forward pointer clicks to the
+control. A shared document-level click observer covers existing wrapping
+labels, Fluent Field associations and portal forms without removing their
+accessible naming. Direct field/icon/button clicks and keyboard activation
+remain unchanged. Intentional checkbox, radio, switch and file-upload labels
+retain their native activation. No pointer-events pass-through layer is used.
+
 Task creation sections now retain a rounded surface and a real border in both
 collapsed and expanded states. The three dependency controls share equal grid
 columns and a 52 px height, stacking at narrow widths. Native disclosure keeps

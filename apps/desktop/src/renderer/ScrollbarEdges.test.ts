@@ -5,6 +5,15 @@ import { observeScrollbarEdges, scrollbarEdgeOpacity } from "./ScrollbarEdges";
 afterEach(() => { document.body.replaceChildren(); vi.unstubAllGlobals(); });
 
 describe("scrollbar edges", () => {
+  it("lets trip detail and approval-stage strips inherit the shared scrollbar treatment", () => {
+    const css = readFileSync("src/renderer/workspace-2-projects-trips.css", "utf8");
+    for (const selector of [".trip-dialog:not(.record-composer-dialog) .trip-detail", ".trip-dialog:not(.record-composer-dialog) .trip-detail-stages", ".context-record-workspace > :is(.project-detail, .trip-detail)"]) {
+      const rule = css.split(`${selector} {`)[1]?.split("}")[0];
+      expect(rule).toBeDefined();
+      expect(rule).not.toMatch(/scrollbar-(width|color)/);
+    }
+    expect(css).not.toContain(":is(.project-detail, .trip-detail)::-webkit-scrollbar");
+  });
   it("uses one theme-aware thumb colour for both complete opacity gradients", () => {
     const css = readFileSync("src/renderer/scrollbars.css", "utf8");
     expect(css).toContain("html { --ws-scrollbar-thumb-rgb: 141 164 170; }");

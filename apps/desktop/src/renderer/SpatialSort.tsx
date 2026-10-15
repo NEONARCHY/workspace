@@ -1,12 +1,18 @@
 import type { HTMLAttributes, ReactNode } from "react";
-import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors } from "@dnd-kit/core";
+import { DndContext, KeyboardSensor, MouseSensor, PointerSensor, TouchSensor, closestCenter, useSensor, useSensors } from "@dnd-kit/core";
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { ReOrderDotsVertical16Regular } from "@fluentui/react-icons";
 
 /** Personal ordering only. Server-backed callers retain their save and conflict contract. */
 export function SpatialSort({ ids, children, onMove, verticalIntent = false }: { ids: string[]; children: ReactNode; onMove: (source: string, target: string) => void; verticalIntent?: boolean }) {
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: verticalIntent ? { distance: { y: 10 }, tolerance: { x: 8 } } : { distance: 7 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
+  const pointer = useSensor(PointerSensor, { activationConstraint: { distance: 7 } });
+  const mouse = useSensor(MouseSensor, { activationConstraint: { distance: { y: 10 }, tolerance: { x: 8 } } });
+  // Row-wide chat sorting must not claim the first vertical swipe on iOS.
+  // A moving finger scrolls; a deliberate stationary hold starts reordering.
+  const touch = useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } });
+  const keyboard = useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates });
+  const sensors = useSensors(verticalIntent ? mouse : pointer, verticalIntent ? touch : undefined, keyboard);
   return <DndContext sensors={sensors} collisionDetection={closestCenter}
     onDragEnd={({ active: item, over }) => { if (over && over.id !== item.id) onMove(String(item.id), String(over.id)); }}
     accessibility={{ screenReaderInstructions: { draggable: "Пробел — поднять. Стрелки вверх и вниз — выбрать место. Пробел — перенести. Escape — отменить." } }}>

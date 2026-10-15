@@ -1453,6 +1453,8 @@ describe("Private messenger", () => {
     const buckets = screen.getByRole("group", { name: "Папки чатов" });
     expect(buckets).toHaveClass("is-chats");
     expect(buckets.querySelector(".chat-bucket-slider")).toBeInTheDocument();
+    expect(within(buckets).getByRole("button", { name: "Чаты задач" })).toHaveTextContent(/^Чаты задач$/);
+    expect(within(buckets).getByRole("button", { name: "Архив" })).toHaveTextContent(/^Архив$/);
     const generalChats = screen.getByRole("list", { name: "Чаты" });
     expect(within(generalChats).queryByText(taskChat)).not.toBeInTheDocument();
     expect(within(generalChats).getByText(normalChat)).toBeInTheDocument();

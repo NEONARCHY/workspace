@@ -1,4 +1,12 @@
 .workday-control { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.workday-control-direct { display: contents; }
+.workday-control-mobile-trigger { display: none; }
+.workday-control-popover { width: min(300px, calc(100vw - 24px)); box-sizing: border-box; padding: 16px; border-radius: 16px; color: var(--ws-text); background: var(--ws-surface); }
+.workday-control-popover h2 { margin: 0 0 10px; font-size: 18px; }
+.workday-control-popover p { margin: 6px 0 14px; color: var(--ws-muted); font-size: 13px; }
+.workday-control-popover-actions { display: grid; gap: 8px; }
+.workday-control-popover-actions .fui-Button, .workday-control-popover-actions .workday-control-error { min-height: 44px; }
+.workday-control-popover .workday-control-mobile-label { display: none; }
 .workday-control .fui-Button { white-space: nowrap; border-radius: 12px; font-size: 13px; }
 .workday-control-away { display: inline-flex; align-items: center; gap: 6px; color: var(--ws-muted); font-size: 12px; }
 .workday-control-error { border: 0; background: transparent; color: var(--ws-theme-ink-danger, #a03d50); font: inherit; font-size: 12px; cursor: pointer; }
