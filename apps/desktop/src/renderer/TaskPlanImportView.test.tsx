@@ -160,7 +160,11 @@ it("matches a full name from each table row without assigning an ambiguous name"
   expect(screen.getByText("Соисполнители: Шокирова Феруза")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("checkbox"));
   fireEvent.click(screen.getByRole("button", { name: "Подтвердить и создать план" }));
-  expect(await screen.findByRole("alert")).toHaveTextContent("проверьте каждый включённый пункт");
+  expect(await screen.findByRole("alert")).toHaveTextContent("Пункт 2: Выберите ответственного");
+  expect(screen.getByText("Требуют заполнения: 1 из 2 пунктов")).toBeInTheDocument();
+  expect(screen.queryByText("Пункт 1 · DOCX, таблица 1, строка 2")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Показать все пункты" }));
+  expect(screen.getByText("Пункт 1 · DOCX, таблица 1, строка 2")).toBeInTheDocument();
   expect(confirmTaskPlanImport).not.toHaveBeenCalled();
 });
 
@@ -182,7 +186,7 @@ it("does not silently assign a structured plan to the importer when the leader i
   await screen.findByText("В документе: Матбуот хизмати");
   fireEvent.click(screen.getByRole("checkbox"));
   fireEvent.click(screen.getByRole("button", { name: "Подтвердить и создать план" }));
-  expect(await screen.findByRole("alert")).toHaveTextContent("проверьте каждый включённый пункт");
+  expect(await screen.findByRole("alert")).toHaveTextContent("Пункт 1: Выберите ответственного");
   expect(confirmTaskPlanImport).not.toHaveBeenCalled();
 });
 
@@ -266,6 +270,44 @@ it("does not promote a later annual executor when the first name is ambiguous", 
   expect(screen.getByText("Наблюдатели («Масъул»): Лютфиддинов Далер")).toBeInTheDocument();
   fireEvent.click(screen.getByLabelText(/Я проверил исполнителей/));
   fireEvent.click(screen.getByRole("button", { name: "Подтвердить и создать план" }));
-  expect(await screen.findByRole("alert")).toHaveTextContent("проверьте каждый включённый пункт");
+  expect(await screen.findByRole("alert")).toHaveTextContent("Пункт 1: Выберите основного исполнителя");
   expect(confirmTaskPlanImport).not.toHaveBeenCalled();
+});
+
+it("identifies the unresolved row among 88 annual items and allows completing it", async () => {
+  vi.mocked(previewTaskPlanImport).mockResolvedValue({
+    suggestedTitle: "Иш режа 2026", annualWorkPlan: true,
+    rows: Array.from({ length: 88 }, (_, index) => ({
+      title: `Пункт документа ${index + 1}`, source: `DOCX, таблица 1, строка ${index + 2}`,
+      warning: null, executorsText: index === 41 ? "Неизвестный сотрудник" : "Б. Мардаев",
+    })),
+  });
+  vi.mocked(confirmTaskPlanImport).mockResolvedValue({
+    id: "plan-88", title: "Иш режа 2026", kind: "work", periodStart: null, periodEnd: null,
+    taskIds: [], ownerUserId: "me", status: "active", createdByUserId: "me",
+    createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-01T00:00:00Z",
+  });
+  render(<FluentProvider theme={webLightTheme}><TaskPlanImportView
+    token="token" currentUserId="me" people={[
+      { id: "me", name: "Автор плана", initials: "А", role: "manager", color: "blue", status: "active" },
+      { id: "executor", name: "Мардаев Ботир", initials: "Б", role: "employee", color: "blue", status: "active" },
+    ]} tasks={[]} onImported={vi.fn().mockResolvedValue(undefined)} onClose={vi.fn()} />
+  </FluentProvider>);
+  fireEvent.change(screen.getByLabelText("Файл плана"), {
+    target: { files: [new File(["content"], "annual.docx")] },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Разобрать документ" }));
+  expect(await screen.findByText("Требуют заполнения: 1 из 88 пунктов")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Подтвердить и создать план" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Пункт 42: Выберите основного исполнителя");
+  expect(screen.getByText("Пункт 42 · DOCX, таблица 1, строка 43")).toBeInTheDocument();
+  expect(screen.queryByText("Пункт 88 · DOCX, таблица 1, строка 89")).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("Основной исполнитель («Бажарувчи»)"), {
+    target: { value: "executor" },
+  });
+  expect(screen.getByText("Пункт 42 · DOCX, таблица 1, строка 43")).toBeInTheDocument();
+  expect(await screen.findByRole("button", { name: "Все пункты заполнены · показать план целиком" })).toBeInTheDocument();
+  fireEvent.click(screen.getByLabelText(/Я проверил исполнителей/));
+  fireEvent.click(screen.getByRole("button", { name: "Подтвердить и создать план" }));
+  await waitFor(() => expect(confirmTaskPlanImport).toHaveBeenCalledTimes(1));
 });

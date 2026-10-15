@@ -33,6 +33,16 @@ type ReviewRow = {
   historicalCompleted: boolean;
 };
 
+function rowIssue(row: ReviewRow, annualWorkPlan: boolean): string | null {
+  if (row.mode === "skip") return null;
+  if (!row.title.trim()) return "Укажите название задачи";
+  if (row.mode === "link") return row.taskId ? null : "Выберите существующую задачу";
+  if (!row.assigneeId) return annualWorkPlan
+    ? "Выберите основного исполнителя из «Бажарувчи»"
+    : "Выберите ответственного за задачу";
+  return null;
+}
+
 function pastReviewedDate(value: string): boolean {
   return Boolean(value) && new Date(`${value}T23:59:59+05:00`).getTime() < Date.now();
 }
@@ -95,6 +105,7 @@ export function TaskPlanImportView({
   const [groupParticipants, setGroupParticipants] = useState<Record<string, string[]>>({});
   const [expandedParticipantsRow, setExpandedParticipantsRow] = useState<number | null>(null);
   const [expandedObserversRow, setExpandedObserversRow] = useState<number | null>(null);
+  const [filteredIssueIndices, setFilteredIssueIndices] = useState<number[] | null>(null);
   const [participantsReviewed, setParticipantsReviewed] = useState(false);
   const [operationId, setOperationId] = useState("");
   const [title, setTitle] = useState("");
@@ -110,6 +121,13 @@ export function TaskPlanImportView({
     row.groupKey!, row.coexecutorsHint ?? "",
   ])).entries()];
   const hasStructuredAssignments = rows.some((row) => row.groupKey);
+  const rowIssues = rows.flatMap((row, index) => {
+    const issue = rowIssue(row, Boolean(preview?.annualWorkPlan));
+    return issue ? [{ index, issue }] : [];
+  });
+  const showOnlyUnresolved = filteredIssueIndices !== null;
+  const visibleRows = rows.map((row, index) => ({ row, index })).filter(({ index }) =>
+    !showOnlyUnresolved || filteredIssueIndices?.includes(index));
 
   function updateRow(index: number, patch: Partial<ReviewRow>) {
     setRows((current) => current.map((row, rowIndex) => rowIndex === index ? { ...row, ...patch } : row));
@@ -163,6 +181,7 @@ export function TaskPlanImportView({
       setParticipantsReviewed(false);
       setExpandedParticipantsRow(null);
       setExpandedObserversRow(null);
+      setFilteredIssueIndices(null);
       setTitle(result.suggestedTitle);
       setOperationId(crypto.randomUUID());
     } catch (reason) {
@@ -175,10 +194,19 @@ export function TaskPlanImportView({
   async function confirm() {
     if (!preview || !operationId || busy) return;
     const included = rows.filter((row) => row.mode !== "skip");
-    if (!title.trim() || included.length === 0 || included.some((row) => !row.title.trim())
-      || included.some((row) => row.mode === "link" && !row.taskId)
-      || included.some((row) => row.mode === "create" && !row.assigneeId)) {
-      setError("Укажите название плана и проверьте каждый включённый пункт.");
+    if (!title.trim()) {
+      setError("Укажите название плана.");
+      return;
+    }
+    if (included.length === 0) {
+      setError("Включите хотя бы один пункт плана.");
+      return;
+    }
+    if (rowIssues.length > 0) {
+      const first = rowIssues[0];
+      if (!first) return;
+      setFilteredIssueIndices(rowIssues.map(({ index }) => index));
+      setError(`Пункт ${first.index + 1}: ${first.issue}. Всего требуют заполнения: ${rowIssues.length}. В списке показаны только эти пункты.`);
       return;
     }
     if ((hasStructuredAssignments || preview.annualWorkPlan) && !participantsReviewed) {
@@ -255,6 +283,7 @@ export function TaskPlanImportView({
           setFile(event.target.files?.[0] ?? null);
           setPreview(null); setRows([]); setGroupParticipants({});
           setParticipantsReviewed(false); setExpandedParticipantsRow(null);
+          setExpandedObserversRow(null); setFilteredIssueIndices(null);
           setOperationId(""); setError("");
         }} /></label>
         <Button appearance="secondary" disabled={!file || busy} onClick={() => void analyze()}>{busy && !preview ? "Разбираем…" : "Разобрать документ"}</Button>
@@ -293,8 +322,14 @@ export function TaskPlanImportView({
             ? "Я проверил исполнителей и наблюдателей для каждого включённого пункта; отделы и неясные имена сопоставлены вручную или сознательно не назначены."
             : "Я проверил ответственного и соисполнителей для каждого включённого пункта; отделы и неясные имена сопоставлены вручную или сознательно не назначены."}</label>
         </section> : null}
-        <div className="task-plan-import-rows">{rows.map((row, index) => <fieldset key={`${row.source}-${index}`}>
+        {rowIssues.length > 0 ? <div className="task-plan-import-issue-summary" role="status">
+          <strong>Требуют заполнения: {rowIssues.length} из {rows.filter((row) => row.mode !== "skip").length} пунктов</strong>
+          <span>Номера: {rowIssues.slice(0, 20).map(({ index }) => index + 1).join(", ")}{rowIssues.length > 20 ? ` и ещё ${rowIssues.length - 20}` : ""}. Нераспознанные имена из документа нужно сопоставить вручную.</span>
+          <Button appearance="secondary" aria-pressed={showOnlyUnresolved} onClick={() => setFilteredIssueIndices(showOnlyUnresolved ? null : rowIssues.map(({ index }) => index))}>{showOnlyUnresolved ? "Показать все пункты" : "Показать только незаполненные"}</Button>
+        </div> : showOnlyUnresolved ? <Button appearance="secondary" onClick={() => setFilteredIssueIndices(null)}>Все пункты заполнены · показать план целиком</Button> : null}
+        <div className="task-plan-import-rows">{visibleRows.map(({ row, index }) => <fieldset key={`${row.source}-${index}`} className={rowIssue(row, Boolean(preview.annualWorkPlan)) ? "task-plan-import-row-needs-attention" : undefined}>
           <legend>Пункт {index + 1} · {row.source}</legend>
+          {rowIssue(row, Boolean(preview.annualWorkPlan)) ? <p className="task-plan-import-row-issue">{rowIssue(row, Boolean(preview.annualWorkPlan))}</p> : null}
           {row.warning ? <p className="task-plan-import-warning">{row.warning}</p> : null}
           {row.groupKey ? <p>В документе: ответственный — {row.assigneeHint ?? "не указан"}; срок — {row.dueDateHint ?? "не указан или не распознан"}.</p> : null}
           {preview.annualWorkPlan ? <p className="task-plan-import-source">{row.section ? `${row.section} · ` : ""}Масъул: {row.responsibleText || "не указан"} · Бажарувчи: {row.executorsText || "не указан"} · Муддати: {row.deadlineText || "не указан"}{row.deadlineNeedsReview ? " · срок требует проверки" : ""}</p> : null}
