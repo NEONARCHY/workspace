@@ -1,6 +1,7 @@
 """Plan document preview never persists data and surfaces uncertain rows for review."""
 
 from io import BytesIO
+from uuid import UUID
 from xml.sax.saxutils import escape
 from zipfile import ZipFile
 
@@ -192,8 +193,9 @@ def test_annual_work_plan_preserves_columns_and_conservative_completion() -> Non
     assert len(preview.rows) == 2
     first, second = preview.rows
     assert first.title == "Тадбирни ташкил этиш"
-    assert first.assignee_hint == "Д. Лютфиддинов"
+    assert first.assignee_hint == "Б. Мардаев"
     assert first.coexecutors_hint == "Б. Мардаев; ҳудудий бўлинмалар"
+    assert first.responsible_text == "Д. Лютфиддинов"
     assert first.due_date_hint is not None and first.due_date_hint.isoformat() == "2026-03-31"
     assert first.mechanism_items == ["Режа тузиш", "Учрашув"]
     assert first.completed_work_text == "Тадбир ўтказилди"
@@ -241,4 +243,25 @@ def test_confirm_payload_requires_link_target_and_nonblank_title() -> None:
         TaskPlanImportConfirm.model_validate({**valid, "items": [{
             "title": "Task", "source": "DOCX", "mode": "create",
             "assigneeId": co_assignee, "coAssigneeIds": [co_assignee],
+        }]})
+    with pytest.raises(ValueError, match="one role"):
+        TaskPlanImportConfirm.model_validate({**valid, "items": [{
+            "title": "Task", "source": "DOCX", "mode": "create",
+            "coAssigneeIds": [co_assignee], "observerIds": [co_assignee],
+        }]})
+    with pytest.raises(ValueError, match="Observers must be unique"):
+        TaskPlanImportConfirm.model_validate({**valid, "items": [{
+            "title": "Task", "source": "DOCX", "mode": "create",
+            "observerIds": [co_assignee, co_assignee],
+        }]})
+    with pytest.raises(ValueError, match="at most 100"):
+        TaskPlanImportConfirm.model_validate({**valid, "items": [{
+            "title": "Task", "source": "DOCX", "mode": "create",
+            "coAssigneeIds": [str(UUID(int=index)) for index in range(1, 52)],
+            "observerIds": [str(UUID(int=index)) for index in range(52, 103)],
+        }]})
+    with pytest.raises(ValueError, match="Linked task participants"):
+        TaskPlanImportConfirm.model_validate({**valid, "items": [{
+            "title": "Task", "source": "DOCX", "mode": "link",
+            "taskId": valid["operationId"], "observerIds": [co_assignee],
         }]})

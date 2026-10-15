@@ -190,12 +190,12 @@ it("reviews the annual plan mapping and completes only an old green row", async 
   vi.mocked(previewTaskPlanImport).mockResolvedValue({
     suggestedTitle: "Иш режа 2025", annualWorkPlan: true, rows: [
       { title: "Тадбирни ташкил этиш", source: "DOCX, таблица 1, строка 3", warning: null,
-        assigneeHint: "Д. Лютфиддинов", coexecutorsHint: "Б. Мардаев; ҳудудий бўлинмалар",
+        assigneeHint: "Б. Мардаев", coexecutorsHint: "Б. Мардаев. Ф. Шокирова ҳудудий бўлинмалар",
         dueDateHint: "2025-03-31", deadlineText: "Март", mechanismItems: ["Режа тузиш"],
         completedWorkText: "Тадбир ўтказилди", greenCompletion: true,
-        responsibleText: "Д. Лютфиддинов", executorsText: "Б. Мардаев; ҳудудий бўлинмалар" },
+        responsibleText: "Д. Лютфиддинов", executorsText: "Б. Мардаев. Ф. Шокирова ҳудудий бўлинмалар" },
       { title: "Мунтазам мониторинг", source: "DOCX, таблица 1, строка 4", warning: null,
-        assigneeHint: "Д. Лютфиддинов", deadlineText: "Ҳар ойда",
+        assigneeHint: "Б. Мардаев", executorsText: "Б. Мардаев", deadlineText: "Ҳар ойда",
         deadlineNeedsReview: true, mechanismItems: ["Ҳисобот бериш"] },
     ],
   });
@@ -209,6 +209,7 @@ it("reviews the annual plan mapping and completes only an old green row", async 
       { id: "me", name: "Автор плана", initials: "А", role: "manager", color: "blue", status: "active" },
       { id: "responsible", name: "Лютфиддинов Далер", initials: "Д", role: "employee", color: "blue", status: "active" },
       { id: "executor", name: "Мардаев Ботир", initials: "Б", role: "employee", color: "blue", status: "active" },
+      { id: "co-executor", name: "Шокирова Феруза", initials: "Ф", role: "employee", color: "blue", status: "active" },
     ]} tasks={[]} onImported={vi.fn().mockResolvedValue(undefined)} onClose={vi.fn()} />
   </FluentProvider>);
   fireEvent.change(screen.getByLabelText("Файл плана"), {
@@ -218,20 +219,53 @@ it("reviews the annual plan mapping and completes only an old green row", async 
   expect(await screen.findByText(/Прошедшие сроки исключаются/)).toBeInTheDocument();
   expect(screen.getByLabelText("Создать как завершённую (зелёный пункт, срок прошёл)"))
     .toBeChecked();
-  expect(screen.getAllByLabelText("Ответственный / исполнитель")[0]).toHaveAttribute(
-    "value", "responsible",
+  expect(screen.getAllByLabelText("Основной исполнитель («Бажарувчи»)")[0]).toHaveAttribute(
+    "value", "executor",
   );
+  expect(screen.getByText("Наблюдатели («Масъул»): Лютфиддинов Далер")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Изменить наблюдателей пункта 1" }));
+  expect(screen.getByLabelText("Наблюдатели пункта 1")).toHaveAttribute("value", "responsible");
   fireEvent.click(screen.getByRole("button", { name: "Подтвердить и создать план" }));
-  expect(await screen.findByRole("alert")).toHaveTextContent("Проверьте ответственного");
-  fireEvent.click(screen.getByLabelText(/Я проверил ответственного/));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Проверьте исполнителей");
+  fireEvent.click(screen.getByLabelText(/Я проверил исполнителей/));
   fireEvent.click(screen.getByRole("button", { name: "Подтвердить и создать план" }));
   await waitFor(() => expect(confirmTaskPlanImport).toHaveBeenCalledTimes(1));
   const payload = vi.mocked(confirmTaskPlanImport).mock.calls[0]?.[1];
   expect(payload?.annualWorkPlan).toBe(true);
   expect(payload?.items[0]).toMatchObject({
-    assigneeId: "responsible", coAssigneeIds: ["executor"],
+    assigneeId: "executor", coAssigneeIds: ["co-executor"], observerIds: ["responsible"],
     description: "Тадбир ўтказилди", checklist: ["Режа тузиш"], historicalCompleted: true,
   });
   expect(payload?.items[1]?.historicalCompleted).toBe(false);
   expect(payload?.items[1]?.description).toContain("Ҳар ойда");
+});
+
+it("does not promote a later annual executor when the first name is ambiguous", async () => {
+  vi.mocked(previewTaskPlanImport).mockResolvedValue({
+    suggestedTitle: "Иш режа 2026", annualWorkPlan: true, rows: [{
+      title: "Тадбирни ташкил этиш", source: "DOCX, таблица 1, строка 3", warning: null,
+      assigneeHint: "Д. Лютфиддинов", executorsText: "Н. Каримбердиева; Б. Мардаев",
+      responsibleText: "Д. Лютфиддинов",
+    }],
+  });
+  render(<FluentProvider theme={webLightTheme}><TaskPlanImportView
+    token="token" currentUserId="me" people={[
+      { id: "me", name: "Автор плана", initials: "А", role: "manager", color: "blue", status: "active" },
+      { id: "nigora-1", name: "Каримбердиева Нигора", initials: "Н", role: "employee", color: "blue", status: "active" },
+      { id: "nigora-2", name: "Каримбердиева Нилуфар", initials: "Н", role: "employee", color: "blue", status: "active" },
+      { id: "executor", name: "Мардаев Ботир", initials: "Б", role: "employee", color: "blue", status: "active" },
+      { id: "observer", name: "Лютфиддинов Далер", initials: "Д", role: "employee", color: "blue", status: "active" },
+    ]} tasks={[]} onImported={vi.fn()} onClose={vi.fn()} />
+  </FluentProvider>);
+  fireEvent.change(screen.getByLabelText("Файл плана"), {
+    target: { files: [new File(["content"], "annual.docx")] },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Разобрать документ" }));
+  expect(await screen.findByText("Соисполнители: Мардаев Ботир")).toBeInTheDocument();
+  expect(screen.getByLabelText("Основной исполнитель («Бажарувчи»)")).toHaveAttribute("value", "");
+  expect(screen.getByText("Наблюдатели («Масъул»): Лютфиддинов Далер")).toBeInTheDocument();
+  fireEvent.click(screen.getByLabelText(/Я проверил исполнителей/));
+  fireEvent.click(screen.getByRole("button", { name: "Подтвердить и создать план" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("проверьте каждый включённый пункт");
+  expect(confirmTaskPlanImport).not.toHaveBeenCalled();
 });
