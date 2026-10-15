@@ -344,8 +344,6 @@ html[data-color-theme="dark"] :is(.employee-reward-card, .reward-catalog-option)
   }
   html[data-color-theme="dark"] .tasks-view .task-filters { border-color: transparent; background: transparent; box-shadow: none; }
   html[data-color-theme="dark"] .app-provider .record-status-badge[data-status] { border-color: transparent; }
-  html[data-color-theme="dark"] .task-participant-avatar .fui-Avatar { border-color: var(--ws-surface); outline: none; }
-  html[data-color-theme="dark"] .task-participant-anchor[data-working="true"] .task-participant-avatar .fui-Avatar { border-color: var(--task-participant-ring); }
   html[data-color-theme="dark"] .app-provider :is(.fui-Button, .workspace-select, .record-page-size-trigger, .section-jump-trigger, .person-picker-trigger, .ws-date-time-trigger, .browser-menu-trigger, .sliding-segmented > button, .view-switch > button):focus-visible,
   html[data-color-theme="dark"] .app-provider .workspace-select:has(> button:focus-visible) {
     outline: 2px solid var(--ws-focus-line);

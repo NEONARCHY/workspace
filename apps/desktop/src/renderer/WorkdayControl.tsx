@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 import type { WorkdayMe } from "@yuksalish/contracts";
-import { Button } from "@fluentui/react-components";
+import { Button, Popover, PopoverSurface, PopoverTrigger } from "@fluentui/react-components";
 import { Clock20Regular, Play20Regular, Stop20Regular } from "@fluentui/react-icons";
 
 import { finishMyWorkday, loadMyWorkday, startMyWorkday } from "./workspace-api";
@@ -63,23 +63,37 @@ export function WorkdayControl({ token }: { readonly token: string }) {
   const schedule = data
     ? `График ${timeLabel(data.schedule.startsAt)}–${timeLabel(data.schedule.endsAt)}`
     : "Рабочий статус";
-  return <div className="workday-control">
-    {data?.status === "approved_absence" ? (
+  const status = !data ? "Загружаем статус" : isWorking ? "Сейчас в работе" : data.status === "approved_absence" ? "Отсутствие оформлено" : data.status === "finished" ? "Работа завершена" : "Работа не начата";
+  const action = data?.status === "approved_absence" ? (
       <span className="workday-control-away" title={schedule}><Clock20Regular /> Отсутствие оформлено</span>
     ) : <Button
       appearance={isWorking ? "secondary" : "primary"}
       icon={isWorking ? <Stop20Regular /> : <Play20Regular />}
       disabled={busy || !data}
+      aria-label={busy ? "Сохраняем…" : data ? label : "Рабочий день"}
       title={`${label} · ${schedule}${data?.session?.closeSource === "automatic" ? " · предыдущий день закрыт автоматически" : ""}`}
       onClick={() => void act()}
-    >{busy ? "Сохраняем…" : data ? label : "Рабочий день"}</Button>}
-    {error ? <button className="workday-control-error" type="button" role="alert" title={error} onClick={() => {
+    ><span className="workday-control-label">{busy ? "Сохраняем…" : data ? label : "Рабочий день"}</span><span className="workday-control-mobile-label" aria-hidden="true">{busy ? "Сохраняем…" : !data ? "Рабочий день" : isWorking ? "Завершить" : data.status === "finished" ? "Снова" : "Начать"}</span></Button>;
+  const feedback = error ? <button className="workday-control-error" type="button" role="alert" title={error} onClick={() => {
       void loadMyWorkday(token).then((result) => {
         if (!result.schedule?.startsAt || !result.schedule?.endsAt) {
           throw new Error("Сервер вернул неполный рабочий статус");
         }
         setData(result); setError("");
       }).catch((failure: unknown) => setError(failure instanceof Error ? failure.message : "Повторите позже"));
-    }}>Ошибка · повторить</button> : null}
+    }}>Ошибка · повторить</button> : null;
+  return <div className="workday-control">
+    <div className="workday-control-direct">{action}{feedback}</div>
+    <Popover positioning="below-end" trapFocus>
+      <PopoverTrigger disableButtonEnhancement>
+        <button type="button" className="workday-control-mobile-trigger" aria-label={`Рабочий день: ${status}`} title={`Рабочий день · ${status}`} data-working={isWorking || undefined} data-error={Boolean(error) || undefined}>
+          <Clock20Regular aria-hidden="true" /><i aria-hidden="true" />
+        </button>
+      </PopoverTrigger>
+      <PopoverSurface className="workday-control-popover" aria-label="Рабочий день">
+        <h2>Рабочий день</h2><strong>{status}</strong><p>{schedule}</p>
+        <div className="workday-control-popover-actions">{action}{feedback}</div>
+      </PopoverSurface>
+    </Popover>
   </div>;
 }

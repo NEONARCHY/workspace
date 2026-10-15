@@ -159,6 +159,7 @@ export function AIReferentIncomingRegister({ token, focusLetterId }: AIReferentI
           <Button
             appearance="secondary"
             icon={<ArrowDownload20Regular />}
+            title="Скачать Excel-журнал"
             disabled={!registry?.journal.available || downloading}
             onClick={() => void downloadJournal()}
           >
@@ -167,6 +168,7 @@ export function AIReferentIncomingRegister({ token, focusLetterId }: AIReferentI
           <Button
             appearance="subtle"
             icon={<ArrowClockwise20Regular />}
+            title="Обновить входящие письма"
             disabled={loading}
             onClick={() => void refresh(query)}
           >
