@@ -1111,7 +1111,8 @@ async function loginToWorkspace(username = "aziza", targetSection: "home" | "mes
   await screen.findByRole("heading", { name: /Добрый день/ });
   if (targetSection === "home") return;
   if (targetSection === "projects") {
-    fireEvent.click(screen.getByRole("button", { name: /Yuksalish Workspace.*Ближайший срок/ }));
+    // The greeting precedes Home resource readiness; interact only once the card is exposed.
+    fireEvent.click(await screen.findByRole("button", { name: /Yuksalish Workspace.*Ближайший срок/ }, { timeout: 10_000 }));
     fireEvent.click(await screen.findByRole("button", { name: "Закрыть карточку проекта" }, { timeout: 10_000 }));
     return;
   }
