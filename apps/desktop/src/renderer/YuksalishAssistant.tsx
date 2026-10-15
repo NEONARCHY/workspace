@@ -1,3 +1,4 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type DragEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { createPortal } from "react-dom";
@@ -1032,7 +1033,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
                 </div>
               </div>
             </form>
-            {error && <p className="assistant-error" role="alert">{error}</p>}
+            {error && <WorkspaceNotice tone="error" className="assistant-error" role="alert">{error}</WorkspaceNotice>}
             {selectedFile && <small className="assistant-attachment-notice">{selectedAudio
               ? "Без текста — голосовой запрос. С текстом — задание для записи. Аудио не сохраняется на сервере."
               : "Файл используется только для этого запроса и не сохраняется на сервере. TXT и текст DOCX — до 50 000 символов."}</small>}

@@ -1,3 +1,4 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
 import { useMemo, useState } from "react";
 
 import type { DirectoryBootstrap, ModuleAccessRule, ModuleAccessSubject, ModulePermissionSet } from "@yuksalish/contracts";
@@ -194,7 +195,7 @@ export function ModuleAccessManagement({ token, directory, onRuleChanged, onRule
         {assistantAllowedForSelectedUser ? "Отключить сотруднику" : "Включить сотруднику"}
       </Button>
     </div> : null}
-    {feedback ? <div className="directory-feedback" role={feedbackIsError ? "alert" : "status"}>{feedback}</div> : null}
+    {feedback ? <WorkspaceNotice tone={feedbackIsError ? "error" : "success"} className="directory-feedback" role={feedbackIsError ? "alert" : "status"}>{feedback}</WorkspaceNotice> : null}
     {!subjects.length ? <div className="directory-empty">Для этого уровня пока нет записей.</div> : <div className="access-matrix" role="table" aria-label="Матрица разрешений">
       <div className="access-matrix-row access-matrix-head" role="row"><span>Модуль</span>{actionLabels.map((action) => <span key={action.key}>{action.label}</span>)}<span>Источник</span></div>
       {directory.modules.map((module) => {

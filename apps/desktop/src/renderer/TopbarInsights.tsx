@@ -97,11 +97,12 @@ export function TopbarInsights({ token }: { readonly token: string }) {
     <Popover open={open === "rates"} onOpenChange={(event, data) => {
       toggle("rates", data.open);
       if (!data.open && "key" in event && event.key === "Escape") close("rates");
-    }} positioning={{ position: "below", align: "end", autoSize: "height", overflowBoundaryPadding: 12 }} trapFocus>
+    }} positioning={{ position: "below", align: "end", offset: 8, autoSize: "height", overflowBoundaryPadding: 12 }} trapFocus>
       <PopoverTrigger disableButtonEnhancement><button ref={currencyTrigger} type="button" className="context-trigger context-currency-trigger" data-stale={staleRates || undefined}
         aria-label={`Курсы валют: 1 USD — ${usd ? number(Number(usd.rateUzs), 2) : "нет данных"} UZS${staleRates ? ". Данные устарели" : ""}`} aria-expanded={open === "rates"}>
         <CircleDollarSign size={18} aria-hidden /><span><small>USD <ArrowRight size={11} aria-hidden /> UZS</small><strong>{usd ? number(Number(usd.rateUzs), 2) : rates.pending ? "Загрузка…" : "Нет данных"}</strong></span><ChevronDown size={13} aria-hidden /></button></PopoverTrigger>
-      <PopoverSurface className="topbar-context-surface" aria-label="Курсы валют">
+      {/* Explicit overflow keeps Fluent autoSize from adding a second scrollbar. */}
+      <PopoverSurface className="topbar-context-surface" style={{ overflowY: "hidden" }} aria-label="Курсы валют">
         <div className="context-panel-head"><div><span className="context-kicker">Центральный банк Узбекистана</span><h2>Курсы валют</h2></div><button type="button" className="context-icon-action" aria-label="Закрыть курсы валют" onClick={() => close("rates")}><X size={19} aria-hidden /></button></div>
         <div className="context-panel-body">
           {rates.error && <p className="context-notice" role="alert">{rates.error}</p>}
@@ -123,11 +124,11 @@ export function TopbarInsights({ token }: { readonly token: string }) {
     <Popover open={open === "weather"} onOpenChange={(event, data) => {
       toggle("weather", data.open);
       if (!data.open && "key" in event && event.key === "Escape") close("weather");
-    }} positioning={{ position: "below", align: "end", autoSize: "height", overflowBoundaryPadding: 12 }} trapFocus>
+    }} positioning={{ position: "below", align: "end", offset: 8, autoSize: "height", overflowBoundaryPadding: 12 }} trapFocus>
       <PopoverTrigger disableButtonEnhancement><button ref={weatherTrigger} type="button" className="context-trigger context-weather-trigger" data-stale={staleWeather || undefined}
         aria-label={`Погода в Ташкенте: ${number(tashkent?.weather?.temperature)} градусов${staleWeather ? ". Данные устарели" : ""}`} aria-expanded={open === "weather"}>
         <ContextWeatherIcon weather={tashkent?.weather} /><span><small>Ташкент</small><strong>{tashkent?.weather ? `${number(tashkent.weather.temperature, 0)}°` : weather.pending ? "…" : "—"}</strong></span><ChevronDown size={13} aria-hidden /></button></PopoverTrigger>
-      <PopoverSurface className="topbar-context-surface context-weather-surface" aria-label="Погода Узбекистана">
+      <PopoverSurface className="topbar-context-surface context-weather-surface" style={{ overflowY: "hidden" }} aria-label="Погода Узбекистана">
         <div className="context-panel-head"><div><span className="context-kicker">Сейчас · Узбекистан</span><h2>{detail?.region ?? "Погода по областям"}</h2></div><button type="button" className="context-icon-action" aria-label="Закрыть погоду" onClick={() => close("weather")}><X size={19} aria-hidden /></button></div>
         <div className="context-panel-body" ref={bodyMotion}>
           {weather.error && <p className="context-notice" role="alert">{weather.error}</p>}

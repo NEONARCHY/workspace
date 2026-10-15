@@ -1,3 +1,4 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { previewAIReferentLocalFile } from "./workspace-api";
 
@@ -574,9 +575,9 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
         </div>
       </header>
 
-      {readOnly ? <p className="ai-referent-readonly" role="status">
+      {readOnly ? <WorkspaceNotice tone="info" className="ai-referent-readonly" role="status">
         {authorityError ? `Режим только для просмотра: ${authorityError}` : authority?.detail || "Проверяем связь с роботом. Пока изменения недоступны."}
-      </p> : null}
+      </WorkspaceNotice> : null}
 
       <div className="ai-referent-register-bar">
         <SlidingSegmented className="ai-referent-register-tabs" role="tablist" aria-label="Реестры корреспонденции">
@@ -625,14 +626,14 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
         </div> : null}
       </div>
 
-      {visibilityError ? <div className="ai-referent-feedback" role="alert">{visibilityError} <Button onClick={() => setVisibilityAttempt((value) => value + 1)}>Повторить проверку доступа</Button></div> : null}
+      {visibilityError ? <WorkspaceNotice tone="error" className="ai-referent-feedback" role="alert" actions={<><Button onClick={() => setVisibilityAttempt((value) => value + 1)}>Повторить проверку доступа</Button></>}>{visibilityError} </WorkspaceNotice> : null}
       {registerKind === "settings" && canAdmin ? <AIReferentSettings token={token} people={people} readOnly={readOnly} /> :
         registerKind === "visibility" && visibility?.canManageVisibility ? <AIReferentIncomingAccess token={token} people={people} /> :
         registerKind === "addresses" && canAdmin ? <AIReferentAddressBook token={token} readOnly={readOnly} /> :
         registerKind === "archive" && visibility?.canViewJournals ? <AIReferentArchive token={token} /> :
         registerKind === "telegram" ? <AIReferentTelegram token={token} /> :
         registerKind === "incoming" ? (canIncoming ? <>
-          {visibility?.incomingMode === "assigned" ? <p className="ai-referent-readonly">Здесь только письма, назначенные вам роботом Exat. Общий журнал скрыт.</p> : null}
+          {visibility?.incomingMode === "assigned" ? <WorkspaceNotice tone="info" className="ai-referent-readonly">Здесь только письма, назначенные вам роботом Exat. Общий журнал скрыт.</WorkspaceNotice> : null}
           <AIReferentIncomingRegister key={`${visibility?.incomingMode}:${visibility?.revision}:${focusRevision}`} token={token} focusLetterId={focusIncomingId} />
         </> : <Spinner label="Проверяем доступ к входящим" />) : (
         <div className="ai-referent-page ai-referent-outgoing-page" key={registerKind}>
@@ -696,8 +697,8 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
         <AIReferentPagination label="Страницы исходящих писем" page={page} loading={loading}
           hasNext={(registry?.letters.length ?? 0) >= 50} onPageChange={setPage} />
       </div>
-      {registryError ? <p className="ai-referent-feedback" role="alert">{registryError}</p> : null}
-      {error ? <p className="ai-referent-feedback" role="alert">{error}</p> : null}
+      {registryError ? <WorkspaceNotice tone="error" className="ai-referent-feedback" role="alert">{registryError}</WorkspaceNotice> : null}
+      {error ? <WorkspaceNotice tone="error" className="ai-referent-feedback" role="alert">{error}</WorkspaceNotice> : null}
       {loading ? <div className="ai-referent-loading"><Spinner label="Загружаем письма" /></div> : null}
       {!loading && !registryError && visibleLetters.length === 0 ? (
         <div className="ai-referent-empty">
@@ -798,7 +799,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
                   <div className="ai-referent-select-field"><span id="referent-reviewer-label">Согласующий</span><Select aria-labelledby="referent-reviewer-label" disabled={busy || reviewersLoading || Boolean(reviewersError)} value={form.reviewerUserId} onChange={(event) => setForm((current) => ({ ...current, reviewerUserId: event.target.value, finalReviewerUserId: "" }))}><option value="">{reviewersLoading ? "Загружаем согласующих…" : "Не назначен"}</option>{reviewers.map((person) => <option value={person.id} key={person.id}>{person.name}</option>)}</Select></div>
                 </div>
                 {form.workflowKind === "delivery" && requiredRoute ? <small>Канал определён адресом: {requiredRoute === "exat" ? "адреса @exat.uz принимаются через E-XAT." : "этот адрес принимает письма через Webmail."}</small> : null}
-                {reviewersError || (!reviewersLoading && reviewers.length === 0) ? <div className="ai-referent-preflight" role="alert"><span>{reviewersError || "Нет доступных согласующих. Попросите администратора проверить их настройки."}</span><Button disabled={reviewersLoading} onClick={() => setReviewersAttempt((attempt) => attempt + 1)}>Обновить согласующих</Button></div> : null}
+                {reviewersError || (!reviewersLoading && reviewers.length === 0) ? <WorkspaceNotice tone="warning" className="ai-referent-preflight" role="alert" actions={<><Button disabled={reviewersLoading} onClick={() => setReviewersAttempt((attempt) => attempt + 1)}>Обновить согласующих</Button></>}><span>{reviewersError || "Нет доступных согласующих. Попросите администратора проверить их настройки."}</span></WorkspaceNotice> : null}
                 {form.workflowKind === "delivery" && boburId && form.reviewerUserId === boburId ? <div className="ai-referent-select-field"><span id="referent-preliminary-label">Предварительный согласующий — до Бобура · обязательно</span><Select aria-labelledby="referent-preliminary-label" required value={form.finalReviewerUserId} onChange={(event) => setForm((current) => ({ ...current, finalReviewerUserId: event.target.value }))}><option value="" disabled>Выберите предварительного согласующего</option>{reviewers.filter((person) => person.id !== boburId).map((person) => <option value={person.id} key={person.id}>{person.name}</option>)}</Select></div> : null}
                 <label>Служебная заметка<Textarea resize="vertical" value={form.note} onChange={(_e, d) => setForm((current) => ({ ...current, note: d.value }))} /></label>
                 <WorkspaceFileDropzone
@@ -823,10 +824,12 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
                   {onPreviewAttachment && <Button disabled={busy} onClick={() => onPreviewAttachment(savedPrimary)} aria-label={`Открыть ${savedPrimary.fileName}`}>Открыть</Button>}
                   <Button disabled={busy} icon={<ArrowDownload20Regular />} onClick={() => void download(savedPrimary.id, savedPrimary.fileName)} aria-label={`Скачать ${savedPrimary.fileName}`}>Скачать</Button>
                 </li></ul> : null}
-                {form.file ? <div className="ai-referent-preflight" role="status" aria-live="polite">
-                  {activeCheck?.error || activeCheck?.result?.status === "failed" ? <><p>{activeCheck.error || activeCheck.result?.detail}</p><Button onClick={() => { setDocumentCheck(undefined); setCheckAttempt((attempt) => attempt + 1); }}>Повторить проверку</Button></> : checkingFile ? <><Spinner size="tiny" /><span>Подождите: робот проверяет форматирование и место для подписи.<small>Проверка выполняется на ПК референта. Если он выключен, письмо останется в ожидании.</small></span></> : formSignatureMismatch ? <span>Форматирование проверено, но подпись не соответствует выбранному руководителю.</span> : <><Checkmark20Regular aria-hidden="true" /><span>С письмом всё в порядке.<small>Место для подписи найдено. Соответствие выбранному руководителю проверяется перед согласованием.</small></span></>}
-                </div> : null}
-                {formSignatureMismatch ? <p className="ai-referent-feedback" role="alert">В DOCX не найдено место для подписи выбранного руководителя. Проверьте документ или выбор согласующего.</p> : null}
+                {form.file ? <WorkspaceNotice className="ai-referent-preflight" role="status" aria-live="polite"
+                  tone={activeCheck?.error || activeCheck?.result?.status === "failed" ? "error" : checkingFile ? "info" : formSignatureMismatch ? "warning" : "success"}
+                  icon={checkingFile ? <Spinner size="tiny" /> : undefined}>
+                  {activeCheck?.error || activeCheck?.result?.status === "failed" ? <><p>{activeCheck.error || activeCheck.result?.detail}</p><Button onClick={() => { setDocumentCheck(undefined); setCheckAttempt((attempt) => attempt + 1); }}>Повторить проверку</Button></> : checkingFile ? <span>Подождите: робот проверяет форматирование и место для подписи.<small>Проверка выполняется на ПК референта. Если он выключен, письмо останется в ожидании.</small></span> : formSignatureMismatch ? <span>Форматирование проверено, но подпись не соответствует выбранному руководителю.</span> : <span>С письмом всё в порядке.<small>Место для подписи найдено. Соответствие выбранному руководителю проверяется перед согласованием.</small></span>}
+                </WorkspaceNotice> : null}
+                {formSignatureMismatch ? <WorkspaceNotice tone="error" className="ai-referent-feedback" role="alert">В DOCX не найдено место для подписи выбранного руководителя. Проверьте документ или выбор согласующего.</WorkspaceNotice> : null}
                 {form.workflowKind === "delivery" ? <><WorkspaceFileDropzone
                   label="Дополнительные вложения"
                   hint="Приложения, таблицы и сопроводительные файлы"
@@ -850,7 +853,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
               </div>
             </DialogContent>
             <DialogActions className="ai-referent-form-actions">
-              {error ? <p className="ai-referent-feedback" role="alert">{error}</p> : null}
+              {error ? <WorkspaceNotice tone="error" className="ai-referent-feedback" role="alert">{error}</WorkspaceNotice> : null}
               <Button appearance="secondary" disabled={busy || manualRecipientBusy} onClick={() => setFormOpen(false)}>Отмена</Button>
               <Button appearance="secondary" disabled={readOnly || busy || manualRecipientBusy || needsManualRecipientChoice || Boolean(form.file && activeCheck?.result?.status !== "passed")} onClick={() => void save()}>{busy ? "Сохраняем…" : "Сохранить черновик"}</Button>
               <Button appearance="primary" icon={<Checkmark20Regular />} disabled={readOnly || busy || manualRecipientBusy || needsManualRecipientChoice || reviewersLoading || Boolean(reviewersError) || formSignatureMismatch || Boolean(form.file && activeCheck?.result?.status !== "passed")} onClick={() => void save(true)}>Отправить на согласование</Button>
@@ -879,8 +882,8 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
                   <span>{selected.workflowKind === "sign_only" ? "Только подпись · без доставки" : selected.route === "exat" ? "E-XAT" : "Webmail"}</span>
                   <span>Источник: {selected.source === "telegram" ? "Telegram" : selected.source === "import" ? "Архив" : "Workspace"}</span>
                 </div>
-                {selected.documentCheck && selected.canEdit && !selected.submissionBlockReason && selected.documentCheck.status !== "passed" ? <p className="ai-referent-preflight" role="status">{selected.documentCheck.detail || "Робот проверяет DOCX. Согласование станет доступно после успешной проверки."}</p> : null}
-                {selected.canEdit && selected.submissionBlockReason ? <p className="ai-referent-preflight" role="status">{selected.submissionBlockReason}</p> : null}
+                {selected.documentCheck && selected.canEdit && !selected.submissionBlockReason && selected.documentCheck.status !== "passed" ? <WorkspaceNotice tone="warning" className="ai-referent-preflight" role="status">{selected.documentCheck.detail || "Робот проверяет DOCX. Согласование станет доступно после успешной проверки."}</WorkspaceNotice> : null}
+                {selected.canEdit && selected.submissionBlockReason ? <WorkspaceNotice tone="warning" className="ai-referent-preflight" role="status">{selected.submissionBlockReason}</WorkspaceNotice> : null}
                 <SlidingSegmented className="ai-referent-detail-tabs" role="tablist" aria-label="Разделы письма">
                   {([ ["overview", "Обзор"], ["files", `Документы · ${visibleDocumentCount}`], ["history", `История · ${selected.events.length}`] ] as const).map(([key, label]) =>
                     <button type="button" role="tab" key={key} aria-selected={detailTab === key} className={detailTab === key ? "active" : ""} onClick={() => setDetailTab(key)}>{label}</button>)}
@@ -935,7 +938,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
                     ))}
                   </div>
                 </section> : null}
-                {selected.deliveryError ? <p role="alert">{selected.deliveryError}</p> : null}
+                {selected.deliveryError ? <WorkspaceNotice tone="error" role="alert">{selected.deliveryError}</WorkspaceNotice> : null}
                 {selected.canReplaceDocument && !readOnly ? <section className="ai-referent-detail-card">
                   <h3>Замена администратором</h3>
                   <p>Без нового согласования. DOCX получит прежний номер и подпись; готовый PDF будет использован как есть. Проверьте номер, подпись и содержимое.</p>
@@ -954,7 +957,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
                   <label className="ai-referent-decision-comment">Комментарий к решению<Textarea value={decisionComment} onChange={(_e, d) => setDecisionComment(d.value)} /></label>
                 ) : null}
                 {selected.availableActions.includes("return_for_revision") && !readOnly ? <AIReferentAudioComposer key={`${selected.id}:${selected.revision}`} token={token} letter={selected} disabled={busy} value={selectedAudio} onChange={(audio) => setDecisionAudio(audio ? { letterId: selected.id, revision: selected.revision, audio } : undefined)} /> : null}
-                {error ? <p className="ai-referent-feedback" role="alert">{error}</p> : null}
+                {error ? <WorkspaceNotice tone="error" className="ai-referent-feedback" role="alert">{error}</WorkspaceNotice> : null}
                 </DialogContent>
                 <DialogActions className="ai-referent-detail-actions">
                   {selected.canEdit && !readOnly ? <Button appearance="secondary" onClick={() => openEdit(selected)}>Редактировать</Button> : null}
@@ -988,6 +991,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
       </Dialog>
       {formOpen && localPreview && <Suspense fallback={<span role="status">Открываем выбранный документ…</span>}>
         <LocalFileViewer key={`${localPreview.name}:${localPreview.lastModified}:${localPreview.size}`} file={localPreview}
+          files={[...(form.file ? [form.file] : []), ...selectedAdditionalFiles]}
           onClose={() => setLocalPreview(undefined)} onLoadOffice={loadLocalOffice} />
       </Suspense>}
     </section>

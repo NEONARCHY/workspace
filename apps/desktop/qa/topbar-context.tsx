@@ -1,4 +1,5 @@
 import { createRoot } from "react-dom/client";
+import { useEffect, useState } from "react";
 import { FluentProvider } from "@fluentui/react-components";
 import { TopbarInsights } from "../src/renderer/TopbarInsights";
 import { ConnectionIndicator, WorkspaceIdentity } from "../src/renderer/WorkspaceIdentity";
@@ -57,10 +58,37 @@ window.fetch = async input => {
   if (url.includes("/workday/me")) data = { status: "not_started", schedule: { startsAt: "09:00", endsAt: "18:00" } };
   return new Response(JSON.stringify(state === "error" && url.includes("/context/") ? { detail: "Источник временно недоступен" } : data), { status: state === "error" && url.includes("/context/") ? 503 : 200, headers: { "content-type": "application/json" } });
 };
+function OpeningProbe() {
+  const [result, setResult] = useState("");
+  useEffect(() => {
+    const seen = new WeakSet<Element>();
+    let frame = 0;
+    const observe = new MutationObserver(() => {
+      const panel = document.querySelector<HTMLElement>(".topbar-context-surface");
+      if (!panel || seen.has(panel)) return;
+      seen.add(panel);
+      const started = performance.now();
+      const samples: { time: number; height: number; overflow: number; resizing: boolean }[] = [];
+      cancelAnimationFrame(frame);
+      const sample = () => {
+        const body = panel.querySelector<HTMLElement>(".context-panel-body")!;
+        samples.push({ time: Math.round(performance.now() - started), height: panel.clientHeight,
+          overflow: body.scrollHeight - body.clientHeight, resizing: panel.dataset.surfaceResizing === "true" });
+        if (panel.isConnected && performance.now() - started < 600) frame = requestAnimationFrame(sample);
+        else setResult(JSON.stringify(samples));
+      };
+      sample();
+    });
+    observe.observe(document.body, { childList: true, subtree: true });
+    return () => { observe.disconnect(); cancelAnimationFrame(frame); };
+  }, []);
+  return <output aria-label="Замер открытия" style={{ position: "fixed", left: 0, bottom: 0, maxWidth: "100vw", maxHeight: 40, overflow: "auto", fontSize: 9 }}>{result}</output>;
+}
 function Fixture() {
   const theme = useQaTheme();
   const compact = useBrowserCompactLayout(true);
   return <FluentProvider theme={theme} className="app-provider"><DialogResizeMotion />
+    {new URLSearchParams(location.search).has("measureOpening") && <OpeningProbe />}
     <div className={`app-shell ${compact ? "browser-compact" : ""}`} style={{ display: "block", padding: compact ? 12 : 24 }}><div className="app-stage" style={{ marginLeft: compact ? 0 : 230 }}>
       <header className="global-bar">
         {compact && <button className="browser-menu-trigger" aria-label="Открыть меню"><Navigation24Regular /></button>}

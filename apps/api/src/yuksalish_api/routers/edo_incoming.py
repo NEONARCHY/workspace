@@ -39,6 +39,7 @@ from ..edo_service import (
     stream_attachment,
 )
 from ..file_preview import OfficePreview, preview_office
+from ..office_pdf_preview import render_word_pdf
 from ..tables import users
 
 router = APIRouter(prefix="/incoming-letters", tags=["incoming-letters"])
@@ -158,7 +159,8 @@ async def incoming_office_preview(
     connection: Connection,
     sheet: Annotated[int, Query(ge=0, le=1000)] = 0,
     offset: Annotated[int, Query(ge=0, le=150000)] = 0,
-) -> OfficePreview:
+    render: bool = False,
+) -> OfficePreview | Response:
     await ensure_module_action(connection, user, "incoming_letters", "view")
     scope = await resolve_read_scope(connection, user)
     response.headers["Cache-Control"] = "no-store, private"
@@ -184,6 +186,10 @@ async def incoming_office_preview(
                     if len(content) + len(chunk) > MAX_PREVIEW_BYTES:
                         raise HTTPException(422, "Документ превышает 25 МБ. Скачайте оригинал.")
                     content.extend(chunk)
+            if render and metadata.name.lower().endswith((".doc", ".docx")):
+                return await render_word_pdf(
+                    request.app.state.settings, metadata.name, bytes(content),
+                )
             return await asyncio.to_thread(
                 preview_office, metadata.name, bytes(content), sheet, offset,
             )

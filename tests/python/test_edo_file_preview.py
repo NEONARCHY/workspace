@@ -14,6 +14,11 @@ from yuksalish_api.edo_service import EdoBridgeError
 from yuksalish_api.routers import ai_referent, edo_incoming
 
 
+@pytest.fixture
+def anyio_backend() -> str:
+    return "asyncio"
+
+
 def document() -> bytes:
     buffer = BytesIO()
     with ZipFile(buffer, "w") as archive:

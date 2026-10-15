@@ -1,3 +1,4 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { SlidingSegmented } from "./SlidingSegmented";
 
@@ -511,7 +512,7 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
             </div>
           ) : null}
         </section>
-        {securityError && <div className="account-retry" role="alert"><p>{securityError}</p><Button disabled={securityLoading} onClick={() => void refreshSecurity()}>Повторить загрузку</Button></div>}
+        {securityError && <WorkspaceNotice tone="error" className="account-retry" role="alert" actions={<><Button disabled={securityLoading} onClick={() => void refreshSecurity()}>Повторить загрузку</Button></>}><p>{securityError}</p></WorkspaceNotice>}
         </div>
 
         <div id="account-page-sessions" className="account-settings-page" hidden={activeSection !== "sessions"}>
@@ -537,7 +538,7 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
           </div>
           {securityLoading && <p role="status">Загружаем активные устройства…</p>}
           {!securityLoading && !securityError && sessions.length === 0 && <p className="account-empty-state">Нет доступных сведений об активных устройствах.</p>}
-          {securityError && <div className="account-retry" role="alert"><p>{securityError}</p><Button disabled={securityLoading} onClick={() => void refreshSecurity()}>Повторить загрузку</Button></div>}
+          {securityError && <WorkspaceNotice tone="error" className="account-retry" role="alert" actions={<><Button disabled={securityLoading} onClick={() => void refreshSecurity()}>Повторить загрузку</Button></>}><p>{securityError}</p></WorkspaceNotice>}
           {sessionToRevoke && <div className="account-session-confirm" role="group" aria-label="Подтверждение завершения сеанса">
             <strong>{sessionToRevoke.current ? "Выйти на этом устройстве?" : `Завершить сеанс «${sessionToRevoke.deviceLabel}»?`}</strong>
             <p>{sessionToRevoke.current ? "Вы вернётесь на экран входа." : "На выбранном устройстве потребуется войти снова. Остальные сеансы останутся открытыми."}</p>
@@ -671,7 +672,7 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
 
         </div>
         </div>
-        {feedback ? <div className="account-settings-feedback" role="status"><p>{feedback}</p><Button appearance="subtle" icon={<Dismiss24Regular />} aria-label="Скрыть сообщение" onClick={() => setFeedback("")} /></div> : null}
+        {feedback ? <WorkspaceNotice tone="info" className="account-settings-feedback" role="status" actions={<><Button appearance="subtle" icon={<Dismiss24Regular />} aria-label="Скрыть сообщение" onClick={() => setFeedback("")} /></>}><p>{feedback}</p></WorkspaceNotice> : null}
       </aside>
     </div>
   );

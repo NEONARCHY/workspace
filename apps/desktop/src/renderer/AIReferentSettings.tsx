@@ -1,3 +1,4 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AIReferentConfiguration, AIReferentConfigurationUpdate, WorkspacePerson } from "@yuksalish/contracts";
 import { Button, Checkbox, Input, Spinner } from "@fluentui/react-components";
@@ -83,13 +84,13 @@ export function AIReferentSettings({ token, people, readOnly = false }: Props) {
       {config ? <span className="ai-referent-page-aside">Действуют {config.reviewers.filter((item) => item.canApprove).length} из {config.reviewers.length} назначений</span> : null}
     </div>
     <p className="ai-referent-settings-explain">Изменения общие для Workspace и робота. Открытые письма маршрута получит новый согласующий; прежние решения останутся в истории.</p>
-    {error ? <p role="alert" className="ai-referent-feedback">{error}</p> : null}
+    {error ? <WorkspaceNotice tone="error" role="alert" className="ai-referent-feedback">{error}</WorkspaceNotice> : null}
     {notice ? <p role="status">{notice}</p> : null}
     {!draft ? <><Spinner label="Загружаем настройки" /><Button onClick={() => void refresh()}>Повторить</Button></> : null}
     {draft && config ? <>
-      {draft.expectedRevision !== config.revision ? <p role="status" className="ai-referent-feedback">
+      {draft.expectedRevision !== config.revision ? <WorkspaceNotice tone="warning" role="status" className="ai-referent-feedback">
         Настройки изменены на другом устройстве. Ваш ввод сохранён; сравните его с актуальной версией перед повторным сохранением.
-      </p> : null}
+      </WorkspaceNotice> : null}
       <div className="ai-referent-settings-grid">
         {draft.reviewers.map((item, index) => {
           const saved = config.reviewers.find((row) => row.key === item.key);

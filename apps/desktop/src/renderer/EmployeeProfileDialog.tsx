@@ -1,3 +1,4 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
 import {
   Button,
   DialogBody,
@@ -647,11 +648,11 @@ export function EmployeeProfileDialog({
           >{personalShown ? "Моя эффективность" : "Профиль сотрудника"}</DialogTitle>
           <DialogContent ref={profileContentRef}>
             {!profile && !error ? <div className="employee-profile-loading"><Spinner label="Загружаем профиль" /></div> : null}
-            {error && !profile ? <div className="employee-profile-error" role="alert">{error}</div> : null}
+            {error && !profile ? <WorkspaceNotice tone="error" className="employee-profile-error" role="alert">{error}</WorkspaceNotice> : null}
             {profile && personalShown ? <PersonalEfficiencyView token={token} onBack={() => setPersonalUserId(undefined)} onOpenTask={onOpenTask ? (taskId) => { onOpenTask(taskId); onOpenChange(false); } : undefined} /> : profile ? <div className="employee-profile-shell">
               <div ref={profileHeaderRef} className="employee-profile-sticky">
                 <header className="employee-profile-hero">
-                  <ProfileAvatar person={profile.person} token={token} size={72} />
+                  <ProfileAvatar person={profile.person} token={token} size={128} />
                   <div className="employee-profile-identity">
                     <span className="employee-profile-eyebrow">Рабочий профиль</span>
                     <h2>{profile.person.name}</h2>
@@ -685,7 +686,7 @@ export function EmployeeProfileDialog({
                     <small>{countLabel(unlocked.length, ["достижение", "достижения", "достижений"])}</small>
                   </div>
                 </header>
-                {chatError?.userId === profile.person.id ? <p className="employee-profile-chat-error" role="alert">{chatError.message}</p> : null}
+                {chatError?.userId === profile.person.id ? <WorkspaceNotice tone="error" className="employee-profile-chat-error" role="alert">{chatError.message}</WorkspaceNotice> : null}
 
                 <SlidingSegmented as="nav" className="employee-profile-tabs employee-scope-switch" aria-label="Навигация по профилю">
                   {(["overview", "rewards", "achievements"] as const).map((key) => <button
@@ -747,7 +748,7 @@ export function EmployeeProfileDialog({
                     {profile.rewardCatalog.map((option) => <RewardCatalogOption key={option.iconKey} option={option} selected={rewardIcon === option.iconKey} onSelect={() => setRewardIcon(option.iconKey)} />)}
                   </div>
                   <Field label="Повод · необязательно" hint="Например, после завершения проекта или конкретной задачи"><Input maxLength={240} value={rewardContext} onChange={(_, data) => setRewardContext(data.value)} placeholder="Что хочется отметить именно сейчас?" /></Field>
-                  {error ? <p className="reward-composer-error" role="alert">{error}</p> : null}
+                  {error ? <WorkspaceNotice tone="error" className="reward-composer-error" role="alert">{error}</WorkspaceNotice> : null}
                   <div className="reward-composer-actions"><Button disabled={rewardBusy} onClick={() => { setRewardOpen(false); setErrorState(undefined); }}>Отмена</Button><Button appearance="primary" disabled={rewardBusy || !profile.rewardCatalog.some((item) => item.iconKey === rewardIcon)} onClick={() => void submitReward()}>{rewardBusy ? "Сохраняем…" : "Выдать награду"}</Button></div>
         </div> : null}
       </DialogContent></DialogBody></DialogSurface>

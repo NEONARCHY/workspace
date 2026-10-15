@@ -1,3 +1,4 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
 import { useId, useState } from "react";
 import { Button, Checkbox, Combobox, Option } from "@fluentui/react-components";
 import { Input } from "./WorkspaceInput";
@@ -63,6 +64,6 @@ export function CalendarFilters({ value, onChange, onReset, people, token, curre
       <Button appearance="subtle" disabled={disabled} onClick={() => { setSearch(undefined); onReset(); }}>Сбросить фильтры</Button>
     </div>
     </div>
-    {issue && <p className="calendar-filter-error" role="alert">{issue}</p>}
+    {issue && <WorkspaceNotice tone="error" className="calendar-filter-error" role="alert">{issue}</WorkspaceNotice>}
   </section>;
 }

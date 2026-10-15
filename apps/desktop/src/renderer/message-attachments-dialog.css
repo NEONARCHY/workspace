@@ -1,0 +1,21 @@
+html body .message-attachments-dialog.fui-DialogSurface { width: min(480px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); padding: 20px; border-radius: 20px; }
+.message-attachments-dialog .fui-DialogBody { min-height: 0; max-height: calc(100dvh - 64px); }
+.message-attachments-dialog .fui-DialogContent { min-height: 0; overflow-y: auto; padding-right: 4px; }
+.attachment-selection-scroll { max-height: min(420px, 45dvh); overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.selected-photo-albums { display: grid; gap: 8px; }
+.selected-photo-album { position: relative; width: 100%; max-height: 520px; overflow: hidden; border-radius: 12px; background: var(--ws-muted-surface); }
+.selected-photo-tile { position: absolute; overflow: hidden; }
+.selected-photo-tile img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.message-attachments-dialog .selected-photo-tile .fui-Button { position: absolute; top: 4px; right: 4px; width: 32px; min-width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%; background: rgb(16 17 21 / 75%); color: #fff; }
+.attachment-original-note { margin: 12px 0; color: var(--ws-muted); font-size: 12px; }
+.attachment-caption-label { display: block; margin-bottom: 6px; font-size: 12px; color: var(--ws-muted); }
+.message-attachments-dialog .fui-Textarea { width: 100%; }
+.message-attachments-dialog .pending-message-files { max-height: none; }
+.message-attachments-dialog .fui-DialogActions { grid-column: 1 / -1; justify-self: stretch; width: 100%; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
+@media (max-width: 600px), (pointer: coarse) {
+  .message-attachments-dialog .fui-DialogActions { display: grid; grid-template-columns: 1fr 1fr; }
+  .message-attachments-dialog .fui-DialogActions > .fui-Button:last-child { grid-column: 1 / -1; }
+  .message-attachments-dialog .fui-Button { min-height: 44px; }
+  .message-attachments-dialog .selected-photo-tile .fui-Button { width: 44px; min-width: 44px; height: 44px; }
+}
+@media (forced-colors: active) { .message-attachments-dialog .selected-photo-tile .fui-Button { background: ButtonFace; color: ButtonText; border: 1px solid ButtonText; } }

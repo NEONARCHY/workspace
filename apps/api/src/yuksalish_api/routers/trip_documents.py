@@ -20,6 +20,7 @@ from yuksalish_api.errors import WorkspaceRepositoryError
 from yuksalish_api.events import WorkspaceEventBus
 from yuksalish_api.file_preview import OfficePreview, preview_office
 from yuksalish_api.object_storage import ObjectStorage, ObjectStorageError
+from yuksalish_api.office_pdf_preview import render_word_pdf
 from yuksalish_api.repository import get_trip_request
 from yuksalish_api.trip_document_service import (
     MAX_ATTACHMENT_BYTES,
@@ -137,7 +138,8 @@ async def set_original_signature(
 async def preview_brief_attachment(
     request_id: UUID, request: Request, response: Response, user: User, connection: Connection,
     sheet: int = Query(default=0, ge=0), offset: int = Query(default=0, ge=0),
-) -> OfficePreview:
+    render: bool = False,
+) -> OfficePreview | Response:
     await ensure_module_action(connection, user, "trip_approvals", "view")
     response.headers.update(PRIVATE)
     try:
@@ -149,6 +151,8 @@ async def preview_brief_attachment(
                 raise HTTPException(
                     415, "Предпросмотр текста доступен только для DOCX", headers=PRIVATE,
                 )
+            if render:
+                return await render_word_pdf(request.app.state.settings, name, content)
             return await run_in_threadpool(preview_office, name, content, sheet, offset)
     except (WorkspaceRepositoryError, ObjectStorageError) as error:
         raise _failure(error) from error

@@ -1,3 +1,4 @@
+import type { OfficePreviewResult } from "./file-viewer-kind";
 import type {
   ExchangeSnapshot, WeatherSnapshot,
   HiringDetail, HiringRegistry, HiringFields, HiringSignatureBox, HiringActionName, HiringActionRequest, HiringDocumentKind, IdentityRecognition,
@@ -264,23 +265,29 @@ export function downloadEdoIncomingAttachment(
   }, (response) => response.blob(), 120_000);
 }
 
+async function readOfficePreview(response: Response): Promise<OfficePreviewResult> {
+  return response.headers.get("Content-Type")?.split(";", 1)[0]?.trim().toLowerCase() === "application/pdf"
+    ? response.blob() : await response.json() as OfficeFilePreview;
+}
+
 export function loadEdoIncomingOfficePreview(
   token: string, id: number, attachmentId: string, sheet = 0, offset = 0, signal?: AbortSignal,
-): Promise<OfficeFilePreview> {
-  return apiRequest<OfficeFilePreview>(
-    `/incoming-letters/${id}/attachments/${encodeURIComponent(attachmentId)}/preview?sheet=${sheet}&offset=${offset}`,
-    { signal }, token, 120_000,
+): Promise<OfficePreviewResult> {
+  return apiRequest<OfficePreviewResult>(
+    `/incoming-letters/${id}/attachments/${encodeURIComponent(attachmentId)}/preview?sheet=${sheet}&offset=${offset}&render=true`,
+    { signal, headers: { Accept: "application/pdf, application/json" } }, token, 120_000, readOfficePreview,
   );
 }
 
 export function previewAIReferentLocalFile(
   token: string, file: File, sheet = 0, offset = 0, signal?: AbortSignal,
-): Promise<OfficeFilePreview> {
+): Promise<OfficePreviewResult> {
   return boundedRequest(
-    `${getApiBaseUrl()}/api/v1/ai-referent/file-preview?fileName=${encodeURIComponent(file.name)}&sheet=${sheet}&offset=${offset}`,
+    `${getApiBaseUrl()}/api/v1/ai-referent/file-preview?fileName=${encodeURIComponent(file.name)}&sheet=${sheet}&offset=${offset}&render=true`,
     { method: "POST", body: file, signal, cache: "no-store", headers: {
       Authorization: `Bearer ${token}`, "Content-Type": file.type || "application/octet-stream",
-    } }, async response => await response.json() as OfficeFilePreview, 120_000,
+      Accept: "application/pdf, application/json",
+    } }, readOfficePreview, 120_000,
   );
 }
 
@@ -842,16 +849,17 @@ async function apiRequest<T>(
   options: RequestInit = {},
   token?: string,
   timeout?: number,
+  readResponse?: (response: Response) => Promise<T>,
 ): Promise<T> {
   const headers = new Headers(options.headers);
-  headers.set("Accept", "application/json");
+  if (!headers.has("Accept")) headers.set("Accept", "application/json");
   if (workspacePlatform.kind === "electron") {
     headers.set("X-Desktop-Version", workspacePlatform.version);
   }
   if (options.body !== undefined) headers.set("Content-Type", "application/json");
   if (token !== undefined) headers.set("Authorization", `Bearer ${token}`);
-  return boundedRequest(`${getApiBaseUrl()}/api/v1${path}`, { ...options, headers }, async (response) =>
-    response.status === 204 ? undefined as T : await response.json() as T, timeout);
+  return boundedRequest(`${getApiBaseUrl()}/api/v1${path}`, { ...options, headers }, readResponse ?? (async (response) =>
+    response.status === 204 ? undefined as T : await response.json() as T), timeout);
 }
 
 export function loadExchangeRates(token: string, signal?: AbortSignal): Promise<ExchangeSnapshot> {
@@ -2364,10 +2372,10 @@ export function setWorkspaceTripOriginalSignature(
 
 export function loadWorkspaceTripBriefOfficePreview(
   token: string, requestId: string, sheet = 0, offset = 0, signal?: AbortSignal,
-): Promise<OfficeFilePreview> {
-  return apiRequest<OfficeFilePreview>(
-    `/trip-requests/${encodeURIComponent(requestId)}/brief-attachment/preview?sheet=${sheet}&offset=${offset}`,
-    { signal }, token,
+): Promise<OfficePreviewResult> {
+  return apiRequest<OfficePreviewResult>(
+    `/trip-requests/${encodeURIComponent(requestId)}/brief-attachment/preview?sheet=${sheet}&offset=${offset}&render=true`,
+    { signal, headers: { Accept: "application/pdf, application/json" } }, token, 120_000, readOfficePreview,
   );
 }
 
@@ -2448,8 +2456,8 @@ export async function downloadWorkspaceAttachment(
   }, (response) => response.blob(), 120_000);
 }
 
-export function loadOfficeFilePreview(token: string, id: string, sheet = 0, offset = 0, signal?: AbortSignal): Promise<OfficeFilePreview> {
-  return apiRequest<OfficeFilePreview>(`/attachments/${encodeURIComponent(id)}/preview?sheet=${sheet}&offset=${offset}`, {signal}, token);
+export function loadOfficeFilePreview(token: string, id: string, sheet = 0, offset = 0, signal?: AbortSignal): Promise<OfficePreviewResult> {
+  return apiRequest<OfficePreviewResult>(`/attachments/${encodeURIComponent(id)}/preview?sheet=${sheet}&offset=${offset}&render=true`, {signal, headers: { Accept: "application/pdf, application/json" }}, token, 120_000, readOfficePreview);
 }
 
 export async function uploadProfileAvatar(token: string, file: File): Promise<{ avatarVersion: string }> {

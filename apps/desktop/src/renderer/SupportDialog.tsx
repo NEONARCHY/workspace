@@ -1,3 +1,4 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
 import {
   Button,
   DialogBody,
@@ -192,7 +193,7 @@ export function SupportDialog({
               </div>
             </header>
 
-            {error ? <div className="support-error" role="alert">{error}</div> : null}
+            {error ? <WorkspaceNotice tone="error" className="support-error" role="alert">{error}</WorkspaceNotice> : null}
             {!registry ? <div className="support-loading"><Spinner label="Загружаем обращения" /></div> : (
               <div className={`support-workspace ${isInbox ? "is-inbox" : "is-personal"}`}>
                 <aside className="support-request-list" aria-label={isInbox ? "Все обращения" : "Мои обращения"}>

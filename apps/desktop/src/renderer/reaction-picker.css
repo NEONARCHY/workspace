@@ -1,0 +1,61 @@
+html body .reaction-picker-popover.fui-PopoverSurface {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  width: min(352px, calc(100vw - 24px));
+  max-height: min(440px, calc(100dvh - 24px));
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--ws-line);
+  border-radius: 18px;
+  color: var(--ws-text);
+  background: var(--ws-surface-raised, var(--ws-surface));
+  box-shadow: 0 12px 32px rgb(41 58 85 / 18%);
+}
+html body .reaction-picker-popover::before,
+html body .reaction-picker-popover::after { content: none; }
+.reaction-picker-header { display: flex; align-items: center; gap: 8px; padding: 12px 12px 8px; }
+.reaction-picker-search { flex: 1; min-width: 0; }
+.reaction-picker-close { flex: none; }
+.reaction-picker-scroll { min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--ws-muted) transparent; padding: 0 8px 8px; }
+.reaction-picker-scroll::-webkit-scrollbar { width: 5px; }
+.reaction-picker-scroll::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+.reaction-picker-scroll::-webkit-scrollbar-thumb { border-radius: 4px; background: var(--ws-muted); }
+.reaction-picker-scroll::-webkit-scrollbar-track { background: transparent; }
+@supports selector(::-webkit-scrollbar) {
+  /* Chromium ignores custom button removal while standard thin scrollbars win. */
+  html body .reaction-picker-scroll { scrollbar-width: auto; scrollbar-color: auto; }
+}
+.reaction-picker-section h3 { margin: 8px 4px; color: var(--ws-muted); font-size: 12px; font-weight: 600; }
+.reaction-picker-cells { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 2px; }
+.reaction-picker-cells > button { display: grid; place-items: center; min-width: 0; width: 100%; aspect-ratio: 1; padding: 5px; border: 1px solid transparent; border-radius: 9px; background: transparent; cursor: pointer; }
+.reaction-picker-cells img { display: block; width: 28px; height: 28px; pointer-events: none; }
+.reaction-picker-cells > button:hover { background: var(--ws-accent-wash); }
+.reaction-picker-cells > button[aria-pressed="true"] { background: var(--ws-accent-wash); border-color: var(--ws-link); }
+.reaction-picker-cells > button:focus-visible { outline: 2px solid var(--ws-link); outline-offset: -2px; }
+.reaction-picker-categories { display: flex; flex: none; justify-content: space-between; gap: 2px; padding: 8px; border-top: 1px solid var(--ws-line); }
+html body .reaction-picker-categories .fui-Button {
+  flex: 0 0 36px;
+  min-width: 36px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  box-shadow: none;
+  color: var(--ws-muted);
+  background: transparent;
+}
+html body .reaction-picker-categories .fui-Button[aria-pressed="true"] { color: var(--ws-link); }
+html body .reaction-picker-categories .fui-Button:is(:hover, :active) { background: var(--ws-accent-wash); }
+html body .reaction-picker-categories .fui-Button:focus-visible { outline: 2px solid var(--ws-link); outline-offset: -2px; }
+.reaction-picker-categories svg { width: 20px; height: 20px; }
+.reaction-picker-empty { margin: 0; padding: 28px 8px; color: var(--ws-muted); text-align: center; font-size: 13px; }
+@media (max-width: 320px) {
+  html body .reaction-picker-categories .fui-Button { flex-basis: 30px; min-width: 30px; width: 30px; height: 30px; }
+}
+@media (forced-colors: active) {
+  html body .reaction-picker-popover.fui-PopoverSurface { border-color: CanvasText; background: Canvas; color: CanvasText; }
+  .reaction-picker-cells > button[aria-pressed="true"] { border-color: Highlight; }
+  .reaction-picker-cells > button:focus-visible { outline-color: Highlight; }
+}

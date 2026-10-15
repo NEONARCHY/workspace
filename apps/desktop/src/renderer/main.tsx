@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
 import { App } from "./App";
+import { warmReactionArtwork } from "./reaction-artwork-preload";
 import { ScrollbarEdges } from "./ScrollbarEdges";
 import { DialogResizeMotion } from "./DialogResizeMotion";
 import { InterfaceLocalization } from "./InterfaceLocalization";
@@ -91,6 +92,14 @@ if (workspacePlatform.kind === "web") {
   document.documentElement.classList.add("web-platform");
   const stopViewport = observeBrowserViewport();
   import.meta.hot?.dispose(stopViewport);
+  // Download public emoji once during idle time; never start invisible animation decoders.
+  if (typeof window.requestIdleCallback === "function") {
+    const idle = window.requestIdleCallback(() => { void warmReactionArtwork(); }, { timeout: 4000 });
+    import.meta.hot?.dispose(() => window.cancelIdleCallback(idle));
+  } else {
+    const timer = window.setTimeout(() => { void warmReactionArtwork(); }, 1500);
+    import.meta.hot?.dispose(() => window.clearTimeout(timer));
+  }
 }
 
 if (workspacePlatform.kind === "electron" && navigator.userAgent.includes("Windows")) {

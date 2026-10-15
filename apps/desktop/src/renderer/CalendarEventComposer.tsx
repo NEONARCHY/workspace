@@ -1,3 +1,4 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
 import { useState, type FormEvent } from "react";
 
 import type {
@@ -213,7 +214,7 @@ export function CalendarEventComposer({
             {canLinkProjects ? <RecordSection title="Связь с проектом"
               description="При необходимости укажите проект, направление и работу. Это не создаёт новую проектную задачу.">
               {projectTargetsLoading ? <p role="status">Загружаем проекты…</p> : null}
-              {projectTargetsError ? <div role="alert">{projectTargetsError} <Button type="button" onClick={onRetryProjectTargets}>Повторить</Button></div> : null}
+              {projectTargetsError ? <WorkspaceNotice tone="error" role="alert" actions={<><Button type="button" onClick={onRetryProjectTargets}>Повторить</Button></>}>{projectTargetsError} </WorkspaceNotice> : null}
               <CalendarProjectLinkFields value={draft} targets={projectTargets} onChange={onDraftChange} />
             </RecordSection> : null}
 

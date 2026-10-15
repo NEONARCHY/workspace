@@ -1,3 +1,4 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
 import { useEffect, useState } from "react";
 
 import type { WorkdayTeam, WorkdayTeamMember } from "@yuksalish/contracts";
@@ -126,7 +127,7 @@ export function TeamPresencePanel({ token }: { readonly token: string }) {
         }} />
       </div>
     </div>
-    {error ? <div className="team-presence-error" role="alert">{error}</div> : null}
+    {error ? <WorkspaceNotice tone="error" className="team-presence-error" role="alert">{error}</WorkspaceNotice> : null}
     <div className="team-presence-viewport" ref={peopleMotion}>
     <div className="team-presence-people">
       {members.map((person) => <div key={person.userId} className={`team-presence-person is-${person.status}`}>
@@ -154,7 +155,7 @@ export function TeamPresencePanel({ token }: { readonly token: string }) {
               <Field label="Начало"><WorkspaceDateTimePicker mode="time" ariaLabel="Начало рабочего дня" value={start} onChange={setStart} /></Field>
               <Field label="Окончание"><WorkspaceDateTimePicker mode="time" ariaLabel="Окончание рабочего дня" value={end} onChange={setEnd} /></Field>
             </div>
-            {formError ? <p className="team-presence-error" role="alert">{formError}</p> : null}
+            {formError ? <WorkspaceNotice tone="error" className="team-presence-error" role="alert">{formError}</WorkspaceNotice> : null}
           </DialogContent>
           <DialogActions>
             <Button disabled={saving} onClick={() => setEditing(undefined)}>Отмена</Button>

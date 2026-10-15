@@ -43,6 +43,16 @@ const card = () => document.querySelector(".trip-board-card")!;
 async function drop(target: string) { await dropSpatialCard(card(), column(target)); }
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 describe("Trip approvals interaction", async () => {
+  it("presents empty-board guidance as one readable status with a decorative icon", () => {
+    render(<FluentProvider theme={webLightTheme}><TripApprovalsView
+      requests={[]} people={people} currentUser={people[0]!}
+      onCreate={vi.fn()} onUpdate={vi.fn()} onAction={vi.fn()} /></FluentProvider>);
+    const status = screen.getByText(/^Поездок пока нет/).closest(".workspace-notice")!;
+    expect(status).toHaveAttribute("role", "status");
+    expect(status).toHaveTextContent("Поездок пока нет. Создайте первую командировку");
+    expect(status.querySelector(":scope > svg")).toHaveAttribute("aria-hidden", "true");
+    expect(status.querySelector(".workspace-notice-content")).toHaveTextContent("в колонке «Запуск»");
+  });
   it("opens the map from the header and returns to trips", async () => {
     setup();
     const toggle = screen.getByRole("button", { name: "Интерактивная карта поездок" });

@@ -10,10 +10,15 @@ it("uses separate Telegram-inspired dark and softened light outgoing palettes", 
   expect(css).toContain(".message-delivery.is-read");
   expect(css).toContain("@media (forced-colors: none)");
 });
-it("keeps sizing and focus intact, with a tail only on final grouped bubbles", () => {
+it("keeps ordinary bubble sizing/focus intact and explicitly sizes standalone media", () => {
   expect(css).toContain(":not(.is-group-first):not(.is-group-middle)");
   expect(css).toContain("pointer-events: none");
   expect(css).toContain("border-color: transparent");
   expect(css).not.toContain(".message-body::after");
-  expect(css).not.toMatch(/font-size:|line-height:|padding:|min-width:|max-width:|outline:|animation:/);
+  const [ordinary, media] = css.split("/* Media and conference cards are the message surface");
+  expect(ordinary).not.toMatch(/font-size:|line-height:|padding:|min-width:|max-width:|outline:|animation:/);
+  expect(css).not.toMatch(/font-size:|line-height:|outline:|animation:/);
+  expect(media).toContain("padding: 0;");
+  expect(media).toContain("width: 320px; max-width: calc(100% - 44px)");
+  expect(media).toContain(".message-body.is-document-message { padding-block: 8px; }");
 });

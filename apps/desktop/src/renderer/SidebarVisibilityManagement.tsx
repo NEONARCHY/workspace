@@ -1,3 +1,4 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
 import { useEffect, useRef, useState } from "react";
 import type { DirectoryBootstrap, NavigationKey, SidebarVisibility, WorkspacePerson } from "@yuksalish/contracts";
 import { Button, Checkbox, DialogSurface, Field, Spinner } from "@fluentui/react-components";
@@ -74,7 +75,7 @@ export function SidebarVisibilityManagement({ token, directory, currentUser, ini
         <div className="sidebar-visibility-list-head"><strong>Показывать в меню</strong><Button type="button" appearance="subtle" disabled={busy || !hidden.length} onClick={() => { setHidden([]); setNotice(""); }}>Вернуть все кнопки</Button></div>
         <div className="sidebar-visibility-list">{sections.map((section) => <Checkbox key={section.key} label={section.label} checked={!hidden.includes(section.key)} disabled={busy} onChange={(_, data) => { setHidden((current) => data.checked ? current.filter((key) => key !== section.key) : [...current, section.key]); setNotice(""); }} />)}</div>
       </> : !error ? <p>Выберите сотрудника, чтобы настроить его меню.</p> : null}
-      {error ? <div className="sidebar-visibility-error" role="alert"><span>{error}</span><Button type="button" disabled={busy || loading} onClick={reload}>Обновить настройки</Button></div> : null}
+      {error ? <WorkspaceNotice tone="error" className="sidebar-visibility-error" role="alert" actions={<><Button type="button" disabled={busy || loading} onClick={reload}>Обновить настройки</Button></>}><span>{error}</span></WorkspaceNotice> : null}
       {notice ? <p className="sidebar-visibility-notice" role="status">{notice}</p> : null}
     </div>
     <footer><span>{saved ? `${hidden.filter((key) => sections.some((section) => section.key === key)).length} скрыто` : "Изменения сохраняются только по кнопке"}</span><Button type="button" disabled={busy} onClick={onClose}>Закрыть</Button><Button type="submit" appearance="primary" disabled={busy || loading || !changed}>{busy ? "Сохраняем…" : "Сохранить меню"}</Button></footer>

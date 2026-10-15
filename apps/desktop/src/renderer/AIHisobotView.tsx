@@ -1,3 +1,4 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
 import { Input } from "./WorkspaceInput";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { WorkspaceSelect } from "./WorkspaceSelect";
@@ -195,7 +196,7 @@ export function AIHisobotView({ token }: { readonly token: string }) {
     </header>
 
     {loading ? <p className="hisobot-loading" role="status">Загружаем отчёты…</p> : null}
-    {error ? <div className="hisobot-error" role="alert">{error}</div> : null}
+    {error ? <WorkspaceNotice tone="error" className="hisobot-error" role="alert">{error}</WorkspaceNotice> : null}
     {profile ? <>
       <SlidingSegmented as="nav" className="hisobot-tabs" aria-label="Разделы AI Hisobot">
         <button type="button" aria-pressed={tab === "today"} className={tab === "today" ? "active" : ""} onClick={() => setTab("today")}>Сегодня</button>

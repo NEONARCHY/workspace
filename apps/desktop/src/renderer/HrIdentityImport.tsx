@@ -1,3 +1,4 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
 import { useEffect, useRef, useState } from "react";
 import { Button, Checkbox, Field, Input, Spinner } from "@fluentui/react-components";
 import { DocumentSearch20Regular, Dismiss20Regular } from "@fluentui/react-icons";
@@ -120,10 +121,10 @@ export function HrIdentityImport({ token, current, disabled, onApply }: {
       {files.length ? <><Button appearance="primary" disabled={disabled || busy} onClick={() => void analyse()}>{result ? "Распознать повторно" : "Распознать данные"}</Button>
         <Button icon={<Dismiss20Regular />} disabled={busy || disabled} onClick={clear}>Убрать фото</Button></> : null}</div>
     {busy ? <div className="hr-identity-feedback" role="status"><Spinner label="Распознаём ID-карту локально…" /></div> : null}
-    {error ? <p className="hr-identity-feedback hr-identity-error" role="alert">{error} Ручное заполнение остаётся доступным.</p> : null}
-    {result ? <p className="hr-identity-feedback" role="status">{result.fullName || result.pinfl || result.passport
+    {error ? <WorkspaceNotice tone="error" className="hr-identity-feedback hr-identity-error" role="alert">{error} Ручное заполнение остаётся доступным.</WorkspaceNotice> : null}
+    {result ? <WorkspaceNotice tone={result.fullName || result.pinfl || result.passport ? "success" : "warning"} className="hr-identity-feedback" role="status">{result.fullName || result.pinfl || result.passport
       ? "Распознавание завершено. Проверьте найденные значения ниже и выберите поля для заполнения."
-      : "Не удалось прочитать данные на фото. Попробуйте более чёткий снимок или заполните поля вручную."}</p> : null}
+      : "Не удалось прочитать данные на фото. Попробуйте более чёткий снимок или заполните поля вручную."}</WorkspaceNotice> : null}
     {files.length ? <div className="hr-identity-photos">{files.map((file, index) => <figure key={`${file.name}-${index}`}>
       <div className="hr-identity-photo-frame">{previews[index] ? <img style={{ transform: `rotate(${rotations[index] ?? 0}deg) scale(${(rotations[index] ?? 0) % 180 ? .65 : 1})` }} src={previews[index]} alt={`Фото ID-карты, сторона ${index + 1}`} /> : null}</div><figcaption>{photoLabels[index]}</figcaption>
       <div className="hr-identity-photo-actions"><Button disabled={busy || disabled} onClick={() => setExpanded(index)}>Увеличить фото {index + 1}</Button>

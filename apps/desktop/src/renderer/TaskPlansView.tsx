@@ -1,3 +1,4 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
 import { useState } from "react";
 
 import type { TaskPlan, TaskPlanWrite, WorkspacePerson, WorkspaceTask } from "@yuksalish/contracts";
@@ -142,15 +143,15 @@ export function TaskPlansView({
       </WorkspaceSelect></label>
       <label>Начало периода <input type="date" value={periodStart} onChange={(event) => setPeriodStart(event.target.value)} /></label>
       <label>Конец периода <input type="date" value={periodEnd} onChange={(event) => setPeriodEnd(event.target.value)} /></label>
-      {saveError ? <p className="task-plan-error" role="alert">{saveError}</p> : null}
+      {saveError ? <WorkspaceNotice tone="error" className="task-plan-error" role="alert">{saveError}</WorkspaceNotice> : null}
       <div className="task-plans-actions"><Button appearance="primary" disabled={saving || !title.trim()} onClick={() => void save()}>{saving ? "Сохраняем…" : "Сохранить план"}</Button><Button appearance="subtle" disabled={saving} onClick={resetForm}>Отмена</Button></div>
     </div> : null}
     <div className="task-plan-filters">
       <label>Поиск планов<Input value={search} onChange={(_, data) => setSearch(data.value)} placeholder="Название или постановщик" /></label>
       <label className="task-plan-completed-toggle"><input type="checkbox" checked={showCompleted} onChange={(event) => setShowCompleted(event.target.checked)} />Показать завершённые планы</label>
     </div>
-    {statusError ? <p className="task-plan-error" role="alert">{statusError}</p> : null}
-    {loading ? <p role="status">Загружаем планы…</p> : error ? <div className="task-plan-error" role="alert">{error} <Button appearance="secondary" onClick={onRetry}>Повторить</Button></div> : visiblePlans.length === 0 ? <p className="task-plan-empty">{plans.length === 0 ? "Планов пока нет. Создайте первый план, затем привяжите задачи в их карточках." : "По выбранным условиям планов нет."}</p> : <div className="task-plan-grid">
+    {statusError ? <WorkspaceNotice tone="error" className="task-plan-error" role="alert">{statusError}</WorkspaceNotice> : null}
+    {loading ? <p role="status">Загружаем планы…</p> : error ? <WorkspaceNotice tone="error" className="task-plan-error" role="alert" actions={<><Button appearance="secondary" onClick={onRetry}>Повторить</Button></>}>{error} </WorkspaceNotice> : visiblePlans.length === 0 ? <p className="task-plan-empty">{plans.length === 0 ? "Планов пока нет. Создайте первый план, затем привяжите задачи в их карточках." : "По выбранным условиям планов нет."}</p> : <div className="task-plan-grid">
       {visiblePlans.map((plan) => <article className="task-plan-card" key={plan.id}>
         <div className="task-plan-card-meta"><span className="task-plan-kind">{kindLabels[plan.kind]}</span><span className="task-plan-status">{plan.status === "completed" ? "Завершённый" : "Активный"}</span></div>
         <h3>{plan.title}</h3>

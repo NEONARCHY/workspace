@@ -1,13 +1,15 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import type { WorkspaceAttachment } from "@yuksalish/contracts";
 import { Button, Spinner, useRestoreFocusTarget } from "@fluentui/react-components";
-import { ArrowDownload24Regular, ArrowExpand24Regular, Attach24Regular, Delete20Regular, Document24Regular, Pause24Filled, Play24Filled } from "@fluentui/react-icons";
+import { Attach24Regular, Delete20Regular, Document24Filled, Pause24Filled, Play24Filled } from "@fluentui/react-icons";
 import { ConfirmActionDialog } from "./ConfirmActionDialog";
 import { MediaVolumeControl } from "./MediaVolumeControl";
 import { WorkspaceFileDropzone } from "./WorkspaceFileDropzone";
 import { fileViewerKind } from "./file-viewer-kind";
 import "./attachment-thumbnails.css";
+import { AttachmentImage, AttachmentImageAlbum, attachmentGeometry } from "./AttachmentImage";
 
 interface AttachmentChipsProps {
   readonly attachments: readonly WorkspaceAttachment[];
@@ -16,12 +18,32 @@ interface AttachmentChipsProps {
   readonly canDelete?: (attachment: WorkspaceAttachment) => boolean;
   readonly onDelete?: (attachment: WorkspaceAttachment) => void;
   readonly deleting?: boolean;
+  readonly presentation?: "media";
 }
 
-function MediaAttachment({attachment, onLoad, onOpen}: {
+function ImageAttachmentCard({ attachment, onLoad, onOpen, presentation }: {
+  readonly attachment: WorkspaceAttachment;
+  readonly onLoad: NonNullable<AttachmentChipsProps["onLoad"]>;
+  readonly onOpen: AttachmentChipsProps["onDownload"];
+  readonly presentation?: "media";
+}) {
+  const [size] = useState(() => attachmentGeometry(attachment));
+  const ratio = Math.max(.5, Math.min(2, size.width / size.height));
+  const width = Math.min(360, size.width, (presentation ? 420 : 320) * ratio);
+  return <article className="attachment-media-preview attachment-image-card" style={{ width }}>
+    <AttachmentImage attachment={attachment} onLoad={onLoad} onOpen={onOpen} style={{ aspectRatio: String(ratio) }} />
+    {!presentation && <button className="attachment-document" type="button" title={`Открыть ${attachment.fileName}`} onClick={() => void onOpen(attachment)}>
+      <span className="attachment-document-icon" aria-hidden="true"><Document24Filled /></span>
+      <span className="attachment-document-copy"><span>{attachment.fileName}</span><small>{fileSize(attachment.byteSize)}</small></span>
+    </button>}
+  </article>;
+}
+
+function MediaAttachment({attachment, onLoad, onOpen, presentation}: {
   readonly attachment: WorkspaceAttachment;
   readonly onLoad: (attachment: WorkspaceAttachment, signal?: AbortSignal) => Promise<Blob>;
   readonly onOpen: (attachment: WorkspaceAttachment) => void | Promise<void>;
+  readonly presentation?: "media";
 }) {
   const ref = useRef<HTMLElement>(null);
   const [visibility, setVisibility] = useState({visible:false, epoch:0});
@@ -52,7 +74,7 @@ function MediaAttachment({attachment, onLoad, onOpen}: {
   const video = fileViewerKind(attachment) === "video";
   const failed = () => setResource(current => ({...current, url:"", failed:true}));
   return <article ref={ref} className={`attachment-media-preview ${video ? "attachment-video-card" : "attachment-image-card"}${imageSize ? " has-image-size" : ""}`}
-    style={imageSize ? { width: Math.min(360, imageSize.width, 320 * imageSize.width / imageSize.height) } : undefined}>
+    style={imageSize ? { width: Math.min(360, imageSize.width, (presentation ? 420 : 320) * imageSize.width / imageSize.height) } : undefined}>
     {video && shown && resource.url ? <InlineVideoPlayer url={resource.url} fileName={attachment.fileName} onError={failed} /> :
     <button className="attachment-image-thumb" type="button" aria-label={`Открыть ${video ? "видео" : "изображение"}: ${attachment.fileName}`} onClick={() => void onOpen(attachment)}>
       {shown && resource.url ? <img src={resource.url} alt={attachment.fileName} onError={failed} onLoad={event => {
@@ -60,7 +82,10 @@ function MediaAttachment({attachment, onLoad, onOpen}: {
         if (width && height) setImageSize({ width, height });
       }} /> : <span>{shown && resource.failed ? "Предпросмотр недоступен · открыть файл" : video ? "Видео · открыть" : "Изображение · открыть"}</span>}
     </button>}
-    <button type="button" title={`Открыть ${attachment.fileName}`} onClick={() => void onOpen(attachment)}><Document24Regular /><span>{attachment.fileName}</span><small>{fileSize(attachment.byteSize)}</small></button>
+    {!presentation && <button className="attachment-document" type="button" title={`Открыть ${attachment.fileName}`} onClick={() => void onOpen(attachment)}>
+      <span className="attachment-document-icon" aria-hidden="true"><Document24Filled /></span>
+      <span className="attachment-document-copy"><span>{attachment.fileName}</span><small>{fileSize(attachment.byteSize)}</small></span>
+    </button>}
   </article>;
 }
 
@@ -229,23 +254,38 @@ export function InlineAudioPlayer({ url, blob, fileName, onError }: { readonly u
   </div>;
 }
 
-export function AttachmentChips({ attachments, onDownload, onLoad, canDelete, onDelete, deleting }: AttachmentChipsProps) {
+export function AttachmentChips({ attachments, onDownload, onLoad, canDelete, onDelete, deleting, presentation }: AttachmentChipsProps) {
   const deleteFocusTarget = useRestoreFocusTarget();
   if (attachments.length === 0) return null;
+  const albums = new Map<number, readonly WorkspaceAttachment[]>(), skipped = new Set<number>();
+  if (onLoad && !onDelete) for (let index = 0; index < attachments.length; index++) {
+    const group: WorkspaceAttachment[] = [];
+    for (let next = index; next < Math.min(index + 10, attachments.length); next++) {
+      if (fileViewerKind(attachments[next]!) !== "image") break;
+      group.push(attachments[next]!);
+    }
+    if (group.length < 2) continue;
+    albums.set(index, group);
+    for (let next = index + 1; next < index + group.length; next++) skipped.add(next);
+    index += group.length - 1;
+  }
   return (
-    <div className="attachment-chips" aria-label="Вложения">
-      {attachments.map((attachment) => {
-        const content = onLoad && ["image", "video"].includes(fileViewerKind(attachment)) ? <MediaAttachment key={attachment.id} attachment={attachment} onLoad={onLoad} onOpen={onDownload} /> : (
+    <div className={`attachment-chips${presentation ? " is-message-media" : ""}`} aria-label="Вложения">
+      {attachments.map((attachment, index) => {
+        if (skipped.has(index)) return null;
+        const album = albums.get(index);
+        if (album && onLoad) return <AttachmentImageAlbum key={album.map(item => `${item.id}:${item.sha256}`).join("|")} attachments={album} onLoad={onLoad} onOpen={onDownload} />;
+        const content = onLoad && fileViewerKind(attachment) === "image" ? <ImageAttachmentCard key={`${attachment.id}:${attachment.sha256}`} attachment={attachment} onLoad={onLoad} onOpen={onDownload} presentation={presentation} />
+          : onLoad && fileViewerKind(attachment) === "video" ? <MediaAttachment key={attachment.id} attachment={attachment} onLoad={onLoad} onOpen={onDownload} presentation={presentation} /> : (
         <button
+          className="attachment-document"
           key={attachment.id}
           type="button"
           title={`${fileViewerKind(attachment) === "unsupported" ? "Скачать" : "Открыть"}: ${attachment.fileName}, ${fileSize(attachment.byteSize)}`}
           onClick={() => void onDownload(attachment)}
         >
-          <Document24Regular />
-          <span>{attachment.fileName}</span>
-          <small>{fileSize(attachment.byteSize)}</small>
-          {fileViewerKind(attachment) === "unsupported" ? <ArrowDownload24Regular /> : <ArrowExpand24Regular />}
+          <span className="attachment-document-icon" aria-hidden="true"><Document24Filled /></span>
+          <span className="attachment-document-copy"><span>{attachment.fileName}</span><small>{fileSize(attachment.byteSize)}</small></span>
         </button>
         );
         if (!onDelete) return content;
@@ -340,7 +380,7 @@ export function AttachmentPanel({
       /> : null}
       <AttachmentChips attachments={attachments} onDownload={onDownload} canDelete={canDelete} deleting={deleting || busy}
         onDelete={onDelete ? attachment => { setDeleteError(""); setPendingDelete(attachment); } : undefined} />
-      {deleteError ? <p className="auth-error" role="alert">{deleteError}</p> : null}
+      {deleteError ? <WorkspaceNotice tone="error" className="auth-error" role="alert">{deleteError}</WorkspaceNotice> : null}
       <ConfirmActionDialog open={!!pendingDelete} title="Удалить файл?"
         message={`Файл «${pendingDelete?.fileName ?? ""}» исчезнет из вложений задачи.`} busy={deleting}
         onCancel={() => setPendingDelete(undefined)} onConfirm={remove}

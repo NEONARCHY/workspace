@@ -1,3 +1,4 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
 import { useCallback, useEffect, useState } from "react";
 import { Button, DialogSurface, Input, Textarea } from "@fluentui/react-components";
 import { Add24Regular, ArrowClockwise24Regular, Attach20Regular, Dismiss20Regular } from "@fluentui/react-icons";
@@ -283,7 +284,7 @@ export function ProjectHubView({ mode, token, people, departments, currentUserId
   };
 
   if (loading && !hub.projects.length && !requests.length) return <section className="project-hub-view" aria-busy="true"><p>Загружаем проектное пространство…</p></section>;
-  if (loadError && !hub.projects.length && !requests.length) return <section className="project-hub-view"><h1>{mode === "projects" ? "Проекты" : "Проектные заявки"}</h1><p role="alert">{loadError}</p><Button onClick={() => void reload()}>Повторить</Button></section>;
+  if (loadError && !hub.projects.length && !requests.length) return <section className="project-hub-view"><h1>{mode === "projects" ? "Проекты" : "Проектные заявки"}</h1><WorkspaceNotice tone="error" role="alert">{loadError}</WorkspaceNotice><Button onClick={() => void reload()}>Повторить</Button></section>;
 
   return <section className={`project-hub-view workspace-view is-${mode}`} aria-label={mode === "projects" ? "Проекты" : "Проектные заявки"}>
     <header className="project-hub-header">
@@ -296,7 +297,7 @@ export function ProjectHubView({ mode, token, people, departments, currentUserId
         {mode === "projects" && selectedProject ? <Button onClick={() => setBudgetOpen(true)}>Бюджет и расходы</Button> : null}
         {mode === "funding" && canCreateRequest ? <Button className="project-hub-primary-action" appearance="primary" icon={<Add24Regular />} onClick={() => { setFundingProjectId((id) => id || hub.projects[0]?.id || ""); setFundingWorkstreamId(""); setRequestForm({ itemId: "", title: "", purpose: "", amount: "", approvalDueAt: "" }); setRequestFiles([]); setRequestDraftId(""); setUploadedFileCount(0); setActionError(""); setFormMode("request"); }}>Новая проектная заявка</Button> : null}</div></div>
     </header>
-    {loadError ? <p className="project-hub-error" role="alert">{loadError}</p> : null}
+    {loadError ? <WorkspaceNotice tone="error" className="project-hub-error" role="alert">{loadError}</WorkspaceNotice> : null}
     {mode === "projects" ? <div className="project-hub-layout">
       <aside className="project-hub-index" aria-label="Список новых проектов">
         <div className="project-hub-index-top"><div><span className="view-kicker">ПОРТФЕЛЬ</span><strong>Ваши проекты</strong><small>{visibleProjects.length} в выбранном срезе</small></div><WorkspaceSelect aria-label="Фильтр проектов" value={filter} onChange={(event) => setFilter(event.target.value)}><option value="active">Активные</option><option value="completed">Завершённые</option><option value="all">Все</option></WorkspaceSelect></div>
@@ -368,7 +369,7 @@ export function ProjectHubView({ mode, token, people, departments, currentUserId
           </section>;
         })}
       </div>
-      <aside className={`project-hub-funding-detail ${selectedRequest ? "" : "is-empty"}`} aria-label="Карточка проектной заявки">{actionError ? <p className="project-hub-error" role="alert">{actionError}</p> : null}{selectedRequest ? <><span className="view-kicker">{selectedRequest.projectTitle} · {selectedRequest.itemTitle}</span><h2>{selectedRequest.title}</h2><p>{selectedRequest.purpose || "Назначение не указано"}</p><div className="project-hub-funding-amount">{formatMoney(selectedRequest.amount, selectedRequest.currency)}</div><div className={`project-hub-state ${selectedRequest.status}`}>{requestStatus[selectedRequest.status]}</div><p className={selectedRequest.status === "pending" && selectedRequest.approvalDueAt && new Date(selectedRequest.approvalDueAt).getTime() < asOf ? "project-hub-deadline-overdue" : ""}>Срок согласования: {formatDate(selectedRequest.approvalDueAt)}</p>
+      <aside className={`project-hub-funding-detail ${selectedRequest ? "" : "is-empty"}`} aria-label="Карточка проектной заявки">{actionError ? <WorkspaceNotice tone="error" className="project-hub-error" role="alert">{actionError}</WorkspaceNotice> : null}{selectedRequest ? <><span className="view-kicker">{selectedRequest.projectTitle} · {selectedRequest.itemTitle}</span><h2>{selectedRequest.title}</h2><p>{selectedRequest.purpose || "Назначение не указано"}</p><div className="project-hub-funding-amount">{formatMoney(selectedRequest.amount, selectedRequest.currency)}</div><div className={`project-hub-state ${selectedRequest.status}`}>{requestStatus[selectedRequest.status]}</div><p className={selectedRequest.status === "pending" && selectedRequest.approvalDueAt && new Date(selectedRequest.approvalDueAt).getTime() < asOf ? "project-hub-deadline-overdue" : ""}>Срок согласования: {formatDate(selectedRequest.approvalDueAt)}</p>
         <h3>Файлы</h3><div className="project-hub-files">{selectedRequest.attachments.map((file) => <Button appearance="subtle" key={file.id} onClick={() => void downloadFile(file.id, file.fileName)}>{file.fileName}</Button>)}{!selectedRequest.attachments.length ? <p>Файлов пока нет.</p> : null}</div>
         {(selectedRequest.status === "draft" || selectedRequest.status === "pending") && selectedRequest.requesterUserId === currentUserId ? <WorkspaceFileDropzone label="Прикрепить файл" hint="До 25 МБ. Файл станет доступен участникам заявки." actionLabel="Выбрать файл" disabled={busy} icon={<Attach20Regular aria-hidden="true" />} onFiles={(files) => { const file = files[0]; if (file) void mutate(() => uploadWorkspaceAttachment(token, "project_funding_request", selectedRequest.id, file)); }} /> : null}
         {selectedRequest.status === "draft" && selectedRequest.requesterUserId === currentUserId ? <Button appearance="primary" disabled={busy} onClick={() => void mutate(() => submitProjectHubRequestDraft(token, selectedRequest.id))}>Отправить на согласование</Button> : null}
@@ -377,7 +378,7 @@ export function ProjectHubView({ mode, token, people, departments, currentUserId
         <h3>История</h3><div className="project-hub-action-history">{selectedRequest.actions.map((action, index) => <p key={`${action.createdAt}:${index}`}><strong>{personName(action.actorUserId)}</strong> · {action.action === "submit" ? "отправил" : action.action === "approve" ? "согласовал" : "отклонил"} · {formatDate(action.createdAt)}{action.comment ? <small>{action.comment}</small> : null}</p>)}</div>
       </> : <div className="project-hub-empty">Выберите заявку, чтобы увидеть маршрут и решение.</div>}</aside>
     </div>}
-    {actionError && formMode === null && mode === "projects" ? <p role="alert" className="project-hub-error">{actionError}</p> : null}
+    {actionError && formMode === null && mode === "projects" ? <WorkspaceNotice tone="error" role="alert" className="project-hub-error">{actionError}</WorkspaceNotice> : null}
 
     <Dialog open={formMode !== null} onOpenChange={(_, data) => { if (!data.open && !busy) setFormMode(null); }}><DialogSurface className="project-hub-dialog" aria-labelledby="project-hub-dialog-title">
        <div className="project-hub-dialog-head"><div><span className="view-kicker">ПРОЕКТНОЕ ПРОСТРАНСТВО</span><h2 id="project-hub-dialog-title">{formMode === "project" ? editingProjectId ? "Настроить проект" : "Новый проект" : formMode === "workstream" ? editingWorkstreamId ? "Изменить направление" : "Новое направление" : formMode === "item" ? editingItemId ? "Изменить работу" : "Новая работа" : formMode === "status" ? statusTarget === "rejected" ? "Отклонить задачу" : "Отменить работу" : "Новая проектная заявка"}</h2></div><Button appearance="subtle" icon={<Dismiss20Regular />} aria-label="Закрыть" disabled={busy} onClick={() => setFormMode(null)} /></div>

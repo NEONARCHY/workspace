@@ -1,0 +1,927 @@
+{
+  "1f604": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f604/512.webp",
+    "sourceSha256": "43a3dfe932da3b430ee7db85eca6ccc42ac52da4d7009caa7c962d69fde4d88e",
+    "sha256": "80d12f8836af54657ad8d8decd91770171203f12aabf99fa2e0d33ae2a86daad",
+    "bytes": 67414,
+    "frames": 34,
+    "durationMs": 2100
+  },
+  "1f614": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f614/512.webp",
+    "sourceSha256": "a3b0c78891d1a8ae3eead27771e0efaa643826b3d4cd9321baea1023641f76d1",
+    "sha256": "d55f4db6fb25cee33a70a6910f21ceccfd7e51ea745ec8d28e83eca11e3e9424",
+    "bytes": 59654,
+    "frames": 31,
+    "durationMs": 2370
+  },
+  "1f973": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f973/512.webp",
+    "sourceSha256": "fcf2af3bb9244afe32685f0293ff2ad3f4fb3575e93fec3054f59c052b82762f",
+    "sha256": "97de0194b6df756aaf243a182c356654630f29ffa0a6e360f4b99ae3834f7afb",
+    "bytes": 64620,
+    "frames": 27,
+    "durationMs": 1620
+  },
+  "1f914": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f914/512.webp",
+    "sourceSha256": "4f8cbd8d563d8bf16d4d7043c3e91afcfe514389bd7e81cc5624f6097aa2053c",
+    "sha256": "12b1f3b1d2f40f9db52b386074dcfc99b6562ff40ef38d36638fb6c5ff3d297f",
+    "bytes": 61332,
+    "frames": 30,
+    "durationMs": 1800
+  },
+  "1f92f": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f92f/512.webp",
+    "sourceSha256": "9bda8e4f7c8941625b0ae64c2c3c85c794bbbe14f8e7bdd13b92b34c726ac59e",
+    "sha256": "de6985cbe050f678385c5adc95f1ebceab42877f96bc5d8858c9011171fb9a99",
+    "bytes": 76976,
+    "frames": 42,
+    "durationMs": 2610
+  },
+  "1f631": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f631/512.webp",
+    "sourceSha256": "960377ff1bbe23d763c32facd45654d1d3b38aaa9d4f5cc4b296bf3c79b9b007",
+    "sha256": "9aec82d3551a1631f4d3d3437b7de5a303823bc76564479180a4d4cea7e4d575",
+    "bytes": 49966,
+    "frames": 24,
+    "durationMs": 1530
+  },
+  "1f621": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f621/512.webp",
+    "sourceSha256": "0404e358adb2ed3bcefe415af7d5dfe3fd150946b1ffde7926337b34ce05ac3d",
+    "sha256": "29ecdb09018563a84d287cd1fa0e5466d1a1e915d3821aefb93dc6935a3c480d",
+    "bytes": 80964,
+    "frames": 43,
+    "durationMs": 2700
+  },
+  "1f929": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f929/512.webp",
+    "sourceSha256": "878a5c5ac1397cf4f79cb73bdb4d077e0eb19b633ebc46dbdf53ecb74223d2b6",
+    "sha256": "18575bde7ecfec3116b0d7b29936a1b17789278c3c157cdd06e83d3696ca6e9f",
+    "bytes": 67056,
+    "frames": 30,
+    "durationMs": 1800
+  },
+  "1f922": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f922/512.webp",
+    "sourceSha256": "5f504ea0019e50c0a07ed24097ecc663546c7c58e9a5f6ca456b7f7c62941c4a",
+    "sha256": "a3bffeee0cebf3ecbf4dffd0035c664204e43c1d04ac63d87c56e3c697ef2873",
+    "bytes": 69920,
+    "frames": 36,
+    "durationMs": 2281
+  },
+  "1f4a9": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f4a9/512.webp",
+    "sourceSha256": "1794d4885bfe35a83e8957d2031832af455443afbe7291638df63ac7eacd8ab0",
+    "sha256": "f81621d221c57f1dbfdcd5dad4bc535e24a719f3b98ceeddf0e71ace96ecf6f2",
+    "bytes": 63448,
+    "frames": 36,
+    "durationMs": 2160
+  },
+  "1f921": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f921/512.webp",
+    "sourceSha256": "3827a17cc811a5c131a69220eca0d8330135ae1a60184db61cadc6c959d5c58b",
+    "sha256": "9ce75bcdbaaf0a41d9c1d50f67d9bd9950017b5e34191c1df0a73f82c869bb63",
+    "bytes": 65416,
+    "frames": 29,
+    "durationMs": 1862
+  },
+  "1f62d": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f62d/512.webp",
+    "sourceSha256": "13a7a4b7e6d920b83f899ca64312bed80280507e93c04bd6e2361764db975a50",
+    "sha256": "d917255e8854b8cc488e32fd5664008e6f988a6cfcd161a39e5bd17ea0f2dc58",
+    "bytes": 62048,
+    "frames": 30,
+    "durationMs": 1800
+  },
+  "1f60c": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f60c/512.webp",
+    "sourceSha256": "246334419df307e3ae84f0b47501a9908723d24b3f4feb25a8e2d8385f697cf6",
+    "sha256": "862d73c19e6f6ebd10d1beff8593d11889cc77abb890500d7ea030c8ff850308",
+    "bytes": 79214,
+    "frames": 40,
+    "durationMs": 2610
+  },
+  "1f602": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f602/512.webp",
+    "sourceSha256": "281d5ceb7881fe9393c200ea16c73a4d53af58b4ff04d76a46c432e7e4dd0901",
+    "sha256": "c22e6ac4bb9dbfbd46c6180ca387cd975d46e51fe6bc79605b56f1c9db4f6dfb",
+    "bytes": 69552,
+    "frames": 30,
+    "durationMs": 1770
+  },
+  "1f62e": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f62e/512.webp",
+    "sourceSha256": "ef22fc1e1f4508a0bb2f5a889fe03d1da5fc528d3d63136e31bf29149c4426b5",
+    "sha256": "596b33f4a8b9c92fc8288180416d3187e275352500d16eaebf57dcef068067e2",
+    "bytes": 46306,
+    "frames": 34,
+    "durationMs": 2280
+  },
+  "1f622": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f622/512.webp",
+    "sourceSha256": "d2601ea4398ad6154ace98fb3d786049a92cf6bccd0c9c58a835da72ed5b960a",
+    "sha256": "2372f755652188fcd58fa11c9fe0f51031e6d6e7cffaceaa7c594d8db80851d4",
+    "bytes": 54082,
+    "frames": 28,
+    "durationMs": 1650
+  },
+  "1f970": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f970/512.webp",
+    "sourceSha256": "7734ab5ea4f0f8169df1f9d0faa00983d1d535b9d73b8d4243250531ea9ed898",
+    "sha256": "4bbfcc471ab38aa9ae039c9b1ed20ef0cc7b1601daf12674b0eab7f49ebb1b86",
+    "bytes": 58470,
+    "frames": 25,
+    "durationMs": 1470
+  },
+  "1f60d": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f60d/512.webp",
+    "sourceSha256": "f9a12dd0779299de1c77d8c6168be39ad0f5c579b7ac46f9c77d60be042bc3de",
+    "sha256": "b0058c6a8b9f4a57ab968982ddb36fe291eccd6cc248fbb30d3ecb8e0bfacef3",
+    "bytes": 54694,
+    "frames": 26,
+    "durationMs": 1560
+  },
+  "1f60e": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f60e/512.webp",
+    "sourceSha256": "16e9f241e5471c77bd94b3ff1fbdfd4a37e2056d6485256db41729165b57e66f",
+    "sha256": "8c18b5dd871d64b00ced56d2c78cc77dabd960ad2638da5d4d98264a75c8b475",
+    "bytes": 68496,
+    "frames": 32,
+    "durationMs": 2190
+  },
+  "1f609": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f609/512.webp",
+    "sourceSha256": "ab2dfbceeae29a7a1b6ff0bb2cfb9d2abb779b0b3dbb428907ecdf7532b383fb",
+    "sha256": "cf53e77badc1e1e17d0d010bfbb96a0713271a786cf5825074fae538773b2de4",
+    "bytes": 53670,
+    "frames": 28,
+    "durationMs": 2250
+  },
+  "1f60a": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f60a/512.webp",
+    "sourceSha256": "cd29299c0bfd6c49484c3e536208a81ba1473b80e7236ba7b6ca07c81a21dd6e",
+    "sha256": "eb467e50077950f0bf7ed44d19c51638430e3e844d219cd3967bab1be3e7fb09",
+    "bytes": 69468,
+    "frames": 37,
+    "durationMs": 2400
+  },
+  "1f642": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f642/512.webp",
+    "sourceSha256": "649b1026c246417a42e7bb6d0dcb1b3832c7eef8ace5a2e2167270850295b075",
+    "sha256": "b9263d9e3e913c6059b9fac99b3d7c52158ade0d6e925218eae2fbd3621c91b7",
+    "bytes": 52314,
+    "frames": 29,
+    "durationMs": 3000
+  },
+  "1f643": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f643/512.webp",
+    "sourceSha256": "4df5aa853f57b632d7ce78956c6effa191bc4d9057d5bd93100173452af6a1c5",
+    "sha256": "25bb65116d98e306f0d810efa935229d8fd5822897742b275dbe7c34b9213ac8",
+    "bytes": 19244,
+    "frames": 23,
+    "durationMs": 1590
+  },
+  "1f60b": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f60b/512.webp",
+    "sourceSha256": "326317843daeaf9929226597fd5b14622ed1077bb9d29741a953c12f9ddc211d",
+    "sha256": "c408c1696acd928988710db95ac7b1c4affd46f00788b241793b523ff3fee5e3",
+    "bytes": 41616,
+    "frames": 22,
+    "durationMs": 1290
+  },
+  "1f61b": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f61b/512.webp",
+    "sourceSha256": "80e803f587b61d70d05ed3a7be4f7c992cedacbcf43decd897700e4922a1c346",
+    "sha256": "54e956e0b0c44f738e8cead758d04a6b04956ab7e805a131a912a465c6ee7831",
+    "bytes": 49392,
+    "frames": 27,
+    "durationMs": 1800
+  },
+  "1f61c": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f61c/512.webp",
+    "sourceSha256": "a892eb657ad8643aab9f7a535c0f9709a19e2fd7ed16d13e250dfe68cc601d8e",
+    "sha256": "1e4143fee7b66457c4826f71cfbce24f7006b3e76f3e51937449a2524c6eaa24",
+    "bytes": 39806,
+    "frames": 21,
+    "durationMs": 1440
+  },
+  "1f92a": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f92a/512.webp",
+    "sourceSha256": "9c442622ad3613f98bc0f88705856972c31b84869df366d1535f99812c6ff22a",
+    "sha256": "fb141b1600dea085a833a901b73e972e8f32d89c533f60e0d01cbb47cd96f7c9",
+    "bytes": 53132,
+    "frames": 28,
+    "durationMs": 1650
+  },
+  "1f9d0": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f9d0/512.webp",
+    "sourceSha256": "3df2a5daf0aa56d5d7a2440bb99e1b95cd255dacd63a87eb4c4fa34e39901baf",
+    "sha256": "811873e3fcb824a0e3f8e434d1a6f4a7a9bb7400c4b835339d38a9544ce5c046",
+    "bytes": 96418,
+    "frames": 50,
+    "durationMs": 3060
+  },
+  "1f913": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f913/512.webp",
+    "sourceSha256": "febaf220b3d57f8d0b3d2ad9b2ea65abac93bbbc49b5a3c862c499811d327c48",
+    "sha256": "ddcb31394d41060a4691c9bf2f030b8151e279b826ac5cf7bdc5074eb0550bb7",
+    "bytes": 75418,
+    "frames": 33,
+    "durationMs": 2711
+  },
+  "1f607": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f607/512.webp",
+    "sourceSha256": "438e8256a8fce73e9fa439fcb0b7b55ed7d9cabaa2dab6c617a6a59067ed1c0e",
+    "sha256": "e8e5192aa0e72285d2c0284eb9a48506211100bec260eccf675c3b1dd27716cf",
+    "bytes": 97614,
+    "frames": 49,
+    "durationMs": 3090
+  },
+  "1f917": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f917/512.webp",
+    "sourceSha256": "a8807ffe440c7f9b13095256079cad2ff12e92caad4a203d49b3199987e54628",
+    "sha256": "9dd178676b257e959a1ecb82a2ace8799956164f19f4a581e9f2a695d57bb86a",
+    "bytes": 62530,
+    "frames": 27,
+    "durationMs": 1800
+  },
+  "1f92d": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f92d/512.webp",
+    "sourceSha256": "611a57c74c6c2599de4ca115c9b6519fdb8bb66573f2c58ee898c88378f7944c",
+    "sha256": "6a3bc8042782bdf2d468e64f69fae412c85027ae076defcdc36e56e9f53e9757",
+    "bytes": 57110,
+    "frames": 27,
+    "durationMs": 1620
+  },
+  "1f92b": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f92b/512.webp",
+    "sourceSha256": "86e9f17633ec9264b99dea4f7b2bc9893b27e8560f07246dd1987960c36d782e",
+    "sha256": "0aa90800ddcf5b492418466c13f6a33ae9ad863cef4c507ee6f1191243848747",
+    "bytes": 57094,
+    "frames": 28,
+    "durationMs": 1800
+  },
+  "1f925": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f925/512.webp",
+    "sourceSha256": "dad1ea38bc730265cec832457ee124f0493816a29b5d60c78386baf809b709ef",
+    "sha256": "86eed76a906215a69cf16bcb779dbba8e7a8f559a65214ef419c7146d4bdb229",
+    "bytes": 52576,
+    "frames": 29,
+    "durationMs": 1740
+  },
+  "1f610": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f610/512.webp",
+    "sourceSha256": "4e6b21870397d5ee9ef64ebcf4860e9be736280ce21ff7607b5adf41791b4bed",
+    "sha256": "e4752bd9f32308e2de8574d9d5cc43a7ebf4409a74728bd63a682b2082feaea8",
+    "bytes": 6696,
+    "frames": 11,
+    "durationMs": 3000
+  },
+  "1f611": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f611/512.webp",
+    "sourceSha256": "4804d828c4e21141642e186a47def627f877c18d9b512d4a08a80612c34eb844",
+    "sha256": "137595d7e245360324412bf745ef161959637701869681696ae89165e22919ba",
+    "bytes": 30412,
+    "frames": 19,
+    "durationMs": 2250
+  },
+  "1f636": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f636/512.webp",
+    "sourceSha256": "367955c5d7d434c06f0a20afec43741fb8ac1b46945ffa36b24cbfea784960b3",
+    "sha256": "b9eafbdecb8f8f90b9bf1623a38698a5dbeebf6948e1eff73f9d802654d7429d",
+    "bytes": 7722,
+    "frames": 11,
+    "durationMs": 3000
+  },
+  "1f60f": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f60f/512.webp",
+    "sourceSha256": "58a0c12facc58d7a8484f79faac8ea4202824eaa2366efa6d1554569a7ea94f1",
+    "sha256": "acbdbdbdc8e153c25982f0919db862370240c06be3c715cbede625fcae6d3ae9",
+    "bytes": 46226,
+    "frames": 26,
+    "durationMs": 1800
+  },
+  "1f612": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f612/512.webp",
+    "sourceSha256": "ed7e150c8afe48bb2c965d114100f1789e36eea2a4fc902403d6d522afaa0827",
+    "sha256": "1679a90e4b9081bef43cb07e167d32a4baf29a3d340250e58722315b06ca8bd5",
+    "bytes": 70766,
+    "frames": 41,
+    "durationMs": 2880
+  },
+  "1f644": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f644/512.webp",
+    "sourceSha256": "324bde5da39264d5cbd61308aae42174fb03081349333e0467e144402e94f1a1",
+    "sha256": "78fdf7ad59c4a31a2e1e67f65abe6a8a13ae378ac0f4b948df822f88ce2239ab",
+    "bytes": 36420,
+    "frames": 42,
+    "durationMs": 2940
+  },
+  "1f62c": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f62c/512.webp",
+    "sourceSha256": "f3b9b8733f225f47e6d1da430bc367cc386b1546ac45f6c746a8d6048ab9d163",
+    "sha256": "afc2b6ffcc842df37b8ab654b04effed92ce3421e3b8b071d3757a8fa9912435",
+    "bytes": 17266,
+    "frames": 19,
+    "durationMs": 2670
+  },
+  "1f910": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f910/512.webp",
+    "sourceSha256": "c70878162e569be78a9303ef6cbf2891e8232a4a554c4bac7462cb8f5bf8619b",
+    "sha256": "1baed35cc624010690de91ca1cf814c58e40a5f734b0167e49d3846ce40c71bd",
+    "bytes": 67432,
+    "frames": 36,
+    "durationMs": 3133
+  },
+  "1f62a": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f62a/512.webp",
+    "sourceSha256": "cb6e310714ab9417a965eb1219bd5e4ff9728c608e3055148c7e5ced54e45897",
+    "sha256": "69b635dc80ac23bb129fc3540d92f5e724cbd96e96ac2ffb017ebc606b3cf55b",
+    "bytes": 63546,
+    "frames": 30,
+    "durationMs": 1800
+  },
+  "1f634": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f634/512.webp",
+    "sourceSha256": "ca41f50126de30ef67ae2df42f17ae3fd2ffd7deb7b1bba6d2e4141b1ff2ce3f",
+    "sha256": "c06527138de2ee78ae2013b5a043d13c9a426236f610c9381426d27e39e25c49",
+    "bytes": 67634,
+    "frames": 30,
+    "durationMs": 1800
+  },
+  "1f924": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f924/512.webp",
+    "sourceSha256": "5a3589b1dd928b45ea967cdfa2fe0d1f2ab2ac1bb8a2eadf09d0b088ab6e968e",
+    "sha256": "4c04d119ad60041c7d842b9087fbe5eec94172f5bfaf5748ebae1a1363b67a7c",
+    "bytes": 61670,
+    "frames": 33,
+    "durationMs": 1950
+  },
+  "1f637": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f637/512.webp",
+    "sourceSha256": "3b6246502da01aa6076ded25b2ff8c9e272181185191443f5edbbe3c74b0c889",
+    "sha256": "fc58d5b726c6ca780c668bdb5f46cdfc08e81eefb25c63ee046bead0429be71a",
+    "bytes": 43334,
+    "frames": 22,
+    "durationMs": 1841
+  },
+  "1f912": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f912/512.webp",
+    "sourceSha256": "c1cfd1c049cd189b69113af3140bf421162375c0087d31c062759c432742b1a5",
+    "sha256": "6fe8e4dc1bfa072e369ad1317f3f48bf8fc0aaa9df32decd182d554f73b12447",
+    "bytes": 56862,
+    "frames": 35,
+    "durationMs": 2130
+  },
+  "1f915": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f915/512.webp",
+    "sourceSha256": "d658dccf27fb86d446e02088af60e94312c7a3a098007beb7b85475e7d5c6c45",
+    "sha256": "236f9cc2238a9707351774c29d305ce3ee15a9ef7ac04472136cef388a6588d6",
+    "bytes": 9802,
+    "frames": 8,
+    "durationMs": 2379
+  },
+  "1f911": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f911/512.webp",
+    "sourceSha256": "d036d9792344ec4d7955fe8aff8ffd272859ffc69aaabbecc8c5606bd654c822",
+    "sha256": "c72f64c17dce681fa40017ad1a15922b4b35c767aa83324c19c710d416c49f51",
+    "bytes": 55506,
+    "frames": 30,
+    "durationMs": 2160
+  },
+  "1f608": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f608/512.webp",
+    "sourceSha256": "bf5119c4aca66355ff2f0cf68688f6c89a8bd1665272cc20136c3cfaf8291c81",
+    "sha256": "694e07f28771d072c62f023c6d249e11187883f24995ca705782034991180675",
+    "bytes": 87754,
+    "frames": 48,
+    "durationMs": 3150
+  },
+  "1f47f": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f47f/512.webp",
+    "sourceSha256": "dff2f3b79711846c5f272deea14de95d98b6339e1f09265c9c1ee9be86447604",
+    "sha256": "efbd9a8f5a5a20557cdd38a53b1eb97270c6a2df6148483e8c35492306feff6f",
+    "bytes": 98708,
+    "frames": 53,
+    "durationMs": 3150
+  },
+  "1f47b": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f47b/512.webp",
+    "sourceSha256": "5a609490cb6e1931fc7074666b53cf1685c313fae347daceed330545eae429fc",
+    "sha256": "7f7f64e1b81f8d2477bcc08770c4ad044f6c9558547cfe70cd423d0171751881",
+    "bytes": 54972,
+    "frames": 36,
+    "durationMs": 2160
+  },
+  "1f480": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f480/512.webp",
+    "sourceSha256": "dc404ecc31c03d4c4e5d650300f5b6468b6cc05ca30afa7b483eb07776bef3ed",
+    "sha256": "e4834b8a3d56a984291b36713f06473740857987645b6e94b1bd3524ea7237f6",
+    "bytes": 89782,
+    "frames": 52,
+    "durationMs": 4240
+  },
+  "2620": null,
+  "1f47d": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f47d/512.webp",
+    "sourceSha256": "42e884527fc8e7c2e64389dbf49ccd6e1b7d65fd79dde95bb9ba5e03f6f8ab07",
+    "sha256": "6367e3cd2003fb0aa718bea20f408b987bc1e47f6161f3d1a26b6e39d651e047",
+    "bytes": 66182,
+    "frames": 36,
+    "durationMs": 2738
+  },
+  "1f916": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f916/512.webp",
+    "sourceSha256": "0b4793fdd518d65b6804449bad81d26908b14e1b6bb5bf560ad8bdeded5a72e2",
+    "sha256": "c6e3bacb867f065593b4dd444693a472ceaf8d018ef45ab7a0ef2489105fc31b",
+    "bytes": 45980,
+    "frames": 37,
+    "durationMs": 2464
+  },
+  "1f383": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f383/512.webp",
+    "sourceSha256": "df3ad81457c8b4c088bbc39de33748a70a1194012457408c8f1aa08794dc0a2b",
+    "sha256": "609407bd6844f629e704ab1bc03e10d3672ed2458bf402dfe4228216b8fcc676",
+    "bytes": 62172,
+    "frames": 41,
+    "durationMs": 2581
+  },
+  "1f44d": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f44d/512.webp",
+    "sourceSha256": "f456f329ec2457828e0511f31b855e1b3b21c91f53d7d465dc3a1aa7d3b73383",
+    "sha256": "8f3c70e1bbcacab0b5ea94573bd8590a3b369a331a3b852acbe6ba6ff9a1465b",
+    "bytes": 22310,
+    "frames": 12,
+    "durationMs": 720
+  },
+  "1f91d": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f91d/512.webp",
+    "sourceSha256": "400eb5356ebec89f85ddf6e955bfa6ad56103cdda2282c9e02f0160285545c0b",
+    "sha256": "026ea300e4e0d53fc991abadd276a4cca331b6f9ed4a494d84b9065282341908",
+    "bytes": 32000,
+    "frames": 18,
+    "durationMs": 1080
+  },
+  "1f44f": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f44f/512.webp",
+    "sourceSha256": "424f978963357da085a444e1b659028a5f7ccd927d72158ef5c97c82d3ddfd20",
+    "sha256": "1d34261a8f1c24f1a7775557c5b613d0ba79523bd843eafbb00b1fb33146188a",
+    "bytes": 23856,
+    "frames": 11,
+    "durationMs": 660
+  },
+  "1f44e": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f44e/512.webp",
+    "sourceSha256": "9e03c03aff588ce944addcbc80ed16a80146c70546a795adc40201b4a3b5a184",
+    "sha256": "53139552a93eab1475712c77399c5b75294869e0280d386b9bb7d8842844277c",
+    "bytes": 23386,
+    "frames": 13,
+    "durationMs": 780
+  },
+  "1f64f": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f64f/512.webp",
+    "sourceSha256": "648eb5ee603e776d4452ea78f2a89b7b08c3f4110d4afa7ed3954622a1499a68",
+    "sha256": "732c176ed51b1028bb9b9743123a284413389785c9bffb3f62244ca82c40c697",
+    "bytes": 28486,
+    "frames": 13,
+    "durationMs": 750
+  },
+  "1f44c": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f44c/512.webp",
+    "sourceSha256": "6a47bdee96c2a11af32d6a4eed5c6528292aa64e6333fb204b7112939ec6c8fd",
+    "sha256": "dc5b0a0c9941a62b7f145aad7b06b0545ac7ca114d42b72181f9159f2cab773e",
+    "bytes": 27186,
+    "frames": 14,
+    "durationMs": 810
+  },
+  "1f440": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f440/512.webp",
+    "sourceSha256": "44da2fbd6e9ec1dee07808fef5216fb8393d78155c7f104be99525215961e07e",
+    "sha256": "bb6b2df36b206b440f957e20e1e53e4c24eb6af24a7b6d6b794ccb729b9b549a",
+    "bytes": 32956,
+    "frames": 19,
+    "durationMs": 1355
+  },
+  "1f4aa": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f4aa/512.webp",
+    "sourceSha256": "fdbf8494ad8c8235bcfec94e751b5570a398bb328020e5282f3923535389548e",
+    "sha256": "c6bdb94046641d02e2bc05cd225c9a64c90494249a157b2f476505b1c2e8fb64",
+    "bytes": 42060,
+    "frames": 24,
+    "durationMs": 1410
+  },
+  "1f64c": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f64c/512.webp",
+    "sourceSha256": "51accc877dc32ac4ecfbb5745b89afdf1f610c7e23c4fb292f4bea3dd603fa44",
+    "sha256": "19437ff11d8c2cc8ec8278928995600af7c54d4ad28e890f19fdb8880fc6ac2f",
+    "bytes": 44468,
+    "frames": 20,
+    "durationMs": 1414
+  },
+  "1f44b": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f44b/512.webp",
+    "sourceSha256": "2209749c084f37f914e7878346b1285896f4ce9d1a3f5294db93779c00186fa9",
+    "sha256": "6da40f5e93717e59c49225e3feff322b0cfa0aa2cef339623755d60032f67a1a",
+    "bytes": 58252,
+    "frames": 23,
+    "durationMs": 1380
+  },
+  "1f91a": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f91a/512.webp",
+    "sourceSha256": "0cc8872a9aad9db555de3f21837e616e951ef3e4ad990e7078c3ebb9c83bf413",
+    "sha256": "8d43fd4d7f699dd3d17f28c2aaa89828d008c7a9c80deac73cc6574b356a1dac",
+    "bytes": 47742,
+    "frames": 35,
+    "durationMs": 2100
+  },
+  "1f590": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f590/512.webp",
+    "sourceSha256": "5801f6e66cdd301de7025a31b659da211e9e33b8a33e3f66900af43a7f6b8669",
+    "sha256": "b976990b24144c704e075603443ba27b3e86ef5723ddbacc1826bbd78d05b5e4",
+    "bytes": 35124,
+    "frames": 18,
+    "durationMs": 1482
+  },
+  "270b": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/270b/512.webp",
+    "sourceSha256": "e91f0bd997147d9d8446bf0e21db7dc49aeee9fa87992a485460db1acbd84f34",
+    "sha256": "38cc3caa99229b82fe0d439608ed848db578e71cb193ed08779bf3d8e8aa98f9",
+    "bytes": 30148,
+    "frames": 17,
+    "durationMs": 1020
+  },
+  "1f596": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f596/512.webp",
+    "sourceSha256": "b9dba5d6d27b1b9868f397f2c8a48e4c2ad2ba88524d79cb79416f4cef4859b8",
+    "sha256": "9f2d2aeaacbcb3ed82b01f9b24fa66a7c295604286e05836c134290296f6cebf",
+    "bytes": 32392,
+    "frames": 16,
+    "durationMs": 1238
+  },
+  "1f90f": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f90f/512.webp",
+    "sourceSha256": "aae8db4e8723b71894677e4d3a61f4e8e0e51860881a4bca4546ab19a20f10ea",
+    "sha256": "17e8a158afa9b2b40aa660d27e2ca0228c7ececbe2a719f0d7fefc5b653943e1",
+    "bytes": 48460,
+    "frames": 23,
+    "durationMs": 1350
+  },
+  "270c": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/270c/512.webp",
+    "sourceSha256": "116172b2c450bd61d99c844eba03d92bc16ca674e98ec6d76f927f409d5cf321",
+    "sha256": "e087466fc22dd37bd40f313dee17e57af73890f516d04dc231bd78cc6d989be4",
+    "bytes": 39478,
+    "frames": 22,
+    "durationMs": 1656
+  },
+  "1f91e": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f91e/512.webp",
+    "sourceSha256": "7c592dbd1102d01d98c5d70c429d14da9814815243714bc5e2cae12891929ba0",
+    "sha256": "43332b68ae4f0379bfb86f855ad2f7b7a2213b8fcf75d9e2873a6a1c851f3084",
+    "bytes": 42068,
+    "frames": 28,
+    "durationMs": 1680
+  },
+  "1f91f": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f91f/512.webp",
+    "sourceSha256": "20a0b2b1427912415f4485339a429a3b4080808a17b67f2d6c0637c5b22a8e46",
+    "sha256": "3de5760f27004d3f5d04521260aa80d8714267e356ce52db41c11ad601100cb7",
+    "bytes": 96578,
+    "frames": 49,
+    "durationMs": 2940
+  },
+  "1f918": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f918/512.webp",
+    "sourceSha256": "e4efe9caae7e3623e932ff3c70239c21d8381ccec4cfa14bcc72fbe52a638dda",
+    "sha256": "019fae1141c7df58d3d931f52cbf58782a7e627e29b0c264f4bd225a69dfd47d",
+    "bytes": 44486,
+    "frames": 23,
+    "durationMs": 1350
+  },
+  "1f919": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f919/512.webp",
+    "sourceSha256": "8deeda7b308598ed18d5174643ae186e32475878a37b536af4b70d4c27a6f846",
+    "sha256": "e8c94300c64f9fb1a5ede9a17ad9a3b680b3919f8c65b857bac9a133acaa31ef",
+    "bytes": 66310,
+    "frames": 39,
+    "durationMs": 2310
+  },
+  "1f448": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f448/512.webp",
+    "sourceSha256": "6052413f7e156fac049eed0a156876506a81d5a1a58e01b3f3872a5551041f3a",
+    "sha256": "37669f00d261e697779eefe01cb44750609e6f8833215c9194250e01bc1ddca9",
+    "bytes": 34836,
+    "frames": 27,
+    "durationMs": 1590
+  },
+  "1f449": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f449/512.webp",
+    "sourceSha256": "d29baece441dbd71bd5863ff40fdf1e9d4361e202f9ccb82d2e5871c1af3c7d2",
+    "sha256": "4f00bb8b2380b029c8d5f2a8b40e55f06da721da186be2494dad21de0423c96a",
+    "bytes": 37318,
+    "frames": 27,
+    "durationMs": 1590
+  },
+  "1f446": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f446/512.webp",
+    "sourceSha256": "ef0df793e0a2283643a7dcce6ae0523ac5679719ede14a68aa6f4ec4f205ba34",
+    "sha256": "6d3990d59f8d5a35c9c5e9348f15e0d558b23c6ece868536cde2669cfbf4d66d",
+    "bytes": 36742,
+    "frames": 27,
+    "durationMs": 1590
+  },
+  "1f447": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f447/512.webp",
+    "sourceSha256": "a8ea44e666cb70f4eb4bd47f871fedd17433a7433f6418730f07b0f6e7df1657",
+    "sha256": "44f51bbcebf32b837261591664c4de6b1bb0d2cb78ae9a8f3b382277a83adfd1",
+    "bytes": 36186,
+    "frames": 27,
+    "durationMs": 1590
+  },
+  "261d": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/261d/512.webp",
+    "sourceSha256": "d5523df079e4aaeafef32ad60e6af99ca31a08d88508baa3d796422ed6504a37",
+    "sha256": "5e391d61c6342363061d11420eb49fe4f42864c6aa49d04b30100db44ae38870",
+    "bytes": 37840,
+    "frames": 23,
+    "durationMs": 1380
+  },
+  "270d": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/270d/512.webp",
+    "sourceSha256": "33e4bbcc3a0aa53a56655af971fe9c6a4916107d512d98c6eb0d1cac62ee3047",
+    "sha256": "0560dd8f6975f852686e0da2f9e325982e693b60e0c9fb2c8e99fe1d173c6e0d",
+    "bytes": 59768,
+    "frames": 30,
+    "durationMs": 1891
+  },
+  "1f485": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f485/512.webp",
+    "sourceSha256": "9fa22da84f82a7144195aa9ab2db9fa1c91f38557bc79b3ecda7183009f25fb5",
+    "sha256": "d96234b74236d0291a445f9a6ccfdf9486156b471cccd56d048e50364e6645a2",
+    "bytes": 55464,
+    "frames": 40,
+    "durationMs": 2430
+  },
+  "1f933": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f933/512.webp",
+    "sourceSha256": "14b50b3d3be9fada9d0e0c57fce259d886d011d129cc609d4b28fe58e4585957",
+    "sha256": "c2f87d189f53128f826c63186c37821dcf292e68bf3d7da38b35858668ed0872",
+    "bytes": 47626,
+    "frames": 29,
+    "durationMs": 1710
+  },
+  "1f483": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f483/512.webp",
+    "sourceSha256": "7265091130b74db0def65ddeefbc689fb4a9df10200048f7346f22ccc02a5dfd",
+    "sha256": "d2e897daf7ee4f3e99a2928cf1eccd83f7bac000e8392bcba9f509a2d558417e",
+    "bytes": 55338,
+    "frames": 24,
+    "durationMs": 1440
+  },
+  "1f57a": null,
+  "1f407": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f407/512.webp",
+    "sourceSha256": "97a573219abb21325c8c1e3c34fea614d2ce3e07c548241df0033ab5fd479db5",
+    "sha256": "eae427b5dead6739199b9fbb5b0960ff7cdf366aed88448f8965db03b0728ec3",
+    "bytes": 32762,
+    "frames": 19,
+    "durationMs": 1201
+  },
+  "1f63a": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f63a/512.webp",
+    "sourceSha256": "e367ab219a5675574ef93c7568173f4b8e431fcd01ab24c8c794ab3d097142f9",
+    "sha256": "1107e2783a4f110adafbafb357f994650498d2af0bb085eb4d48bed85d6e84cc",
+    "bytes": 70622,
+    "frames": 31,
+    "durationMs": 2226
+  },
+  "1f638": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f638/512.webp",
+    "sourceSha256": "4e40fc584a9e44476285aadfea4e00a77c236093d12d2fab823db50ab09c7c49",
+    "sha256": "de2a3ce555071661c7ffece9260cd4736e4ef02d21977ec7ab06854fdba72415",
+    "bytes": 112090,
+    "frames": 48,
+    "durationMs": 3031
+  },
+  "1f639": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f639/512.webp",
+    "sourceSha256": "fb74827de06e6af1eb0c25a82f7ba78e7dffb1c7b5bdcc745aba4c2181b10fe1",
+    "sha256": "2802fc342e4ecaed6faa4335697f3e4e7526fdfd1b6524ff659dfd2ca0675bf0",
+    "bytes": 113284,
+    "frames": 44,
+    "durationMs": 2640
+  },
+  "1f63b": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f63b/512.webp",
+    "sourceSha256": "4a2eb43b5ce2a2be6be812c22b067fb71908ab1c1d34c40cb6676218936bb0fc",
+    "sha256": "b4c42bef2d323c0340c5cdf8bf5ee7963e7c38215cb6283dd0b1ee519f73018a",
+    "bytes": 94730,
+    "frames": 39,
+    "durationMs": 2310
+  },
+  "1f63c": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f63c/512.webp",
+    "sourceSha256": "57ed3444c6a17c8c2f864881fae33356837f7da94b78f87afa39da699a864919",
+    "sha256": "7824403796559ee3377237dc811591cc179b494358460174ba0d16496f378e9a",
+    "bytes": 59458,
+    "frames": 26,
+    "durationMs": 2660
+  },
+  "1f63d": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f63d/512.webp",
+    "sourceSha256": "eaf39fcefe0d76dc3d5ea71983b04cd80985ab68f2454e68b6138ac0ebd3edb2",
+    "sha256": "af0cc837b28a88f72be17afbaf1831f576717359aa104ddf5230da64c957b4ad",
+    "bytes": 68522,
+    "frames": 32,
+    "durationMs": 2164
+  },
+  "1f640": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f640/512.webp",
+    "sourceSha256": "cd65ae44fad4c5dbe00f6d47746669a10b84b7fbc204aeba9b24833be76e3dea",
+    "sha256": "873c1963734f000b8c7366c86216650e258637fe549d893d4411aefac05d0de3",
+    "bytes": 64194,
+    "frames": 28,
+    "durationMs": 2169
+  },
+  "1f63f": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f63f/512.webp",
+    "sourceSha256": "01b9897f3a91c7aaee8a81dc1b8a23db61bb2377b1e87e901f11e82e0fdbd36c",
+    "sha256": "b0746fae4c1d31655833a1815b9bd5b5b89ec818e2880d8c855d034d11999ffb",
+    "bytes": 58694,
+    "frames": 26,
+    "durationMs": 1530
+  },
+  "1f63e": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f63e/512.webp",
+    "sourceSha256": "0a938abce2b8688afeb8e49b5735ba0748ac022047ad1430dfe26452835e7c75",
+    "sha256": "d3facc62eb0e7932961f8aa959666a50b364f946c7f21a1798290736f31ad3f9",
+    "bytes": 61810,
+    "frames": 29,
+    "durationMs": 1893
+  },
+  "1f389": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f389/512.webp",
+    "sourceSha256": "aeff875df341bb7136fa4c84538000a3d4aea8a6dd16245ee8fa1c8bbfeb6ddc",
+    "sha256": "970596e1411e73ccd1d1e6f7ec82452ae664e9ed0f28971da746c32aee3dd6b5",
+    "bytes": 47978,
+    "frames": 21,
+    "durationMs": 1380
+  },
+  "1f680": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f680/512.webp",
+    "sourceSha256": "304e710dde0b42b15673e10937623789adf72cae569c0e0defe7ec21c0bdf293",
+    "sha256": "d7f182a27271a6640d4ebef6d47fd676c6a8feccbc60c319cbc7ead6807294c8",
+    "bytes": 26354,
+    "frames": 10,
+    "durationMs": 600
+  },
+  "1f38a": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f38a/512.webp",
+    "sourceSha256": "85ca810ff267af819a4025d934af583986ebb6efd1bef4e03be11e49a102cb88",
+    "sha256": "9a32b19c80887a581d2c5eedec52be01417b7fd93a94d640a41b61081d497fd5",
+    "bytes": 60794,
+    "frames": 32,
+    "durationMs": 2160
+  },
+  "1f388": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f388/512.webp",
+    "sourceSha256": "d022299b1b1503d9d825e010b20f3727e95c7c90c7bdb0d7095d22a5b9bede13",
+    "sha256": "95914869a56e7a888fc8ebb3604e94311e9f144134cc3f4f022b1741a1d6679c",
+    "bytes": 35856,
+    "frames": 24,
+    "durationMs": 1440
+  },
+  "1f3af": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f3af/512.webp",
+    "sourceSha256": "5c561a2c23796b9cbc0aa966f8899b4f1019616a456d35224f819caa163ee4d9",
+    "sha256": "7c5702b60e82c7cfadb296f05e44091d89f80166befab301ee33ce329a8da3ea",
+    "bytes": 60252,
+    "frames": 27,
+    "durationMs": 2110
+  },
+  "1f3c6": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f3c6/512.webp",
+    "sourceSha256": "955179c00e7203213f98c3f7ba45c83a4cf9b8a7c2a9a5526c2bda907154ef1e",
+    "sha256": "201ac313ab47dbec188c4d43e9a2ae5bb11150907419f5b7fb58edefe9925458",
+    "bytes": 71626,
+    "frames": 34,
+    "durationMs": 2040
+  },
+  "1f947": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f947/512.webp",
+    "sourceSha256": "51f7a3e549979f61319667a5672cf0c7e2d332b0786caf2881aaf0152761e477",
+    "sha256": "b9d27015edbc23760433e678e23dad28a644ea02e03a4b7a535deb3a715a5a8f",
+    "bytes": 55842,
+    "frames": 30,
+    "durationMs": 1800
+  },
+  "2764": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/2764/512.webp",
+    "sourceSha256": "8f02722ca349a1b1a0c7a02d7ec3c716e09eccdbf696adf89c67afe2bb175b56",
+    "sha256": "d500ffa5235dfda9d9055c3fe386b5c244260bc9e76487370a46e3032023baa9",
+    "bytes": 42826,
+    "frames": 28,
+    "durationMs": 1800
+  },
+  "1f494": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f494/512.webp",
+    "sourceSha256": "ccbcbf0f3e1fdb8307072f5f13794f7fa44234518c28bf426ef4f393c0a62cea",
+    "sha256": "66b5412728f3b6d1b04a891bf99861839c0a5a5f1a4fff649cd9074ba9d87d27",
+    "bytes": 77248,
+    "frames": 47,
+    "durationMs": 2970
+  },
+  "1f525": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f525/512.webp",
+    "sourceSha256": "8c18972a71041700a1da4d9a1586640fb6d55eff4dc64efd29efde6a384a2ff5",
+    "sha256": "adbfb16fb4172af59e77fa39b1b86c9815a577de49073467590d3ccd3cf08852",
+    "bytes": 28822,
+    "frames": 17,
+    "durationMs": 990
+  },
+  "2705": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/2705/512.webp",
+    "sourceSha256": "21d3e05606b552902dc221e04c8144809ed650ee2c018a01249803d5ccf85bdb",
+    "sha256": "d79de1fd134b1cf61335dfbf36155beec410002105968f0f215dff9a0f4ab6a2",
+    "bytes": 11100,
+    "frames": 14,
+    "durationMs": 1310
+  },
+  "1f4af": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f4af/512.webp",
+    "sourceSha256": "c9fdc6075233c9fbd1b77b4df0107187a543223b9ff566fd65a887f221b21008",
+    "sha256": "d73f6da0a2c067995c98a4b3f2ff06748e5eb0eccea0bf5db24f5e9bb932a33e",
+    "bytes": 63786,
+    "frames": 23,
+    "durationMs": 2040
+  },
+  "2757": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/2757/512.webp",
+    "sourceSha256": "776e02dd6533b36ef17137c709dc8381bacec6fa55bbbcf182b075565b9439f6",
+    "sha256": "19ff60c9b1303413a3d15acfcb2cce0292e3031a9d9e1a18c8be2801179aeb51",
+    "bytes": 20900,
+    "frames": 43,
+    "durationMs": 2580
+  },
+  "1f4a1": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f4a1/512.webp",
+    "sourceSha256": "aae84c10307e31042dd9dc3d6c1b4561dd3965cde26343646d16a155119f408a",
+    "sha256": "5c832644ee1c71cdc9b7d6053367bd61ca62bdfd6b990da51e3a63c4f0413c41",
+    "bytes": 12380,
+    "frames": 9,
+    "durationMs": 872
+  },
+  "2b50": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/2b50/512.webp",
+    "sourceSha256": "b93aeff891b9601812738449efedab7085b0f6da74c2c39edd652ad523fc76b2",
+    "sha256": "a6c7fd0eaab8439403326fcaedcc4c88dda918c56489fefa6416a8a48c850abe",
+    "bytes": 60556,
+    "frames": 37,
+    "durationMs": 2190
+  },
+  "1f31f": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f31f/512.webp",
+    "sourceSha256": "0fe335effdfa7a35334ebd1f2c4b4ba12bfb7a21dd44a458080bc45b365a073d",
+    "sha256": "5e8ad3edaaf4b2e8fcd367ab806a5e2646d200e0f66c15bdaaed3bbb8892cfe1",
+    "bytes": 37258,
+    "frames": 27,
+    "durationMs": 1620
+  },
+  "26a1": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/26a1/512.webp",
+    "sourceSha256": "36bf86bbe97c9a5b0e312d0a65ed12538a282456e86d491268cb15b098c19715",
+    "sha256": "3ead89ca707f2fd65b0c722f817cfd9e89231cfa2eb07f7f8f6b063a7d1754a0",
+    "bytes": 28318,
+    "frames": 21,
+    "durationMs": 1260
+  },
+  "1f4a5": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f4a5/512.webp",
+    "sourceSha256": "5db437158db94661f626069d3b68f87ca223108adccb5aa12467bbe003c584c3",
+    "sha256": "3a28e6dc1df25af6c5364a3393a54b5f0881cf377f9ed72a15a6007b53241cb5",
+    "bytes": 53212,
+    "frames": 19,
+    "durationMs": 1140
+  },
+  "1f4a6": null,
+  "1f4cc": null,
+  "1f4ce": null,
+  "1f9e0": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f9e0/512.webp",
+    "sourceSha256": "d145a399be0961ee3d3f1657ccb829a3b81ef50fb7eafb0404d5be16eacf141f",
+    "sha256": "83841bb09ac8685f5dd7a2f5ebff60a2f56c3d1fdc3faded94772aa2bac6af8f",
+    "bytes": 39656,
+    "frames": 20,
+    "durationMs": 1200
+  },
+  "1f4ac": {
+    "source": "https://fonts.gstatic.com/s/e/notoemoji/latest/1f4ac/512.webp",
+    "sourceSha256": "58118865ee9119afd2b095f168cefbafc41df6ec54743753c3ddf8bd81f550cc",
+    "sha256": "fa25e6298481d7e3af3610b2f216eda225add98c05140e4b2baf27611c917066",
+    "bytes": 19468,
+    "frames": 57,
+    "durationMs": 3662
+  }
+}

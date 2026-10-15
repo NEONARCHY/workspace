@@ -1,3 +1,4 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
 import { useState } from "react";
 import type {
   ChatMember,
@@ -306,9 +307,9 @@ export function ChatManagement({
           </DialogTitle>
           <DialogContent className="chat-settings-content">
             {error && (
-              <p role="alert" className="inline-error">
+              <WorkspaceNotice tone="error" role="alert" className="inline-error">
                 {error}
-              </p>
+              </WorkspaceNotice>
             )}
             {!chat && (
               <div className="chat-create-intro">

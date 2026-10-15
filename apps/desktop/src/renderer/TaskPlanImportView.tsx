@@ -1,3 +1,4 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
 import { useState } from "react";
 import { Button, Input } from "@fluentui/react-components";
 import type {
@@ -367,6 +368,6 @@ export function TaskPlanImportView({
         <div className="task-plan-import-footer"><Button appearance="primary" disabled={busy || rows.every((row) => row.mode === "skip")} onClick={() => void confirm()}>{busy ? "Сохраняем…" : "Подтвердить и создать план"}</Button><Button disabled={busy} onClick={onClose}>Отмена</Button></div>
       </> : null}
     </>}
-    {error ? <p className="task-plan-error" role="alert">{error}</p> : null}
+    {error ? <WorkspaceNotice tone="error" className="task-plan-error" role="alert">{error}</WorkspaceNotice> : null}
   </section>;
 }

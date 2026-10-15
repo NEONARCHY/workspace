@@ -1,3 +1,4 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
 import { Input } from "./WorkspaceInput";
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
 import { WorkspaceSelect } from "./WorkspaceSelect";
@@ -237,7 +238,7 @@ export function TelegramAccessView({ token, departments }: { readonly token: str
       <Input aria-label="Поиск сотрудников для Telegram" type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Имя, логин или должность" />
     </label>
     {departments ? <EmployeeScopeSwitch value={scope} onChange={setScope} label="Сотрудники с доступом к Telegram-ботам" /> : null}
-    {error ? <div className="telegram-access-page-error" role="alert">{error} <button type="button" onClick={() => void refresh()}>Повторить</button></div> : null}
+    {error ? <WorkspaceNotice tone="error" className="telegram-access-page-error" role="alert" actions={<><button type="button" onClick={() => void refresh()}>Повторить</button></>}>{error} </WorkspaceNotice> : null}
     {loading && !registry ? <p className="telegram-access-loading" role="status">Загружаем сотрудников…</p> : null}
     {registry ? <div className="telegram-access-list" aria-label="Сотрудники и доступ к ботам">
       {people.length ? people.map((person) => <PersonAccessRow

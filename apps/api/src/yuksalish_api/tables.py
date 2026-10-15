@@ -401,6 +401,8 @@ attachments = sa.Table(
     sa.Column("document_role", sa.String(24)),
     sa.Column("media_kind", sa.String(16)),
     sa.Column("media_duration_ms", sa.Integer()),
+    sa.Column("image_width", sa.Integer()),
+    sa.Column("image_height", sa.Integer()),
     sa.Column("media_codec", sa.String(32)),
     sa.Column("created_at", sa.DateTime(timezone=True)),
 )

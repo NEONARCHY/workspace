@@ -1,3 +1,4 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
 import { useCallback, useEffect, useState } from "react";
 import { Button, DialogSurface, Input, Textarea } from "@fluentui/react-components";
 import type {
@@ -194,7 +195,7 @@ export function ProjectImportDialog({ token, currentUserId, people, projectId, o
           {draft.documents.map((document) => <div className="project-import-file" key={document.id}><span>{document.name} · {Math.ceil(document.size / 1024)} КиБ</span>
             <Button size="small" disabled={busy} onClick={() => void download(document.id)}>Скачать</Button></div>)}</details> : null}
         {pending ? <p role="status">Документы {draft.state === "queued" ? "ожидают обработки" : "анализируются"}. Можно закрыть окно и вернуться к черновику позже.</p> : null}
-        {draft?.state === "failed" ? <p role="alert">{draft.error}</p> : null}
+        {draft?.state === "failed" ? <WorkspaceNotice tone="error" role="alert">{draft.error}</WorkspaceNotice> : null}
         {(ready || archive) && content ? <>
           <nav className="project-import-tabs" aria-label="Части шаблона">{([
             ["passport", "Паспорт"], ["plan", "Направления и работы"], ["budget", "Бюджет"], ["issues", "Проверка"],
@@ -292,7 +293,7 @@ export function ProjectImportDialog({ token, currentUserId, people, projectId, o
             onChange={(event) => setReviewed(event.target.checked)} />Проверил сохранённый паспорт, работы, бюджет и решения по исходным документам.</label> : null}
         </> : null}
       </div>
-      <footer>{error ? <p role="alert">{error}</p> : null}
+      <footer>{error ? <WorkspaceNotice tone="error" role="alert">{error}</WorkspaceNotice> : null}
         {dirty && draft ? <Button disabled={busy} onClick={() => { accept(draft); setError(""); }}>Отменить правки</Button> : null}
         <Button disabled={busy || dirty} onClick={() => void reload()}>Повторить загрузку</Button>
         {ready ? <><Button disabled={busy || !dirty} onClick={() => void run(async () => {

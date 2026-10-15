@@ -1,3 +1,4 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
 import { SpatialSort, SpatialSortItem } from "./SpatialSort";
 import { useEffect, useMemo, useRef, useState, type ReactNode, type TransitionEvent } from "react";
 import type { ChatMessage, ChatSummary, PersonalChatAction, PersonalPreferences, WorkspaceDepartment, WorkspacePerson } from "@yuksalish/contracts";
@@ -180,7 +181,7 @@ export function OrganizedChatList({ token, chats, messages, people = [], departm
       </Menu>
     </div>
     {archive && <p className="chat-organization-hint">Архив только для вас. Переписка и уведомления сохраняются.</p>}
-    {error && <div className="organization-error" role="alert">{error}</div>}
+    {error && <WorkspaceNotice tone="error" className="organization-error" role="alert">{error}</WorkspaceNotice>}
     <span className="organization-live" role="status">{busy ? "Сохраняем настройки чатов…" : notice}</span>
     {bucket === "chats" && departments ? <EmployeeScopeSwitch value={peopleScope} onChange={setPeopleScope} label="Контакты" /> : null}
     <SpatialSort ids={visibleChats.map(chat => chat.id)} onMove={move} verticalIntent>

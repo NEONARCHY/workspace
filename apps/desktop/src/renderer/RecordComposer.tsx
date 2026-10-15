@@ -1,3 +1,4 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
 import { useEffect, useId, useRef, useState, type ReactNode, type SyntheticEvent } from "react";
 import { Button } from "@fluentui/react-components";
 import { Dismiss20Regular } from "@fluentui/react-icons";
@@ -11,7 +12,7 @@ export function RecordComposer({ title, titleId, eyebrow, children, aside, stage
   readonly busy?: boolean; readonly error?: string; readonly hint: string;
   readonly submitLabel: string; readonly submitDisabled?: boolean; readonly onClose: () => void;
 }) {
-  const errorRef = useRef<HTMLParagraphElement>(null);
+  const errorRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     // Disabling a focused submit button may move focus to body. Restore it inside the dialog.
     if (error && !busy) errorRef.current?.focus();
@@ -29,7 +30,7 @@ export function RecordComposer({ title, titleId, eyebrow, children, aside, stage
       </div>
     </div>
     <footer className="record-composer-footer">
-      {error ? <p ref={errorRef} tabIndex={-1} className="record-composer-error" role="alert">{error}</p> : null}
+      {error ? <WorkspaceNotice tone="error" ref={errorRef} tabIndex={-1} className="record-composer-error" role="alert">{error}</WorkspaceNotice> : null}
       <span>{hint}</span>
       <div><Button type="button" disabled={busy} onClick={onClose}>Отмена</Button><Button type="submit" appearance="primary" disabled={busy || submitDisabled}>{busy ? "Сохраняем…" : submitLabel}</Button></div>
     </footer>

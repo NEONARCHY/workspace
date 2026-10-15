@@ -1,3 +1,4 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
 import { Input } from "./WorkspaceInput";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
@@ -246,7 +247,7 @@ export function IncomingLettersView({ token, people, currentUserId, canEdit, foc
     </div>
     <div className="edo-incoming-layout">
       <div className="edo-incoming-list" aria-label="Список входящих писем">
-        {error ? <div role="alert" className="edo-incoming-error">{error}<button type="button" onClick={() => void refreshList()}>Повторить</button></div> : null}
+        {error ? <WorkspaceNotice tone="error" role="alert" className="edo-incoming-error" actions={<><button type="button" onClick={() => void refreshList()}>Повторить</button></>}>{error}</WorkspaceNotice> : null}
         {loading ? <p role="status" className="edo-incoming-empty">Загружаем письма…</p> : null}
         {!loading && !error && registry?.data.length === 0 ? <p className="edo-incoming-empty">Письма по выбранным условиям не найдены.</p> : null}
         {!loading && !error && registry?.data.map((item) => <button type="button" key={item.id}
@@ -269,8 +270,8 @@ export function IncomingLettersView({ token, people, currentUserId, canEdit, foc
       <div className="edo-incoming-detail" aria-label="Карточка письма">
         {selectedId === undefined ? <div className="edo-incoming-empty">Выберите письмо, чтобы увидеть содержание и документы.</div> : null}
         {detailLoading ? <p role="status" className="edo-incoming-empty">Открываем письмо…</p> : null}
-        {detailError ? <div role="alert" className="edo-incoming-error">{detailError}
-          <button type="button" onClick={() => selectedId !== undefined && void refreshDetail(selectedId)}>Повторить</button></div> : null}
+        {detailError ? <WorkspaceNotice tone="error" role="alert" className="edo-incoming-error" actions={<><button type="button" onClick={() => selectedId !== undefined && void refreshDetail(selectedId)}>Повторить</button></>}>{detailError}
+          </WorkspaceNotice> : null}
         {letter && !detailLoading ? <>
           <div className="edo-incoming-detail-title"><div><p className="edo-incoming-eyebrow">Входящий № {letter.in_num || letter.id}</p>
             <h2>{letter.organization || "Входящее письмо"}</h2></div>
@@ -325,13 +326,14 @@ export function IncomingLettersView({ token, people, currentUserId, canEdit, foc
               </div>
             </> : <p>Действия доступны только назначенному исполнителю.</p>}
           </div> : null}
-          {actionError ? <div role="alert" className="edo-incoming-error">{actionError}
-            {needsReconcile ? <button type="button" onClick={() => void refreshDetail(letter.id)}>Проверить состояние письма</button> : null}</div> : null}
+          {actionError ? <WorkspaceNotice tone="error" role="alert" className="edo-incoming-error">{actionError}
+            {needsReconcile ? <button type="button" onClick={() => void refreshDetail(letter.id)}>Проверить состояние письма</button> : null}</WorkspaceNotice> : null}
         </> : null}
       </div>
     </div>
     {preview && <Suspense fallback={<span role="status">Открываем просмотрщик…</span>}>
       <ExternalFileViewer key={`${preview.letterId}:${preview.file.id}`} attachment={preview.file} onClose={() => setPreview(undefined)}
+        images={letter?.id === preview.letterId ? letter.attachments.map((file) => ({ attachment: { id: file.id, fileName: file.name, contentType: "", byteSize: file.size }, caption: letter.description ?? undefined })).filter((item) => fileViewerKind(item.attachment) === "image") : undefined}
         onLoad={loadPreview} onLoadOffice={loadOfficePreview} onDownload={downloadPreview} />
     </Suspense>}
   </section>;

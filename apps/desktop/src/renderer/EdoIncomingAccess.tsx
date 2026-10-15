@@ -1,3 +1,4 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
 import { useEffect, useRef, useState } from "react";
 import { Button, Checkbox, Spinner } from "@fluentui/react-components";
 import { Input } from "./WorkspaceInput";
@@ -68,7 +69,7 @@ export function EdoIncomingAccess({ token, people }: {
       <p>Администраторы и суперадминистратор видят все входящие. Для руководителей можно выбрать подразделения или открыть весь реестр.</p>
       <p>Настройка разрешает читать карточки и вложения. Выполнять письмо и добавлять исполнителей по-прежнему могут только назначенные исполнители.</p>
     </div><Button disabled={saving} onClick={reload}>Обновить настройки</Button></div>
-    {error ? <p role="alert">{error}</p> : null}
+    {error ? <WorkspaceNotice tone="error" role="alert">{error}</WorkspaceNotice> : null}
     {notice ? <p role="status">{notice}</p> : null}
     {!config && !error ? <Spinner label="Загружаем настройки доступа" /> : null}
     {config ? <div className="edo-access-form">

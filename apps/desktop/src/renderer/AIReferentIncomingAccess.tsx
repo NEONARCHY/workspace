@@ -1,3 +1,4 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
 import { useEffect, useRef, useState } from "react";
 import type {
   AIReferentIncomingAccess as AccessConfiguration,
@@ -69,7 +70,7 @@ export function AIReferentIncomingAccess({ token, people }: {
     <div className="ai-referent-page-intro"><div><span className="ai-referent-eyebrow">Права на переписку</span>
       <h2>Кому видны входящие</h2><p>Выберите сотрудника и режим доступа. Изменяется только Workspace — настройки робота Exat остаются прежними.</p>
     </div><Button disabled={saving} onClick={() => { setAttempt((value) => value + 1); setSelected(""); setDraft(undefined); setConfig(undefined); setError(""); }}>Обновить настройки</Button></div>
-    {error ? <p role="alert" className="ai-referent-feedback">{error}</p> : null}
+    {error ? <WorkspaceNotice tone="error" role="alert" className="ai-referent-feedback">{error}</WorkspaceNotice> : null}
     {notice ? <p role="status">{notice}</p> : null}
     {!config && !error ? <Spinner label="Загружаем видимость" /> : null}
     {config ? <div className="ai-referent-access-editor">

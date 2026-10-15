@@ -11,10 +11,6 @@ body .app-provider .file-viewer-surface .file-viewer-content { flex: 1; min-heig
 .file-viewer-state strong { color: var(--ws-text); font-size: 18px; }
 .file-viewer-state p { max-width: 50ch; overflow-wrap: anywhere; }
 .file-viewer-content iframe { width: 100%; height: 100%; min-height: 300px; border: 0; }
-.file-viewer-surface .file-viewer-content .file-viewer-image-stage { display: grid; place-items: center; width: max-content; min-width: 100%; min-height: 100%; padding: 36px; }
-.file-viewer-image-size { position: relative; margin: auto; flex: none; }
-.file-viewer-image-stage img { max-width: 100%; max-height: 60dvh; object-fit: contain; transform-origin: center; transition: transform var(--ws-motion-fast) var(--ws-ease); }
-.file-viewer-image-stage img.fitted { position: absolute; left: 50%; top: 50%; max-width: none; max-height: none; }
 .file-viewer-video video { display: block; width: 100%; height: 100%; object-fit: contain; background: var(--ws-navy); border-radius: 10px; }
 .file-viewer-audio-stage { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 24px; min-height: 100%; }
 .file-viewer-audio-art { display: grid; place-items: center; width: 112px; height: 112px; border-radius: 28px; background: var(--ws-selected); color: var(--ws-link); font-size: 52px; }
@@ -42,5 +38,4 @@ body .app-provider .file-viewer-surface .file-viewer-pdf { overflow: hidden; dis
 .file-viewer-pdf-loading { position: sticky; top: 12px; z-index: 1; padding: 12px; background: var(--ws-surface); border-radius: 12px; }
 .file-viewer-pdf-text { padding: 20px; margin-top: 16px; background: var(--ws-theme-surface, white); border-radius: 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
 @media (max-width: 640px) { .app-provider .file-viewer-surface { width: calc(100vw - 16px); height: calc(100dvh - 16px); padding: 14px; } .file-viewer-toolbar, .file-viewer-footer { flex-wrap: wrap; } body .app-provider .file-viewer-surface .file-viewer-content { padding: 12px; } }
-@media (prefers-reduced-motion: reduce) { .file-viewer-image-stage img { transition: none; } }
 @media (forced-colors: active) { body .app-provider .file-viewer-surface .file-viewer-content, .file-viewer-document, .file-viewer-grid { background: Canvas; color: CanvasText; } }

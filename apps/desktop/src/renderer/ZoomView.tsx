@@ -1,3 +1,4 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
 import { workspacePlatform } from "./platform-adapter";
 import { validatedZoomLink } from "../shared/zoom-link";
@@ -232,9 +233,9 @@ function BusyStrip({ availability, day, timeZone }: {
         ))}
       </ul>
       {availability && !availability.hostCalendarSynced ? (
-        <p className="zoom-strip-warning" role="status">
+        <WorkspaceNotice tone="warning" className="zoom-strip-warning" role="status">
           Календарь Zoom сейчас недоступен — показаны только конференции Workspace.
-        </p>
+        </WorkspaceNotice>
       ) : null}
     </div>
   );
@@ -415,7 +416,7 @@ export function ZoomView({
       </WorkspaceSectionHeader>
 
       {error || actionError ? (
-        <div className="auth-error zoom-error" role="alert">{actionError || error}</div>
+        <WorkspaceNotice tone="error" className="auth-error zoom-error" role="alert">{actionError || error}</WorkspaceNotice>
       ) : null}
       {notice ? <p className="zoom-notice" role="status">{notice}</p> : null}
 
@@ -564,7 +565,7 @@ export function ZoomView({
                     ))}
                 </div>
               </fieldset>
-              {formError ? <div className="auth-error" role="alert">{formError}</div> : null}
+              {formError ? <WorkspaceNotice tone="error" className="auth-error" role="alert">{formError}</WorkspaceNotice> : null}
               <div className="zoom-form-actions">
                 <Button appearance="primary" disabled={busy || !draft.topic.trim()} onClick={() => void save()}>
                   {draft.meetingId ? "Сохранить изменения" : "Создать конференцию"}

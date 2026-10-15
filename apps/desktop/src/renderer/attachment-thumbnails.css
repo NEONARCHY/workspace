@@ -1,8 +1,39 @@
 .attachment-chips :is(.attachment-image-card, .attachment-video-card) { width: 360px; max-width: 100%; }
 .attachment-chips .attachment-image-thumb { display: grid; place-items: center; grid-template-columns: 1fr; margin: 0; padding: 0; width: 100%; aspect-ratio: 1.6; overflow: hidden; background: var(--ws-muted-surface); }
 .attachment-image-thumb img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.attachment-chips .attachment-image-album { position: relative; flex: none; width: 420px; max-width: 100%; overflow: hidden; border-radius: 14px; background: var(--ws-muted-surface); }
+.attachment-chips .attachment-image-album > .attachment-image-thumb { position: absolute; aspect-ratio: auto; margin: 0; padding: 0; border: 0; border-radius: 0; }
+.attachment-image-album .attachment-image-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.messenger-view .attachment-chips .attachment-image-album > .attachment-image-thumb { border-radius: 0; }
+.attachment-image-thumb > .attachment-image-placeholder { display: grid; place-items: center; width: 100%; height: 100%; min-height: 0; color: var(--ws-muted); font-size: 12px; background: var(--ws-muted-surface); }
 .attachment-chips .attachment-image-card.has-image-size .attachment-image-thumb { aspect-ratio: auto; }
 .attachment-image-card.has-image-size .attachment-image-thumb img { height: auto; }
+
+/* Shared document row: one open/download target, filename above file size. */
+.attachment-chips button.attachment-document {
+  display: grid; grid-template-columns: 44px minmax(0, 1fr); align-items: center;
+  gap: 11px; min-width: 0; min-height: 56px; padding: 6px 10px;
+  border-radius: 12px; text-align: left;
+}
+.attachment-chips .attachment-document > .attachment-document-icon {
+  display: grid; place-items: center; width: 44px; height: 44px;
+  border-radius: 50%; background: var(--ws-attachment-icon-fill, #348fc9); color: #fff;
+}
+.attachment-chips .attachment-document-icon > svg { width: 23px; height: 23px; color: inherit; }
+.attachment-chips .attachment-document > .attachment-document-copy {
+  display: grid; gap: 3px; min-width: 0; white-space: normal;
+}
+.attachment-document-copy > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; line-height: 18px; }
+.attachment-document-copy > small { color: var(--ws-muted); font-size: 12px; line-height: 16px; }
+.attachment-chips button.attachment-document:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 2px; }
+.attachment-chips button.attachment-document:hover { background-color: var(--ws-selected); }
+.messenger-view .message-body .attachment-chips button.attachment-document {
+  width: 100%; border: 0; background: transparent; box-shadow: none; color: inherit; padding: 3px 0;
+}
+.messenger-view .message.own .attachment-document-copy > small { color: var(--chat-outgoing-meta, var(--ws-muted)); }
+@media (forced-colors: active) {
+  .attachment-chips .attachment-document > .attachment-document-icon { color: ButtonText; background: ButtonFace; border: 1px solid ButtonText; }
+}
 .messenger-view .message-body.has-attachments { width: max-content; max-width: 100%; }
 .messenger-view .message-body.has-attachments .attachment-chips { width: max-content; max-width: 100%; flex-direction: column; align-items: flex-start; }
 .attachment-chips .attachment-video-card .attachment-video-player { width: 100%; }

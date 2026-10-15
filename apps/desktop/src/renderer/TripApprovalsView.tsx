@@ -1,3 +1,4 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
 import { lazy, Suspense, useCallback, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { SpatialBoard, SpatialCard, SpatialLane } from "./SpatialBoard";
@@ -8,7 +9,8 @@ import { RecordComposer, RecordSection, RecordSummary } from "./RecordComposer";
 import { ChatIconPicker } from "./ChatAvatar";
 import type { ChatAvatarIconKey } from "@yuksalish/contracts";
 import { currentTripWorkflow, tripColumns, tripDropAction } from "./trip-board";
-import type { AssistantActionDraft, OfficeFilePreview, TripAction, TripRequest, TripRequestInput, TripStage, WorkflowDefinition, WorkflowPosition, WorkspaceDepartment, WorkspacePerson } from "@yuksalish/contracts";
+import type { AssistantActionDraft, TripAction, TripRequest, TripRequestInput, TripStage, WorkflowDefinition, WorkflowPosition, WorkspaceDepartment, WorkspacePerson } from "@yuksalish/contracts";
+import type { OfficePreviewResult } from "./file-viewer-kind";
 import { Avatar, Badge, Button, Checkbox, DialogSurface, DialogTitle, Textarea, useRestoreFocusTarget } from "@fluentui/react-components";
 import { Input } from "./WorkspaceInput";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
@@ -59,7 +61,7 @@ interface TripApprovalsViewProps {
   readonly onRemoveBrief?: (requestId: string) => Promise<TripRequest | undefined>;
   readonly onUploadSignature?: (requestId: string, content: Blob) => Promise<TripRequest | undefined>;
   readonly onSetOriginalSignature?: (requestId: string, confirmed: boolean) => Promise<TripRequest | undefined>;
-  readonly onLoadBriefOffice?: (requestId: string, sheet: number, offset: number, signal?: AbortSignal) => Promise<OfficeFilePreview>;
+  readonly onLoadBriefOffice?: (requestId: string, sheet: number, offset: number, signal?: AbortSignal) => Promise<OfficePreviewResult>;
   readonly onDownloadDocument?: (requestId: string, kind: "attachment" | "brief" | "order" | "order-preview", signal?: AbortSignal) => Promise<Blob | undefined>;
   readonly onOpenChat?: (chatId: string) => void;
   readonly renderTripChat?: (request: TripRequest) => ReactNode;
@@ -307,7 +309,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
     } catch { setError("Не удалось удалить заявку. Проверьте подключение и её текущий статус."); }
     finally { busyRef.current = false; setBusy(false); }
   };
-  const feedback = error ? <p className="trip-feedback error" role="alert">{error}</p> : null;
+  const feedback = error ? <WorkspaceNotice tone="error" className="trip-feedback error" role="alert"><span>{error}</span></WorkspaceNotice> : null;
 
   return (
     <section className="workspace-view bp7-view trips-view trip-view workflow-process-view" aria-label="Согласование поездок">
@@ -321,7 +323,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
       </WorkspaceSectionHeader>
 
       {mapOpen ? <Suspense fallback={<p className="trip-board-help" role="status">Загружаем карту поездок…</p>}><TripWorldMap requests={requests} people={people} onOpenRequest={openRequest} onClose={() => { setMapOpen(false); mapToggleRef.current?.focus(); }} /></Suspense>
-        : section === "designer" && workflow && onSaveWorkflow && onPublishWorkflow ? <><p className="trip-document-reminder">Для этапа «Согласование первого заместителя» выберите должность или конкретного сотрудника, затем сохраните и опубликуйте маршрут. Новые отправки закрепляют выбранного согласующего; уже отправленные заявки сохраняют прежнее назначение. Председатель и подпись приказа по-прежнему определяются настройками HR.</p><ProcessWorkflowDesigner workflow={currentTripWorkflow(workflow, positions)} processName="Маршрут поездок" accent="trip" people={people} departments={departments} positions={positions} onSave={onSaveWorkflow} onPublish={onPublishWorkflow} /></> : <>
+        : section === "designer" && workflow && onSaveWorkflow && onPublishWorkflow ? <><WorkspaceNotice tone="warning" className="trip-document-reminder">Для этапа «Согласование первого заместителя» выберите должность или конкретного сотрудника, затем сохраните и опубликуйте маршрут. Новые отправки закрепляют выбранного согласующего; уже отправленные заявки сохраняют прежнее назначение. Председатель и подпись приказа по-прежнему определяются настройками HR.</WorkspaceNotice><ProcessWorkflowDesigner workflow={currentTripWorkflow(workflow, positions)} processName="Маршрут поездок" accent="trip" people={people} departments={departments} positions={positions} onSave={onSaveWorkflow} onPublish={onPublishWorkflow} /></> : <>
       <section className="ws2-process-overview trip-overview" aria-label="Сводка по командировкам">
         <button type="button" className="ws2-process-focus" onClick={() => setFilter("running")}>
           <strong>{actionableCount}</strong>
@@ -345,8 +347,8 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
         </SlidingSegmented>
       </div>
       {feedback}
-      {view === "kanban" && visibleRequests.some((request) => request.stage === "hr") ? <p className="trip-board-help">Заявка прежнего маршрута на кадровом этапе доступна во вкладке «Список».</p> : null}
-      {visibleRequests.length === 0 ? <p className="trip-board-help">{requests.length ? "По выбранным фильтрам поездок нет. Измените поиск или выберите «Все»." : "Поездок пока нет. Создайте первую командировку — она появится в колонке «Запуск»."}</p> : null}
+      {view === "kanban" && visibleRequests.some((request) => request.stage === "hr") ? <WorkspaceNotice tone="info" className="trip-board-help" role="status"><span>Заявка прежнего маршрута на кадровом этапе доступна во вкладке «Список».</span></WorkspaceNotice> : null}
+      {visibleRequests.length === 0 ? <WorkspaceNotice tone="info" className="trip-board-help" role="status"><span>{requests.length ? "По выбранным фильтрам поездок нет. Измените поиск или выберите «Все»." : "Поездок пока нет. Создайте первую командировку — она появится в колонке «Запуск»."}</span></WorkspaceNotice> : null}
       {view === "kanban" ? (
         <SpatialBoard canDrop={(id, target) => { const request = requests.find(item => item.id === id); const action = request && tripDropAction(request, target as TripStage, isAdministrator); return !busy && !!action && !(request && (action === "submit" || action === "resubmit") && needsNewSignature(request)); }} onMove={async (id, target) => { const request = requests.find(item => item.id === id); const targetStage = target as TripStage; const action = request && tripDropAction(request, targetStage, isAdministrator); if (request && action && !((action === "submit" || action === "resubmit") && needsNewSignature(request))) { if (action === "move") await commitAction(request, action, `Перенос на этап «${displayTripColumns.find((column) => column.key === targetStage)?.label ?? targetStage}»`, targetStage); else await act(request, action); } }}>
         <div className="approval-kanban trip-kanban middle-pan-surface" role="region" tabIndex={0} aria-label="Стадии поездок" aria-busy={busy} {...boardPan}>
@@ -413,10 +415,10 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
               </div>
               {selected.canEdit && selected.requesterUserId === currentUser.id && selected.briefAttachmentName && onSetOriginalSignature ? <div className="trip-original-signature-choice"><Checkbox checked={Boolean(selected.originalSignatureConfirmed)} disabled={busy || (!selected.originalSignatureConfirmed && previewedBriefVersion !== `${selected.id}:${selected.updatedAt}`)} label="Оригинал билдирги уже подписан мной" onChange={(_, data) => void confirmOriginalSignature(selected, Boolean(data.checked))} /><p>{selected.originalSignatureConfirmed ? "Используем прикреплённый оригинал без дополнительной подписи. Снимите отметку, если нужно подписать в системе." : selected.briefAttachmentName.toLowerCase().endsWith(".docx") ? "Откройте документ. Встроенный просмотр Word показывает текст; для проверки подписи скачайте оригинал в просмотрщике." : "Сначала откройте и проверьте оригинал целиком. Если подпись уже есть в файле, подтвердите это здесь."}</p></div> : null}
               {selected.canEdit && selected.requesterUserId === currentUser.id && onUploadSignature && !selected.originalSignatureConfirmed ? <TripSignaturePad saved={selected.hasEmployeeSignature} disabled={busy} onSave={(content) => saveSignature(selected, content)} /> : null}
-              {selected.canEdit && needsNewSignature(selected) ? <p className="trip-document-reminder">Перед отправкой добавьте текст или оригинал билдирги и подтвердите подпись: в прикреплённом оригинале либо в системе. После исправления заявки подпись нужно подтвердить снова. Если данные менял суперадмин, подпись подтверждает инициатор.</p> : null}
-              {selected.status === "approved" ? <p role="status" className="trip-document-approved">Приказ зарегистрирован и подписан председателем. Участникам направлены уведомления.</p> : null}
-              {selected.status === "annulled" ? <p role="status" className="trip-document-reminder">Приказ аннулирован. Исходный подписанный документ и история решений сохранены.</p> : null}
-            </section> : selected.stage === "hr" ? <p className="trip-document-reminder">Эта поездка проходит прежний маршрут через кадровую службу.</p> : null}
+              {selected.canEdit && needsNewSignature(selected) ? <WorkspaceNotice tone="warning" className="trip-document-reminder">Перед отправкой добавьте текст или оригинал билдирги и подтвердите подпись: в прикреплённом оригинале либо в системе. После исправления заявки подпись нужно подтвердить снова. Если данные менял суперадмин, подпись подтверждает инициатор.</WorkspaceNotice> : null}
+              {selected.status === "approved" ? <WorkspaceNotice tone="success" role="status" className="trip-document-approved">Приказ зарегистрирован и подписан председателем. Участникам направлены уведомления.</WorkspaceNotice> : null}
+              {selected.status === "annulled" ? <WorkspaceNotice tone="warning" role="status" className="trip-document-reminder">Приказ аннулирован. Исходный подписанный документ и история решений сохранены.</WorkspaceNotice> : null}
+            </section> : selected.stage === "hr" ? <WorkspaceNotice tone="warning" className="trip-document-reminder">Эта поездка проходит прежний маршрут через кадровую службу.</WorkspaceNotice> : null}
             <div className="bp7-actions">
               {selected.canEdit ? <Button disabled={busy || Boolean(pendingDecision)} icon={<Edit24Regular />} onClick={() => { pendingCreatedRef.current = undefined; setBriefFile(undefined); setForm({ purpose: selected.purpose, destination: selected.destination, startDate: selected.startDate, endDate: selected.endDate, employeeIds: selected.employeeIds, briefText: selected.briefText ?? "", expenseSource: selected.expenseSource ?? "" }); setEmployeeQuery(""); setError(""); setFormMode("edit"); }}>Изменить</Button> : null}
               {selected.canDelete && onDelete ? <Button disabled={busy || Boolean(pendingDecision)} onClick={() => setConfirmDeleteId(selected.id)}>Удалить заявку</Button> : null}
