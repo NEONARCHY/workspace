@@ -39,13 +39,17 @@ to tasks in that column. Exact dates are suggested directly. A week range may us
 its final day only when the document heading supplies one unambiguous year. The
 desktop matches names only when exactly one active employee fits; unresolved names
 and dates remain editable and are not silently assigned to the importer. Nothing
-is created until the reviewed plan is confirmed.
+is created until the reviewed plan is confirmed. The preview counts incomplete
+included rows, names their original document positions, and can show only those
+rows; confirmation remains blocked until each has a title and primary assignee
+(or a selected existing task when linking).
 
 The 2026 annual `Иш режа` table has a dedicated seven-column import path.
 `Тадбирнинг номи` becomes the task title, `Муддати` the reviewed deadline,
-`Амалга ошириш механизми` the ordered checklist, the first matched employee in
-`Бажарувчи` the primary assignee and the remaining matched employees its
-co-assignees, `Масъул` the observer(s), and `Бажарилган ишлар` the description/expected
+`Амалга ошириш механизми` the ordered checklist, the first named employee in
+`Бажарувчи` the primary assignee only when uniquely matched; the remaining
+matched employees become co-assignees, `Масъул` the observer(s), and
+`Бажарилган ишлар` the description/expected
 result. Section headers are context, not tasks. The source file is read for preview
 and is not stored. Ambiguous names, department labels, recurring or moved deadlines
 require review; no person or exact date is fabricated. A green completed-work cell
