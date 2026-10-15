@@ -19,6 +19,10 @@ vi.mock("./FileViewer", () => ({
 vi.mock("./TripSignaturePad", () => ({
   TripSignaturePad: () => <div data-testid="signature-pad">Нарисуйте подпись</div>,
 }));
+vi.mock("./TripWorldMap", () => ({
+  TripWorldMap: ({ requests, onClose }: { requests: readonly TripRequest[]; onClose: () => void }) =>
+    <div data-testid="trip-map">Доступно поездок: {requests.length}<button type="button" onClick={onClose}>К поездкам</button></div>,
+}));
 
 const request: TripRequest = {
   id: "test-trip", number: "TR-TEST", requesterUserId: people[0]!.id,
@@ -49,6 +53,19 @@ describe("Trip approvals interaction", async () => {
     expect(status.querySelector(":scope > svg")).toHaveAttribute("aria-hidden", "true");
     expect(status.querySelector(".workspace-notice-content")).toHaveTextContent("в колонке «Запуск»");
   });
+  it("opens the map from the header and returns to trips", async () => {
+    setup();
+    const toggle = screen.getByRole("button", { name: "Интерактивная карта поездок" });
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(toggle);
+    expect(await screen.findByTestId("trip-map")).toHaveTextContent("Доступно поездок: 1");
+    expect(toggle).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: "К поездкам" }));
+    expect(screen.queryByTestId("trip-map")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Интерактивная карта поездок" })).toHaveAttribute("aria-pressed", "false");
+    expect(toggle).toHaveFocus();
+  });
+
   it("confirms soft deletion of an editable request before calling the API", async () => {
     installSpatialGeometry();
     const draft: TripRequest = {
@@ -121,7 +138,7 @@ describe("Trip approvals interaction", async () => {
       } }}
     /></FluentProvider>);
     expect(screen.queryByRole("textbox", { name: "Цель поездки" })).not.toBeInTheDocument();
-    expect(screen.getByRole("textbox", { name: "Куда едем" })).toHaveValue("Навои");
+    expect(screen.getByRole("combobox", { name: "Куда едем" })).toHaveValue("Навои");
     expect(onCreate).not.toHaveBeenCalled();
   });
   it("shows only the destination field and uploads a selected brief on save", async () => {
@@ -139,7 +156,7 @@ describe("Trip approvals interaction", async () => {
     expect(screen.queryByRole("textbox", { name: "Источник покрытия расходов" })).not.toBeInTheDocument();
     expect(screen.queryByText("Общее")).not.toBeInTheDocument();
     expect(brief).toHaveAttribute("type", "file");
-    fireEvent.change(screen.getByRole("textbox", { name: "Куда едем" }), { target: { value: "Термиз" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Куда едем" }), { target: { value: "Термиз" } });
     const file = new File(["%PDF-1.4"], "bildirgi.pdf", { type: "application/pdf" });
     fireEvent.change(brief, { target: { files: [file] } });
     expect(screen.getByText("bildirgi.pdf")).toBeInTheDocument();
@@ -164,13 +181,13 @@ describe("Trip approvals interaction", async () => {
       onCreate={onCreate} onUpdate={onUpdate} onAction={vi.fn()}
       onUploadBrief={onUploadBrief} /></FluentProvider>);
     fireEvent.click(screen.getByRole("button", { name: "Новая командировка" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "Куда едем" }), { target: { value: "Термиз" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Куда едем" }), { target: { value: "Термиз" } });
     fireEvent.change(screen.getByLabelText("Загрузить билдирги"), { target: {
       files: [new File(["%PDF-1.4"], "bildirgi.pdf", { type: "application/pdf" })],
     } });
     fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Черновик сохранён, но билдирги не загрузилась");
-    expect(screen.getByRole("textbox", { name: "Куда едем" })).toHaveValue("Термиз");
+    expect(screen.getByRole("combobox", { name: "Куда едем" })).toHaveValue("Термиз");
     fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
     await waitFor(() => expect(onUploadBrief).toHaveBeenCalledTimes(2));
     expect(onCreate).toHaveBeenCalledTimes(1);

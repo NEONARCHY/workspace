@@ -2236,7 +2236,7 @@ describe("corporate workspace authentication alpha", () => {
       "Входящие письма",
       "Лента",
       "Проекты",
-      "Согласование поездок",
+      "Поездки",
       "Отсутствия",
       "Работа с членами",
       "HR",
@@ -2296,7 +2296,7 @@ describe("corporate workspace authentication alpha", () => {
     render(<App />);
     await loginToWorkspace("aziza", "home");
 
-    clickWithFocus(screen.getByRole("button", { name: "Согласование поездок" }));
+    clickWithFocus(screen.getByRole("button", { name: "Поездки" }));
     clickWithFocus(await screen.findByRole("button", { name: "Новая командировка" }, { timeout: 5000 }));
     const form = within(await screen.findByRole("dialog", { name: "Создать заявку на поездку" }));
     // fireEvent.change does not focus an input as typing in the browser would.

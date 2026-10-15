@@ -76,7 +76,7 @@ export const fallbackModules: readonly ModuleDescriptor[] = [
   },
   {
     key: "trip_approvals",
-    label: { ru: "Согласование поездок", uz_cyrl: "Сафарни келишиш", uz_latn: "Safarni kelishish" },
+    label: { ru: "Поездки", uz_cyrl: "Сафарлар", uz_latn: "Safarlar" },
     route: "/trip-approvals",
     status: "available",
   },
