@@ -39,6 +39,51 @@ const card = () => document.querySelector(".trip-board-card")!;
 async function drop(target: string) { await dropSpatialCard(card(), column(target)); }
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 describe("Trip approvals interaction", async () => {
+  it("confirms soft deletion of an editable request before calling the API", async () => {
+    installSpatialGeometry();
+    const draft: TripRequest = {
+      ...request, stage: "launch", stageLabel: "Запуск", status: "draft",
+      statusLabel: "Черновик", canEdit: true, canDelete: true, allowedActions: ["submit"],
+    };
+    const onDelete = vi.fn(async () => undefined);
+    render(<FluentProvider theme={webLightTheme}><TripApprovalsView
+      requests={[draft]} people={people} currentUser={people[0]!}
+      onCreate={vi.fn()} onUpdate={vi.fn()} onAction={vi.fn()} onDelete={onDelete}
+    /></FluentProvider>);
+    fireEvent.click(card().querySelector(".approval-card-open")!);
+    fireEvent.click(screen.getByRole("button", { name: "Удалить заявку" }));
+    expect(onDelete).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Отмена" }));
+    expect(onDelete).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Удалить заявку" }));
+    fireEvent.click(screen.getByRole("button", { name: "Да, удалить" }));
+    await waitFor(() => expect(onDelete).toHaveBeenCalledWith(draft));
+  });
+
+  it("asks for a reason before withdrawing a sent request", async () => {
+    installSpatialGeometry();
+    const sent: TripRequest = {
+      ...request, stage: "deputy_approval", stageLabel: "Согласование первого заместителя",
+      workflowVersion: 3, allowedActions: ["withdraw"],
+    };
+    const onAction = vi.fn(async () => ({
+      ...sent, stage: "launch" as const, status: "needs_revision" as const,
+      allowedActions: ["resubmit" as const],
+    }));
+    render(<FluentProvider theme={webLightTheme}><TripApprovalsView
+      requests={[sent]} people={people} currentUser={people[0]!}
+      onCreate={vi.fn()} onUpdate={vi.fn()} onAction={onAction}
+    /></FluentProvider>);
+    fireEvent.click(card().querySelector(".approval-card-open")!);
+    fireEvent.click(screen.getByRole("button", { name: "Отозвать заявку" }));
+    expect(onAction).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByRole("textbox", { name: "Причина решения" }), {
+      target: { value: "Нужно исправить даты" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Подтвердить решение" }));
+    await waitFor(() => expect(onAction).toHaveBeenCalledWith(sent, "withdraw", "Нужно исправить даты"));
+  });
+
   it("preserves the agreed trip participants and creates only after saving the actual form", async () => {
     const onCreate = vi.fn(async () => undefined);
     render(<FluentProvider theme={webLightTheme}><TripApprovalsView

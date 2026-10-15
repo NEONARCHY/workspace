@@ -46,6 +46,21 @@ describe("ProcessWorkflowDesigner", () => {
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ id: "trip-draft", formSchema: { process: "trip" } }));
   });
 
+  it("configures the first deputy in trips but keeps the chair appointed in HR", () => {
+    const tripWorkflow: WorkflowDefinition = {
+      ...workflow, id: "trip-draft", formSchema: { process: "trip" },
+      nodes: [
+        { id: "deputy_approval", kind: "approval", label: "Первый заместитель", detail: "", positionX: 0, positionY: 0, config: {} },
+        { id: "manager_approval", kind: "approval", label: "Председатель", detail: "", positionX: 260, positionY: 0, config: {} },
+      ],
+    };
+    render(<ProcessWorkflowDesigner workflow={tripWorkflow} processName="Маршрут поездок" accent="trip" onSave={vi.fn()} onPublish={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "Конкретный согласующий" })).toBeInTheDocument();
+    fireEvent.click(document.querySelector('[data-id="manager_approval"]')!);
+    expect(screen.queryByRole("button", { name: "Конкретный согласующий" })).toBeNull();
+    expect(screen.getByText("Председатель назначается в настройках HR.")).toBeInTheDocument();
+  });
+
   it("saves a pastel stage colour and marks colours used by another stage", () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
     const coloredWorkflow: WorkflowDefinition = {

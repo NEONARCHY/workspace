@@ -195,7 +195,7 @@ async def context_chat_finished(connection: AsyncConnection, chat: Record,
         )
         result = await connection.execute(query.with_for_update() if lock else query)
         trip = result.mappings().first()
-        return trip is not None and (trip["status"] == "rejected" or (
+        return trip is not None and (trip["status"] in {"rejected", "annulled"} or (
             trip["status"] == "approved"
             and trip["end_date"] < datetime.now(ZoneInfo("Asia/Tashkent")).date()
         ))

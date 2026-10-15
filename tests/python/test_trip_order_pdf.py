@@ -13,7 +13,12 @@ from pypdf import PdfReader
 from yuksalish_api import repository, trip_document_service
 from yuksalish_api.auth import AuthenticatedUser
 from yuksalish_api.errors import WorkspaceRepositoryError
-from yuksalish_api.repository import _trip_allowed_actions, act_on_trip_request
+from yuksalish_api.repository import (
+    _trip_allowed_actions,
+    _trip_deputy_user_id,
+    act_on_trip_request,
+    delete_trip_request,
+)
 from yuksalish_api.trip_document_service import validate_attachment
 from yuksalish_api.trip_order_pdf import brief_pdf, order_pdf
 from yuksalish_api.workspace_schemas import CreateTripRequest, TripActionRequest
@@ -81,12 +86,150 @@ def test_new_trip_needs_deputy_then_chair_without_hr_access() -> None:
         "approve", "return", "reject",
     ]
     assert _trip_allowed_actions(row, chair, chair_id, deputy_id) == []
-    assert _trip_allowed_actions(row, requester, chair_id, deputy_id) == []
+    assert _trip_allowed_actions(row, requester, chair_id, deputy_id) == ["withdraw"]
     row["stage"] = "manager_approval"
     assert _trip_allowed_actions(row, deputy, chair_id, deputy_id) == []
     assert _trip_allowed_actions(row, chair, chair_id, deputy_id) == [
         "approve", "return", "reject",
     ]
+
+
+def test_published_trip_approver_overrides_directory_and_pinned_request_stays_assigned() -> None:
+    requester_id, published_id, later_id = uuid4(), uuid4(), uuid4()
+    connection = AsyncMock()
+    connection.scalar.side_effect = [{"approverUserId": str(published_id)}, published_id]
+    assert asyncio.run(_trip_deputy_user_id(connection)) == published_id
+    row = {
+        "stage": "deputy_approval", "status": "running", "workflow_version": 3,
+        "requester_user_id": requester_id, "deputy_approver_user_id": published_id,
+    }
+    assigned = AuthenticatedUser(published_id, "assigned", "Assigned", None, None, "employee")
+    later = AuthenticatedUser(later_id, "later", "Later", None, None, "employee")
+    assert _trip_allowed_actions(row, assigned, None, later_id) == [
+        "approve", "return", "reject",
+    ]
+    assert _trip_allowed_actions(row, later, None, later_id) == []
+
+
+def test_published_trip_position_requires_exactly_one_active_holder() -> None:
+    position_id, first_id, second_id = uuid4(), uuid4(), uuid4()
+    connection = AsyncMock()
+    connection.scalar.return_value = {"approverPositionId": str(position_id)}
+    candidates = MagicMock()
+    candidates.scalars.return_value.all.return_value = [first_id, second_id]
+    connection.execute.return_value = candidates
+    assert asyncio.run(_trip_deputy_user_id(connection)) is None
+    candidates.scalars.return_value.all.return_value = [first_id]
+    assert asyncio.run(_trip_deputy_user_id(connection)) == first_id
+
+
+def test_requester_and_superadmin_can_withdraw_or_annul_but_others_cannot() -> None:
+    requester_id, superadmin_id, stranger_id = uuid4(), uuid4(), uuid4()
+    requester = AuthenticatedUser(requester_id, "requester", "Requester", None, None, "employee")
+    superadmin = AuthenticatedUser(
+        superadmin_id, "root", "Root", None, None, "superadmin",
+    )
+    stranger = AuthenticatedUser(stranger_id, "other", "Other", None, None, "employee")
+    row = {
+        "stage": "deputy_approval", "status": "running", "workflow_version": 3,
+        "requester_user_id": requester_id,
+    }
+    assert _trip_allowed_actions(row, requester) == ["withdraw"]
+    assert _trip_allowed_actions(row, superadmin) == ["withdraw"]
+    assert _trip_allowed_actions(row, stranger) == []
+    approved = row | {"stage": "approved", "status": "approved"}
+    assert _trip_allowed_actions(approved, requester) == ["annul"]
+    assert _trip_allowed_actions(approved, superadmin) == ["annul"]
+    assert _trip_allowed_actions(approved, stranger) == []
+    assert _trip_allowed_actions(approved | {"status": "annulled"}, superadmin) == []
+
+
+def test_delete_trip_is_soft_and_requires_editable_stage() -> None:
+    request_id, requester_id, stranger_id = uuid4(), uuid4(), uuid4()
+    requester = AuthenticatedUser(requester_id, "requester", "Requester", None, None, "employee")
+    stranger = AuthenticatedUser(stranger_id, "other", "Other", None, None, "employee")
+    row = {
+        "id": request_id, "requester_user_id": requester_id,
+        "stage": "launch", "status": "draft",
+    }
+    connection = AsyncMock()
+    result = MagicMock()
+    result.mappings.return_value.first.return_value = row
+    connection.execute.return_value = result
+    with pytest.raises(WorkspaceRepositoryError) as denied:
+        asyncio.run(delete_trip_request(connection, stranger, request_id))
+    assert denied.value.status_code == 403
+    row["stage"] = "manager_approval"
+    with pytest.raises(WorkspaceRepositoryError) as running:
+        asyncio.run(delete_trip_request(connection, requester, request_id))
+    assert running.value.status_code == 409
+    row["stage"] = "launch"
+    asyncio.run(delete_trip_request(connection, requester, request_id))
+    assert connection.execute.await_count == 6  # three attempts, plus row/chat/audit writes
+    request_update = connection.execute.await_args_list[-3].args[0].compile().params
+    assert request_update["deleted_at"] is not None
+
+
+def test_withdraw_clears_signature_and_releases_pinned_approver(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request_id, requester_id, deputy_id, chair_id = uuid4(), uuid4(), uuid4(), uuid4()
+    row = {
+        "id": request_id, "requester_user_id": requester_id,
+        "workflow_version": 3, "stage": "deputy_approval", "status": "running",
+        "deputy_approver_user_id": deputy_id, "order_pdf_key": None,
+    }
+    connection = AsyncMock()
+    result = MagicMock()
+    result.mappings.return_value.first.return_value = row
+    connection.execute.return_value = result
+    connection.scalar.return_value = chair_id
+    monkeypatch.setattr(repository, "_trip_deputy_user_id", AsyncMock(return_value=deputy_id))
+    monkeypatch.setattr(repository, "_trip_response", AsyncMock(return_value="updated"))
+    requester = AuthenticatedUser(requester_id, "requester", "Requester", None, None, "employee")
+    assert asyncio.run(act_on_trip_request(
+        connection, requester, request_id,
+        TripActionRequest(action="withdraw", comment="Нужно изменить даты"),
+    )) == "updated"
+    changed = connection.execute.await_args_list[1].args[0].compile().params
+    assert changed["stage"] == "launch"
+    assert changed["status"] == "needs_revision"
+    assert changed["deputy_approver_user_id"] is None
+    assert changed["employee_signature_key"] is None
+    assert changed["signed_brief_key"] is None
+
+
+def test_annul_requires_reason_and_keeps_issued_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request_id, requester_id, deputy_id, chair_id = uuid4(), uuid4(), uuid4(), uuid4()
+    row = {
+        "id": request_id, "requester_user_id": requester_id,
+        "workflow_version": 3, "stage": "approved", "status": "approved",
+        "deputy_approver_user_id": deputy_id, "order_pdf_key": "issued.pdf",
+        "destination": "Термиз",
+    }
+    connection = AsyncMock()
+    result = MagicMock()
+    result.mappings.return_value.first.return_value = row
+    result.scalars.return_value.all.return_value = []
+    connection.execute.return_value = result
+    connection.scalar.return_value = chair_id
+    monkeypatch.setattr(repository, "_trip_deputy_user_id", AsyncMock(return_value=deputy_id))
+    monkeypatch.setattr(repository, "_trip_response", AsyncMock(return_value="updated"))
+    requester = AuthenticatedUser(requester_id, "requester", "Requester", None, None, "employee")
+    with pytest.raises(WorkspaceRepositoryError) as missing_reason:
+        asyncio.run(act_on_trip_request(
+            connection, requester, request_id, TripActionRequest(action="annul"),
+        ))
+    assert missing_reason.value.status_code == 422
+    assert asyncio.run(act_on_trip_request(
+        connection, requester, request_id,
+        TripActionRequest(action="annul", comment="Поездка отменена"),
+    )) == "updated"
+    changed = connection.execute.await_args_list[2].args[0].compile().params
+    assert changed["status"] == "annulled"
+    assert "order_pdf_key" not in changed
 
 
 def test_deputy_approval_moves_to_chair_without_issuing_order(
@@ -105,6 +248,7 @@ def test_deputy_approval_moves_to_chair_without_issuing_order(
     connection.execute.return_value = result_row
     connection.scalar.return_value = chair_id
     monkeypatch.setattr(repository, "_trip_deputy_user_id", AsyncMock(return_value=deputy_id))
+    monkeypatch.setattr(repository, "_trip_directory_deputy_id", AsyncMock(return_value=deputy_id))
     monkeypatch.setattr(repository, "_trip_response", AsyncMock(return_value="updated"))
     deputy = AuthenticatedUser(deputy_id, "deputy", "Deputy", None, None, "employee")
     result = asyncio.run(act_on_trip_request(
