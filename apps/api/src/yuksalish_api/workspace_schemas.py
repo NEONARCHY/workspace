@@ -1120,6 +1120,9 @@ class TripRequestResponse(ApiModel):
     brief_text: str = ""
     expense_source: str = ""
     brief_attachment_name: str | None = None
+    brief_attachment_type: str | None = None
+    brief_attachment_size: int | None = None
+    original_signature_confirmed: bool = False
     has_employee_signature: bool = False
     has_signed_brief: bool = False
     order_number: str | None = None

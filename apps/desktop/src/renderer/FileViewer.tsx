@@ -123,7 +123,9 @@ function FileViewer<T extends FileViewerSource>({ attachment, onClose, onLoad, o
     catch (reason) { setError(reason instanceof Error ? reason.message : "Не удалось скачать файл"); }
     finally { setSaving(false); }
   };
-  const size = attachment.byteSize < 1024 * 1024 ? `${Math.ceil(attachment.byteSize / 1024)} КБ` : `${(attachment.byteSize / 1024 / 1024).toFixed(1)} МБ`;
+  const size = attachment.byteSize > 0
+    ? attachment.byteSize < 1024 * 1024 ? `${Math.ceil(attachment.byteSize / 1024)} КБ` : `${(attachment.byteSize / 1024 / 1024).toFixed(1)} МБ`
+    : "";
   const columnName = (index: number): string => {
     let name = "";
     for (let number = index + 1; number > 0; number = Math.floor((number - 1) / 26)) name = String.fromCharCode(65 + (number - 1) % 26) + name;
@@ -135,7 +137,7 @@ function FileViewer<T extends FileViewerSource>({ attachment, onClose, onLoad, o
         <span className="file-viewer-title" title={attachment.fileName}>{attachment.fileName}</span>
       </DialogTitle><Button appearance="subtle" icon={<Dismiss20Regular />} aria-label="Закрыть просмотрщик" onClick={onClose} /></header>
       <div className="file-viewer-toolbar">
-        <span>{kind === "unsupported" ? "Файл" : {word:"Word",excel:"Excel",pdf:"PDF",image:"Изображение",video:"Видео",audio:"Аудио"}[kind]} · {size}</span>
+        <span>{kind === "unsupported" ? "Файл" : {word:"Word",excel:"Excel",pdf:"PDF",image:"Изображение",video:"Видео",audio:"Аудио"}[kind]}{size ? ` · ${size}` : ""}</span>
         <div className="file-viewer-tools">
           {(kind === "image" || kind === "word") && <>
             <Button appearance="subtle" icon={<Subtract20Regular />} aria-label="Уменьшить" disabled={zoom <= .5} onClick={() => setZoom(value => Math.max(.5, value - .25))} />
