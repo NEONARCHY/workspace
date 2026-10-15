@@ -39,10 +39,27 @@ def _project(point: list[float]) -> str:
 
 def _rings(geometry: dict[str, Any]) -> list[list[list[float]]]:
     if geometry["type"] == "Polygon":
-        return geometry["coordinates"]
-    if geometry["type"] == "MultiPolygon":
-        return [ring for polygon in geometry["coordinates"] for ring in polygon]
-    return []
+        polygons = [geometry["coordinates"]]
+    elif geometry["type"] == "MultiPolygon":
+        polygons = geometry["coordinates"]
+    else:
+        return []
+    rings: list[list[list[float]]] = []
+    for polygon in polygons:
+        if not isinstance(polygon, list):
+            continue
+        for ring in polygon:
+            if not isinstance(ring, list):
+                continue
+            points: list[list[float]] = []
+            for point in ring:
+                if (isinstance(point, list) and len(point) >= 2
+                        and isinstance(point[0], (int, float))
+                        and isinstance(point[1], (int, float))):
+                    points.append([float(point[0]), float(point[1])])
+            if len(points) > 2:
+                rings.append(points)
+    return rings
 
 
 def main() -> None:
