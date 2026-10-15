@@ -67,10 +67,6 @@ body:has(.yuksalish-assistant-root) .global-bar { padding-right: 16px; }
 .assistant-composer button { flex: 0 0 auto; width: 38px; height: 38px; display: grid; place-items: center; border: 0; border-radius: 12px; background: #0e6e77; color: white; cursor: pointer; transition: background-color 160ms ease, transform 160ms ease; }
 .assistant-composer button:not(:disabled):hover { background: #07565d; transform: translateY(-2px); }
 .assistant-composer button:disabled { background: var(--ws-theme-wash-teal, #c8d6d9); cursor: not-allowed; }
-.border-beam { position: absolute; inset: 0; pointer-events: none; border-radius: inherit; padding: 1px; background: conic-gradient(from var(--assistant-beam-angle, 0deg), transparent 0deg 285deg, #2aa9aa 310deg, var(--ws-theme-wash-teal, #8dded3) 332deg, transparent 360deg); mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite: exclude; opacity: 0; }
-.border-beam.is-active { opacity: .7; animation: assistant-beam 8s linear infinite; }
-@keyframes assistant-beam { to { --assistant-beam-angle: 360deg; } }
-@property --assistant-beam-angle { syntax: "<angle>"; initial-value: 0deg; inherits: false; }
 .assistant-error { margin: 1px 2px 0; color: var(--ws-theme-ink-danger, #a23532); font-size: 12px; }
 .assistant-privacy { color: var(--ws-theme-muted, #627789); font-size: 11px; text-align: center; }
 .thinking-orbs { display: inline-flex; gap: 3px; align-items: center; min-width: 23px; height: 14px; }
@@ -168,7 +164,7 @@ body:has(.yuksalish-assistant-root) .global-bar { padding-right: 16px; }
 @media (max-width: 800px) { .assistant-launcher { width: 44px; height: 44px; } }
 @media (max-width: 600px) { .assistant-stream { padding-inline: 12px; } .assistant-composer-area { padding-inline: 12px; } .assistant-model-description { display: none; } .assistant-empty .gradient-orb, .assistant-empty .gradient-orb-fallback { width: 108px; height: 108px; } }
 @media (max-width: 600px) { .assistant-empty .gradient-orb, .assistant-empty .gradient-orb-fallback { width: 82px; height: 82px; } .assistant-quick-prompts { max-width: 390px; } }
-@media (prefers-reduced-motion: reduce) { .assistant-launcher, .assistant-composer button, .thinking-orbs span, .border-beam.is-active { transition: none; animation: none; } .assistant-launcher:hover { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .assistant-launcher, .assistant-composer button, .thinking-orbs span { transition: none; animation: none; } .assistant-launcher:hover { transform: none; } }
 @media (prefers-reduced-motion: reduce) { .assistant-quick-prompts button { transition: none; } }
 @media (forced-colors: active) { .gradient-orb, .gradient-orb-fallback { filter: none; } .gradient-orb-fallback { mask-image: none; border: 2px solid CanvasText; background: Canvas; } }
 @media (forced-colors: active) { .assistant-panel, .assistant-message, .assistant-composer { border: 1px solid CanvasText; } .assistant-launcher:focus-visible { outline-color: Highlight; } }

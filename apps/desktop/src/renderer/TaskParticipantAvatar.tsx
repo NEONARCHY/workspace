@@ -127,7 +127,7 @@ export function TaskParticipantAvatar({ person, role, token }: {
       onPointerEnter={() => { window.clearTimeout(closeTimer.current); cursorX.set(0); cursorTilt.set(0); }} onPointerLeave={hideSoon}
       onFocus={() => window.clearTimeout(closeTimer.current)} onBlur={hideSoon} onClickCapture={() => setOpen(false)}>
       <EmployeeProfileLink userId={person?.id} personName={name} className="task-participant-profile">
-        <small>{role}</small><strong>{name}</strong>{isWorking ? <small>Работа начата</small> : null}
+        <small>{role}</small><strong>{name}</strong>
       </EmployeeProfileLink>
     </motion.div>, document.body) : null}
   </>;

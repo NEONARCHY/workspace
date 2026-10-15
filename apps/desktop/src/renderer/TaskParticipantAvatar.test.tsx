@@ -25,10 +25,11 @@ describe("Task avatar workday rings", () => {
       expect(anchor).toHaveAttribute("data-working", "true");
       expect(anchor.className).toBe(originalClass);
       fireEvent.focus(anchor.querySelector(".employee-profile-link")!);
-      expect(screen.getByText("Работа начата")).toBeInTheDocument();
+      expect(screen.getByRole("dialog", { name: `${role}: ${person.name}` }).textContent).toBe(`${role}${person.name}`);
       view.rerender(avatar([]));
       expect(anchor).not.toHaveAttribute("data-working");
       expect(screen.queryByText("Работа начата")).toBeNull();
+      expect(screen.getByRole("dialog", { name: `${role}: ${person.name}` }).textContent).toBe(`${role}${person.name}`);
     },
   );
 
