@@ -1011,6 +1011,8 @@ export interface WorkspaceAttachment {
   readonly mediaKind?: "file" | "voice";
   readonly mediaDurationMs?: number | null;
   readonly mediaCodec?: "opus" | null;
+  readonly imageWidth?: number | null;
+  readonly imageHeight?: number | null;
   readonly createdAt: string;
 }
 

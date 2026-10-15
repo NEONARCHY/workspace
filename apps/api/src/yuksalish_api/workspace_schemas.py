@@ -256,6 +256,8 @@ class AttachmentResponse(ApiModel):
     media_kind: Literal["file", "voice"] = "file"
     media_duration_ms: int | None = Field(default=None, ge=500, le=600_000)
     media_codec: Literal["opus"] | None = None
+    image_width: int | None = Field(default=None, ge=1, le=100_000)
+    image_height: int | None = Field(default=None, ge=1, le=100_000)
     created_at: datetime
 
 

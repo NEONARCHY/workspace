@@ -1,3 +1,4 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
 import { useEffect, useRef, useState } from "react";
 import { Avatar, Button, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle } from "@fluentui/react-components";
 import { Input } from "./WorkspaceInput";
@@ -43,7 +44,7 @@ export function ForwardDialog({ source, preview, chats, excludeChatId, onForward
             <Avatar name={chat.title} size={32} color="colorful" /><span><strong>{chat.title}</strong><small>{chat.kind === "direct" ? "Личный диалог" : "Рабочий чат"}</small></span>
           </button>)}
           {!targets.length && <p role="status">Нет доступных чатов для отправки</p>}
-        </div>{busy && <p role="status">Пересылаем…</p>}{error && <p className="forward-error" role="alert">{error}</p>}
+        </div>{busy && <p role="status">Пересылаем…</p>}{error && <WorkspaceNotice tone="error" className="forward-error" role="alert">{error}</WorkspaceNotice>}
       </DialogContent><DialogActions><Button disabled={busy} onClick={onClose}>Отмена</Button></DialogActions>
     </DialogBody></DialogSurface>
   </WorkspaceDialog>;

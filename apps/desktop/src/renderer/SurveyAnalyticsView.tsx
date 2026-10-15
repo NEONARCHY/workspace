@@ -1,3 +1,4 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, Field, Select, Spinner } from "@fluentui/react-components";
 import { ArrowUpload24Regular, Document24Regular, Folder24Regular } from "@fluentui/react-icons";
@@ -170,7 +171,7 @@ export function SurveyAnalyticsView({ token, canCreate, canEdit }: { readonly to
     <header className="survey-heading"><div><span className="survey-eyebrow">ЛИЧНОЕ РАБОЧЕЕ ПРОСТРАНСТВО</span><h1>Аналитика опросов</h1>
       <p>Исходные ответы и сохранённые анализы доступны только вам. Без отправки в ИИ.</p></div>
       <Button disabled={busy} onClick={() => void refresh()}>Обновить список</Button></header>
-    {error && <div className="survey-error" role="alert">{error} <Button disabled={busy} onClick={() => void refresh()}>Повторить загрузку списка</Button></div>}
+    {error && <WorkspaceNotice tone="error" className="survey-error" role="alert" actions={<><Button disabled={busy} onClick={() => void refresh()}>Повторить загрузку списка</Button></>}>{error} </WorkspaceNotice>}
     {notice && <p role="status" className="survey-note">{notice}</p>}
     <div className="survey-layout">
       <aside className="survey-panel survey-library" aria-label="Мои анализы">

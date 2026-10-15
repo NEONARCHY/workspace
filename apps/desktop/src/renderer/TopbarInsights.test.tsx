@@ -24,6 +24,7 @@ describe("topbar insights", () => {
     mount();
     fireEvent.click(await screen.findByRole("button", { name: /Курсы валют: 1 USD — 12.*000 UZS/ }));
     const panel = await screen.findByRole("dialog", { name: "Курсы валют" });
+    expect(panel).toHaveStyle({ overflowY: "hidden" });
     fireEvent.click(within(panel).getByRole("button", { name: /EUR Евро/ }));
     fireEvent.change(within(panel).getByRole("textbox", { name: "Сумма в EUR" }), { target: { value: "2,5" } });
     expect(within(panel).getByRole("status")).toHaveTextContent(/33.*750 UZS/);
@@ -36,6 +37,7 @@ describe("topbar insights", () => {
     mount();
     fireEvent.click(await screen.findByRole("button", { name: /Погода в Ташкенте: 13,3/ }));
     const panel = await screen.findByRole("dialog", { name: "Погода Узбекистана" });
+    expect(panel).toHaveStyle({ overflowY: "hidden" });
     expect(within(panel).getAllByRole("button", { name: /^Погода:/ })).toHaveLength(13);
     fireEvent.click(within(panel).getByRole("button", { name: "Погода: Ташкентская область" }));
     const back = within(panel).getByRole("button", { name: "К списку областей" });

@@ -1,3 +1,4 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { AIReferentManualRecipientInput, AIReferentRecipient } from "@yuksalish/contracts";
@@ -133,7 +134,7 @@ export function AIReferentAddressBook({ token, readOnly }: Props) {
         </div>)}
       </div>
     </div>
-    {error ? <p className="ai-referent-feedback" role="alert">{error}</p> : null}
-    {notice ? <p className="ai-referent-feedback" role="status">{notice}</p> : null}
+    {error ? <WorkspaceNotice tone="error" className="ai-referent-feedback" role="alert">{error}</WorkspaceNotice> : null}
+    {notice ? <WorkspaceNotice tone="success" className="ai-referent-feedback" role="status">{notice}</WorkspaceNotice> : null}
   </section>;
 }

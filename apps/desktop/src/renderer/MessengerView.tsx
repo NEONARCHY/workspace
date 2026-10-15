@@ -1,5 +1,8 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
+import { ReactionEmoji } from "./ReactionEmoji";
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { RefObject, SetStateAction } from "react";
 import { Copy, Forward, ListTodo, Pencil, Pin, PinOff, Reply, Smile, Trash2, UserRound, UsersRound, WandSparkles } from "lucide-react";
 import { useMessageArrivalMotion } from "./useMessageArrivalMotion";
 import { ComposerSendTransition, MessageTextAnimate } from "./MessageTextAnimate";
@@ -43,6 +46,7 @@ import {
   CalendarLtr24Regular,
   ChevronLeft20Regular,
   Color24Regular,
+  Dismiss24Regular,
   Mic24Regular,
   MoreHorizontal20Regular,
   Pin24Regular,
@@ -51,6 +55,7 @@ import {
 } from "@fluentui/react-icons";
 import { AttachmentChips } from "./AttachmentPanel";
 import { PendingMessageFiles } from "./PendingMessageFiles";
+import { MessageAttachmentsDialog } from "./MessageAttachmentsDialog";
 import { ChatManagement, type ChatActions } from "./ChatManagement";
 import { OrganizedChatList } from "./OrganizedChatList";
 import { BrowserChatActions } from "./BrowserChatActions";
@@ -72,6 +77,7 @@ import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { ForwardDialog, type ForwardContentAction } from "./ForwardDialog";
 import { ForwardedMessage } from "./ForwardedMessage";
 import { ZoomInvitationCard } from "./ZoomInvitationCard";
+import { fileViewerKind } from "./file-viewer-kind";
 import { MessageMetadata } from "./MessageMetadata";
 import { ConfirmActionDialog } from "./ConfirmActionDialog";
 import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
@@ -93,6 +99,21 @@ function messagesShareBubbleGroup(first?: ChatMessage, second?: ChatMessage): bo
     && new Date(firstAt).toDateString() === new Date(secondAt).toDateString();
 }
 
+function useComposerState<T>(initial: T | (() => T), revisionRef: RefObject<number>) {
+  const [value, setValue] = useState(initial);
+  const update = useCallback((next: SetStateAction<T>) => { revisionRef.current += 1; setValue(next); }, [revisionRef]);
+  return [value, update] as const;
+}
+
+interface OutgoingDraft {
+  readonly id: number;
+  readonly text: string;
+  readonly files: readonly File[];
+  readonly reply?: ChatMessage;
+  readonly mentions: readonly string[];
+  readonly error: string;
+}
+
 export interface MessengerViewProps {
   readonly onForwardContent?: ForwardContentAction;
   readonly onOpenFeedPost?: (id: string) => void | Promise<void>;
@@ -104,6 +125,7 @@ export interface MessengerViewProps {
   readonly onPersonalChat?: (id: string, action: PersonalChatAction) => Promise<void>;
   readonly onPinnedOrder?: (order: readonly string[]) => Promise<void>;
   readonly focusChatId?: string;
+  readonly focusMessageId?: string;
   readonly currentUserId: string;
   readonly currentUserRole: string;
   readonly chats: readonly ChatSummary[];
@@ -181,7 +203,7 @@ function MessageReactionChip({ reaction, people, token, disabled, onToggle, onOp
       }}
       onClick={onToggle}
     >
-      <span className="message-reaction-emoji" aria-hidden="true">{reaction.emoji}</span>
+      <span className="message-reaction-emoji" aria-hidden="true"><ReactionEmoji emoji={reaction.emoji} /></span>
       {additionalReactors.length ? <span className="message-reaction-avatars" aria-hidden="true">
         {additionalReactors.map((person) => <ProfileAvatar key={person.id} person={person} token={token} size={20} />)}
       </span> : null}
@@ -225,6 +247,7 @@ function Conversation({
   assistantDraft,
   canUseAssistant = false,
   fileDropDisabledReason,
+  focusMessageId,
 }: Omit<MessengerViewProps, "chats" | "onMarkRead"> & {
   readonly chat: ChatSummary;
   readonly availableChats: readonly ChatSummary[];
@@ -233,18 +256,20 @@ function Conversation({
   readonly embedded?: boolean;
   readonly fileDropDisabledReason?: string;
 }) {
-  const [draft, setDraft] = useState(assistantDraft?.kind === "message" ? assistantDraft.fields.body ?? "" : "");
+  const composerRevision = useRef(0);
+  const [draft, setDraft] = useComposerState(assistantDraft?.kind === "message" ? assistantDraft.fields.body ?? "" : "", composerRevision);
   const draftKey = `chat:${currentUserId}:${chat.id}`;
   const draftEdited = useRef(assistantDraft?.kind === "message");
   const draftReady = useRef(assistantDraft?.kind === "message");
-  const [reply, setReply] = useState<ChatMessage>();
-  const [mentions, setMentions] = useState<readonly string[]>([]);
+  const [reply, setReply] = useComposerState<ChatMessage | undefined>(undefined, composerRevision);
+  const [mentions, setMentions] = useComposerState<readonly string[]>([], composerRevision);
   const [mentionPicker, setMentionPicker] = useState(false);
   const [mentionScope, setMentionScope] = useState<EmployeeScope>("central");
-  const [pendingFiles, setPendingFiles] = useState<readonly File[]>([]);
+  const [pendingFiles, setPendingFiles] = useComposerState<readonly File[]>([], composerRevision);
+  const [attachmentReviewOpen, setAttachmentReviewOpen] = useState(false);
   const [taskSource, setTaskSource] = useState<ChatMessage>();
   const [forwarding, setForwarding] = useState<ChatMessage>();
-  const [editing, setEditing] = useState<ChatMessage>();
+  const [editing, setEditing] = useComposerState<ChatMessage | undefined>(undefined, composerRevision);
   const [editBody, setEditBody] = useState("");
   const [editMentions, setEditMentions] = useState<readonly string[]>([]);
   const [deleting, setDeleting] = useState<ChatMessage>();
@@ -259,6 +284,8 @@ function Conversation({
   const [reactionDialog, setReactionDialog] = useState<ChatMessage>();
   const [reactionPreview, setReactionPreview] = useState(false);
   const [reactionTargetId, setReactionTargetId] = useState<string>();
+  const reactionHoverTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(reactionHoverTimer.current), []);
   const [chatBackground, setChatBackground] = useState(() => readChatBackground(currentUserId));
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
   const [avatarDraft, setAvatarDraft] = useState<ChatAvatarIconKey>(chat.avatarIconKey ?? defaultChatIcon(chat));
@@ -275,6 +302,10 @@ function Conversation({
   const [deadlineError, setDeadlineError] = useState("");
   const [sendingText, setSendingText] = useState<{ id: number; text: string; scrollLeft: number }>();
   const sendingSequence = useRef(0);
+  const sendQueue = useRef<Promise<void>>(Promise.resolve());
+  const submittedRevision = useRef(-1);
+  const [pendingSendCount, setPendingSendCount] = useState(0);
+  const [failedSends, setFailedSends] = useState<readonly OutgoingDraft[]>([]);
   const [voiceOpen, setVoiceOpen] = useState(false);
   const [rewriteOpen, setRewriteOpen] = useState(false);
   const [rewriteBusy, setRewriteBusy] = useState(false);
@@ -312,7 +343,7 @@ function Conversation({
       }
     }).catch(() => undefined).finally(() => { draftReady.current = true; });
     return () => { active = false; };
-  }, [assistantDraft, draftKey]);
+  }, [assistantDraft, draftKey, setDraft]);
   useEffect(() => {
     const bridge = workspacePlatform;
     if (!draftReady.current || !draftEdited.current) return;
@@ -341,15 +372,15 @@ function Conversation({
     if (fileDropBlocked || !files.length) return false;
     try { files.forEach(file => validateWorkspaceAttachmentFile(file)); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "Не удалось прикрепить файлы"); return false; }
-    focusAfterSend.current = true;
+    focusAfterSend.current = false;
     // Distinct files can share all metadata; never discard one on that basis.
     setPendingFiles(current => [...new Set([...current, ...files])]);
+    setAttachmentReviewOpen(true);
     setError("");
     return true;
   }, [fileDropBlocked, setPendingFiles, setError]);
-  const personName = (id: string) =>
-    people.find((person) => person.id === id)?.name ?? "Сотрудник";
-  const personById = (id: string) => people.find((person) => person.id === id);
+  const personById = useCallback((id: string) => people.find((person) => person.id === id), [people]);
+  const personName = useCallback((id: string) => personById(id)?.name ?? "Сотрудник", [personById]);
   const activeMessages = useMemo(() => messages.filter(
     (message) => message.chatId === chat.id && !message.deletedAt,
   ), [messages, chat.id]);
@@ -441,6 +472,11 @@ function Conversation({
     });
   };
   useEffect(() => {
+    if (!focusMessageId) return;
+    const frame = requestAnimationFrame(() => scrollRef.current?.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(focusMessageId)}"]`)?.scrollIntoView({ block: "center", behavior: "instant" }));
+    return () => cancelAnimationFrame(frame);
+  }, [focusMessageId]);
+  useEffect(() => {
     if (editing) {
       const input = composerInputRef.current;
       input?.focus();
@@ -451,11 +487,11 @@ function Conversation({
     wasEditing.current = Boolean(editing);
   }, [editing]);
   useEffect(() => {
-    if (!busy && focusAfterSend.current) {
+    if (!busy && focusAfterSend.current && !attachmentReviewOpen) {
       focusAfterSend.current = false;
       composerInputRef.current?.focus();
     }
-  }, [busy, draft, pendingFiles]);
+  }, [busy, draft, pendingFiles, attachmentReviewOpen]);
   useEffect(() => {
     if (!contextMenu) return;
     const close = () => { setContextMenu(undefined); setReactionPreview(false); };
@@ -480,7 +516,7 @@ function Conversation({
     setMentionPicker(false);
     setError("");
   };
-  const run = async (operation: () => Promise<void>) => {
+  const run = useCallback(async (operation: () => Promise<void>) => {
     setBusy(true);
     setError("");
     try {
@@ -494,7 +530,7 @@ function Conversation({
     } finally {
       setBusy(false);
     }
-  };
+  }, []);
   const requestMessageDelete = (message: ChatMessage, trigger?: HTMLButtonElement) => {
     if (busy) return;
     deleteReturnFocus.current = trigger ?? composerInputRef.current;
@@ -503,22 +539,33 @@ function Conversation({
     setContextMenu(undefined);
   };
   const send = () => {
-    if (!canSend || busy || (!draft.trim() && pendingFiles.length === 0)) return;
+    if (!canSend || busy || submittedRevision.current === composerRevision.current || (!draft.trim() && pendingFiles.length === 0)) return;
     const sentText = draft.trim();
+    setAttachmentReviewOpen(false);
     const sentScrollLeft = composerInputRef.current?.scrollLeft ?? 0;
     const sentFiles = pendingFiles;
-    const sentReplyId = reply?.id;
+    const sentReply = reply;
     const sentMentions = mentions.filter((id) => activeMemberIds.has(id));
+    sendingSequence.current += 1;
+    const sendId = sendingSequence.current;
     if (sentText) {
-      sendingSequence.current += 1;
       setSendingText({ id: sendingSequence.current, text: sentText, scrollLeft: sentScrollLeft });
-      setDraft("");
     }
+    // Snapshot and release the composer before any network work. Acknowledgements
+    // must never clear text/files/reply belonging to the next message.
+    setDraft(""); setPendingFiles([]); setReply(undefined); setMentions([]); setMentionPicker(false);
+    draftEdited.current = true;
+    void workspacePlatform.clearDraft(draftKey).catch(() => undefined);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    const revision = composerRevision.current;
+    submittedRevision.current = revision;
     focusAfterSend.current = true;
-    void run(async () => {
+    setError(""); setPendingSendCount((count) => count + 1);
+    // Serialize explicit sends, not typing; no automatic retry after an uncertain response.
+    sendQueue.current = sendQueue.current.then(async () => {
       try {
         const message = await onSendMessage(chat.id, sentText || "Файл", sentFiles, {
-          replyToMessageId: sentReplyId,
+          replyToMessageId: sentReply?.id,
           mentionUserIds: sentMentions,
         });
         if (!message)
@@ -526,20 +573,18 @@ function Conversation({
             "Сообщение не отправлено. Текст сохранён — попробуйте снова.",
           );
       } catch (cause) {
-        if (sentText) {
+        const failure = cause instanceof Error ? cause.message : "Не удалось отправить сообщение";
+        if (composerRevision.current === revision) {
           setSendingText(undefined);
           setDraft(sentText);
+          setPendingFiles(sentFiles); setReply(sentReply); setMentions(sentMentions);
+          setError(failure);
+        } else {
+          setFailedSends((items) => [...items, { id: sendId, text: sentText, files: sentFiles, reply: sentReply, mentions: sentMentions, error: failure }]);
         }
-        throw cause;
+      } finally {
+        setPendingSendCount((count) => count - 1);
       }
-      setDraft("");
-      draftEdited.current = true;
-      void workspacePlatform.clearDraft(draftKey).catch(() => undefined);
-      setReply(undefined);
-      setMentions([]);
-      setMentionPicker(false);
-      setPendingFiles([]);
-      if (fileInputRef.current) fileInputRef.current.value = "";
     });
   };
   const saveEdit = () => {
@@ -586,7 +631,7 @@ function Conversation({
       setDeadlineBusy(false);
     }
   };
-  const decideDeadline = async (requestId: string, approved: boolean) => {
+  const decideDeadline = useCallback(async (requestId: string, approved: boolean) => {
     if (!taskForChat || !onDecideTaskDeadline || deadlineDecisionId) return;
     setDeadlineDecisionId(requestId);
     setDeadlineError("");
@@ -595,7 +640,172 @@ function Conversation({
     } finally {
       setDeadlineDecisionId(undefined);
     }
-  };
+  }, [taskForChat, onDecideTaskDeadline, deadlineDecisionId]);
+  // Keep typing local: unchanged history must not rebuild rich message subtrees.
+  const messageRows = useMemo(() => renderedMessages.map((message, index) => {
+          const parent = activeMessages.find(
+            (item) => item.id === message.replyToMessageId,
+          );
+          const date = message.createdAt
+            ? new Date(message.createdAt).toLocaleDateString("ru-RU")
+            : "История переписки";
+          const previous = renderedMessages[index - 1]?.createdAt;
+          const previousDate = previous
+            ? new Date(previous).toLocaleDateString("ru-RU")
+            : "История переписки";
+          const deadlineRequest = message.systemKind === "task_deadline_request"
+            ? taskForChat?.deadlineRequests?.find((item) => item.messageId === message.id) : undefined;
+          if (message.systemKind) return <div key={message.id} data-message-row-id={message.id}>
+            {(index === 0 || date !== previousDate) && <div className="date-separator">{date}</div>}
+            {deadlineRequest ? <div className="task-deadline-message" data-message-id={message.id} role="group" aria-label="Запрос переноса срока">
+              <strong>Перенос срока · {deadlineRequest.status === "pending" ? "ожидает решения" : deadlineRequest.status === "approved" ? "подтверждён" : deadlineRequest.status === "rejected" ? "отклонён" : "неактуален"}</strong>
+              <small>Запросил: {people.find((person) => person.id === deadlineRequest.requesterUserId)?.name ?? "Исполнитель"}</small>
+              <p><MessageTextAnimate key={`${message.id}:${arrivingIds.has(message.id)}`} enabled={arrivingIds.has(message.id)} disabled={motionDisabled}>{message.body}</MessageTextAnimate></p>
+              <div><span>Было: {new Date(deadlineRequest.oldDueAt).toLocaleString("ru-RU")}</span><span>Предложено: {new Date(deadlineRequest.proposedDueAt).toLocaleString("ru-RU")}</span></div>
+              {deadlineRequest.status === "pending" && canDecideDeadline && onDecideTaskDeadline ? <div className="task-deadline-message-actions">
+                <Button appearance="primary" disabled={!!deadlineDecisionId} onClick={() => void decideDeadline(deadlineRequest.id, true)}>Подтвердить перенос</Button>
+                <Button appearance="secondary" disabled={!!deadlineDecisionId} onClick={() => void decideDeadline(deadlineRequest.id, false)}>Отклонить</Button>
+              </div> : null}
+              <time>{message.time}</time>
+            </div> : <div className="message-system" data-message-id={message.id} role="note">
+              <span><MessageTextAnimate key={`${message.id}:${arrivingIds.has(message.id)}`} enabled={arrivingIds.has(message.id)} disabled={motionDisabled}>{message.body}</MessageTextAnimate></span><time>{message.time}</time>
+            </div>}
+          </div>;
+          const own = message.authorId === currentUserId;
+          const groupedWithPrevious = !query && messagesShareBubbleGroup(renderedMessages[index - 1], message);
+          const groupedWithNext = !query && messagesShareBubbleGroup(message, renderedMessages[index + 1]);
+          const groupPosition = groupedWithPrevious
+            ? groupedWithNext ? "is-group-middle" : "is-group-last"
+            : groupedWithNext ? "is-group-first" : "";
+          const messageAttachments = attachments.filter(
+            (attachment) => attachment.ownerType === "message" && attachment.ownerId === message.id,
+          );
+          const voiceAttachments = messageAttachments.filter((attachment) => attachment.mediaKind === "voice");
+          const mediaOnly = !!onLoadAttachment && !message.deletedAt && !message.forwarded && !message.zoomInvitation
+            && messageAttachments.length > 0 && messageAttachments.every(attachment => fileViewerKind(attachment) === "image");
+          const mediaCaption = mediaOnly && message.body.trim() !== "Файл" ? message.body : "";
+          const documentOnly = !message.deletedAt && !message.forwarded && !message.zoomInvitation
+            && messageAttachments.length > 0 && messageAttachments.every(attachment => attachment.mediaKind !== "voice"
+              && !["image", "video", "audio"].includes(fileViewerKind(attachment)));
+          const documentFooter = documentOnly && (message.editedAt || (message.body.trim() && message.body.trim() !== "Файл"));
+          return (
+            <div key={message.id} data-message-row-id={message.id} className={`message-row ${groupPosition}${removingMessage?.message.id === message.id ? ` is-removing is-${removingMessage.phase}` : ""}`} style={removingMessage?.message.id === message.id ? { height: removingMessage.phase === "exiting" ? 0 : removingMessage.height } : undefined}>
+              {(index === 0 || date !== previousDate) && (
+                <div className="date-separator">{date}</div>
+              )}
+              <div
+                data-message-id={message.id}
+                className={`message ${own ? "own" : ""} ${message.isPinned ? "message-pinned" : ""} ${message.mentionUserIds?.includes(currentUserId) ? "message-mentioned" : ""}`}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  setContextMenu({ message, x: event.clientX, y: event.clientY, portalContainer: menuPortalContainerFor(event.currentTarget) });
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
+                    event.preventDefault();
+                    const rect = event.currentTarget.getBoundingClientRect();
+                    setContextMenu({ message, x: rect.left + 28, y: rect.top + 28, portalContainer: menuPortalContainerFor(event.currentTarget) });
+                  }
+                }}
+                tabIndex={0}
+                onPointerEnter={(event) => {
+                  window.clearTimeout(reactionHoverTimer.current);
+                  if (event.pointerType === "touch" || event.currentTarget.contains(document.activeElement)) return;
+                  setReactionTargetId(undefined);
+                  reactionHoverTimer.current = window.setTimeout(() => setReactionTargetId(message.id), 500);
+                }}
+                onPointerLeave={(event) => {
+                  window.clearTimeout(reactionHoverTimer.current);
+                  if (event.currentTarget.contains(document.activeElement)) return;
+                  setReactionTargetId((current) => current === message.id ? undefined : current);
+                }}
+                onFocus={() => {
+                  window.clearTimeout(reactionHoverTimer.current);
+                  setReactionTargetId(message.id);
+                }}
+                onBlur={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget)) setReactionTargetId((current) => current === message.id ? undefined : current);
+                }}
+              >
+                {!own && (groupedWithNext ? <span className="message-avatar-spacer" aria-hidden="true" /> :
+                  <EmployeeProfileLink className="message-sender-avatar" userId={message.authorId} personName={personName(message.authorId)}>
+                    {personById(message.authorId) ? <ProfileAvatar person={personById(message.authorId)!} token={token} size={32} /> : <Avatar name={personName(message.authorId)} size={32} color="colorful" />}
+                  </EmployeeProfileLink>
+                )}
+                <div className="message-content">
+                  <div className={`message-body${message.forwarded || message.zoomInvitation || messageAttachments.length ? " has-rich-content" : ""}${messageAttachments.length ? " has-attachments" : ""}${mediaOnly ? ` is-media-message${mediaCaption || parent || message.mentionUserIds?.length ? " has-media-caption" : ""}` : ""}${documentOnly ? ` is-document-message${documentFooter ? " has-document-footer" : ""}` : ""}${message.zoomInvitation && !message.deletedAt ? " is-conference-message" : ""}`}>
+                    {!own && (groupedWithPrevious
+                      ? <span className="sr-only">Сообщение от {personName(message.authorId)}</span>
+                      : <EmployeeProfileLink userId={message.authorId} personName={personName(message.authorId)}><strong>{personName(message.authorId)}</strong></EmployeeProfileLink>)}
+                    {parent && (
+                      <blockquote className="message-quote">
+                        <EmployeeProfileLink userId={parent.authorId} personName={personName(parent.authorId)}><strong>{personName(parent.authorId)}</strong></EmployeeProfileLink>
+                        <span>{parent.body}</span>
+                      </blockquote>
+                    )}
+                    {message.zoomInvitation && !message.deletedAt ? <ZoomInvitationCard messageId={message.id} invitation={message.zoomInvitation} people={people} token={token} />
+                      : message.forwarded ? <ForwardedMessage message={message} onOpenPost={onOpenFeedPost} animateText={arrivingIds.has(message.id)} motionDisabled={motionDisabled} />
+                      : voiceAttachments.length === 0 && !mediaOnly && !(messageAttachments.length && message.body.trim() === "Файл") ? <p className="message-text"><MessageTextAnimate key={`${message.id}:${arrivingIds.has(message.id)}`} enabled={arrivingIds.has(message.id)} disabled={motionDisabled}>{message.body}</MessageTextAnimate></p> : null}
+                    {!message.deletedAt && (
+                      <>
+                        {!!message.mentionUserIds?.length && (
+                          <div className="message-mentions">
+                            {message.mentionUserIds.map((id) => (
+                              <EmployeeProfileLink key={id} userId={id} personName={personName(id)}>@{personName(id)}</EmployeeProfileLink>
+                            ))}
+                          </div>
+                        )}
+                        {voiceAttachments.map((attachment) => (
+                          <VoiceMessagePlayer key={attachment.id} attachment={attachment} onLoad={onLoadAttachment} />
+                        ))}
+                        {message.body && !message.zoomInvitation && message.forwarded?.kind !== "feed" ? <MessageLinkPreviews body={message.body} token={token} /> : null}
+                        <AttachmentChips
+                          attachments={messageAttachments.filter((attachment) => attachment.mediaKind !== "voice")}
+                          onDownload={onDownloadAttachment}
+                          onLoad={onLoadAttachment}
+                          presentation={mediaOnly ? "media" : undefined}
+                        />
+                        {mediaCaption ? <p className="message-text message-media-caption">{mediaCaption}</p> : null}
+                      </>
+                    )}
+                    <MessageMetadata message={message} own={own} />
+                    {!message.deletedAt && (
+                      <div className={`message-actions message-reaction-trigger ${reactionTargetId === message.id ? "is-visible" : ""}`} role="group" aria-label="Реакция на сообщение">
+                        <ReactionPicker userId={currentUserId} disabled={!canSend || busy} ownMessage={own}
+                          active={(message.reactions ?? []).filter((item) => item.reactedByCurrentUser).map((item) => item.emoji)}
+                          onSelect={(emoji) => void run(() => onReactMessage(message, emoji))} />
+                        <Button className="browser-message-menu" appearance="subtle" icon={<MoreHorizontal20Regular />}
+                          aria-label="Действия сообщения" aria-haspopup="menu" onClick={(event) => {
+                            const rect = event.currentTarget.getBoundingClientRect();
+                            setContextMenu({ message, x: rect.left, y: rect.bottom, portalContainer: menuPortalContainerFor(event.currentTarget), trigger: event.currentTarget });
+                          }} />
+                      </div>
+                    )}
+                  </div>
+                  {!!message.reactions?.length && (
+                    <div className="message-reactions" aria-label="Реакции на сообщение">
+                      {message.reactions.map((reaction) => (
+                        <MessageReactionChip
+                          key={reaction.emoji}
+                          reaction={reaction}
+                          people={people}
+                          token={token}
+                          disabled={!canSend || busy}
+                          onOpenDetails={(event) => {
+                            setContextMenu(undefined);
+                            const rect = event.currentTarget.getBoundingClientRect();
+                            setReactionQuick({ message, emoji: reaction.emoji, x: "clientX" in event ? event.clientX : rect.left, y: "clientY" in event ? event.clientY : rect.bottom, anchor: event.currentTarget });
+                          }}
+                          onToggle={() => void run(() => onReactMessage(message, reaction.emoji))}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        }), [renderedMessages, activeMessages, taskForChat, people, canDecideDeadline, onDecideTaskDeadline, deadlineDecisionId, decideDeadline, arrivingIds, motionDisabled, currentUserId, query, attachments, onLoadAttachment, removingMessage, personName, personById, token, onOpenFeedPost, onDownloadAttachment, reactionTargetId, canSend, busy, run, onReactMessage]);
   return (
     <MessengerFileDropSurface className={`conversation-pane${embedded ? " embedded-conversation" : ""}`}
       title={chat.title} blockedReason={fileDropBlocked} receive={acceptFiles} reject={setError}>
@@ -612,7 +822,7 @@ function Conversation({
               <DialogContent>
               <ChatIconPicker value={avatarDraft} onChange={setAvatarDraft} disabled={busy} />
               <p>Иконку увидят все участники чата.</p>
-              {error ? <p className="messenger-error" role="alert">{error}</p> : null}
+              {error ? <WorkspaceNotice tone="error" className="messenger-error" role="alert">{error}</WorkspaceNotice> : null}
               </DialogContent>
               <DialogActions className="chat-dialog-actions">
                 <Button onClick={() => setAvatarPickerOpen(false)}>Отмена</Button>
@@ -732,151 +942,7 @@ function Conversation({
               : "Начните разговор — отправьте первое сообщение"}
           </div>
         )}
-        {renderedMessages.map((message, index) => {
-          const parent = activeMessages.find(
-            (item) => item.id === message.replyToMessageId,
-          );
-          const date = message.createdAt
-            ? new Date(message.createdAt).toLocaleDateString("ru-RU")
-            : "История переписки";
-          const previous = renderedMessages[index - 1]?.createdAt;
-          const previousDate = previous
-            ? new Date(previous).toLocaleDateString("ru-RU")
-            : "История переписки";
-          const deadlineRequest = message.systemKind === "task_deadline_request"
-            ? taskForChat?.deadlineRequests?.find((item) => item.messageId === message.id) : undefined;
-          if (message.systemKind) return <div key={message.id} data-message-row-id={message.id}>
-            {(index === 0 || date !== previousDate) && <div className="date-separator">{date}</div>}
-            {deadlineRequest ? <div className="task-deadline-message" data-message-id={message.id} role="group" aria-label="Запрос переноса срока">
-              <strong>Перенос срока · {deadlineRequest.status === "pending" ? "ожидает решения" : deadlineRequest.status === "approved" ? "подтверждён" : deadlineRequest.status === "rejected" ? "отклонён" : "неактуален"}</strong>
-              <small>Запросил: {people.find((person) => person.id === deadlineRequest.requesterUserId)?.name ?? "Исполнитель"}</small>
-              <p><MessageTextAnimate key={`${message.id}:${arrivingIds.has(message.id)}`} enabled={arrivingIds.has(message.id)} disabled={motionDisabled}>{message.body}</MessageTextAnimate></p>
-              <div><span>Было: {new Date(deadlineRequest.oldDueAt).toLocaleString("ru-RU")}</span><span>Предложено: {new Date(deadlineRequest.proposedDueAt).toLocaleString("ru-RU")}</span></div>
-              {deadlineRequest.status === "pending" && canDecideDeadline && onDecideTaskDeadline ? <div className="task-deadline-message-actions">
-                <Button appearance="primary" disabled={!!deadlineDecisionId} onClick={() => void decideDeadline(deadlineRequest.id, true)}>Подтвердить перенос</Button>
-                <Button appearance="secondary" disabled={!!deadlineDecisionId} onClick={() => void decideDeadline(deadlineRequest.id, false)}>Отклонить</Button>
-              </div> : null}
-              <time>{message.time}</time>
-            </div> : <div className="message-system" data-message-id={message.id} role="note">
-              <span><MessageTextAnimate key={`${message.id}:${arrivingIds.has(message.id)}`} enabled={arrivingIds.has(message.id)} disabled={motionDisabled}>{message.body}</MessageTextAnimate></span><time>{message.time}</time>
-            </div>}
-          </div>;
-          const own = message.authorId === currentUserId;
-          const groupedWithPrevious = !query && messagesShareBubbleGroup(renderedMessages[index - 1], message);
-          const groupedWithNext = !query && messagesShareBubbleGroup(message, renderedMessages[index + 1]);
-          const groupPosition = groupedWithPrevious
-            ? groupedWithNext ? "is-group-middle" : "is-group-last"
-            : groupedWithNext ? "is-group-first" : "";
-          const messageAttachments = attachments.filter(
-            (attachment) => attachment.ownerType === "message" && attachment.ownerId === message.id,
-          );
-          const voiceAttachments = messageAttachments.filter((attachment) => attachment.mediaKind === "voice");
-          return (
-            <div key={message.id} data-message-row-id={message.id} className={`message-row ${groupPosition}${removingMessage?.message.id === message.id ? ` is-removing is-${removingMessage.phase}` : ""}`} style={removingMessage?.message.id === message.id ? { height: removingMessage.phase === "exiting" ? 0 : removingMessage.height } : undefined}>
-              {(index === 0 || date !== previousDate) && (
-                <div className="date-separator">{date}</div>
-              )}
-              <div
-                data-message-id={message.id}
-                className={`message ${own ? "own" : ""} ${message.isPinned ? "message-pinned" : ""} ${message.mentionUserIds?.includes(currentUserId) ? "message-mentioned" : ""}`}
-                onContextMenu={(event) => {
-                  event.preventDefault();
-                  setContextMenu({ message, x: event.clientX, y: event.clientY, portalContainer: menuPortalContainerFor(event.currentTarget) });
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
-                    event.preventDefault();
-                    const rect = event.currentTarget.getBoundingClientRect();
-                    setContextMenu({ message, x: rect.left + 28, y: rect.top + 28, portalContainer: menuPortalContainerFor(event.currentTarget) });
-                  }
-                }}
-                tabIndex={0}
-                onPointerEnter={() => setReactionTargetId(message.id)}
-                onPointerLeave={() => {
-                  setReactionTargetId((current) => current === message.id ? undefined : current);
-                }}
-                onFocus={() => setReactionTargetId(message.id)}
-                onBlur={(event) => {
-                  if (!event.currentTarget.contains(event.relatedTarget)) setReactionTargetId((current) => current === message.id ? undefined : current);
-                }}
-              >
-                {!own && (groupedWithNext ? <span className="message-avatar-spacer" aria-hidden="true" /> :
-                  <EmployeeProfileLink className="message-sender-avatar" userId={message.authorId} personName={personName(message.authorId)}>
-                    {personById(message.authorId) ? <ProfileAvatar person={personById(message.authorId)!} token={token} size={32} /> : <Avatar name={personName(message.authorId)} size={32} color="colorful" />}
-                  </EmployeeProfileLink>
-                )}
-                <div className="message-content">
-                  <div className={`message-body${message.forwarded || message.zoomInvitation || messageAttachments.length ? " has-rich-content" : ""}${messageAttachments.length ? " has-attachments" : ""}`}>
-                    {!own && (groupedWithPrevious
-                      ? <span className="sr-only">Сообщение от {personName(message.authorId)}</span>
-                      : <EmployeeProfileLink userId={message.authorId} personName={personName(message.authorId)}><strong>{personName(message.authorId)}</strong></EmployeeProfileLink>)}
-                    {parent && (
-                      <blockquote className="message-quote">
-                        <EmployeeProfileLink userId={parent.authorId} personName={personName(parent.authorId)}><strong>{personName(parent.authorId)}</strong></EmployeeProfileLink>
-                        <span>{parent.body}</span>
-                      </blockquote>
-                    )}
-                    {message.zoomInvitation && !message.deletedAt ? <ZoomInvitationCard messageId={message.id} invitation={message.zoomInvitation} people={people} token={token} />
-                      : message.forwarded ? <ForwardedMessage message={message} onOpenPost={onOpenFeedPost} animateText={arrivingIds.has(message.id)} motionDisabled={motionDisabled} />
-                      : voiceAttachments.length === 0 ? <p className="message-text"><MessageTextAnimate key={`${message.id}:${arrivingIds.has(message.id)}`} enabled={arrivingIds.has(message.id)} disabled={motionDisabled}>{message.body}</MessageTextAnimate></p> : null}
-                    {!message.deletedAt && (
-                      <>
-                        {!!message.mentionUserIds?.length && (
-                          <div className="message-mentions">
-                            {message.mentionUserIds.map((id) => (
-                              <EmployeeProfileLink key={id} userId={id} personName={personName(id)}>@{personName(id)}</EmployeeProfileLink>
-                            ))}
-                          </div>
-                        )}
-                        {voiceAttachments.map((attachment) => (
-                          <VoiceMessagePlayer key={attachment.id} attachment={attachment} onLoad={onLoadAttachment} />
-                        ))}
-                        {message.body && !message.zoomInvitation && message.forwarded?.kind !== "feed" ? <MessageLinkPreviews body={message.body} token={token} /> : null}
-                        <AttachmentChips
-                          attachments={messageAttachments.filter((attachment) => attachment.mediaKind !== "voice")}
-                          onDownload={onDownloadAttachment}
-                          onLoad={onLoadAttachment}
-                        />
-                      </>
-                    )}
-                    <MessageMetadata message={message} own={own} />
-                    {!message.deletedAt && (
-                      <div className={`message-actions message-reaction-trigger ${reactionTargetId === message.id ? "is-visible" : ""}`} role="group" aria-label="Реакция на сообщение">
-                        <ReactionPicker userId={currentUserId} disabled={!canSend || busy} ownMessage={own}
-                          active={(message.reactions ?? []).filter((item) => item.reactedByCurrentUser).map((item) => item.emoji)}
-                          onSelect={(emoji) => void run(() => onReactMessage(message, emoji))} />
-                        <Button className="browser-message-menu" appearance="subtle" icon={<MoreHorizontal20Regular />}
-                          aria-label="Действия сообщения" aria-haspopup="menu" onClick={(event) => {
-                            const rect = event.currentTarget.getBoundingClientRect();
-                            setContextMenu({ message, x: rect.left, y: rect.bottom, portalContainer: menuPortalContainerFor(event.currentTarget), trigger: event.currentTarget });
-                          }} />
-                      </div>
-                    )}
-                  </div>
-                  {!!message.reactions?.length && (
-                    <div className="message-reactions" aria-label="Реакции на сообщение">
-                      {message.reactions.map((reaction) => (
-                        <MessageReactionChip
-                          key={reaction.emoji}
-                          reaction={reaction}
-                          people={people}
-                          token={token}
-                          disabled={!canSend || busy}
-                          onOpenDetails={(event) => {
-                            setContextMenu(undefined);
-                            const rect = event.currentTarget.getBoundingClientRect();
-                            setReactionQuick({ message, emoji: reaction.emoji, x: "clientX" in event ? event.clientX : rect.left, y: "clientY" in event ? event.clientY : rect.bottom, anchor: event.currentTarget });
-                          }}
-                          onToggle={() => void run(() => onReactMessage(message, reaction.emoji))}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          );
-        })}
+        {messageRows}
       </div>
       {contextMenu ? (() => {
         const message = contextMenu.message;
@@ -910,14 +976,14 @@ function Conversation({
         people={people} token={token} onClose={() => setReactionQuick(undefined)} onOpenPersonProfile={onOpenPersonProfile} /> : null}
       {reactionDialog && <Dialog open onOpenChange={(_, data) => { if (!data.open) setReactionDialog(undefined); }}><DialogSurface className="message-reaction-dialog" aria-label="Реакции на сообщение">
         <DialogBody><DialogTitle>Реакции</DialogTitle><DialogContent>
-          <div className="message-reaction-summary">{reactionDialog?.reactions?.map((reaction) => <span key={reaction.emoji}>{reaction.emoji} {reaction.count}</span>)}</div>
+          <div className="message-reaction-summary">{reactionDialog?.reactions?.map((reaction) => <span key={reaction.emoji} aria-label={`${reaction.emoji} ${reaction.count}`}><ReactionEmoji emoji={reaction.emoji} /> {reaction.count}</span>)}</div>
           <ReactionPeople reactions={reactionDialog?.reactions ?? []} people={people} token={token} onOpenPersonProfile={(id) => { setReactionDialog(undefined); onOpenPersonProfile?.(id); }} />
         </DialogContent></DialogBody>
       </DialogSurface></Dialog>}
-      {error && !avatarPickerOpen && (
-        <div className="messenger-error" role="alert">
+      {error && !avatarPickerOpen && !(attachmentReviewOpen && pendingFiles.length) && (
+        <WorkspaceNotice tone="error" className="messenger-error" role="alert">
           {error}
-        </div>
+        </WorkspaceNotice>
       )}
       {deleting && (
         <WorkspaceDialog open onOpenChange={(_, data) => { if (!data.open && !busy) setDeleting(undefined); }}>
@@ -986,12 +1052,21 @@ function Conversation({
         preview={forwarding.body} chats={availableChats} excludeChatId={chat.id}
         onForward={onForwardContent} onClose={() => setForwarding(undefined)} /> : null}
       {!canSend ? (
-        <div className="chat-read-only">
+        <WorkspaceNotice tone="info" className="chat-read-only">
           Вам доступно только чтение. Право отправлять сообщения меняет владелец
           группы.
-        </div>
+        </WorkspaceNotice>
       ) : (
         <>
+          {pendingSendCount > 0 && <small className="composer-send-status" role="status">Отправляется: {pendingSendCount}</small>}
+          {failedSends.length > 0 && <div className="composer-failed-sends">{failedSends.map((item) => <WorkspaceNotice key={item.id} tone="error" role="alert">
+            <span>{item.error}<br />{item.text.slice(0, 160) || "Сообщение с вложениями"}{item.files.length ? ` · файлов: ${item.files.length}` : ""}</span>
+            <Button size="small" disabled={busy || Boolean(editing) || Boolean(draft.trim()) || pendingFiles.length > 0 || Boolean(reply) || mentions.length > 0} onClick={() => {
+              setDraft(item.text); setPendingFiles(item.files); setReply(item.reply); setMentions(item.mentions); setSendingText(undefined);
+              draftEdited.current = true; focusAfterSend.current = true;
+              setFailedSends((items) => items.filter((entry) => entry.id !== item.id));
+            }}>Вернуть в поле</Button>
+          </WorkspaceNotice>)}</div>}
           {reply && (
             <div className="composer-context">
               <div>
@@ -1137,13 +1212,14 @@ function Conversation({
               <span className="composer-mention-glyph" aria-hidden="true">@</span>
               {activeMentions.length ? <span className="composer-mention-count">{activeMentions.length}</span> : null}
             </Button>
-            <Tooltip content="Записать голосовое сообщение" relationship="label">
+            <Tooltip content={busy ? "Дождитесь завершения действия" : editing ? "Завершите редактирование сообщения перед записью" : draft.trim() ? "Чтобы записать голосовое сообщение, отправьте или удалите набранный текст" : pendingFiles.length ? "Отправьте или удалите вложения перед записью" : "Записать голосовое сообщение"} relationship="description">
               <Button
+                className="composer-microphone"
                 appearance="subtle"
-                icon={<Mic24Regular />}
+                icon={<><Mic24Regular className="composer-microphone-icon" /><Dismiss24Regular className="composer-microphone-blocked-icon" /></>}
                 aria-label="Записать голосовое сообщение"
-                disabled={busy || Boolean(editing) || Boolean(draft.trim()) || pendingFiles.length > 0}
-                onClick={() => setVoiceOpen(true)}
+                aria-disabled={busy || Boolean(editing) || Boolean(draft.trim()) || pendingFiles.length > 0}
+                onClick={() => { if (!busy && !editing && !draft.trim() && !pendingFiles.length) setVoiceOpen(true); }}
               />
             </Tooltip>
             {canUseAssistant ? <div className="composer-rewrite-anchor" ref={rewriteRef}>
@@ -1183,8 +1259,8 @@ function Conversation({
               </div>}
             </div> : null}
             <div className="composer-input">
-              <PendingMessageFiles files={pendingFiles} disabled={busy}
-                onRemove={index => setPendingFiles(current => current.filter((_, fileIndex) => fileIndex !== index))} />
+              {!attachmentReviewOpen && <PendingMessageFiles files={pendingFiles} disabled={busy}
+                onRemove={index => setPendingFiles(current => current.filter((_, fileIndex) => fileIndex !== index))} />}
               <div className={`composer-field-shell${sendingText && !motionDisabled ? " is-message-animating" : ""}`}>
                 <Input
                 input={{ ref: composerInputRef }}
@@ -1259,6 +1335,11 @@ function Conversation({
           </div>}
         </>
       )}
+      {attachmentReviewOpen && pendingFiles.length > 0 && <MessageAttachmentsDialog files={pendingFiles} caption={draft}
+        onFiles={acceptFiles} errorMessage={error}
+        blockedReason={fileDropBlocked} onCaption={value => { draftEdited.current = true; setDraft(value); }}
+        onRemove={index => setPendingFiles(current => current.filter((_, fileIndex) => fileIndex !== index))}
+        onAdd={() => fileInputRef.current?.click()} onSend={send} onClose={() => setAttachmentReviewOpen(false)} />}
     </MessengerFileDropSurface>
   );
 }
@@ -1401,7 +1482,7 @@ export function MessengerView(props: MessengerViewProps) {
           <h2>Сообщение для {assistantRecipient.name}</h2>
           <p>Проверьте получателя и текст. При открытии диалога сообщение останется черновиком — отправить его сможете только вы.</p>
           <blockquote>{props.assistantDraft?.fields.body}</blockquote>
-          {assistantChatError ? <p role="alert" className="messenger-error">{assistantChatError}</p> : null}
+          {assistantChatError ? <WorkspaceNotice tone="error" role="alert" className="messenger-error">{assistantChatError}</WorkspaceNotice> : null}
           <div className="assistant-message-prepare-actions">
             <Button appearance="primary" disabled={assistantChatBusy} onClick={() => void openAssistantChat()}>
               {assistantChatBusy ? "Открываем…" : "Открыть диалог с черновиком"}

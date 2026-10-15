@@ -1,3 +1,4 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { AdministrativeChat, AdministrativeChatInspection } from "@yuksalish/contracts";
@@ -148,7 +149,7 @@ export function AdministrativeChatInspectionView({ token, onClose }: {
       Администратор не становится участником чата, не меняет непрочитанные сообщения и не может отправлять, редактировать или скачивать вложения.
     </div>
     <div className="admin-chat-feedback-slot">
-      {error ? <div className="admin-chat-error" role="alert">{error}</div> : null}
+      {error ? <WorkspaceNotice tone="error" className="admin-chat-error" role="alert">{error}</WorkspaceNotice> : null}
     </div>
     {chats === undefined && !error ? <Spinner label="Загружаем доступные для контроля чаты" /> : null}
     {chats !== undefined ? <div className="admin-chat-layout">

@@ -1,3 +1,4 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
 import { useEffect, useState } from "react";
 import type { AIReferentArchiveLetter, AIReferentJournalFile } from "@yuksalish/contracts";
 import { Button, Spinner } from "@fluentui/react-components";
@@ -50,7 +51,7 @@ export function AIReferentArchive({ token }: { readonly token: string }) {
         <Button icon={<ArrowClockwise20Regular />} disabled={loading} onClick={() => setRevision((value) => value + 1)}>Обновить</Button>
       </div>
     </div>
-    {error ? <p className="ai-referent-feedback" role="alert">{error}</p> : null}
+    {error ? <WorkspaceNotice tone="error" className="ai-referent-feedback" role="alert">{error}</WorkspaceNotice> : null}
     {loading ? <div className="ai-referent-loading"><Spinner label="Загружаем архив" /></div> : null}
     {!loading && !error && letters.length === 0 ? <div className="ai-referent-empty"><h2>{query ? "Письма не найдены" : "Архив пока пуст"}</h2><p>{query ? "Попробуйте другой номер или тему." : "После синхронизации робот покажет здесь прежние письма."}</p></div> : null}
     {!loading && letters.length > 0 ? <div className="ai-incoming-table-wrap" role="region" aria-label="Архив писем" tabIndex={0}>
@@ -81,7 +82,7 @@ export function AIReferentTelegram({ token }: { readonly token: string }) {
         <span className="ai-referent-eyebrow">{telegramId ? "ID назначен" : "Ожидает настройки"}</span>
         <h3>{telegramId ? "Telegram ID указан администратором" : "Попросите администратора подключить Telegram"}</h3>
         <p>{telegramId ? `Telegram ID: ${telegramId}. Дополнительная привязка не нужна. Откройте чат с ботом и нажмите «Старт»; доступ к боту администратор выдаёт отдельно.` : "Администратор укажет ваш Telegram ID и выдаст доступ к AI Referent. После сохранения откройте чат с ботом и нажмите «Старт» — код привязки не требуется."}</p>
-        {error ? <p className="ai-referent-feedback" role="alert">{error}</p> : null}
+        {error ? <WorkspaceNotice tone="error" className="ai-referent-feedback" role="alert">{error}</WorkspaceNotice> : null}
       </div>
     </section>
     <p className="ai-referent-telegram-note">Доступ к боту и право согласовывать письма — разные настройки. Администратор управляет ими отдельно.</p>

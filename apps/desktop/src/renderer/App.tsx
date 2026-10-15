@@ -1,4 +1,8 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { WorkspaceNotice } from "./WorkspaceNotice";
+import { attachmentImageCache, waitForCachedImage } from "./attachment-image-cache";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { workspaceImageGallery, type GalleryImage } from "./image-gallery";
+import { ForwardDialog } from "./ForwardDialog";
 import { fileViewerKind } from "./file-viewer-kind";
 import { loadOfficeFilePreview } from "./workspace-api";
 const FileViewer = lazy(() => import("./FileViewer"));
@@ -401,6 +405,7 @@ function emptySupportRegistry(person: WorkspacePerson): SupportRegistry {
 
 export function App() {
   const [previewAttachment, setPreviewAttachment] = useState<WorkspaceAttachment>();
+  const [forwardPhoto, setForwardPhoto] = useState<GalleryImage<WorkspaceAttachment>>();
   const [activeSection, setActiveSection] = useState<WorkspaceSection | "notifications">("home");
   const [connectionDetail, setConnectionDetail] = useState("Сервер подключён");
   const [session, setSession] = useState<AuthenticationSession>();
@@ -413,6 +418,9 @@ export function App() {
   const [activeApiOrigin, setActiveApiOrigin] = useState<string>();
   const [switchingNetwork, setSwitchingNetwork] = useState(false);
   const [workspace, setWorkspace] = useState<WorkspaceState>(initialWorkspace);
+  const previewImages = useMemo(() => previewAttachment && fileViewerKind(previewAttachment) === "image"
+    ? workspaceImageGallery(previewAttachment, workspace.attachments, workspace.messages, workspace.people) : [],
+  [previewAttachment, workspace.attachments, workspace.messages, workspace.people]);
   useNotificationSounds(session && workspace.currentUser.id === session.user.id ? session.user.id : undefined,
     workspace.notifications, workspace.notificationPreferences);
   const [efficiency, setEfficiency] = useState<EfficiencyOverview>();
@@ -451,7 +459,7 @@ export function App() {
   const [supportFocusRequestId, setSupportFocusRequestId] = useState<string>();
   const activeToken = useRef<string | undefined>(undefined);
   const [focusTarget, setFocusTarget] = useState<{
-    section: WorkspaceSection; entityId?: string; incomingReferent?: boolean; revision: number;
+    section: WorkspaceSection; entityId?: string; messageId?: string; incomingReferent?: boolean; revision: number;
   }>();
   const [paymentCreateContext, setPaymentCreateContext] = useState<{ projectId: string; workstreamId: string }>();
   const consumePaymentCreateContext = useCallback(() => setPaymentCreateContext(undefined), []);
@@ -557,8 +565,18 @@ export function App() {
     }
   };
 
+  useEffect(() => {
+    if (!session) return;
+    const prune = () => { void attachmentImageCache.prune(); };
+    prune();
+    const timer = window.setInterval(prune, 60 * 60_000);
+    document.addEventListener("visibilitychange", prune);
+    return () => { window.clearInterval(timer); document.removeEventListener("visibilitychange", prune); };
+  }, [session]);
+
   const handleLogout = async () => {
     const current = session;
+    if (current) void attachmentImageCache.clear(JSON.stringify([getApiBaseUrl(), current.user.id]));
     activeToken.current = undefined;
     setAccountOpen(false);
     setAccountInvite(false);
@@ -871,7 +889,9 @@ export function App() {
         file,
         documentRole,
       );
+      if (activeToken.current !== session.accessToken) throw new Error("Сессия изменилась. Войдите снова.");
       uploaded.push(attachment);
+      if (fileViewerKind(attachment) === "image") void attachmentImageCache.store(JSON.stringify([getApiBaseUrl(), session.user.id]), attachment, file);
       setWorkspace((current) => ({
         ...current,
         attachments: [...current.attachments, attachment],
@@ -909,6 +929,9 @@ export function App() {
 
   const handleLoadAttachment = useCallback(async (attachment: WorkspaceAttachment, signal?: AbortSignal) => {
     if (session === undefined) throw new Error("Войдите снова");
+    if (fileViewerKind(attachment) === "image") return waitForCachedImage(
+      attachmentImageCache.load(JSON.stringify([getApiBaseUrl(), session.user.id]), attachment,
+        () => downloadWorkspaceAttachment(session.accessToken, attachment.id)), signal);
     return await downloadWorkspaceAttachment(session.accessToken, attachment.id, signal);
   }, [session]);
   const handleLoadOffice = useCallback(async (attachment: WorkspaceAttachment, sheet: number, offset: number, signal?: AbortSignal) => {
@@ -2125,11 +2148,9 @@ export function App() {
               </div></div>
           </header>
 
-          {backgroundError ? <div className="workspace-feedback" role="alert">
+          {backgroundError ? <WorkspaceNotice tone="warning" className="workspace-feedback" role="alert" actions={<><Button size="small" onClick={() => void refreshWorkspace(session.accessToken).catch(reportError)}>Обновить данные</Button><Button size="small" appearance="subtle" aria-label="Закрыть сообщение об ошибке" onClick={() => setBackgroundError("")}>×</Button></>}>
             <span>{backgroundError}</span>
-            <Button size="small" onClick={() => void refreshWorkspace(session.accessToken).catch(reportError)}>Обновить данные</Button>
-            <Button size="small" appearance="subtle" aria-label="Закрыть сообщение об ошибке" onClick={() => setBackgroundError("")}>×</Button>
-          </div> : null}
+          </WorkspaceNotice> : null}
 
           <main className="app-content" id="workspace-content" tabIndex={-1}>
             <Suspense fallback={<div className="workspace-module-loading" role="status">Открываем раздел…</div>}>
@@ -2255,6 +2276,7 @@ export function App() {
                 }}
                 onOpenPersonProfile={setProfileUserId}
                 focusChatId={focusTarget?.section === "messenger" ? focusTarget.entityId : undefined}
+                focusMessageId={focusTarget?.section === "messenger" ? focusTarget.messageId : undefined}
               />
             ) : null}
             {displayedSection === "tasks" ? (
@@ -2664,7 +2686,17 @@ export function App() {
       ) : null}
       {previewAttachment ? <Suspense fallback={null}><FileViewer key={previewAttachment.id} attachment={previewAttachment}
         onClose={() => setPreviewAttachment(undefined)} onLoad={handleLoadAttachment}
+        images={previewImages}
+        onGoToMessage={(image) => {
+          setPreviewAttachment(undefined);
+          const target = image.messageId ? document.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(image.messageId)}"]`) : null;
+          if (target) requestAnimationFrame(() => target.scrollIntoView({ block: "center", behavior: "instant" }));
+          else if (image.chatId) { setFocusTarget((current) => ({ section: "messenger", entityId: image.chatId, messageId: image.messageId, revision: (current?.revision ?? 0) + 1 })); setActiveSection("messenger"); }
+        }}
+        onForward={canView("messenger") ? (image) => { setPreviewAttachment(undefined); setForwardPhoto(image); } : undefined}
         onLoadOffice={handleLoadOffice} onDownload={handleSaveAttachment} /></Suspense> : null}
+      {forwardPhoto?.messageId && <ForwardDialog source={{ kind: "message", id: forwardPhoto.messageId }} preview={forwardPhoto.caption || forwardPhoto.attachment.fileName}
+        chats={workspace.chats} excludeChatId={forwardPhoto.chatId} onForward={handleForwardContent} onClose={() => setForwardPhoto(undefined)} />}
       <WebUpdateNotice mandatory={Boolean(updatePolicy?.mandatory)} onAvailabilityChange={setWebUpdateAvailable} />
       </EmployeeProfileProvider>
       </WorkspacePeopleProvider>

@@ -1,3 +1,4 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
 import { WorkspaceSelect } from "./WorkspaceSelect";
 import { useEffect, useRef, useState } from "react";
@@ -19,6 +20,7 @@ import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import { ConfirmActionDialog } from "./ConfirmActionDialog";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { ReactionPicker } from "./ReactionPicker";
+import { ReactionEmoji } from "./ReactionEmoji";
 import { ReactionDetailsMenu, type ReactionDetailsTarget } from "./ReactionPeople";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { ForwardDialog, type ForwardContentAction } from "./ForwardDialog";
@@ -69,7 +71,7 @@ export function FeedReactions({ reactions, disabled, currentUserId, onToggle, pe
   const [details, setDetails] = useState<ReactionDetailsTarget>();
   return <div className="feed-reactions" aria-label="Реакции">
     {reactions.map((reaction) => <span className="feed-reaction-pair" key={reaction.emoji}><Button size="small" appearance={reaction.reactedByCurrentUser ? "primary" : "subtle"} disabled={disabled}
-      aria-haspopup="dialog" onContextMenu={(event) => {
+      aria-label={`${reaction.emoji} ${reaction.count}`} aria-haspopup="dialog" onContextMenu={(event) => {
         event.preventDefault(); event.stopPropagation();
         setDetails({ emoji: reaction.emoji, x: event.clientX, y: event.clientY, anchor: event.currentTarget });
       }} onKeyDown={(event) => {
@@ -77,7 +79,7 @@ export function FeedReactions({ reactions, disabled, currentUserId, onToggle, pe
         event.preventDefault(); event.stopPropagation();
         const rect = event.currentTarget.getBoundingClientRect();
         setDetails({ emoji: reaction.emoji, x: rect.left, y: rect.bottom, anchor: event.currentTarget });
-      }} onClick={() => { setDetails(undefined); onToggle(reaction.emoji, !reaction.reactedByCurrentUser); }}>{reaction.emoji} {reaction.count}</Button>
+      }} onClick={() => { setDetails(undefined); onToggle(reaction.emoji, !reaction.reactedByCurrentUser); }}><ReactionEmoji emoji={reaction.emoji} /> {reaction.count}</Button>
       <Button className="browser-feed-reaction-menu" size="small" appearance="subtle" icon={<MoreHorizontal24Regular />} aria-label={`Кто поставил реакцию ${reaction.emoji}`} aria-haspopup="dialog" onClick={(event) => {
         const rect = event.currentTarget.getBoundingClientRect();
         setDetails({ emoji: reaction.emoji, x: rect.left, y: rect.bottom, anchor: event.currentTarget });
@@ -209,7 +211,7 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
           </div>
         </WorkspaceSectionHeader>
       <div className="feed-main">
-        {actionError ? <p className="feed-action-error" role="alert">{actionError}</p> : null}
+        {actionError ? <WorkspaceNotice tone="error" className="feed-action-error" role="alert">{actionError}</WorkspaceNotice> : null}
         <div className="feed-list">
           {focusPostId && !posts.some(post => post.id === focusPostId) && <p className="feed-focus-notice" role="status">Объявление удалено или недоступно</p>}
           {posts.map((post) => {
@@ -272,7 +274,7 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
                       <Button appearance="primary" disabled={greetingBusy || !greetingText.trim()}
                         onClick={() => void publishGreeting(post)}>Опубликовать поздравление</Button>
                     </>}
-                    {greetingError && <p role="alert">{greetingError}</p>}
+                    {greetingError && <WorkspaceNotice tone="error" role="alert">{greetingError}</WorkspaceNotice>}
                     <Button appearance="subtle" onClick={() => setGreetingPostId(undefined)}>Отмена</Button>
                   </div>}
                 </div>}
@@ -346,7 +348,7 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
           <DialogBody>
             <DialogTitle>Новое объявление</DialogTitle>
             <DialogContent className="feed-composer">
-              {actionError ? <p className="feed-action-error" role="alert">{actionError}</p> : null}
+              {actionError ? <WorkspaceNotice tone="error" className="feed-action-error" role="alert">{actionError}</WorkspaceNotice> : null}
               <Input autoFocus aria-label="Заголовок публикации" placeholder="Заголовок" value={title} onChange={(_event, data) => setTitle(data.value)} />
               <Textarea aria-label="Текст публикации" placeholder="Поделитесь новостью с командой" resize="vertical" value={body} onChange={(_event, data) => setBody(data.value)} />
             </DialogContent>

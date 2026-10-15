@@ -1,3 +1,4 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type {
@@ -186,7 +187,7 @@ export function AIReferentIncomingRegister({ token, focusLetterId }: AIReferentI
           loading={loading} hasNext={(page + 1) * 100 < (registry?.filteredCount ?? 0)} onPageChange={setPage} />
       </div>
 
-      {error ? <p className="ai-referent-feedback" role="alert">{error}</p> : null}
+      {error ? <WorkspaceNotice tone="error" className="ai-referent-feedback" role="alert">{error}</WorkspaceNotice> : null}
       {loading ? <div className="ai-referent-loading"><Spinner label="Загружаем входящие письма" /></div> : null}
       {!loading && !error && letters.length === 0 ? (
         <div className="ai-referent-empty">

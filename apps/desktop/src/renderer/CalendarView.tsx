@@ -1,3 +1,4 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
 import { CalendarAudienceActions } from "./CalendarAudienceActions";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -667,7 +668,7 @@ export function CalendarView({
   };
 
   const agendaContent = <>
-    {error && !selected && !draft ? <div className="auth-error calendar-error" role="alert">{error}</div> : null}
+    {error && !selected && !draft ? <WorkspaceNotice tone="error" className="auth-error calendar-error" role="alert">{error}</WorkspaceNotice> : null}
     <div className="calendar-day-panel">
       <div className="calendar-side-heading calendar-day-heading">
         <span>{selectedDayIsPast ? "Прошедший день" : dayKey(selectedDay) === dayKey(new Date()) ? "Сегодня" : "Выбранный день"}</span>
@@ -678,7 +679,7 @@ export function CalendarView({
         <span>{selectedDayItems.length}</span><p>записей в расписании</p>
         {!selectedDayIsPast ? <Button disabled={Boolean(draft) || busy} appearance="primary" icon={<Add24Regular />} onClick={() => createForDay(selectedDay)}>Добавить</Button> : null}
       </div>
-      {selectedDayIsPast ? <div className="calendar-past-note">Новые события задним числом недоступны. Уже созданные события можно открыть и изменить.</div> : null}
+      {selectedDayIsPast ? <WorkspaceNotice tone="info" className="calendar-past-note">Новые события задним числом недоступны. Уже созданные события можно открыть и изменить.</WorkspaceNotice> : null}
       <div className="calendar-day-agenda">
         {selectedDayItems.length ? <CalendarSchedule items={selectedDayItems} currentUserId={currentUserId} disabled={Boolean(draft) || busy}
           people={people} onEvent={openScheduleEvent} onZoom={openZoomEvent} /> : <div className="calendar-empty">
@@ -859,7 +860,7 @@ export function CalendarView({
           }
         }}
         onClose={() => { if (draft) { closeDraft(); return; } setSelected(undefined); setSelectedZoom(undefined); setError(""); }}>
-        {error && selected ? <div className="auth-error calendar-error" role="alert">{error}</div> : null}
+        {error && selected ? <WorkspaceNotice tone="error" className="auth-error calendar-error" role="alert">{error}</WorkspaceNotice> : null}
         {draft && selected ? (
           <div className="calendar-form">
             <div className="calendar-side-nav">
@@ -890,7 +891,7 @@ export function CalendarView({
             {canLinkProjects ? <div>
               <h3>Связь с проектом</h3>
               {projectTargetsLoading ? <p role="status">Загружаем проекты…</p> : null}
-              {projectTargetsError ? <div role="alert">{projectTargetsError} <Button onClick={() => setProjectTargetsAttempt((value) => value + 1)}>Повторить</Button></div> : null}
+              {projectTargetsError ? <WorkspaceNotice tone="error" role="alert" actions={<><Button onClick={() => setProjectTargetsAttempt((value) => value + 1)}>Повторить</Button></>}>{projectTargetsError} </WorkspaceNotice> : null}
               <CalendarProjectLinkFields value={draft} targets={projectTargets} onChange={setDraft} />
             </div> : null}
             <fieldset>
@@ -1069,7 +1070,7 @@ export function CalendarView({
               <h2 id="calendar-payment-title">Оплата мероприятия</h2>
               <p>{paymentEvent.title}. После создания статус будет обновляться в этой карточке.</p>
             </div>
-            {paymentError ? <div className="auth-error" role="alert">{paymentError}</div> : null}
+            {paymentError ? <WorkspaceNotice tone="error" className="auth-error" role="alert">{paymentError}</WorkspaceNotice> : null}
             <Input aria-label="Название заявки" value={paymentTitle} onChange={(_event, data) => setPaymentTitle(data.value)} />
             <Input aria-label="Сумма заявки в сумах" inputMode="numeric" value={paymentAmount} onChange={(_event, data) => setPaymentAmount(data.value)} placeholder="Сумма в UZS" />
             <div className="calendar-form-actions">

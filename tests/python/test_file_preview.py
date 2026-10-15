@@ -12,6 +12,11 @@ from yuksalish_api.repository import WorkspaceRepositoryError
 from yuksalish_api.routers import workspace
 
 
+@pytest.fixture
+def anyio_backend() -> str:
+    return "asyncio"
+
+
 def word(xml: str) -> bytes:
     stream = BytesIO()
     with ZipFile(stream, "w") as archive:

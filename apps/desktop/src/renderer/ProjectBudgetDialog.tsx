@@ -1,3 +1,4 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
 import { useEffect, useRef, useState } from "react";
 import { Button, DialogSurface, Input } from "@fluentui/react-components";
 import type { ProjectBudgetArticleInput, ProjectBudgetSummary, ProjectHubProject } from "@yuksalish/contracts";
@@ -88,7 +89,7 @@ export function ProjectBudgetDialog({ token, project, onClose }: Props) {
           <Button type="submit" appearance="primary" disabled={busy || !article.title.trim()}>Сохранить статью</Button><Button disabled={busy} onClick={() => setAdding(false)}>Отмена</Button>
         </form> : null}
       </div>
-      <footer>{error ? <p role="alert">{error}</p> : null}<Button disabled={busy} onClick={() => { setBusy(true); setError(""); setRefresh((value) => value + 1); }}>Обновить бюджет</Button>
+      <footer>{error ? <WorkspaceNotice tone="error" role="alert">{error}</WorkspaceNotice> : null}<Button disabled={busy} onClick={() => { setBusy(true); setError(""); setRefresh((value) => value + 1); }}>Обновить бюджет</Button>
         {project.canEdit && !adding ? <Button ref={addArticleRef} disabled={busy} onClick={() => {
           setCreationKey(crypto.randomUUID());
           setArticle({ ...empty, currency: project.currency });

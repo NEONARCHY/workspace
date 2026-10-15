@@ -1167,12 +1167,6 @@ button { -webkit-tap-highlight-color: transparent; }
 .feed-reaction-popover.fui-MenuPopover { width: 248px; padding: 8px; border-radius: 18px; }
 .feed-reaction-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
 .feed-reaction-grid .fui-MenuItem { display: grid; place-items: center; min-width: 30px; min-height: 34px; padding: 4px; border-radius: 9px; font-size: 22px; line-height: 1; }
-.reaction-picker-popover.fui-MenuPopover { box-sizing: border-box; width: min(384px, calc(100vw - 24px)); padding: 10px; border: 1px solid rgb(var(--ws-theme-line-rgb, 41 58 85) / 0.1); border-radius: 18px; background: rgb(var(--ws-theme-surface-rgb, 255 255 255) / 0.98); box-shadow: 0 18px 44px rgb(41 58 85 / 18%); }
-.reaction-picker-popover.fui-MenuPopover::before { position: absolute; top: 15px; left: -7px; width: 12px; height: 12px; border: 1px solid rgb(var(--ws-theme-line-rgb, 41 58 85) / 0.1); border-right: 0; border-bottom: 0; background: var(--ws-theme-surface, #fff); content: ""; transform: rotate(-45deg); }
-.reaction-picker-popover.fui-MenuPopover.is-own-message::before { right: -7px; left: auto; transform: rotate(135deg); }
-.reaction-picker-grid.fui-MenuList { display: grid !important; grid-template-columns: repeat(8, minmax(0, 1fr)); grid-auto-rows: 40px; gap: 3px; max-height: 150px; overflow-x: hidden; overflow-y: auto; scrollbar-gutter: stable; scrollbar-width: thin; }
-.reaction-picker-grid .fui-MenuItem { display: grid; place-items: center; min-width: 0; width: 100%; min-height: 40px; height: 40px; padding: 0; border-radius: 10px; font-size: 24px; line-height: 1; }
-.reaction-picker-grid .fui-MenuItem[aria-checked="true"] { background: var(--ws-accent-wash); box-shadow: inset 0 0 0 1px rgb(0 145 168 / 25%); }
 .feed-side { align-self: start; padding: 17px; }
 .feed-side strong { color: var(--ws-theme-ink, #20364a); font-size: 12px; }
 .feed-side p { color: var(--ws-theme-muted, #66798b); font-size: 11px; line-height: 1.55; }

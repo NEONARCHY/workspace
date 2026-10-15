@@ -3,6 +3,20 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 describe("web API addresses and session restore", () => {
   const defaultBridge = window.yuksalish;
   const cookieDescriptor = Object.getOwnPropertyDescriptor(Document.prototype, "cookie");
+  it("loads Word PDF previews as binary while keeping spreadsheet JSON previews", async () => {
+    window.yuksalish = undefined;
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response("%PDF-1.7", { headers: { "Content-Type": "application/pdf" } }))
+      .mockResolvedValueOnce(Response.json({ kind: "excel", rows: [["42"]] }));
+    vi.stubGlobal("fetch", fetchMock);
+    const api = await import("./workspace-api");
+    const pdf = await api.loadOfficeFilePreview("test-token", "file id");
+    expect(pdf).toHaveProperty("type", "application/pdf");
+    const [url, options] = fetchMock.mock.calls[0]! as [string, RequestInit];
+    expect(url).toContain("/attachments/file%20id/preview?sheet=0&offset=0&render=true");
+    expect(new Headers(options.headers).get("Authorization")).toBe("Bearer test-token");
+    expect(new Headers(options.headers).get("Accept")).toContain("application/pdf");
+    expect(await api.loadOfficeFilePreview("test-token", "book", 1, 200)).toEqual({ kind: "excel", rows: [["42"]] });
+  });
   it("deletes only the specified task attachment and propagates a server refusal", async () => {
     window.yuksalish = undefined;
     const fetchMock = vi.fn().mockResolvedValueOnce(new Response(null, {status: 204}))

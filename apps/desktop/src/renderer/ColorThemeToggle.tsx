@@ -1,3 +1,4 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
 import { useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { Button, Tooltip } from "@fluentui/react-components";
@@ -20,6 +21,6 @@ export function ColorThemeToggle({ userId }: { readonly userId: string }) {
           setNotice(setPreference(next) ? "" : "Тема применена, но сохранить выбор не удалось. После перезапуска он может сброситься.");
         }));
       }} /></Tooltip>
-    {notice && <div className="color-theme-save-notice" role="status">{notice}<Button appearance="subtle" onClick={() => setNotice("")}>Закрыть</Button></div>}
+    {notice && <WorkspaceNotice tone="warning" className="color-theme-save-notice" role="status" actions={<><Button appearance="subtle" onClick={() => setNotice("")}>Закрыть</Button></>}>{notice}</WorkspaceNotice>}
   </div>;
 }

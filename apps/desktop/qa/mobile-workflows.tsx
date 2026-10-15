@@ -163,6 +163,7 @@ const rejectSave = async (): Promise<never> => { throw new Error("QA: тесто
 function Fixture() {
   const workspaceTheme = useQaTheme();
   const canManage = new URLSearchParams(location.search).has("workflow");
+  const canCreatePayment = !new URLSearchParams(location.search).has("policy");
   const [page, setPage] = useState("projects");
   useEffect(() => { document.documentElement.classList.add("web-platform"); return observeBrowserViewport(); }, []);
   return <FluentProvider theme={workspaceTheme} className="app-provider"><ScrollbarEdges /><EmployeeProfileProvider onOpenProfile={() => {}}>
@@ -171,7 +172,7 @@ function Fixture() {
         {["projects", "funding", "payments", "trips", "calendar"].map((key, i) => <Button key={key} onClick={() => setPage(key)} aria-pressed={key === page} style={{ minHeight: 48 }}>{["Проекты", "Проектные", "Оплаты", "Поездки", "Календарь"][i]}</Button>)}
       </header><main className="app-content" id="workspace-content">
         {page === "projects" || page === "funding" ? <ProjectHubView key={page} mode={page === "projects" ? "projects" : "funding"} token="qa-only" people={people} currentUserId={people[0]!.id} canCreateProject canCreateRequest canViewFunding /> : null}
-        {page === "payments" ? <ApprovalsView token="qa-only" canManage={canManage} canCreateRequest currentUserId={people[0]!.id} people={people} positions={[]} requests={payments} calendarEvents={events} attachments={[]} onSaveWorkflow={rejectSave} onPublishWorkflow={rejectSave} onCreateRequest={rejectSave} onAction={rejectSave} onDeleteRequest={rejectSave} onReviseRequest={rejectSave} onUploadAttachments={rejectSave} onDownloadAttachment={rejectSave} /> : null}
+        {page === "payments" ? <ApprovalsView token="qa-only" canManage={canManage} canCreateRequest={canCreatePayment} currentUserId={people[0]!.id} people={people} positions={[]} requests={payments} calendarEvents={events} attachments={[]} onSaveWorkflow={rejectSave} onPublishWorkflow={rejectSave} onCreateRequest={rejectSave} onAction={rejectSave} onDeleteRequest={rejectSave} onReviseRequest={rejectSave} onUploadAttachments={rejectSave} onDownloadAttachment={rejectSave} /> : null}
         {page === "trips" ? <TripApprovalsView requests={trips} people={people} currentUser={people[0]!} onCreate={rejectSave} onUpdate={rejectSave} onAction={rejectSave} /> : null}
         {page === "calendar" ? <CalendarView events={events} zoomMeetings={zoomMeetings} people={people} currentUserId={people[0]!.id} onCreate={rejectSave} onUpdate={rejectSave} onCancel={rejectSave} /> : null}
       </main>

@@ -1,3 +1,4 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
 import { useEffect, useMemo, useState } from "react";
 
 import type { EfficiencyOverview, EmployeeEfficiency } from "@yuksalish/contracts";
@@ -189,7 +190,7 @@ export function EfficiencyView({ token, overview, loading, error, onPeriodChange
       <label className="eff-period-control"><span>Период</span><WorkspaceSelect aria-label="Период эффективности" value={overview.period} onChange={(event) => void onPeriodChange(event.target.value)}>{monthOptions().map((period) => <option key={period} value={period}>{monthLabel(period)}</option>)}</WorkspaceSelect></label>
       <Button className="eff-help-button" appearance="secondary" aria-haspopup="dialog" aria-expanded={helpOpen} onClick={() => setHelpOpen(true)}>?</Button>
     </div>
-    {error ? <div className="eff-inline-error" role="status">Показаны последние загруженные данные. {error}</div> : null}
+    {error ? <WorkspaceNotice tone="warning" className="eff-inline-error" role="status">Показаны последние загруженные данные. {error}</WorkspaceNotice> : null}
     <div className="eff-overview-grid">
       <EmployeeSummary employee={activeEmployee} title={activeTitle} token={token} />
       <div className="eff-context-stack">

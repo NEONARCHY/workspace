@@ -7,6 +7,8 @@ import { AttachmentChips } from "./AttachmentPanel";
 import { fileViewerKind } from "./file-viewer-kind";
 import { workspaceTheme } from "./workspace-theme";
 
+vi.mock("./PdfFilePreview", () => ({ default: ({ blob }: { blob: Blob }) => <div data-testid="rendered-office-pdf">PDF {blob.type}</div> }));
+
 const file: WorkspaceAttachment = {id:"file-1",ownerType:"task",ownerId:"task-1",fileName:"Документ.docx",contentType:"application/octet-stream",byteSize:1200,sha256:"test",uploadedByUserId:"user-1",documentRole:"general",createdAt:"2026-10-12T10:00:00Z"};
 const word: OfficeFilePreview = {kind:"word",blocks:[{kind:"paragraph",text:"<script>не исполнять</script>",rows:[]},{kind:"table",text:"",rows:[["Отдел","План"],["ЦА","42"]]}],sheets:[],sheetIndex:0,rowOffset:0,totalRows:0,rows:[],truncated:false};
 const excel: OfficeFilePreview = {...word,kind:"excel",blocks:[],sheets:["План","Итоги"],totalRows:420,rows:[["Мероприятие","Срок"],["Встреча","13 октября"]]};
@@ -17,6 +19,7 @@ afterEach(() => {cleanup();vi.restoreAllMocks();vi.unstubAllGlobals();});
 
 it("classifies documents and media, giving video MIME precedence over webm audio fallback",()=>{
   expect(fileViewerKind(file)).toBe("word");
+  expect(fileViewerKind({...file,fileName:"legacy.DOC",contentType:"application/msword"})).toBe("word");
   expect(fileViewerKind({...file,fileName:"sheet.xlsx"})).toBe("excel");
   expect(fileViewerKind({...file,fileName:"clip.webm",contentType:"video/webm"})).toBe("video");
   expect(fileViewerKind({...file,fileName:"song.mp3"})).toBe("audio");
@@ -31,6 +34,17 @@ it("opens an unsaved image locally and frees its URL without calling the Office 
   view.unmount();
   expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:preview");
 });
+it("browses the other selected local photos without sending them to the server", async () => {
+  const first = new File(["one"], "one.png", {type:"image/png"});
+  const second = new File(["two"], "two.png", {type:"image/png"});
+  const office = vi.fn();
+  render(wrap(<LocalFileViewer file={second} files={[first, second]} onClose={vi.fn()} onLoadOffice={office} />));
+  await screen.findByRole("img", {name:"two.png"});
+  expect(screen.getByText("Фото 2 из 2")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", {name:"Предыдущее фото"}));
+  await screen.findByRole("img", {name:"one.png"});
+  expect(office).not.toHaveBeenCalled();
+});
 it("renders Word content as escaped text and tables without loading the original",async()=>{
   const p=props(); render(wrap(<FileViewer {...p}/>));
   expect(await screen.findByText("<script>не исполнять</script>")).toBeInTheDocument();
@@ -39,6 +53,20 @@ it("renders Word content as escaped text and tables without loading the original
   expect(p.onLoad).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button",{name:"Скачать"})); expect(p.onDownload).toHaveBeenCalledWith(file);
   fireEvent.click(screen.getByRole("button",{name:"Закрыть просмотрщик"})); expect(p.onClose).toHaveBeenCalled();
+});
+it("shows a converted DOC as paginated PDF and still downloads the untouched original", async () => {
+  const attachment = { ...file, fileName: "legacy.doc", contentType: "application/msword" };
+  const p = props(attachment);
+  p.onLoadOffice.mockResolvedValue(new Blob(["%PDF-1.7"], { type: "application/pdf" }));
+  render(wrap(<FileViewer {...p} />));
+  expect(await screen.findByTestId("rendered-office-pdf")).toHaveTextContent("application/pdf");
+  expect(document.querySelector(".file-viewer-pdf")).not.toBeNull();
+  expect(document.querySelector(".file-viewer-document")).toBeNull();
+  expect(screen.queryByRole("textbox", { name: "Поиск в документе" })).toBeNull();
+  expect(screen.getByText(/Страничный просмотр Word/)).toBeInTheDocument();
+  expect(p.onLoad).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Скачать" }));
+  expect(p.onDownload).toHaveBeenCalledWith(attachment);
 });
 it("switches Excel sheets and loads rows in bounded pages",async()=>{
   const p=props({...file,fileName:"book.xlsx"}); p.onLoadOffice.mockResolvedValue(excel);

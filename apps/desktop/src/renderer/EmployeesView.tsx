@@ -1,3 +1,4 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -426,7 +427,7 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
     return (
       <section className="workspace-view directory-loading" aria-label="Сотрудники">
         {!feedback && <Spinner label="Загружаем сотрудников и должности" />}
-        {feedback ? <div className="directory-feedback" role="alert">{feedback}</div> : null}
+        {feedback ? <WorkspaceNotice tone="error" className="directory-feedback" role="alert">{feedback}</WorkspaceNotice> : null}
         {feedback && <Button onClick={() => { setFeedback(""); setLoadAttempt(value => value + 1); }}>Повторить загрузку</Button>}
       </section>
     );
@@ -584,7 +585,7 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
             onClick={() => setPanel(null)}
           />
         </div>
-        {feedback && <div className="directory-feedback" role={feedbackIsError ? "alert" : "status"}>{feedback}</div>}
+        {feedback && <WorkspaceNotice tone={feedbackIsError ? "error" : "success"} className="directory-feedback" role={feedbackIsError ? "alert" : "status"}>{feedback}</WorkspaceNotice>}
         {panel === "employee" ? <div className="employee-detail">
           {selectedEmployee ? (
             <>
@@ -792,7 +793,7 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
               <Field label="Основание" required hint="Минимум 12 символов. Причина будет записана в аудит.">
                 <Textarea aria-label="Основание изменения состояния сотрудника" resize="vertical" maxLength={500} value={employeeStatusReason} disabled={busy} onChange={(_, data) => setEmployeeStatusReason(data.value)} />
               </Field>
-              {feedback ? <div className="admin-chat-error" role="alert">{feedback}</div> : null}
+              {feedback ? <WorkspaceNotice tone="error" className="admin-chat-error" role="alert">{feedback}</WorkspaceNotice> : null}
             </DialogContent>
             <DialogActions>
               <Button appearance="primary" disabled={busy || employeeStatusReason.trim().length < 12} onClick={() => void saveEmployeeStatus()}>{busy ? "Сохраняем…" : "Подтвердить"}</Button>
@@ -849,7 +850,7 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
           </DialogBody>
         </DialogSurface>
       </Dialog> : null}
-      {feedback && !panel ? <div className="directory-feedback" role={feedbackIsError ? "alert" : "status"}>{feedback}</div> : null}
+      {feedback && !panel ? <WorkspaceNotice tone={feedbackIsError ? "error" : "success"} className="directory-feedback" role={feedbackIsError ? "alert" : "status"}>{feedback}</WorkspaceNotice> : null}
       <ConfirmActionDialog
         open={pendingPositionDelete !== undefined}
         title="Удалить должность?"

@@ -1,3 +1,4 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import type { WorkspacePerson, ZoomInvitation } from "@yuksalish/contracts";
 import { Check, ChevronDown, Clock3, ExternalLink, Video, X } from "lucide-react";
@@ -109,7 +110,7 @@ export function ZoomInvitationCard({ messageId, invitation, people, token }: {
         {joinUrl && <a className="zoom-invitation-link" href={joinUrl} onClick={join} target="_blank" rel="noopener noreferrer">Ссылка на конференцию <ExternalLink size={14} aria-hidden="true" /></a>}
         {card.passcode && <p className="zoom-invitation-passcode">Код доступа: <strong>{card.passcode}</strong></p>}
       </>}
-      {error && <p className="zoom-invitation-error" role="alert">{error}</p>}
+      {error && <WorkspaceNotice tone="error" className="zoom-invitation-error" role="alert">{error}</WorkspaceNotice>}
     </div>
   </section>;
 }

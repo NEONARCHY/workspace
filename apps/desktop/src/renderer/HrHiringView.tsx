@@ -1,3 +1,4 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { HiringActionName, HiringDetail, HiringDocumentKind, HiringFields, HiringRegistry, HiringSignatureBox } from "@yuksalish/contracts";
 import { Button, Checkbox, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input, Select, Spinner, Textarea } from "@fluentui/react-components";
@@ -84,7 +85,7 @@ export function HrHiringView({ token }: { readonly token: string }) {
   return <section className="hr-hiring" aria-label="Приём на работу">
     <div className="hr-hiring-toolbar"><div><h2>Приём на работу</h2><p>Договор, приказ и ариза в одном пакете. Сотрудник подписывает договор после распечатки.</p></div>
       <div><span className="hr-hiring-count">{registry ? `${registry.total} оформлений` : "Загрузка"}</span><Button disabled={busy} onClick={() => void run(refresh)}>Обновить</Button>{registry?.canCreate ? <Button appearance="primary" disabled={busy} onClick={start}>Новый приём</Button> : null}</div></div>
-    {error ? <div role="alert" className="hr-alert hr-error">{error}</div> : null}
+    {error ? <WorkspaceNotice tone="error" role="alert" className="hr-alert hr-error">{error}</WorkspaceNotice> : null}
     {!registry && !error ? <Spinner label="Загружаем оформления…" /> : null}
     {registry ? <><div className="hr-hiring-signature"><span>Руководитель: {registry.signerName}. {registry.signatureReady ? "Личная подпись настроена." : "Личная подпись ещё не настроена."}</span>
       {registry.canConfigureSignature ? <><input type="file" ref={signatureInput} hidden accept="image/png" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = "";
@@ -103,7 +104,7 @@ export function HrHiringView({ token }: { readonly token: string }) {
             <li key={label} aria-current={stage === index + 1 ? "step" : undefined} data-complete={stage > index + 1}><span>{index + 1}</span>{label}</li>)}</ol>
           {editable ? <HrIdentityImport key={draftId} token={token} current={fields} disabled={busy}
             onApply={values => { setFields({ ...fields, ...values }); setDirty(true); }} /> : null}
-          {selected?.returnComment ? <p className="hr-alert">Причина возврата: {selected.returnComment}</p> : null}
+          {selected?.returnComment ? <WorkspaceNotice tone="info" className="hr-alert">Причина возврата: {selected.returnComment}</WorkspaceNotice> : null}
           <fieldset disabled={!editable || busy}><legend>Данные сотрудника</legend><div className="hr-hiring-grid">
             {text("fullName", "Фамилия, имя и отчество")}{text("passport", "Паспорт / ID-карта")}{text("pinfl", "JSHSHIR — 14 цифр")}{text("phone", "Телефон")}{text("address", "Адрес проживания")}
           </div></fieldset>
@@ -151,7 +152,7 @@ export function HrHiringView({ token }: { readonly token: string }) {
       {decision === "approve" ? <Checkbox checked={reviewConfirmed} disabled={busy || Boolean(pendingAction)} label="Я ознакомился с полным пакетом и подтверждаю применение моей подписи" onChange={(_, data) => setReviewConfirmed(data.checked === true)} /> : null}
       {decision === "complete" ? <Checkbox checked={reviewConfirmed} disabled={busy || Boolean(pendingAction)} label="Я проверил(а), что сотрудник подписал бумажный договор" onChange={(_, data) => setReviewConfirmed(data.checked === true)} /> : null}
       {decision === "return" ? <Field label="Причина возврата" required><Textarea disabled={busy || Boolean(pendingAction)} value={comment} onChange={(_, data) => setComment(data.value)} /></Field> : null}
-      {pendingAction && error ? <p role="alert">{error} Повтор использует тот же ключ и не подписывает документы дважды.</p> : null}
+      {pendingAction && error ? <WorkspaceNotice tone="error" role="alert">{error} Повтор использует тот же ключ и не подписывает документы дважды.</WorkspaceNotice> : null}
     </DialogContent><DialogActions><Button disabled={busy || Boolean(pendingAction)} onClick={() => { setDecision(undefined); setReviewConfirmed(false); }}>Отмена</Button><Button appearance="primary" disabled={busy || (decision === "return" && !comment.trim()) || ((decision === "approve" || decision === "complete") && !reviewConfirmed)} onClick={confirmDecision}>{pendingAction ? "Повторить безопасно" : "Подтвердить"}</Button></DialogActions></DialogBody></DialogSurface></WorkspaceDialog>
   </section>;
 }

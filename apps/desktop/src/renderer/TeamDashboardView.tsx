@@ -1,3 +1,4 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
@@ -413,7 +414,7 @@ export function TeamDashboardView({
           {([ ["all", "Все"], ["risk", "С просрочкой"], ["review", "На проверке"] ] as const).map(([key, label]) => <button className={teamFilter === key ? "active" : ""} aria-pressed={teamFilter === key} key={key} onClick={() => setTeamFilter(key)} type="button">{label}</button>)}
         </SlidingSegmented>
       </header>
-      {efficiencyError ? <div className="team-dash-data-note" role="status">Показана нагрузка по задачам. Данные EFF‑1 временно недоступны: {efficiencyError}</div> : null}
+      {efficiencyError ? <WorkspaceNotice tone="warning" className="team-dash-data-note" role="status">Показана нагрузка по задачам. Данные EFF‑1 временно недоступны: {efficiencyError}</WorkspaceNotice> : null}
       <div className="team-dash-people" ref={workloadMotion}>
         {teamRows.map((row) => <button className={`team-dash-person ${selectedPersonId === row.person.id ? "selected" : ""}`} key={row.person.id} type="button" onClick={() => setSelectedPersonId((current) => current === row.person.id ? undefined : row.person.id)}>
           <EmployeeProfileLink userId={row.person.id} personName={row.person.name}><Avatar name={row.person.name} size={40} color="colorful" /></EmployeeProfileLink>

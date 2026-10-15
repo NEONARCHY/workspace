@@ -1,3 +1,4 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useModalFocus } from "./useModalFocus";
@@ -1733,13 +1734,12 @@ export function ApprovalsView({
             </SlidingSegmented>
           </div>
           {actionError && !selectedRequest ? (
-            <div className="approval-board-notice approval-action-error" role="alert">
+            <WorkspaceNotice tone="error" className="approval-board-notice approval-action-error" role="alert" actions={<><button type="button" onClick={() => setActionError("")} aria-label="Скрыть ошибку перехода">×</button></>}>
               <span>Переход не подтверждён. {actionError} Проверьте состояние заявки перед повтором.</span>
-              <button type="button" onClick={() => setActionError("")} aria-label="Скрыть ошибку перехода">×</button>
-            </div>
+            </WorkspaceNotice>
           ) : null}
           {!canCreateRequest ? (
-            <div className="request-create-policy">Ваша должность не может создавать заявки на оплату</div>
+            <WorkspaceNotice tone="warning" className="request-create-policy">Ваша должность не может создавать заявки на оплату</WorkspaceNotice>
           ) : null}
 
           {presentation === "kanban" ? <SpatialBoard interactionMode="payment" canDrop={(id, target) => {
@@ -1930,12 +1930,12 @@ export function ApprovalsView({
                     <section className="record-summary-card record-summary-note"><h3>Запуск согласования</h3><p>Проверьте реквизиты и приложите документы. Кнопка «Отправить по маршруту» создаст заявку и запустит действующий процесс согласования.</p><p>Условия и ответственных определяет маршрут. История появится после отправки.</p></section>
                   </>}>
                   {paymentTargetsLoading ? <p role="status">Загружаем проекты и направления…</p> : null}
-                  {paymentTargetsError ? <div role="alert">{paymentTargetsError} <Button type="button" disabled={paymentTargetsLoading} onClick={() => {
+                  {paymentTargetsError ? <WorkspaceNotice tone="error" role="alert" actions={<><Button type="button" disabled={paymentTargetsLoading} onClick={() => {
                     setPaymentTargetsLoading(true);
                     void loadPaymentProjectTargets(token).then((targets) => { setPaymentTargets(targets); setPaymentTargetsError(""); })
                       .catch(() => setPaymentTargetsError("Не удалось загрузить проекты. Повторите попытку."))
                       .finally(() => setPaymentTargetsLoading(false));
-                  }}>Повторить</Button></div> : null}
+                  }}>Повторить</Button></>}>{paymentTargetsError} </WorkspaceNotice> : null}
                   <PaymentFields form={requestDetails} targets={paymentTargets} calendarEvents={calendarEvents} people={people} departments={departments} onChange={setRequestDetails}
                     leadSection={<section className="payment-form-section payment-form-lead">
                       <header>
@@ -2145,7 +2145,7 @@ export function ApprovalsView({
                   </section>
 
                   <aside className="approval-detail-process" tabIndex={0} aria-label="Ход согласования и действия">
-                    {actionError ? <div className="approval-action-error" role="alert">Не удалось выполнить действие: {actionError}. Проверьте состояние заявки перед повтором.</div> : null}
+                    {actionError ? <WorkspaceNotice tone="error" className="approval-action-error" role="alert">Не удалось выполнить действие: {actionError}. Проверьте состояние заявки перед повтором.</WorkspaceNotice> : null}
                     {selectedRequest.status === "running" && selectedRequest.activeStages.some((stage) => stage.canAct) ? (
                       <section className="approval-decision-block detail-overview">
                         <span>Нужно ваше решение</span>
@@ -2191,7 +2191,7 @@ export function ApprovalsView({
                         <PaymentFields form={editDetails} targets={paymentTargets} calendarEvents={calendarEvents} people={people} departments={departments} onChange={setEditDetails} revision />
                         <PendingFilePicker files={editFiles} onChange={setEditFiles} label="Добавить исправленные документы" />
                         <PendingFilePicker files={editAdditionalFiles} onChange={setEditAdditionalFiles} label="Добавить дополнительные документы" />
-                        {editError ? <div className="approval-form-error" role="alert">{editError}</div> : null}
+                        {editError ? <WorkspaceNotice tone="error" className="approval-form-error" role="alert">{editError}</WorkspaceNotice> : null}
                         <div className="approval-revision-actions">
                           <Button appearance="primary" disabled={actionBusy} onClick={() => void saveRevision(selectedRequest)}>{selectedRequest.status === "running" ? "Сохранить изменения" : "Сохранить и отправить повторно"}</Button>
                           <Button appearance="subtle" disabled={actionBusy} onClick={() => setEditingRequestId("")}>Отмена</Button>

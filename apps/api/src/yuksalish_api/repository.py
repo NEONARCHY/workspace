@@ -388,6 +388,8 @@ def _attachment(row: Record) -> AttachmentResponse:
         media_kind=row.get("media_kind") or "file",
         media_duration_ms=row.get("media_duration_ms"),
         media_codec=row.get("media_codec"),
+        image_width=row.get("image_width"),
+        image_height=row.get("image_height"),
         created_at=row["created_at"],
     )
 
@@ -6804,6 +6806,8 @@ async def create_attachment(
     media_kind: str = "file",
     media_duration_ms: int | None = None,
     media_codec: str | None = None,
+    image_width: int | None = None,
+    image_height: int | None = None,
 ) -> AttachmentResponse:
     await validate_attachment_owner(connection, current_user, owner_type, owner_id, write=True)
     if owner_type == "ai_referent_letter":
@@ -6859,6 +6863,8 @@ async def create_attachment(
         "media_kind": media_kind,
         "media_duration_ms": media_duration_ms,
         "media_codec": media_codec,
+        "image_width": image_width,
+        "image_height": image_height,
         "created_at": now,
     }
     await connection.execute(insert(attachments).values(**values))

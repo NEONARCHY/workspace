@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import type { MessageReaction, WorkspacePerson } from "@yuksalish/contracts";
 import { EmployeeProfileLink, useOpenEmployeeProfile } from "./EmployeeProfileLink";
 import { ProfileAvatar } from "./ProfileAvatar";
+import { ReactionEmoji } from "./ReactionEmoji";
 import { MessageContextMenu, menuPortalContainerFor } from "./MessageContextMenu";
 
 export function ReactionPeople({ reactions, people, token, onOpenPersonProfile }: {
@@ -16,7 +17,7 @@ export function ReactionPeople({ reactions, people, token, onOpenPersonProfile }
       const person = people.find((item) => item.id === userId);
       const content = <>
         {person ? <ProfileAvatar person={person} token={token} size={28} /> : <span className="message-reaction-person-fallback" aria-hidden="true">?</span>}
-        <span className="message-reaction-person-name">{person?.name ?? "Сотрудник"}</span><span aria-label={`Реакция ${emoji}`}>{emoji}</span>
+        <span className="message-reaction-person-name">{person?.name ?? "Сотрудник"}</span><span aria-label={`Реакция ${emoji}`}><ReactionEmoji emoji={emoji} /></span>
       </>;
       return person && onOpenPersonProfile
         ? <button className="message-reaction-person" key={`${userId}-${emoji}`} type="button" onClick={() => onOpenPersonProfile(person.id)}>{content}</button>
@@ -63,7 +64,7 @@ export function ReactionDetailsMenu({ target, reactions, people, token, onClose,
   }, [onClose, target.anchor]);
   return <MessageContextMenu x={target.x} y={target.y} portalContainer={menuPortalContainerFor(target.anchor)}
     label="Кто поставил реакцию" onPointerDown={(event) => event.stopPropagation()}>
-    <strong className="message-reaction-quick-title">{target.emoji} · Поставили реакцию</strong>
+    <strong className="message-reaction-quick-title"><ReactionEmoji emoji={target.emoji} /> · Поставили реакцию</strong>
     <ReactionPeople reactions={reactions.filter((reaction) => reaction.emoji === target.emoji)} people={people} token={token}
       onOpenPersonProfile={openProfile ? (id) => { onClose(); openProfile(id); } : undefined} />
   </MessageContextMenu>;

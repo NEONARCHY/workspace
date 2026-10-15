@@ -452,10 +452,20 @@
 }
 
 .messenger-view .message-actions .fui-Button { box-sizing: border-box; flex: 0 0 32px; width: 32px; min-width: 32px; max-width: 32px; height: 32px; min-height: 32px; padding: 0; border: 1px solid rgb(var(--ws-theme-line-teal-rgb, 0 145 168) / 0.2); border-radius: 50% !important; color: var(--ws-theme-ink-teal, #006f82); background: linear-gradient(145deg, var(--ws-theme-surface, #fff) 15%, var(--ws-theme-wash-teal, #e5f6f3) 100%); box-shadow: 0 6px 16px rgb(41 58 85 / 12%); }
-.messenger-view .message-actions .reaction-picker-trigger:hover,
-.messenger-view .message-actions .reaction-picker-trigger:focus-visible { border-color: var(--ws-theme-line-teal, #00869d); color: #fff !important; background: linear-gradient(145deg, #11a8b9, #00869d) !important; transform: scale(1.04); }
-.messenger-view .message-actions .reaction-picker-trigger:hover .fui-Button__icon,
-.messenger-view .message-actions .reaction-picker-trigger:focus-visible .fui-Button__icon { color: #fff !important; }
+html body .messenger-view .message-actions .reaction-picker-trigger {
+  border: 1px solid var(--ws-line); border-radius: 50%;
+  color: var(--ws-link); background: var(--ws-surface-raised, var(--ws-surface));
+  background-clip: border-box; background-size: auto; box-shadow: none;
+  transform: none; transition: background-color 150ms ease, color 150ms ease;
+}
+html body .messenger-view .message-actions .reaction-picker-trigger:hover,
+html body .messenger-view .message-actions .reaction-picker-trigger[aria-expanded="true"] {
+  color: var(--ws-link); background: var(--ws-selected); border-color: var(--ws-link);
+}
+html body .messenger-view .message-actions .reaction-picker-trigger::before,
+html body .messenger-view .message-actions .reaction-picker-trigger::after { content: none; }
+html body .messenger-view .message-actions .reaction-picker-trigger:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 3px; }
+.messenger-view .message-actions .reaction-picker-trigger .fui-Button__icon { width: 18px; height: 18px; font-size: 18px; color: inherit; }
 .message-context-menu { position: fixed; z-index: 10000; display: grid; width: 190px; padding: 7px; border: 1px solid rgb(var(--ws-theme-line-rgb, 41 58 85) / 0.09); border-radius: 17px; background: rgb(var(--ws-theme-surface-rgb, 255 255 255) / 0.97); box-shadow: 0 18px 44px rgb(41 58 85 / 18%); backdrop-filter: blur(16px); }
 .message-context-menu[role="dialog"] { overflow-y: auto; }
 .message-context-menu { gap: 0; width: 210px; padding: 0; border: 0; overflow: hidden; }
@@ -539,6 +549,15 @@ html:not([data-popup-input="pointer"]) body .message-context-menu .fui-Button.me
 }
 .messenger-view .composer { position: relative; }
 
+.messenger-view .composer .composer-microphone {
+  background: var(--colorNeutralBackground3);
+  color: var(--colorNeutralForeground1);
+}
+.composer-microphone .composer-microphone-blocked-icon { display: none; }
+.composer-microphone[aria-disabled="true"]:is(:hover, :focus-visible) { cursor: not-allowed; }
+.composer-microphone[aria-disabled="true"]:is(:hover, :focus-visible) .composer-microphone-icon { display: none; }
+.composer-microphone[aria-disabled="true"]:is(:hover, :focus-visible) .composer-microphone-blocked-icon { display: block; }
+
 .messenger-view .composer .fui-Button {
   min-width: 38px;
   height: 38px;
@@ -571,10 +590,8 @@ html:not([data-popup-input="pointer"]) body .message-context-menu .fui-Button.me
   color: transparent;
 }
 
-.messenger-view .composer-field-shell.is-message-animating input {
-  color: transparent;
-  caret-color: transparent;
-}
+.messenger-view .composer-send-status { padding-inline: 16px; color: var(--ws-muted); font-size: 12px; }
+.messenger-view .composer-failed-sends { display: grid; gap: 8px; max-height: 25dvh; overflow: auto; }
 
 .messenger-view .composer-rewrite-anchor { align-self: center; }
 .messenger-view .composer-rewrite-panel {

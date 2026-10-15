@@ -24,7 +24,7 @@
 }
 .employee-profile-dialog .employee-profile-identity { min-width: 0; }
 .employee-profile-dialog .employee-profile-hero .fui-Avatar__initials {
-  font-size: 20px;
+  font-size: 36px;
   letter-spacing: 0;
   text-transform: none;
 }
@@ -122,7 +122,7 @@
 }
 @container employee-profile (max-width: 400px) {
   .employee-profile-dialog .employee-profile-hero { gap: 12px; padding: 12px; }
-  .employee-profile-dialog .employee-profile-hero .fui-Avatar { width: 56px; height: 56px; }
+  .employee-profile-dialog .employee-profile-hero .fui-Avatar { width: 96px; height: 96px; }
   .employee-profile-dialog .employee-profile-hero h2 { font-size: 20px; }
   .employee-profile-dialog .employee-profile-hero-stat {
     grid-template-columns: auto minmax(0, 1fr);

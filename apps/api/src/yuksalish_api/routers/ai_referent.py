@@ -71,6 +71,7 @@ from yuksalish_api.auth import AuthenticatedUser, require_user
 from yuksalish_api.database import get_connection
 from yuksalish_api.file_preview import OfficePreview, preview_office
 from yuksalish_api.object_storage import ObjectStorage, ObjectStorageError
+from yuksalish_api.office_pdf_preview import render_word_pdf
 
 router = APIRouter(prefix="/ai-referent", tags=["ai-referent"])
 _local_preview_slots = asyncio.Semaphore(2)
@@ -85,13 +86,16 @@ async def preview_local_file(
     file_name: Annotated[str, Query(alias="fileName", min_length=1, max_length=500)],
     sheet: Annotated[int, Query(ge=0, le=1000)] = 0,
     offset: Annotated[int, Query(ge=0, le=150000)] = 0,
-) -> OfficePreview:
+    render: bool = False,
+) -> OfficePreview | Response:
     """Read an unsaved document without creating letters, files or robot jobs."""
     await ensure_module_action(connection, current_user, "ai_referent", "view")
     response.headers["Cache-Control"] = "private, no-store"
     try:
         async with _local_preview_slots:
             content = await read_limited_packet(request.stream(), 25 * 1024 * 1024)
+            if render and file_name.lower().endswith((".doc", ".docx")):
+                return await render_word_pdf(request.app.state.settings, file_name, content)
             return await asyncio.to_thread(preview_office, file_name, content, sheet, offset)
     except (ValueError, BadZipFile, ParseError, DefusedXmlException, KeyError) as error:
         raise HTTPException(422, "Документ недоступен для просмотра. Скачайте оригинал.") from error

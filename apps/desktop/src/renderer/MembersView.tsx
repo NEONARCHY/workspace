@@ -1,3 +1,4 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -118,7 +119,7 @@ export function MembersView({ registry, loading, error, onRefresh }: MembersView
   const clearFilters = () => { setQuery(""); setRegionId("all"); setSphereId("all"); setGender("all"); setCreatedFrom(""); setCreatedTo(""); };
 
   if (loading && !registry) return <section className="workspace-view members-view members-state"><Spinner label="Загружаем реестр членов…" /></section>;
-  if (error && !registry) return <section className="workspace-view members-view members-state"><WorkspaceSectionHeader motif="members"><div><h1>Работа с членами</h1><p>Реестр и региональный состав</p></div></WorkspaceSectionHeader><p role="alert">{error}</p><Button appearance="primary" icon={<ArrowClockwise20Regular />} onClick={onRefresh}>Повторить</Button></section>;
+  if (error && !registry) return <section className="workspace-view members-view members-state"><WorkspaceSectionHeader motif="members"><div><h1>Работа с членами</h1><p>Реестр и региональный состав</p></div></WorkspaceSectionHeader><WorkspaceNotice tone="error" role="alert">{error}</WorkspaceNotice><Button appearance="primary" icon={<ArrowClockwise20Regular />} onClick={onRefresh}>Повторить</Button></section>;
   if (!registry?.configured) return <section className="workspace-view members-view members-state"><WorkspaceSectionHeader motif="members"><div><h1>Работа с членами</h1><p>Реестр и региональный состав</p></div></WorkspaceSectionHeader><p>Интеграция с реестром ещё не настроена. Администратор должен подключить защищённый read-only API на хостинге.</p></section>;
 
   return <section className="workspace-view members-view" aria-label="Работа с членами">

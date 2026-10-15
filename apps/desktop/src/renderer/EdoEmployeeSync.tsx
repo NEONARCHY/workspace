@@ -1,3 +1,4 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
 import { useEffect, useRef, useState } from "react";
 import { Button, Spinner } from "@fluentui/react-components";
 import type { EdoEmployeeSyncStatus } from "@yuksalish/contracts";
@@ -50,7 +51,7 @@ function EdoEmployeeSyncSession({ token }: { readonly token: string }) {
     {opened ? <div className="edo-access-form">
       <p>Личные привязки сохраняются. Новые сотрудники передаются автоматически после включения интеграции. Видимость писем настраивается отдельно.</p>
       <Button disabled={busy} onClick={() => setAttempt((value) => value + 1)}>Обновить синхронизацию</Button>
-      {error ? <p role="alert">{error}</p> : null}
+      {error ? <WorkspaceNotice tone="error" role="alert">{error}</WorkspaceNotice> : null}
       {notice ? <p role="status">{notice}</p> : null}
       {!data && !error ? <Spinner label="Проверяем синхронизацию сотрудников" /> : null}
       {data ? <>

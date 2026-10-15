@@ -1,3 +1,4 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
 import { SpatialSort, SpatialSortItem } from "./SpatialSort";
 import { useState, type ReactNode } from "react";
 import { navigationKeys, type NavigationKey } from "@yuksalish/contracts";
@@ -47,7 +48,7 @@ export function NavigationEditor({ order, revision, labels, hiddenKeys = [], ico
     </div>
     </SpatialSort>
     <span className="organization-live" role="status">{announcement}</span>
-    {error && <div className="organization-error" role="alert">{error}</div>}
+    {error && <WorkspaceNotice tone="error" className="organization-error" role="alert">{error}</WorkspaceNotice>}
     <div className="navigation-edit-actions">
       <button type="button" className="navigation-reset" disabled={busy} onClick={() => { setDraft(navigationKeys.filter((key) => !hiddenKeys.includes(key))); setAnnouncement("Восстановлен стандартный порядок. Нажмите «Сохранить»."); }}>По умолчанию</button>
       <button type="button" className="navigation-cancel" disabled={busy} onClick={onClose}>Отмена</button>

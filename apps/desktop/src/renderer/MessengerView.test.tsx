@@ -74,6 +74,56 @@ function openMessageMenu(text: string) {
   fireEvent.contextMenu(message);
 }
 
+describe("composer performance and microphone", () => {
+  afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+  it("keeps the microphone focusable with an explained recording guard while typing", async () => {
+    renderMessenger();
+    const mic = screen.getByRole("button", { name: "Записать голосовое сообщение" });
+    const input = screen.getByRole("textbox", { name: "Новое сообщение" });
+    fireEvent.change(input, { target: { value: "Черновик" } });
+    expect(mic).not.toBeDisabled();
+    expect(mic).toHaveAttribute("aria-disabled", "true");
+    expect(mic).toHaveClass("composer-microphone");
+    fireEvent.click(mic);
+    expect(input).toHaveValue("Черновик");
+    fireEvent.focus(mic);
+    await waitFor(() => expect(mic).toHaveAccessibleDescription("Чтобы записать голосовое сообщение, отправьте или удалите набранный текст"));
+    fireEvent.change(input, { target: { value: "" } });
+    expect(mic).toHaveAttribute("aria-disabled", "false");
+  });
+  it("does not rebuild message history on draft keystrokes", () => {
+    renderMessenger();
+    const dateFormatting = vi.spyOn(Date.prototype, "toLocaleDateString");
+    const input = screen.getByRole("textbox", { name: "Новое сообщение" });
+    for (const value of ["Т", "Те", "Тес", "Тест"]) fireEvent.change(input, { target: { value } });
+    expect(input).toHaveValue("Тест");
+    expect(dateFormatting).not.toHaveBeenCalled();
+  });
+});
+
+describe("message media layout", () => {
+afterEach(cleanup);
+it.each(["Файл", "Комментарий к документу"])("keeps document rows compact without dropping captions: %s", body => {
+  renderMessenger({ messages: [{ id: "document-layout", chatId: "finance", authorId: "aziza", body, time: "17:36" }],
+    attachments: [{ id: "document", ownerType: "message", ownerId: "document-layout", fileName: "report.doc", contentType: "application/msword", byteSize: 251904, documentRole: "general", sha256: "a".repeat(64), uploadedByUserId: "aziza", createdAt: "2026-10-15T09:00:00Z" }] });
+  const bubble = document.querySelector('[data-message-id="document-layout"] .message-body')!;
+  expect(bubble).toHaveClass("is-document-message");
+  expect(bubble.classList.contains("has-document-footer")).toBe(body !== "Файл");
+  expect(bubble.querySelector(".message-text")?.textContent ?? "").toBe(body === "Файл" ? "" : body);
+  expect(bubble.querySelector(".message-meta")).toHaveTextContent("17:36");
+  expect(bubble.querySelector(".attachment-document-copy > small")).toHaveTextContent("246 КБ");
+});
+it.each(["Файл", "Подпись к фото"])("renders image media without a nested file card: %s", body => {
+  renderMessenger({ messages: [{ id: "media-layout", chatId: "finance", authorId: "aziza", body, time: "14:15" }],
+    attachments: [{ id: "image", ownerType: "message", ownerId: "media-layout", fileName: "image.png", contentType: "image/png", byteSize: 1000, documentRole: "general", sha256: "a".repeat(64), uploadedByUserId: "aziza", createdAt: "2026-10-15T09:00:00Z" }] });
+  const bubble = document.querySelector('[data-message-id="media-layout"] .message-body')!;
+  expect(bubble).toHaveClass("is-media-message");
+  expect(bubble.querySelector(".message-media-caption")?.textContent ?? "").toBe(body === "Файл" ? "" : body);
+  expect(bubble.querySelector(".message-meta")).not.toBeNull();
+  expect(bubble.querySelector(".attachment-media-preview")?.children).toHaveLength(1);
+});
+});
+
 function openChatMenu(chatId: string) {
   const row = document.querySelector(`[data-chat-id="${chatId}"] .chat-row`);
   if (!row) throw new Error(`Chat not found: ${chatId}`);
@@ -280,7 +330,7 @@ describe("Private messenger", () => {
     expect(props.chatActions.create).not.toHaveBeenCalled();
     expect(props.onSendMessage).not.toHaveBeenCalled();
   });
-  it("does not add files to an edit or a message that is being sent", async () => {
+  it("blocks files during editing but accepts them into the next draft while a send is pending", async () => {
     let finish: (value: ChatMessage) => void = () => {};
     const onSendMessage = vi.fn(() => new Promise<ChatMessage>(resolve => { finish = resolve; }));
     const own: ChatMessage = { id: "own", chatId: initialChats[0]!.id, authorId: "aziza", body: "Изменяемый текст", time: "12:00", canEdit: true };
@@ -298,11 +348,13 @@ describe("Private messenger", () => {
     fireEvent.keyDown(screen.getByLabelText("Редактирование сообщения"), { key: "Escape" });
     fireEvent.change(screen.getByRole("textbox", { name: "Новое сообщение" }), { target: { value: "Отправляем" } });
     fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
+    await waitFor(() => expect(onSendMessage).toHaveBeenCalledTimes(1));
     fireEvent.dragEnter(root, { dataTransfer: transfer });
-    expect(root).toHaveAttribute("data-file-drop", "blocked");
+    expect(root).toHaveAttribute("data-file-drop", "ready");
     fireEvent.drop(root, { dataTransfer: transfer });
     fireEvent.paste(root, { clipboardData: transfer });
-    expect(screen.queryByRole("button", { name: "Убрать файл blocked.txt" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Убрать файл blocked.txt" })).toBeInTheDocument();
+    expect(onSendMessage.mock.calls[0]).toEqual([initialChats[0]!.id, "Отправляем", [], { replyToMessageId: undefined, mentionUserIds: [] }]);
     await act(async () => finish({ ...own, id: "sent", body: "Отправляем" }));
   });
 
@@ -874,7 +926,7 @@ describe("Private messenger", () => {
     expect(row("after-notice")?.querySelector(".message-sender-avatar")).toBeInTheDocument();
     expect(row("own-first")).toHaveClass("is-group-first");
     expect(row("own-last")).toHaveClass("is-group-last");
-    expect(row("own-last")?.querySelector(".message-reactions")).toHaveTextContent("👍");
+    expect(row("own-last")?.querySelector(".message-reaction-emoji img")).toHaveAttribute("src", "/emoji/noto/1f44d-still.webp");
     expect(row("late")?.className).not.toMatch(/is-group-/);
   });
 
@@ -984,6 +1036,61 @@ describe("Private messenger", () => {
 
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Сервер временно недоступен"));
     expect(composer).toHaveValue("Не потерять этот текст");
+  });
+
+  it("keeps typing and controls available while sends wait, preserves order and never clears the next draft on acknowledgement", async () => {
+    let finishFirst: ((message: ChatMessage) => void) | undefined;
+    let finishSecond: ((message: ChatMessage) => void) | undefined;
+    const onSendMessage = vi.fn()
+      .mockImplementationOnce(() => new Promise<ChatMessage>((resolve) => { finishFirst = resolve; }))
+      .mockImplementationOnce(() => new Promise<ChatMessage>((resolve) => { finishSecond = resolve; }));
+    renderMessenger({ onSendMessage });
+    const input = screen.getByRole("textbox", { name: "Новое сообщение" });
+    fireEvent.change(input, { target: { value: "Первое" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(onSendMessage).toHaveBeenCalledTimes(1));
+    expect(input).toBeEnabled(); expect(input).toHaveValue(""); expect(input).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Прикрепить файл" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Упомянуть участника" })).toBeEnabled();
+    fireEvent.change(input, { target: { value: "Второе" } });
+    expect(screen.getByRole("button", { name: "Отправить сообщение" })).toBeEnabled();
+    fireEvent.keyDown(input, { key: "Enter" });
+    fireEvent.keyDown(input, { key: "Enter" }); // Empty composer cannot duplicate a queued send.
+    expect(onSendMessage).toHaveBeenCalledTimes(1);
+    fireEvent.change(input, { target: { value: "Третий черновик" } });
+    await act(async () => { finishFirst?.({ ...initialMessages[0]!, id: "first-ack" }); });
+    await waitFor(() => expect(onSendMessage).toHaveBeenCalledTimes(2));
+    expect(onSendMessage.mock.calls.map((call) => call[1])).toEqual(["Первое", "Второе"]);
+    expect(input).toHaveValue("Третий черновик");
+    await act(async () => { finishSecond?.({ ...initialMessages[0]!, id: "second-ack" }); });
+    expect(input).toHaveValue("Третий черновик"); expect(input).toBeEnabled();
+  });
+
+  it("keeps a failed send separately when new text/files exist, then restores it only into an empty composer", async () => {
+    let fail: ((cause: Error) => void) | undefined;
+    const onSendMessage = vi.fn().mockImplementationOnce(() => new Promise<ChatMessage>((_, reject) => { fail = reject; }))
+      .mockResolvedValue({ id: "second-ok" });
+    renderMessenger({ onSendMessage });
+    const input = screen.getByRole("textbox", { name: "Новое сообщение" });
+    const oldFile = new File(["old"], "old.pdf", { type: "application/pdf" });
+    const newFile = new File(["new"], "new.pdf", { type: "application/pdf" });
+    fireEvent.change(input, { target: { value: "Первый с файлом" } });
+    fireEvent.change(screen.getByLabelText("Файлы сообщения"), { target: { files: [oldFile] } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(onSendMessage).toHaveBeenCalledTimes(1));
+    fireEvent.change(input, { target: { value: "Новый черновик" } });
+    fireEvent.change(screen.getByLabelText("Файлы сообщения"), { target: { files: [newFile] } });
+    await act(async () => { fail?.(new Error("Сеть недоступна")); });
+    expect(input).toHaveValue("Новый черновик");
+    expect(screen.getByRole("alert")).toHaveTextContent("Первый с файлом");
+    expect(screen.getByRole("button", { name: "Вернуть в поле" })).toBeDisabled();
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(onSendMessage).toHaveBeenCalledTimes(2));
+    expect(onSendMessage.mock.calls[0]?.[2]).toEqual([oldFile]);
+    expect(onSendMessage.mock.calls[1]?.[2]).toEqual([newFile]);
+    fireEvent.click(screen.getByRole("button", { name: "Вернуть в поле" }));
+    expect(input).toHaveValue("Первый с файлом");
+    expect(screen.getByRole("button", { name: "Убрать файл old.pdf" })).toBeInTheDocument();
   });
 
   it("edits own messages, handles conflicts inline, and requires delete confirmation", async () => {
@@ -1242,14 +1349,24 @@ describe("Private messenger", () => {
 
     const message = screen.getByText("Моё сообщение").closest(".message");
     expect(message).not.toBeNull();
+    vi.useFakeTimers();
     fireEvent.pointerEnter(message!);
+    act(() => { vi.advanceTimersByTime(499); });
+    expect(message!.querySelector(".message-actions")).not.toHaveClass("is-visible");
+    act(() => { vi.advanceTimersByTime(1); });
     expect(message!.querySelector(".message-actions")).toHaveClass("is-visible");
     expect(screen.getByRole("button", { name: "Добавить реакцию" })).toBeEnabled();
     fireEvent.pointerLeave(message!);
     expect(message!.querySelector(".message-actions")).not.toHaveClass("is-visible");
+    fireEvent.pointerEnter(message!);
+    fireEvent.pointerLeave(message!);
+    act(() => { vi.advanceTimersByTime(500); });
+    expect(message!.querySelector(".message-actions")).not.toHaveClass("is-visible");
+    vi.useRealTimers();
     fireEvent.focus(message!);
+    expect(message!.querySelector(".message-actions")).toHaveClass("is-visible");
     const reaction = screen.getByRole("button", { name: "👍: Бахтиёр Самугов" });
-    expect(reaction).toHaveTextContent("👍");
+    expect(reaction.querySelector(".reaction-emoji-art")).toHaveAttribute("src", "/emoji/noto/1f44d-still.webp");
     expect(reaction).not.toHaveTextContent("1");
     expect(reaction.querySelector(".message-reaction-avatars")).not.toBeInTheDocument();
     fireEvent.click(reaction);

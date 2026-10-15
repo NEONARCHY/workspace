@@ -1,3 +1,4 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@fluentui/react-components";
 import { ArrowClockwise24Regular, CheckmarkCircle24Filled } from "@fluentui/react-icons";
@@ -89,7 +90,7 @@ export function WebUpdateNotice({ mandatory = false, onAvailabilityChange }: {
         <h2 id="web-update-title">{available.title || "Доступна новая версия"}</h2>
         <p className="web-update-version"><span>Версия {workspacePlatform.version}</span><b>→</b><strong>{available.version}</strong></p>
         {available.notes?.length ? <ul>{available.notes.map((note) => <li key={note}><CheckmarkCircle24Filled /> <span>{note}</span></li>)}</ul> : <p className="web-update-summary">В новой версии улучшены стабильность и удобство работы.</p>}
-        {mutationPending ? <p className="web-update-warning" role="alert">Сначала дождитесь завершения текущей операции — введённые данные не потеряются.</p> : null}
+        {mutationPending ? <WorkspaceNotice tone="warning" className="web-update-warning" role="alert">Сначала дождитесь завершения текущей операции — введённые данные не потеряются.</WorkspaceNotice> : null}
       </div>
       <footer>
         {!mandatory ? <Button appearance="subtle" disabled={busy} onClick={remindLater}>Напомнить позже</Button> : null}

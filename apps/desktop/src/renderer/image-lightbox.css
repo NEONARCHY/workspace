@@ -1,0 +1,72 @@
+/* A media viewing canvas, deliberately dark in both application themes. */
+html body .app-provider .image-lightbox-surface.fui-DialogSurface {
+  position: fixed; inset: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto;
+  box-sizing: border-box; width: 100vw; max-width: none; height: 100dvh; max-height: none;
+  margin: 0; padding: 0; overflow: hidden; border: 0; border-radius: 0;
+  color: #f0f0f4; background: rgb(16 17 21 / 97%); box-shadow: none;
+  --colorNeutralForeground1: #f0f0f4; --colorNeutralForeground2: #b0b2bf;
+  --colorSubtleBackgroundHover: #30313d; --colorSubtleBackgroundPressed: #3b3d4b;
+  --colorNeutralForegroundDisabled: #626572;
+  --ws-selected: #30313d; --ws-text: #f0f0f4; --ws-muted: #b0b2bf;
+}
+html body .image-lightbox-surface.fui-DialogSurface .message-context-menu { width: min(264px, calc(100vw - 16px)); color: #f0f0f4; background: #262730; }
+html body .image-lightbox-surface.fui-DialogSurface .message-context-menu .fui-Button { color: #f0f0f4; }
+html body .image-lightbox-surface.fui-DialogSurface .message-context-menu .fui-Button:hover,
+html body .image-lightbox-surface.fui-DialogSurface .message-context-menu .fui-Button:focus-visible { background: #30313d; }
+html body .image-lightbox-surface.fui-DialogSurface .fui-Button:focus-visible,
+html body .image-lightbox-surface.fui-DialogSurface .image-lightbox-stage:focus-visible,
+html body .image-lightbox-surface.fui-DialogSurface .image-lightbox-thumbnails > button:focus-visible { outline: 2px solid #9bd5d4; outline-offset: -2px; }
+.image-lightbox-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 20px; min-width: 0; }
+.image-lightbox-header > div:first-child { min-width: 0; }
+.image-lightbox-header .fui-DialogTitle { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 500; }
+.image-lightbox-header span { color: #b0b2bf; font-size: 12px; }
+.image-lightbox-tools { display: flex; align-items: center; gap: 4px; flex: none; }
+.image-lightbox-surface .fui-Button { color: #f0f0f4; }
+.image-lightbox-tools .fui-Button { min-width: 40px; height: 40px; }
+.image-lightbox-stage { display: flex; align-items: center; justify-content: center; min-width: 0; min-height: 0; overflow: hidden; margin: 0 64px; outline-offset: -3px; touch-action: none; }
+.image-lightbox-stage > img { display: block; max-width: 100%; max-height: 100%; object-fit: contain; flex: none; user-select: none; transform-origin: center; }
+.image-lightbox-stage.is-zoomed { cursor: grab; }
+.image-lightbox-stage.is-zoomed:active { cursor: grabbing; }
+.image-lightbox-state { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 24px; text-align: center; }
+.image-lightbox-state p { max-width: 60ch; overflow-wrap: anywhere; }
+html body .image-lightbox-surface .image-lightbox-prev,
+html body .image-lightbox-surface .image-lightbox-next { position: absolute; top: 50%; width: 48px; height: 64px; min-width: 0; border-radius: 12px; transform: translateY(-50%); }
+.image-lightbox-prev { left: 8px; }
+.image-lightbox-next { right: 8px; }
+.image-lightbox-footer { display: grid; grid-template-columns: minmax(160px, 1fr) minmax(0, 2fr) minmax(100px, 1fr); align-items: end; gap: 20px; padding: 16px 24px; }
+.image-lightbox-metadata { display: flex; flex-direction: column; gap: 3px; font-size: 12px; overflow-wrap: anywhere; }
+.image-lightbox-metadata time, .image-lightbox-metadata small { color: #b0b2bf; }
+.image-lightbox-caption { grid-column: 2; margin: 0; padding: 10px 14px; max-height: min(22dvh, 180px); overflow: auto; border-radius: 12px; background: #262730; font-size: 14px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+.image-lightbox-footer > .fui-Button { grid-column: 3; justify-self: end; }
+.image-lightbox-error { position: absolute; top: 76px; left: 50%; transform: translateX(-50%); max-width: min(600px, calc(100% - 32px)); padding: 12px 16px; border-radius: 12px; background: #542c36; color: #fff; }
+.image-lightbox-gallery { position: absolute; inset: 68px 16px 90px; display: flex; flex-direction: column; min-height: 0; padding: 16px; border: 1px solid #454754; border-radius: 18px; background: #1b1c22; }
+.image-lightbox-gallery-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.image-lightbox-gallery-heading h2 { font-size: 16px; }
+.image-lightbox-thumbnails { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); align-content: start; gap: 8px; min-height: 0; overflow: auto; }
+.image-lightbox-thumbnails > button { display: grid; place-items: center; aspect-ratio: 1; min-width: 0; overflow: hidden; padding: 0; border: 2px solid transparent; border-radius: 8px; background: #262730; color: #f0f0f4; cursor: pointer; }
+.image-lightbox-thumbnails > button[aria-pressed="true"] { border-color: #9bd5d4; }
+.image-lightbox-thumbnails img { width: 100%; height: 100%; object-fit: cover; }
+.image-lightbox-menu { display: flex; flex-direction: column; }
+.image-lightbox-menu .fui-Button { justify-content: flex-start; width: 100%; min-height: 36px; border-radius: 0; }
+@media (max-width: 640px) {
+  .image-lightbox-header { gap: 8px; padding: 8px; flex-wrap: wrap; }
+  .image-lightbox-header > div:first-child { flex: 1 1 100%; padding: 0 4px; }
+  .image-lightbox-tools { width: 100%; justify-content: flex-end; }
+  .image-lightbox-tools .fui-Button { height: 44px; min-width: 44px; }
+  .image-lightbox-stage { margin: 0 28px; }
+  html body .image-lightbox-surface .image-lightbox-prev, html body .image-lightbox-surface .image-lightbox-next { width: 28px; }
+  .image-lightbox-prev { left: 0; } .image-lightbox-next { right: 0; }
+  .image-lightbox-footer { grid-template-columns: 1fr auto; gap: 8px; padding: 10px 12px; }
+  .image-lightbox-metadata small { display: none; }
+  .image-lightbox-caption { grid-column: 1 / -1; grid-row: 1; max-height: 20dvh; }
+  .image-lightbox-footer > .fui-Button { grid-column: 2; }
+  .image-lightbox-gallery { inset: 110px 8px 90px; padding: 10px; }
+}
+@media (forced-colors: active) {
+  html body .app-provider .image-lightbox-surface.fui-DialogSurface, .image-lightbox-caption, .image-lightbox-gallery { color: CanvasText; background: Canvas; border-color: CanvasText; }
+  .image-lightbox-surface .fui-Button, .image-lightbox-metadata time, .image-lightbox-metadata small { color: CanvasText; }
+  html body .image-lightbox-surface.fui-DialogSurface .message-context-menu { background: Canvas; color: CanvasText; border: 1px solid CanvasText; }
+  html body .image-lightbox-surface.fui-DialogSurface .message-context-menu .fui-Button { color: CanvasText; }
+  html body .image-lightbox-surface.fui-DialogSurface .message-context-menu .fui-Button:hover,
+  html body .image-lightbox-surface.fui-DialogSurface .message-context-menu .fui-Button:focus-visible { background: Highlight; color: HighlightText; }
+}

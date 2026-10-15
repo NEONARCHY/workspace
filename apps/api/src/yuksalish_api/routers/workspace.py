@@ -48,6 +48,7 @@ from yuksalish_api.efficiency_service import load_efficiency_overview, load_pers
 from yuksalish_api.events import WorkspaceEventBus
 from yuksalish_api.file_preview import OfficePreview, preview_office
 from yuksalish_api.object_storage import ObjectStorage, ObjectStorageError
+from yuksalish_api.office_pdf_preview import render_word_pdf
 from yuksalish_api.repository import (
     WorkspaceRepositoryError,
     accept_task_result,
@@ -1572,6 +1573,11 @@ async def put_attachment(
         duration_limit = max(64 * 1024, voice_duration_ms * 8)
         if len(content) > duration_limit:
             raise HTTPException(status_code=413, detail="Запись имеет слишком высокий битрейт")
+    from ..image_metadata import image_dimensions
+
+    image_width, image_height = await asyncio.to_thread(
+        image_dimensions, bytes(content), content_type,
+    )
     storage_key = f"{owner_type}/{owner_id}/{uuid4()}"
     if owner_type == "ai_referent_letter":
         storage_key = f"{owner_type}/{owner_id}/{hashlib.sha256(content).hexdigest()}"
@@ -1592,6 +1598,8 @@ async def put_attachment(
             media_kind=media_kind,
             media_duration_ms=media_duration_ms,
             media_codec=media_codec,
+            image_width=image_width,
+            image_height=image_height,
         )
     except WorkspaceRepositoryError as error:
         # Content-addressed AI Referent objects may already back a previous upload.
@@ -1684,13 +1692,18 @@ async def preview_attachment(
     response: Response,
     sheet: Annotated[int, Query(ge=0, le=1000)] = 0,
     offset: Annotated[int, Query(ge=0, le=150_000)] = 0,
-) -> OfficePreview:
+    render: bool = False,
+) -> OfficePreview | Response:
     response.headers["Cache-Control"] = "private, no-store"
     try:
         async with _office_preview_slots:
             metadata, content = await _attachment_content(
                 attachment_id, request, current_user, connection,
             )
+            if render and metadata.file_name.lower().endswith((".doc", ".docx")):
+                return await render_word_pdf(
+                    request.app.state.settings, metadata.file_name, content,
+                )
             return await asyncio.to_thread(
                 preview_office, metadata.file_name, content, sheet, offset,
             )

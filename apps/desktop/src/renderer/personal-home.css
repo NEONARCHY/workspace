@@ -1,4 +1,13 @@
 /* The hub has no page backing: only the actual rounded cards are surfaces. */
+.home-ready-content { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.personal-home[data-loading="true"] { position: relative; overflow-y: hidden; }
+.personal-home[data-loading="true"] .home-ready-content { visibility: hidden; }
+.home-initial-loader { position: absolute; inset: 180px 16px auto; min-height: 220px; display: grid; place-items: center; }
+.personal-home[data-loading="false"] .home-ready-content { animation: home-content-ready 240ms ease-out both; }
+@keyframes home-content-ready { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce), (forced-colors: active) {
+  .personal-home[data-loading="false"] .home-ready-content { animation: none; }
+}
 .workspace-view.personal-home {
   display: flex; flex-direction: column; gap: 16px; min-width: 0;
   background: transparent; padding: 0 8px 20px 0; overflow-y: auto; overflow-x: hidden;

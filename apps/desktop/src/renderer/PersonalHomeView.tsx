@@ -1,5 +1,7 @@
+import { WorkspaceNotice } from "./WorkspaceNotice";
+import { ReactionEmoji } from "./ReactionEmoji";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { Button } from "@fluentui/react-components";
+import { Button, Spinner } from "@fluentui/react-components";
 import { ArrowRight20Regular, ArrowSync20Regular, CalendarLtr24Regular, Chat24Regular, Mail24Regular, PeopleTeam24Regular, Reward24Regular, TaskListSquareLtr24Regular } from "@fluentui/react-icons";
 import type { NavigationKey, WorkspaceNotification, ZoomMeeting } from "@yuksalish/contracts";
 import { HistoryChart, ScoreGauge } from "./EfficiencyView";
@@ -81,6 +83,15 @@ export function PersonalHomeView({ token, workspace, canView, zoomMeetings = [],
   const referent = useResource(identity, canView("ai_referent"), referentLoader, revision);
   const edo = useResource(identity, canView("incoming_letters"), edoLoader, revision);
   const projects = useResource(identity, canView("project_hub"), projectLoader, revision);
+  const [loadingDeadline, setLoadingDeadline] = useState<string>();
+  useEffect(() => {
+    // One slow optional integration must not lock the entire home page.
+    const timer = window.setTimeout(() => setLoadingDeadline(identity), 3000);
+    return () => window.clearTimeout(timer);
+  }, [identity]);
+  const initialLoading = loadingDeadline !== identity && (!efficiency || !recognition
+    || (canView("messenger") && !reactions) || (canView("ai_referent") && !referent)
+    || (canView("incoming_letters") && !edo) || (canView("project_hub") && !projects));
   const data = buildPersonalHome(workspace, canView, now, zoomMeetings, projects?.data?.projects);
   const [order, setOrder] = useState(() => rankHomePanels(data, now));
   const [layoutRevision, setLayoutRevision] = useState(0);
@@ -119,7 +130,7 @@ export function PersonalHomeView({ token, workspace, canView, zoomMeetings = [],
   const next = data.signals[0];
   const panels: Record<HomePanelKey, ReactNode> = {
     attention: <Panel id="attention" title="Мой фокус" note="Сначала риски, затем ближайшие действия" icon={<TaskListSquareLtr24Regular />} action={canView("tasks") ? allLink("tasks", "Открыть все задачи") : undefined}>
-      {projects?.error ? <p className="home-notice" role="status">Сроки проектов не загружены. <button type="button" onClick={retry}>Повторить</button></p> : null}
+      {projects?.error ? <WorkspaceNotice tone="warning" className="home-notice" role="status" actions={<><button type="button" onClick={retry}>Повторить</button></>}>Сроки проектов не загружены. </WorkspaceNotice> : null}
       {data.signals.length ? <ul className="home-list">{data.signals.slice(0, 5).map(s => <Row key={s.id} title={s.title} note={<SignalNote note={s.note} />} tone={s.tone} onClick={() => onOpen(s)} />)}</ul> : <Empty>Срочных действий нет. Можно спокойно продолжить текущую работу.</Empty>}
       {canView("tasks") ? <div className="home-workload" aria-label="Текущие личные задачи">{[["Новые", "new"], ["В работе", "in_progress"], ["На проверке", "awaiting_review"]].map(([label, status]) => <div key={status}><strong>{data.tasks.filter(t => t.status === status || (status === "in_progress" && t.status === "overdue")).length}</strong><span>{label}</span></div>)}</div> : null}
     </Panel>,
@@ -137,11 +148,11 @@ export function PersonalHomeView({ token, workspace, canView, zoomMeetings = [],
     </Panel> : null,
     schedule: canView("calendar") || canView("zoom_meetings") ? <Panel id="schedule" title="Ближайшие встречи" note="Ваш календарь и приглашения в Zoom" icon={<CalendarLtr24Regular />} action={canView("calendar") ? allLink("calendar", "Открыть календарь") : undefined}>
       {data.schedule.length ? <ul className="home-list">{data.schedule.slice(0, 4).map(e => <Row key={e.section + e.id} title={e.title} note={homeDate.format(timestamp(e.startsAt)) + " · " + e.note} onClick={() => onOpen({ section: e.section, entityId: e.id })} />)}</ul> : <Empty>Ближайших встреч в вашем расписании нет.</Empty>}
-      {zoomError && canView("zoom_meetings") ? <p className="home-notice" role="status">Расписание Zoom не загружено. <button type="button" onClick={() => onOpen({ section: "zoom_meetings" })}>Открыть конференции</button></p> : null}
+      {zoomError && canView("zoom_meetings") ? <WorkspaceNotice tone="warning" className="home-notice" role="status" actions={<><button type="button" onClick={() => onOpen({ section: "zoom_meetings" })}>Открыть конференции</button></>}>Расписание Zoom не загружено. </WorkspaceNotice> : null}
     </Panel> : null,
     efficiency: <Panel id="efficiency" title="Моя эффективность" note="Выполнение задач в срок · текущий месяц" icon={<TaskListSquareLtr24Regular />}>
       <ResourceState loading={!efficiency} error={efficiency?.error} onRetry={retry} />
-      {efficiency?.data && efficiency.data.employee.userId === user.id ? <><div className="home-efficiency"><ScoreGauge employee={efficiency.data.employee} /><div><strong>{efficiency.data.employee.onTimeCount} из {efficiency.data.employee.eligibleCount}</strong><p>учтённых задач сданы вовремя</p><small>Это соблюдение сроков, не оценка человека.</small>{efficiency.data.employee.smallSample ? <p className="home-notice">Малая выборка</p> : null}{efficiency.data.employee.historyCompleteness !== "complete" ? <p className="home-notice">История месяца неполная</p> : null}</div></div><HistoryChart employee={efficiency.data.employee} /></> : null}
+      {efficiency?.data && efficiency.data.employee.userId === user.id ? <><div className="home-efficiency"><ScoreGauge employee={efficiency.data.employee} /><div><strong>{efficiency.data.employee.onTimeCount} из {efficiency.data.employee.eligibleCount}</strong><p>учтённых задач сданы вовремя</p><small>Это соблюдение сроков, не оценка человека.</small>{efficiency.data.employee.smallSample ? <WorkspaceNotice tone="warning" className="home-notice">Малая выборка</WorkspaceNotice> : null}{efficiency.data.employee.historyCompleteness !== "complete" ? <WorkspaceNotice tone="warning" className="home-notice">История месяца неполная</WorkspaceNotice> : null}</div></div><HistoryChart employee={efficiency.data.employee} /></> : null}
     </Panel>,
     department: <Panel id="department" title="Мой отдел" note={data.department?.name ?? "Подразделение пока не назначено"} icon={<PeopleTeam24Regular />}>
       {data.department ? <><div className="home-department-count"><strong>{Math.max(0, data.department.assignedUsersCount - 1)}</strong><span>других сотрудников в отделе</span>{data.department.chatId && canView("messenger") ? <Button size="small" onClick={() => onOpen({ section: "messenger", entityId: data.department?.chatId ?? undefined })}>Чат отдела</Button> : null}</div><ul className="home-colleagues">{data.colleagues.slice(0, 6).map(p => <li key={p.id}><EmployeeProfileLink userId={p.id} personName={p.name}><ProfileAvatar person={p} token={token} size={36} /><span><strong>{p.name}</strong><small>{p.jobTitle || "Сотрудник"}</small></span></EmployeeProfileLink></li>)}</ul>{data.colleagues.length > 6 ? <details className="home-more-colleagues"><summary>Ещё {data.colleagues.length - 6} сотрудников отдела</summary><ul className="home-colleagues">{data.colleagues.slice(6).map(p => <li key={p.id}><EmployeeProfileLink userId={p.id} personName={p.name}><ProfileAvatar person={p} token={token} size={36} /><span><strong>{p.name}</strong><small>{p.jobTitle || "Сотрудник"}</small></span></EmployeeProfileLink></li>)}</ul></details> : null}</> : <Empty>Администратор назначает отдел в разделе «Отделы и подразделения».</Empty>}
@@ -167,8 +178,8 @@ export function PersonalHomeView({ token, workspace, canView, zoomMeetings = [],
       <ResourceState loading={mailLoading} onRetry={retry} />
       {referent?.error ? <ResourceState loading={false} error={referent.error} onRetry={retry} /> : null}
       {edoError ? <ResourceState loading={false} error={edoError} onRetry={retry} /> : null}
-      {personalEdo ? <p className="home-notice">Писем, назначенных вам в ЭДО: {personalEdo.meta.total}.
-        {personalEdo.meta.total > myEdo.slice(0, 3).length ? " Здесь показаны до трёх последних писем; полный список — во «Входящих письмах»." : null}</p> : null}
+      {personalEdo ? <WorkspaceNotice tone="warning" className="home-notice">Писем, назначенных вам в ЭДО: {personalEdo.meta.total}.
+        {personalEdo.meta.total > myEdo.slice(0, 3).length ? " Здесь показаны до трёх последних писем; полный список — во «Входящих письмах»." : null}</WorkspaceNotice> : null}
     </Panel>,
     recognition: <Panel id="recognition" title="Награды и достижения" note="Признание коллег и подтверждённые результаты" icon={<Reward24Regular />} action={openProfile ? <Button size="small" appearance="subtle" onClick={() => openProfile(user.id)}>Мой профиль</Button> : undefined}>
       <ResourceState loading={!recognition} error={recognition?.error} onRetry={retry} />
@@ -179,14 +190,17 @@ export function PersonalHomeView({ token, workspace, canView, zoomMeetings = [],
     </Panel> : null,
     reactions: canView("messenger") ? <Panel id="reactions" title="Отклик на мои сообщения" note="Реакции коллег в доступных вам чатах · за всё время" icon={<Chat24Regular />}>
       <ResourceState loading={!reactions} error={reactions?.error} onRetry={retry} />
-      {reactions?.data ? <><div className="home-reaction-total"><strong>{reactions.data.totalCount}</strong><span>полученных реакций</span></div>{reactions.data.reactions.length ? <ul className="home-reactions">{reactions.data.reactions.slice(0, 5).map(r => <li key={r.emoji}><span>{r.emoji}</span><strong>{r.count}</strong></li>)}</ul> : <Empty>Когда коллеги отреагируют на ваши сообщения, здесь появится сводка.</Empty>}</> : null}
+      {reactions?.data ? <><div className="home-reaction-total"><strong>{reactions.data.totalCount}</strong><span>полученных реакций</span></div>{reactions.data.reactions.length ? <ul className="home-reactions">{reactions.data.reactions.slice(0, 5).map(r => <li key={r.emoji}><span aria-label={r.emoji}><ReactionEmoji emoji={r.emoji} /></span><strong>{r.count}</strong></li>)}</ul> : <Empty>Когда коллеги отреагируют на ваши сообщения, здесь появится сводка.</Empty>}</> : null}
     </Panel> : null,
   };
-  return <div className="workspace-view personal-home" aria-label="Персональная Главная">
+  return <div className="workspace-view personal-home" aria-label="Персональная Главная" data-loading={initialLoading}>
     <WorkspaceSectionHeader motif="team" className="home-hero"><div><span>Главная · ваше рабочее пространство</span><h2>Добрый день, {personalGreetingName(user.name)}</h2><p>{next ? <>В фокусе: {next.title}</> : "Всё важное — рядом. Спокойный день начинается с ясного плана."}</p></div><Button icon={<ArrowSync20Regular />} disabled={refreshing} onClick={() => void refresh()}>{refreshing ? "Обновляем…" : "Обновить"}</Button></WorkspaceSectionHeader>
-    {refreshError ? <p className="home-notice" role="alert">{refreshError}</p> : null}
+    {initialLoading && <div className="home-initial-loader" role="status"><Spinner label="Собираем ваше рабочее пространство…" /></div>}
+    <div className="home-ready-content" aria-busy={initialLoading} aria-hidden={initialLoading} inert={initialLoading}>
+    {refreshError ? <WorkspaceNotice tone="warning" className="home-notice" role="alert">{refreshError}</WorkspaceNotice> : null}
     <div className="home-overview" aria-label="Мой день"><article><strong>{data.signals.length + important}</strong><span>сигналов внимания</span></article><article><strong>{canView("tasks") ? data.tasks.length : "—"}</strong><span>моих активных задач</span></article><article><strong>{canView("messenger") ? data.chats.reduce((sum, c) => sum + c.chat.unread, 0) : "—"}</strong><span>непрочитанных сообщений</span></article><article><strong>{unread}</strong><span>новых уведомлений</span></article></div>
     {orderChanged ? <div className="home-priority-update" role="status"><span>Приоритеты изменились. Обновить порядок блоков?</span><Button size="small" onClick={() => { setOrder(recommendedOrder); setLayoutRevision(value => value + 1); }}>Обновить фокус дня</Button></div> : null}
     <div className="home-grid" ref={motionRef}>{order.map(key => panels[key] ? <div key={key} className="home-panel-slot">{panels[key]}</div> : null)}</div>
+    </div>
   </div>;
 }
