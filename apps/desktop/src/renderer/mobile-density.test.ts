@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const css = readFileSync("src/renderer/mobile-density.css", "utf8");
+const css = readFileSync("src/renderer/mobile-density.css", "utf8").replace(/\r\n/g, "\n");
 describe("compact browser density", () => {
   it("scopes layout changes to compact viewports, without scaling the interface", () => {
     const firstMedia = css.indexOf("@media");
