@@ -50,10 +50,15 @@
 .task-plan-import-participants { display: grid; grid-column: 1 / -1; justify-items: start; gap: 8px; min-width: 0; padding-top: 8px; border-top: 1px solid var(--ws-line); }
 .task-plan-import-participants span { color: var(--ws-muted); font-size: 13px; }
 .task-plan-import-participants label { width: min(100%, 420px); }
+.task-plan-import-issue-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 11px 13px; border: 1px solid var(--ws-line); border-radius: 12px; background: var(--ws-surface); color: var(--ws-text); font-size: 13px; }
+.task-plan-import-issue-summary span { color: var(--ws-muted); }
+.task-plan-import-issue-summary button { margin-left: auto; }
 .task-plan-import-rows { display: grid; gap: 10px; max-height: min(45vh, 560px); overflow-y: auto; padding-right: 5px; }
 .task-plan-import-rows fieldset { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; min-width: 0; margin: 0; padding: 12px; border: 1px solid var(--ws-line); border-radius: 12px; }
+.task-plan-import-rows fieldset.task-plan-import-row-needs-attention { border-color: var(--ws-warning, #8a5a00); }
 .task-plan-import-rows legend { padding: 0 5px; color: var(--ws-muted); font-size: 12px; }
 .task-plan-import-rows fieldset > p { grid-column: 1 / -1; }
+.task-plan-import-row-issue { color: var(--ws-warning, #8a5a00); font-size: 13px; }
 .task-plan-import-warning { color: #8a5a00 !important; }
 .task-plan-import-annual-note { padding: 12px 14px; border-left: 3px solid var(--ws-link); border-radius: 10px; background: var(--ws-surface); line-height: 1.5; }
 .task-plan-import-source { color: var(--ws-muted); font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
