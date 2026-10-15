@@ -364,13 +364,14 @@ async def test_annual_import_maps_content_and_excludes_historical_tasks() -> Non
     if not database_url:
         pytest.skip("YUKSALISH_TEST_DATABASE_URL is not configured")
     engine = create_async_engine(database_url)
-    author_id, responsible_id, executor_id = uuid4(), uuid4(), uuid4()
+    author_id, observer_id, executor_id, co_executor_id = uuid4(), uuid4(), uuid4(), uuid4()
     try:
         async with engine.connect() as connection:
             transaction = await connection.begin()
             try:
-                for user_id, role in ((author_id, "manager"), (responsible_id, "employee"),
-                                      (executor_id, "employee")):
+                for user_id, role in ((author_id, "manager"), (observer_id, "employee"),
+                                      (executor_id, "employee"),
+                                      (co_executor_id, "employee")):
                     await connection.execute(insert(users).values(
                         id=user_id, username=f"annual-plan-{user_id.hex[:12]}",
                         full_name="Test User", role=role, status="active",
@@ -381,8 +382,9 @@ async def test_annual_import_maps_content_and_excludes_historical_tasks() -> Non
                     "plan": {"title": "Иш режа 2026", "ownerUserId": str(author_id)},
                     "items": [{
                         "title": "Тадбирни ташкил этиш", "source": "DOCX, таблица 1, строка 3",
-                        "mode": "create", "assigneeId": str(responsible_id),
-                        "coAssigneeIds": [str(executor_id)],
+                        "mode": "create", "assigneeId": str(executor_id),
+                        "coAssigneeIds": [str(co_executor_id)],
+                        "observerIds": [str(observer_id)],
                         "dueAt": "2026-03-31T13:00:00Z", "description": "Тадбир ўтказилди",
                         "checklist": ["Режа тузиш", "Учрашув"], "historicalCompleted": True,
                     }],
@@ -396,10 +398,12 @@ async def test_annual_import_maps_content_and_excludes_historical_tasks() -> Non
                 assert task["title"] == "Тадбирни ташкил этиш"
                 assert task["description"] == "Тадбир ўтказилди"
                 assert task["status"] == "completed"
-                assert task["primary_assignee_user_id"] == responsible_id
-                assert (await connection.execute(select(task_participants.c.user_id).where(
+                assert task["primary_assignee_user_id"] == executor_id
+                assert set((await connection.execute(select(
+                    task_participants.c.user_id, task_participants.c.participant_role,
+                ).where(
                     task_participants.c.task_id == task_id,
-                ))).scalar_one() == executor_id
+                ))).all()) == {(co_executor_id, "co_assignee"), (observer_id, "observer")}
                 steps = (await connection.execute(select(task_checklist_items).where(
                     task_checklist_items.c.task_id == task_id,
                 ).order_by(task_checklist_items.c.sort_order))).mappings().all()

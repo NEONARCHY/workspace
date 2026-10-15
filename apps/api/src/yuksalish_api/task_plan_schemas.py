@@ -79,6 +79,7 @@ class TaskPlanImportItem(ApiModel):
     mode: Literal["create", "link"]
     assignee_id: UUID | None = None
     co_assignee_ids: list[UUID] = Field(default_factory=list, max_length=100)
+    observer_ids: list[UUID] = Field(default_factory=list, max_length=100)
     due_at: datetime | None = None
     task_id: UUID | None = None
     description: str = Field(default="", max_length=20_000)
@@ -94,7 +95,7 @@ class TaskPlanImportItem(ApiModel):
             raise ValueError("Select a task to link")
         if self.mode == "create" and self.task_id is not None:
             raise ValueError("New task cannot reference an existing task")
-        if self.mode == "link" and self.co_assignee_ids:
+        if self.mode == "link" and (self.co_assignee_ids or self.observer_ids):
             raise ValueError("Linked task participants cannot be changed by import")
         if self.mode == "link" and (
             self.description or self.checklist or self.historical_completed
@@ -106,8 +107,15 @@ class TaskPlanImportItem(ApiModel):
             raise ValueError("Historical completion requires a reviewed deadline")
         if len(self.co_assignee_ids) != len(set(self.co_assignee_ids)):
             raise ValueError("Co-assignees must be unique")
+        if len(self.observer_ids) != len(set(self.observer_ids)):
+            raise ValueError("Observers must be unique")
+        if len(self.co_assignee_ids) + len(self.observer_ids) > 100:
+            raise ValueError("A task can have at most 100 additional participants")
         if self.assignee_id in self.co_assignee_ids:
             raise ValueError("The responsible person cannot also be a co-assignee")
+        if (self.assignee_id in self.observer_ids
+                or set(self.co_assignee_ids) & set(self.observer_ids)):
+            raise ValueError("A task participant can have only one role")
         return self
 
 

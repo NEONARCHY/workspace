@@ -262,7 +262,9 @@ async def confirm_import(
                 checklist=[TaskCreateChecklistItemRequest(title=step) for step in item.checklist],
                 participants=[TaskCreateParticipantRequest(
                     user_id=str(participant_id), role="co_assignee",
-                ) for participant_id in item.co_assignee_ids],
+                ) for participant_id in item.co_assignee_ids] + [TaskCreateParticipantRequest(
+                    user_id=str(participant_id), role="observer",
+                ) for participant_id in item.observer_ids],
             ), author_user_id=owner_id)
             task_id = UUID(created.id)
             imported_at = datetime.now(UTC)

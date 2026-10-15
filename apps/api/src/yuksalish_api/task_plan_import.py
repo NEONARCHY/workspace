@@ -185,22 +185,22 @@ def _annual_docx_rows(body: Element, ns: str, plan_year: int | None) -> list[_Ca
             mechanism = tuple(line for line in mechanism if line)
             executors = _cell_text(cells[4], ns)
             responsible = _cell_text(cells[5], ns)
+            first_executor = _PERSON_HEADING.search(executors)
+            executor_hint = (first_executor.group() if first_executor else
+                             next((part.strip() for part in re.split(r"[;,\n]", executors)
+                                   if part.strip()), None))
             completed_work = "\n\n".join(_cell_lines(cells[6], ns))
             warnings = []
             if len(title) > 240:
                 warnings.append(
                     "Название длиннее поля задачи; полный оригинал сохранится в описании"
                 )
-            if len(_PERSON_HEADING.findall(responsible)) > 1:
-                warnings.append(
-                    "В колонке «Масъул» несколько людей — выберите одного ответственного"  # noqa: RUF001
-                )
-            if not responsible:
-                warnings.append("В колонке «Масъул» ответственный не указан")  # noqa: RUF001
+            if not executors:
+                warnings.append("В колонке «Бажарувчи» исполнители не указаны")  # noqa: RUF001
             result.append(_Candidate(
                 title=title[:239] + "…" if len(title) > 240 else title,
                 source=f"DOCX, таблица {table_number}, строка {row_number}",
-                assignee_hint=responsible or None,
+                assignee_hint=executor_hint,
                 coexecutors_hint=executors or None,
                 due_date_hint=due_date,
                 deadline_text=deadline or None,

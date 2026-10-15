@@ -43,8 +43,9 @@ is created until the reviewed plan is confirmed.
 
 The 2026 annual `Иш режа` table has a dedicated seven-column import path.
 `Тадбирнинг номи` becomes the task title, `Муддати` the reviewed deadline,
-`Амалга ошириш механизми` the ordered checklist, `Масъул` the primary assignee,
-`Бажарувчи` the co-assignees, and `Бажарилган ишлар` the description/expected
+`Амалга ошириш механизми` the ordered checklist, the first matched employee in
+`Бажарувчи` the primary assignee and the remaining matched employees its
+co-assignees, `Масъул` the observer(s), and `Бажарилган ишлар` the description/expected
 result. Section headers are context, not tasks. The source file is read for preview
 and is not stored. Ambiguous names, department labels, recurring or moved deadlines
 require review; no person or exact date is fabricated. A green completed-work cell

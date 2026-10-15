@@ -1707,6 +1707,7 @@ export interface TaskPlanImportItem {
   readonly mode: "create" | "link";
   readonly assigneeId?: string | null;
   readonly coAssigneeIds?: readonly string[];
+  readonly observerIds?: readonly string[];
   readonly dueAt?: string | null;
   readonly taskId?: string | null;
   readonly description?: string;
