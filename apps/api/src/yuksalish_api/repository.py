@@ -730,6 +730,9 @@ def _trip_request(
         brief_text=row["brief_text"] or "",
         expense_source=row["expense_source"] or "",
         brief_attachment_name=row["brief_attachment_name"],
+        brief_attachment_type=row["brief_attachment_type"],
+        brief_attachment_size=row["brief_attachment_size"],
+        original_signature_confirmed=bool(row["original_signature_confirmed_at"]),
         has_employee_signature=bool(row["employee_signature_key"]),
         has_signed_brief=bool(row["signed_brief_key"]),
         order_number=row["order_number"],
@@ -7269,6 +7272,7 @@ async def update_trip_request(
         values.update(
             employee_signature_key=None,
             employee_signature_sha256=None,
+            original_signature_confirmed_at=None,
             signed_brief_key=None,
             signed_brief_sha256=None,
         )
@@ -7402,6 +7406,7 @@ async def act_on_trip_request(
         changed.update(
             employee_signature_key=None,
             employee_signature_sha256=None,
+            original_signature_confirmed_at=None,
             signed_brief_key=None,
             signed_brief_sha256=None,
         )

@@ -5,6 +5,20 @@ import { FluentProvider, webLightTheme } from "@fluentui/react-components";
 import type { TripRequest } from "@yuksalish/contracts";
 import { TripApprovalsView } from "./TripApprovalsView";
 import { people } from "./test-fixtures/demo-data";
+import type { FileViewerSource } from "./FileViewer";
+
+vi.mock("./FileViewer", () => ({
+  ExternalFileViewer: ({ attachment, onLoad, onClose }: {
+    attachment: FileViewerSource;
+    onLoad: (file: FileViewerSource, signal?: AbortSignal) => Promise<Blob>;
+    onClose: () => void;
+  }) => <div role="dialog" aria-label="Просмотр билдирги"><span>{attachment.fileName}</span>
+    <button type="button" onClick={() => void onLoad(attachment, new AbortController().signal).then(onClose)}>Показать файл</button>
+  </div>,
+}));
+vi.mock("./TripSignaturePad", () => ({
+  TripSignaturePad: () => <div data-testid="signature-pad">Нарисуйте подпись</div>,
+}));
 
 const request: TripRequest = {
   id: "test-trip", number: "TR-TEST", requesterUserId: people[0]!.id,
@@ -152,7 +166,7 @@ describe("Trip approvals interaction", async () => {
     await waitFor(() => expect(onAction).toHaveBeenCalledExactlyOnceWith(modern, "approve", undefined));
     expect(column("manager_approval").querySelector(".trip-board-card")).not.toBeNull();
   });
-  it("does not let a new trip be sent without a fresh graphical signature", () => {
+  it("does not let a new trip be sent without a fresh signature confirmation", () => {
     const modern = { ...request, workflowVersion: 2, stage: "launch" as const,
       status: "draft" as const, allowedActions: ["submit"] as TripRequest["allowedActions"],
       canEdit: true, briefText: "Тестовая билдирги", expenseSource: "Проект",
@@ -160,7 +174,35 @@ describe("Trip approvals interaction", async () => {
     setup(modern);
     fireEvent.click(card().querySelector(".approval-card-open")!);
     expect(screen.getByRole("button", { name: "Отправить председателю" })).toBeDisabled();
-    expect(screen.getByText(/После исправления заявки подпись нужно поставить снова/)).toBeInTheDocument();
+    expect(screen.getByText(/После исправления заявки подпись нужно подтвердить снова/)).toBeInTheDocument();
+  });
+  it("opens the attached brief in the viewer before confirming an existing signature", async () => {
+    const modern = { ...request, workflowVersion: 2, stage: "launch" as const,
+      status: "draft" as const, allowedActions: ["submit"] as TripRequest["allowedActions"],
+      canEdit: true, briefAttachmentName: "bildirgi.jpg", briefAttachmentType: "image/jpeg",
+      briefAttachmentSize: 1024, hasEmployeeSignature: false, originalSignatureConfirmed: false };
+    const onSetOriginalSignature = vi.fn(async () => ({ ...modern, originalSignatureConfirmed: true }));
+    const onDownloadDocument = vi.fn(async () => new Blob(["photo"], { type: "image/jpeg" }));
+    const renderView = (item: TripRequest) => <FluentProvider theme={webLightTheme}><TripApprovalsView
+      requests={[item]} people={people} currentUser={people[0]!} onCreate={vi.fn()}
+      onUpdate={vi.fn()} onAction={vi.fn()} onSetOriginalSignature={onSetOriginalSignature}
+      onDownloadDocument={onDownloadDocument} onUploadSignature={vi.fn()}
+    /></FluentProvider>;
+    installSpatialGeometry();
+    const view = render(renderView(modern));
+    fireEvent.click(card().querySelector(".approval-card-open")!);
+    const confirmation = screen.getByRole("checkbox", { name: "Оригинал билдирги уже подписан мной" });
+    expect(confirmation).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Отправить председателю" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: /Открыть оригинал/ }));
+    fireEvent.click(await screen.findByText("Показать файл"));
+    await waitFor(() => expect(confirmation).toBeEnabled());
+    expect(onDownloadDocument).toHaveBeenCalledWith(modern.id, "attachment", expect.any(AbortSignal));
+    fireEvent.click(confirmation);
+    await waitFor(() => expect(onSetOriginalSignature).toHaveBeenCalledWith(modern.id, true));
+    view.rerender(renderView({ ...modern, originalSignatureConfirmed: true }));
+    expect(screen.getByRole("button", { name: "Отправить председателю" })).toBeEnabled();
+    expect(screen.queryByTestId("signature-pad")).not.toBeInTheDocument();
   });
   it("blocks skipped stages and cards without permission", async () => {
     const { onAction } = setup({ ...request, stage: "launch", status: "draft", allowedActions: [] });
