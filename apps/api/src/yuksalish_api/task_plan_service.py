@@ -244,7 +244,7 @@ async def confirm_import(
                 participants=[TaskCreateParticipantRequest(
                     user_id=str(participant_id), role="co_assignee",
                 ) for participant_id in item.co_assignee_ids],
-            ))
+            ), author_user_id=owner_id)
             task_id = UUID(created.id)
         if task_id is None:
             raise WorkspaceRepositoryError(422, "Select a task to link")

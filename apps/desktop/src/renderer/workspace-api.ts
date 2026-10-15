@@ -2349,13 +2349,32 @@ export function uploadWorkspaceTripSignature(
   );
 }
 
+export function setWorkspaceTripOriginalSignature(
+  token: string, requestId: string, confirmed: boolean,
+): Promise<TripRequest> {
+  return apiRequest<TripRequest>(
+    `/trip-requests/${encodeURIComponent(requestId)}/original-signature`,
+    { method: "PUT", body: JSON.stringify({ confirmed }) }, token,
+  );
+}
+
+export function loadWorkspaceTripBriefOfficePreview(
+  token: string, requestId: string, sheet = 0, offset = 0, signal?: AbortSignal,
+): Promise<OfficeFilePreview> {
+  return apiRequest<OfficeFilePreview>(
+    `/trip-requests/${encodeURIComponent(requestId)}/brief-attachment/preview?sheet=${sheet}&offset=${offset}`,
+    { signal }, token,
+  );
+}
+
 export function downloadWorkspaceTripDocument(
   token: string, requestId: string,
   kind: "attachment" | "brief" | "order" | "order-preview",
+  signal?: AbortSignal,
 ): Promise<Blob> {
   return boundedRequest(
     `${getApiBaseUrl()}/api/v1/trip-requests/${encodeURIComponent(requestId)}/documents/${kind}`,
-    { headers: { Authorization: `Bearer ${token}` } },
+    { headers: { Authorization: `Bearer ${token}` }, signal },
     (response) => response.blob(), 120_000,
   );
 }

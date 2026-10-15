@@ -1,5 +1,5 @@
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
-import { useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { SpatialBoard, SpatialCard, SpatialLane } from "./SpatialBoard";
 import { useMiddleMousePan } from "./useMiddleMousePan";
 import { ProcessWorkflowDesigner } from "./ProcessWorkflowDesigner";
@@ -8,7 +8,7 @@ import { RecordComposer, RecordSection, RecordSummary } from "./RecordComposer";
 import { ChatIconPicker } from "./ChatAvatar";
 import type { ChatAvatarIconKey } from "@yuksalish/contracts";
 import { tripColumns, tripDropAction } from "./trip-board";
-import type { AssistantActionDraft, TripAction, TripRequest, TripRequestInput, TripStage, WorkflowDefinition, WorkflowPosition, WorkspaceDepartment, WorkspacePerson } from "@yuksalish/contracts";
+import type { AssistantActionDraft, OfficeFilePreview, TripAction, TripRequest, TripRequestInput, TripStage, WorkflowDefinition, WorkflowPosition, WorkspaceDepartment, WorkspacePerson } from "@yuksalish/contracts";
 import { Avatar, Badge, Button, Checkbox, DialogSurface, DialogTitle, Textarea, useRestoreFocusTarget } from "@fluentui/react-components";
 import { Input } from "./WorkspaceInput";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
@@ -22,6 +22,9 @@ import { employeeScope, type EmployeeScope } from "./employee-scope";
 import { assistantPeopleIds } from "./assistant-form-handoff";
 import { TripSignaturePad } from "./TripSignaturePad";
 import { WorkspaceFileDropzone } from "./WorkspaceFileDropzone";
+import type { FileViewerSource } from "./FileViewer";
+
+const ExternalFileViewer = lazy(() => import("./FileViewer").then(module => ({ default: module.ExternalFileViewer })));
 
 const actionLabels: Readonly<Record<TripAction, string>> = {
   submit: "Отправить руководителю", resubmit: "Отправить повторно", approve: "Согласовать",
@@ -34,7 +37,8 @@ const moveLabels: Readonly<Record<TripAction, string>> = {
 const dateLabel = (value: string) => new Date(`${value}T00:00:00`).toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
 const isFinished = (request: TripRequest) => request.stage === "approved" || request.stage === "rejected";
 const needsNewSignature = (request: TripRequest) => (request.workflowVersion ?? 1) === 2 &&
-  (!request.hasEmployeeSignature || (!request.briefText && !request.briefAttachmentName));
+  (!(request.hasEmployeeSignature || (request.briefAttachmentName && request.originalSignatureConfirmed)) ||
+    (!request.briefText && !request.briefAttachmentName));
 
 interface TripApprovalsViewProps {
   readonly assistantDraft?: AssistantActionDraft;
@@ -49,7 +53,9 @@ interface TripApprovalsViewProps {
   readonly onUploadBrief?: (requestId: string, file: File) => Promise<TripRequest | undefined>;
   readonly onRemoveBrief?: (requestId: string) => Promise<TripRequest | undefined>;
   readonly onUploadSignature?: (requestId: string, content: Blob) => Promise<TripRequest | undefined>;
-  readonly onDownloadDocument?: (requestId: string, kind: "attachment" | "brief" | "order" | "order-preview") => Promise<Blob | undefined>;
+  readonly onSetOriginalSignature?: (requestId: string, confirmed: boolean) => Promise<TripRequest | undefined>;
+  readonly onLoadBriefOffice?: (requestId: string, sheet: number, offset: number, signal?: AbortSignal) => Promise<OfficeFilePreview>;
+  readonly onDownloadDocument?: (requestId: string, kind: "attachment" | "brief" | "order" | "order-preview", signal?: AbortSignal) => Promise<Blob | undefined>;
   readonly onOpenChat?: (chatId: string) => void;
   readonly renderTripChat?: (request: TripRequest) => ReactNode;
   readonly workflow?: WorkflowDefinition;
@@ -69,7 +75,7 @@ function emptyForm(currentUserId: string): TripFormState {
     employeeIds: [currentUserId], briefText: "", expenseSource: "" };
 }
 
-export function TripApprovalsView({ focusRequestId, requests, people, departments, currentUser, onCreate, onUpdate, onAction, onUploadBrief, onRemoveBrief, onUploadSignature, onDownloadDocument, onOpenChat, renderTripChat, workflow, positions = [], canManageWorkflow = false, onSaveWorkflow, onPublishWorkflow, assistantDraft }: TripApprovalsViewProps) {
+export function TripApprovalsView({ focusRequestId, requests, people, departments, currentUser, onCreate, onUpdate, onAction, onUploadBrief, onRemoveBrief, onUploadSignature, onSetOriginalSignature, onLoadBriefOffice, onDownloadDocument, onOpenChat, renderTripChat, workflow, positions = [], canManageWorkflow = false, onSaveWorkflow, onPublishWorkflow, assistantDraft }: TripApprovalsViewProps) {
   const boardPan = useMiddleMousePan<HTMLDivElement>();
   const restoreFocusTarget = useRestoreFocusTarget();
   const [selectedId, setSelectedId] = useState(focusRequestId ?? "");
@@ -100,6 +106,8 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
   const briefFileRef = useRef<HTMLInputElement>(null);
   const pendingCreatedRef = useRef<TripRequest | undefined>(undefined);
   const [briefFile, setBriefFile] = useState<File>();
+  const [briefPreview, setBriefPreview] = useState<FileViewerSource & { updatedAt: string }>();
+  const [previewedBriefVersion, setPreviewedBriefVersion] = useState("");
   const [error, setError] = useState("");
   const selected = requests.find((request) => request.id === selectedId);
   const canChooseOthers = ["manager", "admin", "superadmin"].includes(currentUser.role);
@@ -133,7 +141,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
       .join(" ").toLocaleLowerCase("ru-RU").includes(query.trim().toLocaleLowerCase("ru-RU"));
   });
 
-  const openRequest = (id: string) => { pendingCreatedRef.current = undefined; setBriefFile(undefined); setFormOpen(false); setFormMode(null); setSelectedId(id); setDetailOpen(true); setPendingDecision(undefined); setError(""); };
+  const openRequest = (id: string) => { pendingCreatedRef.current = undefined; setBriefFile(undefined); setBriefPreview(undefined); setPreviewedBriefVersion(""); setFormOpen(false); setFormMode(null); setSelectedId(id); setDetailOpen(true); setPendingDecision(undefined); setError(""); };
   const closeDetail = () => { if (!busyRef.current) { setDetailOpen(false); setPendingDecision(undefined); setError(""); } };
   const closeForm = () => { if (!busyRef.current) { if (pendingCreatedRef.current) { setSelectedId(pendingCreatedRef.current.id); setDetailOpen(true); } pendingCreatedRef.current = undefined; setBriefFile(undefined); setFormOpen(false); setFormMode(null); setError(""); } };
   const create = () => { pendingCreatedRef.current = undefined; setBriefFile(undefined); setDetailOpen(false); setForm(emptyForm(currentUser.id)); setEmployeeQuery(""); setFormMode("create"); setFormOpen(true); setError(""); };
@@ -172,6 +180,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
       }
       pendingCreatedRef.current = undefined;
       setBriefFile(undefined);
+      setPreviewedBriefVersion("");
       setFormOpen(false);
       setDetailOpen(true);
       setFormMode(null);
@@ -190,6 +199,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
         ? await onRemoveBrief?.(request.id)
         : file ? await onUploadBrief?.(request.id, file) : undefined;
       if (!updated) setError("Не удалось сохранить документ. Проверьте формат файла и подключение.");
+      else { setBriefPreview(undefined); setPreviewedBriefVersion(""); }
     } catch { setError("Не удалось сохранить документ. Попробуйте ещё раз."); }
     finally { busyRef.current = false; setBusy(false); if (briefFileRef.current) briefFileRef.current.value = ""; }
   };
@@ -203,6 +213,27 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
     } catch { setError("Не удалось сохранить подпись. Попробуйте ещё раз."); return false; }
     finally { busyRef.current = false; setBusy(false); }
   };
+  const confirmOriginalSignature = async (request: TripRequest, confirmed: boolean) => {
+    if (busyRef.current || !onSetOriginalSignature) return;
+    busyRef.current = true; setBusy(true); setError("");
+    try {
+      const updated = await onSetOriginalSignature(request.id, confirmed);
+      if (!updated) setError("Не удалось сохранить подтверждение подписи. Повторите попытку.");
+    } catch { setError("Не удалось сохранить подтверждение подписи. Повторите попытку."); }
+    finally { busyRef.current = false; setBusy(false); }
+  };
+  const loadBriefPreview = useCallback(async (file: FileViewerSource, signal?: AbortSignal) => {
+    const content = await onDownloadDocument?.(file.id, "attachment", signal);
+    if (!content) throw new Error("Не удалось открыть оригинал билдирги");
+    if (!signal?.aborted && briefPreview) setPreviewedBriefVersion(`${file.id}:${briefPreview.updatedAt}`);
+    return content;
+  }, [onDownloadDocument, briefPreview]);
+  const loadBriefOffice = useCallback(async (file: FileViewerSource, sheet: number, offset: number, signal?: AbortSignal) => {
+    if (!onLoadBriefOffice) throw new Error("Предпросмотр DOCX недоступен");
+    const content = await onLoadBriefOffice(file.id, sheet, offset, signal);
+    if (!signal?.aborted && briefPreview) setPreviewedBriefVersion(`${file.id}:${briefPreview.updatedAt}`);
+    return content;
+  }, [onLoadBriefOffice, briefPreview]);
   const downloadDocument = async (
     request: TripRequest, kind: "attachment" | "brief" | "order" | "order-preview",
   ) => {
@@ -215,7 +246,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
       const link = document.createElement("a");
       link.href = url;
       link.download = kind === "attachment" ? request.briefAttachmentName ?? "bildirgi"
-        : kind === "brief" ? "bildirgi-signed.pdf"
+        : kind === "brief" ? request.originalSignatureConfirmed ? request.briefAttachmentName ?? "bildirgi" : "bildirgi-signed.pdf"
           : kind === "order" ? `prikaz-${request.orderNumber ?? request.number}.pdf`
             : "prikaz-preview.pdf";
       link.click();
@@ -336,13 +367,14 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
               <dl className="trip-document-facts">{selected.expenseSource ? <div><dt>Источник расходов</dt><dd>{selected.expenseSource}</dd></div> : null}<div><dt>Текст билдирги</dt><dd>{selected.briefText || (selected.briefAttachmentName ? "См. приложенный оригинал" : "Не добавлен")}</dd></div></dl>
               <div className="trip-document-files">
                 {selected.canEdit && onUploadBrief ? <><input ref={briefFileRef} className="sr-only" type="file" accept=".pdf,.docx,.jpg,.jpeg,.png" aria-label="Загрузить оригинал билдирги" onChange={(event) => { const file = event.target.files?.[0]; if (file) void changeBrief(selected, file); }} /><Button type="button" disabled={busy} onClick={() => briefFileRef.current?.click()}>{selected.briefAttachmentName ? "Заменить оригинал" : "Прикрепить оригинал"}</Button></> : null}
-                {selected.briefAttachmentName ? <><Button type="button" disabled={busy} onClick={() => void downloadDocument(selected, "attachment")}>Оригинал · {selected.briefAttachmentName}</Button>{selected.canEdit && onRemoveBrief ? <Button type="button" disabled={busy} onClick={() => void changeBrief(selected, undefined, true)}>Убрать оригинал</Button> : null}</> : null}
-                {selected.hasSignedBrief ? <Button type="button" disabled={busy} onClick={() => void downloadDocument(selected, "brief")}>Подписанная билдирги PDF</Button> : null}
+                {selected.briefAttachmentName ? <><Button type="button" disabled={busy} onClick={() => setBriefPreview({ id: selected.id, fileName: selected.briefAttachmentName!, contentType: selected.briefAttachmentType ?? "", byteSize: selected.briefAttachmentSize ?? 0, updatedAt: selected.updatedAt })}>Открыть оригинал · {selected.briefAttachmentName}</Button>{selected.canEdit && onRemoveBrief ? <Button type="button" disabled={busy} onClick={() => void changeBrief(selected, undefined, true)}>Убрать оригинал</Button> : null}</> : null}
+                {selected.hasSignedBrief ? <Button type="button" disabled={busy} onClick={() => void downloadDocument(selected, "brief")}>{selected.originalSignatureConfirmed ? "Скачать подписанный оригинал" : "Подписанная билдирги PDF"}</Button> : null}
                 {selected.stage === "manager_approval" ? <Button type="button" disabled={busy} onClick={() => void downloadDocument(selected, "order-preview")}>Предпросмотр приказа</Button> : null}
                 {selected.hasOrderPdf ? <Button type="button" appearance="primary" disabled={busy} onClick={() => void downloadDocument(selected, "order")}>Скачать утверждённый приказ PDF</Button> : null}
               </div>
-              {selected.canEdit && onUploadSignature ? <TripSignaturePad saved={selected.hasEmployeeSignature} disabled={busy} onSave={(content) => saveSignature(selected, content)} /> : null}
-              {selected.canEdit && !selected.hasEmployeeSignature ? <p className="trip-document-reminder">Перед отправкой добавьте текст или оригинал билдирги и свою подпись. После исправления заявки подпись нужно поставить снова.</p> : null}
+              {selected.canEdit && selected.briefAttachmentName && onSetOriginalSignature ? <div className="trip-original-signature-choice"><Checkbox checked={Boolean(selected.originalSignatureConfirmed)} disabled={busy || (!selected.originalSignatureConfirmed && previewedBriefVersion !== `${selected.id}:${selected.updatedAt}`)} label="Оригинал билдирги уже подписан мной" onChange={(_, data) => void confirmOriginalSignature(selected, Boolean(data.checked))} /><p>{selected.originalSignatureConfirmed ? "Используем прикреплённый оригинал без дополнительной подписи. Снимите отметку, если нужно подписать в системе." : selected.briefAttachmentName.toLowerCase().endsWith(".docx") ? "Откройте документ. Встроенный просмотр Word показывает текст; для проверки подписи скачайте оригинал в просмотрщике." : "Сначала откройте и проверьте оригинал целиком. Если подпись уже есть в файле, подтвердите это здесь."}</p></div> : null}
+              {selected.canEdit && onUploadSignature && !selected.originalSignatureConfirmed ? <TripSignaturePad saved={selected.hasEmployeeSignature} disabled={busy} onSave={(content) => saveSignature(selected, content)} /> : null}
+              {selected.canEdit && needsNewSignature(selected) ? <p className="trip-document-reminder">Перед отправкой добавьте текст или оригинал билдирги и подтвердите подпись: в прикреплённом оригинале либо в системе. После исправления заявки подпись нужно подтвердить снова.</p> : null}
               {selected.status === "approved" ? <p role="status" className="trip-document-approved">Приказ зарегистрирован и подписан председателем. Участникам направлены уведомления.</p> : null}
             </section> : selected.stage === "hr" ? <p className="trip-document-reminder">Эта поездка проходит прежний маршрут через кадровую службу.</p> : null}
             <div className="bp7-actions">
@@ -354,14 +386,14 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
           </article>{renderTripChat ? renderTripChat(selected) : <div className="embedded-chat-unavailable">Чат поездки недоступен.</div>}</div> : formMode !== null ? (
           <form className="bp7-modal trip-form record-composer" noValidate aria-busy={busy} onSubmit={(event) => { event.preventDefault(); void save(); }}>
             <RecordComposer title={formMode === "create" ? "Создать заявку на поездку" : "Изменить заявку на поездку"} titleId="trip-composer-title" eyebrow="Согласование поездок" busy={busy} error={error} submitLabel="Сохранить" onClose={closeForm}
-              hint="После сохранения проверьте билдирги, поставьте подпись и отправьте председателю."
+              hint="После сохранения проверьте билдирги и подтвердите подпись в оригинале либо подпишите в системе."
               stages={<div className="record-stages" tabIndex={0} role="region" aria-label="Маршрут согласования">{displayTripColumns.filter((column) => column.key !== "rejected" && column.key !== "hr").map((column) => <span key={column.key} aria-current={column.key === (formMode === "edit" ? selected?.stage : "launch") ? "step" : undefined} style={{ "--record-stage-color": column.color } as CSSProperties}>{column.label}</span>)}</div>}
               aside={<>
                 <RecordSummary title="Сводка поездки"><div className="record-summary-title">{form.destination.trim() || "Место поездки не указано"}</div>
                   <dl className="record-summary-facts"><div><dt>Даты</dt><dd>{form.startDate || "Не указано"} — {form.endDate || "Не указано"}</dd></div><div><dt>Инициатор</dt><dd>{formMode === "edit" && selected ? personLink(selected.requesterUserId, personName(selected.requesterUserId)) : personLink(currentUser.id, currentUser.name)}</dd></div><div><dt>Участников</dt><dd>{form.employeeIds.length}</dd></div></dl>
                   <ul className="record-summary-people">{form.employeeIds.map((id) => <EmployeeProfileLink as="li" key={id} userId={people.some((person) => person.id === id) ? id : undefined} personName={personName(id)}>{personName(id)}</EmployeeProfileLink>)}</ul>
                 </RecordSummary>
-                <section className="record-summary-card record-summary-note"><h3>Что произойдёт дальше</h3><p>Выбранный оригинал билдирги загрузится вместе с черновиком. Затем проверьте пакет и нарисуйте подпись. Председатель сможет подтвердить поездку, вернуть на уточнение или отклонить.</p><p>При утверждении приказ получит отдельный номер серии WS и появится в карточке.</p></section>
+                <section className="record-summary-card record-summary-note"><h3>Что произойдёт дальше</h3><p>Выбранный оригинал билдирги загрузится вместе с черновиком. Затем проверьте файл: если он уже подписан, подтвердите это; иначе поставьте подпись в системе. Председатель сможет подтвердить поездку, вернуть на уточнение или отклонить.</p><p>При утверждении приказ получит отдельный номер серии WS и появится в карточке.</p></section>
               </>}>
               <RecordSection title="Билдирги" description="Укажите место поездки, напишите текст или выберите готовый оригинал. Файл загрузится при сохранении черновика."><div className="record-field-grid">
                 <label className="record-field-wide">Куда едем<Input aria-label="Куда едем" aria-required autoFocus placeholder="Город, страна или место встречи" value={form.destination} onChange={(_, data) => setForm({ ...form, destination: data.value })} /></label>
@@ -387,6 +419,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
           </form>) : null}
         </DialogSurface>
       </Dialog>
+      {briefPreview ? <Suspense fallback={<span role="status">Открываем билдирги…</span>}><ExternalFileViewer key={`${briefPreview.id}:${briefPreview.updatedAt}`} attachment={briefPreview} onClose={() => setBriefPreview(undefined)} onLoad={loadBriefPreview} onLoadOffice={loadBriefOffice} onDownload={() => { const request = requests.find(item => item.id === briefPreview.id); if (request) return downloadDocument(request, "attachment"); }} /></Suspense> : null}
     </section>
   );
 }

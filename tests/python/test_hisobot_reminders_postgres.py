@@ -140,8 +140,15 @@ async def exercise_backlog(url: str) -> None:
                 first_notice_id = active[0]["id"]
                 assert active[0]["event_key"] == "hisobot:2026-10-05:missed"
                 assert "05.10.2026" in active[0]["body"] and "18:30" in active[0]["body"]
-                assert not active[0]["is_reminder"] and not active[0]["requires_action"]
+                assert not active[0]["is_reminder"] and active[0]["requires_action"]
+                assert "21:00" in active[0]["body"]
                 assert active[0]["read_at"] is None and active[0]["resolved_at"] is None
+                await materialize_hisobot_reminders(connection, at(5, 21, 0))
+                closed = (await connection.execute(select(workspace_notifications).where(
+                    workspace_notifications.c.id == first_notice_id
+                ))).mappings().one()
+                assert closed["requires_action"] is False
+                assert "21:00" in closed["body"]
                 slots = (await connection.execute(select(workspace_notifications).where(
                     workspace_notifications.c.user_id == owner,
                     workspace_notifications.c.kind == "hisobot",

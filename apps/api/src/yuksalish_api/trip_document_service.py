@@ -123,7 +123,9 @@ async def put_attachment(
         brief_attachment_key=key,
         brief_attachment_name=safe_name,
         brief_attachment_type=media_type,
+        brief_attachment_size=len(content),
         brief_attachment_sha256=_hash(content),
+        original_signature_confirmed_at=None,
         employee_signature_key=None,
         employee_signature_sha256=None,
         signed_brief_key=None,
@@ -141,7 +143,9 @@ async def remove_attachment(
         brief_attachment_key=None,
         brief_attachment_name=None,
         brief_attachment_type=None,
+        brief_attachment_size=None,
         brief_attachment_sha256=None,
+        original_signature_confirmed_at=None,
         employee_signature_key=None,
         employee_signature_sha256=None,
         signed_brief_key=None,
@@ -167,6 +171,26 @@ async def put_employee_signature(
     await connection.execute(update(trip_requests).where(trip_requests.c.id == request_id).values(
         employee_signature_key=key,
         employee_signature_sha256=_hash(normalized),
+        original_signature_confirmed_at=None,
+        signed_brief_key=None,
+        signed_brief_sha256=None,
+        updated_at=datetime.now(UTC),
+    ))
+
+
+async def confirm_original_signature(
+    connection: AsyncConnection, user: AuthenticatedUser,
+    request_id: UUID, *, confirmed: bool,
+) -> None:
+    """Record the requester's declaration, never an automatic image-signature claim."""
+    row = await _row(connection, request_id, lock=True)
+    _require_editable(row, user)
+    if confirmed and not row["brief_attachment_key"]:
+        raise Error(422, "Сначала прикрепите подписанный оригинал билдирги")
+    await connection.execute(update(trip_requests).where(trip_requests.c.id == request_id).values(
+        original_signature_confirmed_at=datetime.now(UTC) if confirmed else None,
+        employee_signature_key=None if confirmed else row["employee_signature_key"],
+        employee_signature_sha256=None if confirmed else row["employee_signature_sha256"],
         signed_brief_key=None,
         signed_brief_sha256=None,
         updated_at=datetime.now(UTC),
@@ -211,12 +235,17 @@ async def prepare_signed_brief(
     _require_editable(row, user)
     if not row["brief_text"] and not row["brief_attachment_key"]:
         raise Error(422, "Напишите билдирги или прикрепите исходный документ")
-    signature = await _verified(
-        storage, row["employee_signature_key"], row["employee_signature_sha256"],
-    )
     if row["brief_attachment_key"]:
         await _verified(
             storage, row["brief_attachment_key"], row["brief_attachment_sha256"],
+        )
+    if row.get("original_signature_confirmed_at"):
+        if not row["brief_attachment_key"] or not row["brief_attachment_sha256"]:
+            raise Error(409, "Подписанный оригинал билдирги недоступен")
+        signature = None
+    else:
+        signature = await _verified(
+            storage, row["employee_signature_key"], row["employee_signature_sha256"],
         )
     chair_id = await _appointed_chair(connection)
     names = await _people(connection, request_id)
@@ -226,14 +255,16 @@ async def prepare_signed_brief(
     ))
     if not requester or not chair:
         raise Error(409, "Инициатор или председатель не найден")
-    cover = await run_in_threadpool(
-        brief_pdf,
-        requester=str(requester), chair=str(chair), purpose=row["purpose"],
-        destination=row["destination"], start=row["start_date"], end=row["end_date"],
-        employees=[name for name, _ in names], expense_source=row["expense_source"],
-        brief_text=row["brief_text"] or "", attachment_name=row["brief_attachment_name"],
-        signature=signature, signed_on=datetime.now(_LOCAL).date(),
-    )
+    cover = None
+    if signature is not None:
+        cover = await run_in_threadpool(
+            brief_pdf,
+            requester=str(requester), chair=str(chair), purpose=row["purpose"],
+            destination=row["destination"], start=row["start_date"], end=row["end_date"],
+            employees=[name for name, _ in names], expense_source=row["expense_source"],
+            brief_text=row["brief_text"] or "", attachment_name=row["brief_attachment_name"],
+            signature=signature, signed_on=datetime.now(_LOCAL).date(),
+        )
     # Reject layouts that cannot become a usable order before entering the chair's queue.
     await run_in_threadpool(
         order_pdf,
@@ -243,10 +274,16 @@ async def prepare_signed_brief(
         expense_source=row["expense_source"], requester=str(requester),
         chair=str(chair), signature=None,
     )
-    key = f"trip-requests/{request_id}/brief/{uuid4()}.pdf"
-    await storage.put(key, cover, "application/pdf")
+    if cover is None:
+        # The attached signed original is authoritative and must remain unmodified.
+        key = row["brief_attachment_key"]
+        digest = row["brief_attachment_sha256"]
+    else:
+        key = f"trip-requests/{request_id}/brief/{uuid4()}.pdf"
+        await storage.put(key, cover, "application/pdf")
+        digest = _hash(cover)
     await connection.execute(update(trip_requests).where(trip_requests.c.id == request_id).values(
-        signed_brief_key=key, signed_brief_sha256=_hash(cover),
+        signed_brief_key=key, signed_brief_sha256=digest,
         updated_at=datetime.now(UTC),
     ))
 
@@ -357,7 +394,10 @@ async def read_document(
         ),
         "brief": (
             row["signed_brief_key"], row["signed_brief_sha256"],
-            "application/pdf", "bildirgi-signed.pdf",
+            row["brief_attachment_type"] if row.get("original_signature_confirmed_at")
+            else "application/pdf",
+            row["brief_attachment_name"] if row.get("original_signature_confirmed_at")
+            else "bildirgi-signed.pdf",
         ),
         "order": (
             row["order_pdf_key"], row["order_pdf_sha256"],

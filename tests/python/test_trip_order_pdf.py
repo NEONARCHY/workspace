@@ -1,7 +1,7 @@
 """Synthetic trip documents only; no personnel records or real signatures."""
 
 import asyncio
-from datetime import date
+from datetime import UTC, date, datetime
 from io import BytesIO
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
@@ -135,6 +135,126 @@ def test_employee_can_sign_brief_without_expense_source(
     ))
     storage.put.assert_awaited_once()
     connection.execute.assert_awaited_once()
+
+
+def test_only_requester_can_confirm_an_attached_signed_original(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    requester_id = uuid4()
+    user = AuthenticatedUser(requester_id, "requester", "Requester", None, None, "employee")
+    row = {
+        "requester_user_id": requester_id, "workflow_version": 2,
+        "stage": "launch", "status": "draft", "brief_attachment_key": "original.pdf",
+        "employee_signature_key": "drawn.png", "employee_signature_sha256": "old-hash",
+    }
+    monkeypatch.setattr(trip_document_service, "_row", AsyncMock(return_value=row))
+    connection = AsyncMock()
+    asyncio.run(trip_document_service.confirm_original_signature(
+        connection, user, uuid4(), confirmed=True,
+    ))
+    values = connection.execute.await_args.args[0].compile().params
+    assert values["original_signature_confirmed_at"].tzinfo == UTC
+    assert values["employee_signature_key"] is None
+    assert values["signed_brief_key"] is None
+    row["brief_attachment_key"] = None
+    with pytest.raises(WorkspaceRepositoryError, match="прикрепите"):
+        asyncio.run(trip_document_service.confirm_original_signature(
+            connection, user, uuid4(), confirmed=True,
+        ))
+    other = AuthenticatedUser(uuid4(), "other", "Other", None, None, "employee")
+    with pytest.raises(WorkspaceRepositoryError, match="только инициатор"):
+        asyncio.run(trip_document_service.confirm_original_signature(
+            connection, other, uuid4(), confirmed=False,
+        ))
+
+
+def test_replacing_brief_clears_previous_signature_confirmation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    requester_id = uuid4()
+    user = AuthenticatedUser(requester_id, "requester", "Requester", None, None, "employee")
+    monkeypatch.setattr(trip_document_service, "_row", AsyncMock(return_value={
+        "requester_user_id": requester_id, "workflow_version": 2,
+        "stage": "launch", "status": "draft",
+    }))
+    monkeypatch.setattr(trip_document_service, "validate_attachment", lambda *_: "application/pdf")
+    connection, storage = AsyncMock(), AsyncMock()
+    asyncio.run(trip_document_service.put_attachment(
+        connection, user, storage, uuid4(), "new-original.pdf", b"replacement",
+    ))
+    values = connection.execute.await_args.args[0].compile().params
+    assert values["brief_attachment_size"] == len(b"replacement")
+    assert values["original_signature_confirmed_at"] is None
+    assert values["employee_signature_key"] is None
+    assert values["signed_brief_key"] is None
+
+
+def test_confirmed_original_is_preserved_as_signed_brief(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    requester_id = uuid4()
+    user = AuthenticatedUser(requester_id, "requester", "Requester", None, None, "employee")
+    original = b"%PDF-1.4 signed source bytes"
+    digest = trip_document_service._hash(original)
+    row = {
+        "requester_user_id": requester_id, "workflow_version": 2,
+        "stage": "launch", "status": "draft", "brief_text": "",
+        "brief_attachment_key": "original.pdf", "brief_attachment_sha256": digest,
+        "brief_attachment_name": "original.pdf", "brief_attachment_type": "application/pdf",
+        "original_signature_confirmed_at": datetime.now(UTC),
+        "employee_signature_key": None, "employee_signature_sha256": None,
+        "purpose": "", "destination": "Нукус", "start_date": date(2026, 10, 15),
+        "end_date": date(2026, 10, 16), "expense_source": "",
+    }
+    monkeypatch.setattr(trip_document_service, "_row", AsyncMock(return_value=row))
+    monkeypatch.setattr(trip_document_service, "_appointed_chair", AsyncMock(
+        return_value=uuid4(),
+    ))
+    monkeypatch.setattr(trip_document_service, "_people", AsyncMock(return_value=[]))
+    connection, storage = AsyncMock(), AsyncMock()
+    connection.scalar.side_effect = ["Testova Zebo", "Testov Rais"]
+    storage.get.return_value = original
+    asyncio.run(trip_document_service.prepare_signed_brief(
+        connection, user, storage, uuid4(),
+    ))
+    storage.put.assert_not_awaited()
+    values = connection.execute.await_args.args[0].compile().params
+    assert values["signed_brief_key"] == "original.pdf"
+    assert values["signed_brief_sha256"] == digest
+
+
+def test_confirmed_signed_brief_returns_original_and_keeps_private_access(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    requester_id = uuid4()
+    original = b"%PDF-1.4 signed source bytes"
+    digest = trip_document_service._hash(original)
+    monkeypatch.setattr(trip_document_service, "_row", AsyncMock(return_value={
+        "requester_user_id": requester_id, "stage": "manager_approval",
+        "status": "running", "original_signature_confirmed_at": datetime.now(UTC),
+        "signed_brief_key": "original.pdf", "signed_brief_sha256": digest,
+        "brief_attachment_key": "original.pdf", "brief_attachment_sha256": digest,
+        "brief_attachment_type": "application/pdf",
+        "brief_attachment_name": "original.pdf",
+        "order_pdf_key": None, "order_pdf_sha256": None, "order_number": None,
+    }))
+    connection, storage = AsyncMock(), AsyncMock()
+    connection.scalar.return_value = uuid4()
+    connection.execute.return_value = MagicMock()
+    connection.execute.return_value.scalars.return_value.all.return_value = []
+    storage.get.return_value = original
+    requester = AuthenticatedUser(
+        requester_id, "requester", "Requester", None, None, "employee",
+    )
+    content, media_type, name = asyncio.run(trip_document_service.read_document(
+        connection, requester, storage, uuid4(), "brief",
+    ))
+    assert (content, media_type, name) == (original, "application/pdf", "original.pdf")
+    stranger = AuthenticatedUser(uuid4(), "stranger", "Stranger", None, None, "employee")
+    with pytest.raises(WorkspaceRepositoryError, match="не найден"):
+        asyncio.run(trip_document_service.read_document(
+            connection, stranger, storage, uuid4(), "brief",
+        ))
 
 
 def test_signed_brief_is_prepared_without_expense_source(

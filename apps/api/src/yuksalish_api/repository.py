@@ -730,6 +730,9 @@ def _trip_request(
         brief_text=row["brief_text"] or "",
         expense_source=row["expense_source"] or "",
         brief_attachment_name=row["brief_attachment_name"],
+        brief_attachment_type=row["brief_attachment_type"],
+        brief_attachment_size=row["brief_attachment_size"],
+        original_signature_confirmed=bool(row["original_signature_confirmed_at"]),
         has_employee_signature=bool(row["employee_signature_key"]),
         has_signed_brief=bool(row["signed_brief_key"]),
         order_number=row["order_number"],
@@ -4048,6 +4051,7 @@ async def _sync_task_chat(
     author_user_id: UUID,
     assignee_user_id: UUID,
     occurred_at: datetime | None = None,
+    created_by_user_id: UUID | None = None,
 ) -> UUID:
     """Create one task chat and keep its membership aligned with task roles."""
     now = occurred_at or datetime.now(UTC)
@@ -4069,7 +4073,7 @@ async def _sync_task_chat(
                 context_type="task",
                 context_id=task_id,
                 direct_key=None,
-                created_by_user_id=author_user_id,
+                created_by_user_id=created_by_user_id or author_user_id,
                 created_at=now,
                 updated_at=now,
             )
@@ -4208,7 +4212,12 @@ async def create_task(
     connection: AsyncConnection,
     current_user: AuthenticatedUser,
     payload: CreateTaskRequest,
+    *,
+    author_user_id: UUID | None = None,
 ) -> TaskResponse:
+    # Internal plan import may assign the plan owner as task author while the
+    # authenticated importer remains the actor of creation and audit events.
+    task_author_id = author_user_id or current_user.id
     try:
         assignee_id = UUID(payload.assignee_id) if payload.assignee_id else current_user.id
         source_message_id = UUID(payload.source_message_id) if payload.source_message_id else None
@@ -4310,7 +4319,7 @@ async def create_task(
         "description": payload.description,
         "status": "new",
         "priority": payload.priority,
-        "author_user_id": current_user.id,
+        "author_user_id": task_author_id,
         "primary_assignee_user_id": assignee_id,
         "parent_task_id": parent_task_id,
         "cycle_id": cycle_id,
@@ -4399,9 +4408,10 @@ async def create_task(
         task_id=task_id,
         title=payload.title,
         description=payload.description,
-        author_user_id=current_user.id,
+        author_user_id=task_author_id,
         assignee_user_id=assignee_id,
         occurred_at=now,
+        created_by_user_id=current_user.id,
     )
     return await _task_response(connection, task_id)
 
@@ -7269,6 +7279,7 @@ async def update_trip_request(
         values.update(
             employee_signature_key=None,
             employee_signature_sha256=None,
+            original_signature_confirmed_at=None,
             signed_brief_key=None,
             signed_brief_sha256=None,
         )
@@ -7402,6 +7413,7 @@ async def act_on_trip_request(
         changed.update(
             employee_signature_key=None,
             employee_signature_sha256=None,
+            original_signature_confirmed_at=None,
             signed_brief_key=None,
             signed_brief_sha256=None,
         )
