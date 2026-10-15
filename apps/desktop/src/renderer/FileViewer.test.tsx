@@ -135,7 +135,7 @@ it("does not download list attachments before the user opens them",()=>{
   expect(load).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button",{name:"Открыть изображение: photo.png"})); expect(open).toHaveBeenCalledOnce();
 });
-it.each(["image", "video"])("loads a %s thumbnail only while visible and aborts/releases it on exit",async kind=>{
+it.each(["image", "video"])("loads a visible %s thumbnail, retains images and releases videos offscreen",async kind=>{
   let notify: (visible: boolean) => void = () => {};
   const disconnect=vi.fn();
   vi.stubGlobal("IntersectionObserver",class {
@@ -152,7 +152,17 @@ it.each(["image", "video"])("loads a %s thumbnail only while visible and aborts/
   else await waitFor(()=>expect(document.querySelector("video")).toHaveAttribute("src", "blob:preview"));
   const signal=load.mock.calls[0]![1] as AbortSignal;
   act(()=>notify(false));
+  if (kind === "image") {
+    expect(signal.aborted).toBe(false);
+    expect(screen.getByRole("img", {name:"photo.png"})).toHaveAttribute("src", "blob:preview");
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+    act(()=>notify(true));
+    expect(load).toHaveBeenCalledOnce();
+  } else {
+    expect(signal.aborted).toBe(true);
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:preview");
+  }
+  view.unmount(); expect(disconnect).toHaveBeenCalled();
   expect(signal.aborted).toBe(true);
   expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:preview");
-  view.unmount(); expect(disconnect).toHaveBeenCalled();
 });
