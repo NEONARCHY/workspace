@@ -185,3 +185,53 @@ it("does not silently assign a structured plan to the importer when the leader i
   expect(await screen.findByRole("alert")).toHaveTextContent("проверьте каждый включённый пункт");
   expect(confirmTaskPlanImport).not.toHaveBeenCalled();
 });
+
+it("reviews the annual plan mapping and completes only an old green row", async () => {
+  vi.mocked(previewTaskPlanImport).mockResolvedValue({
+    suggestedTitle: "Иш режа 2025", annualWorkPlan: true, rows: [
+      { title: "Тадбирни ташкил этиш", source: "DOCX, таблица 1, строка 3", warning: null,
+        assigneeHint: "Д. Лютфиддинов", coexecutorsHint: "Б. Мардаев; ҳудудий бўлинмалар",
+        dueDateHint: "2025-03-31", deadlineText: "Март", mechanismItems: ["Режа тузиш"],
+        completedWorkText: "Тадбир ўтказилди", greenCompletion: true,
+        responsibleText: "Д. Лютфиддинов", executorsText: "Б. Мардаев; ҳудудий бўлинмалар" },
+      { title: "Мунтазам мониторинг", source: "DOCX, таблица 1, строка 4", warning: null,
+        assigneeHint: "Д. Лютфиддинов", deadlineText: "Ҳар ойда",
+        deadlineNeedsReview: true, mechanismItems: ["Ҳисобот бериш"] },
+    ],
+  });
+  vi.mocked(confirmTaskPlanImport).mockResolvedValue({
+    id: "plan-3", title: "Иш режа 2025", kind: "work", periodStart: null, periodEnd: null,
+    taskIds: ["task-1", "task-2"], ownerUserId: "me", status: "active",
+    createdByUserId: "me", createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-01T00:00:00Z",
+  });
+  render(<FluentProvider theme={webLightTheme}><TaskPlanImportView
+    token="token" currentUserId="me" people={[
+      { id: "me", name: "Автор плана", initials: "А", role: "manager", color: "blue", status: "active" },
+      { id: "responsible", name: "Лютфиддинов Далер", initials: "Д", role: "employee", color: "blue", status: "active" },
+      { id: "executor", name: "Мардаев Ботир", initials: "Б", role: "employee", color: "blue", status: "active" },
+    ]} tasks={[]} onImported={vi.fn().mockResolvedValue(undefined)} onClose={vi.fn()} />
+  </FluentProvider>);
+  fireEvent.change(screen.getByLabelText("Файл плана"), {
+    target: { files: [new File(["content"], "annual.docx")] },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Разобрать документ" }));
+  expect(await screen.findByText(/Прошедшие сроки исключаются/)).toBeInTheDocument();
+  expect(screen.getByLabelText("Создать как завершённую (зелёный пункт, срок прошёл)"))
+    .toBeChecked();
+  expect(screen.getAllByLabelText("Ответственный / исполнитель")[0]).toHaveAttribute(
+    "value", "responsible",
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Подтвердить и создать план" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Проверьте ответственного");
+  fireEvent.click(screen.getByLabelText(/Я проверил ответственного/));
+  fireEvent.click(screen.getByRole("button", { name: "Подтвердить и создать план" }));
+  await waitFor(() => expect(confirmTaskPlanImport).toHaveBeenCalledTimes(1));
+  const payload = vi.mocked(confirmTaskPlanImport).mock.calls[0]?.[1];
+  expect(payload?.annualWorkPlan).toBe(true);
+  expect(payload?.items[0]).toMatchObject({
+    assigneeId: "responsible", coAssigneeIds: ["executor"],
+    description: "Тадбир ўтказилди", checklist: ["Режа тузиш"], historicalCompleted: true,
+  });
+  expect(payload?.items[1]?.historicalCompleted).toBe(false);
+  expect(payload?.items[1]?.description).toContain("Ҳар ойда");
+});
