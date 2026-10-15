@@ -117,9 +117,9 @@ MODULE_CATALOG = (
     ModuleDescriptor(
         key="trip_approvals",
         label=LocalizedLabel(
-            ru="Согласование поездок",
-            uz_cyrl="Сафарни келишиш",
-            uz_latn="Safarni kelishish",
+            ru="Поездки",
+            uz_cyrl="Сафарлар",
+            uz_latn="Safarlar",
         ),
         route="/trip-approvals",
         status="available",
