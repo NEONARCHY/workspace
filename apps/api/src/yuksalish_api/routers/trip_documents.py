@@ -1,22 +1,30 @@
-"""Private trip brief upload, drawn signature, and immutable document downloads."""
+"""Private trip brief upload, signature confirmation, and immutable documents."""
 
+import asyncio
 from typing import Annotated, Literal, cast
 from urllib.parse import quote
 from uuid import UUID
+from zipfile import BadZipFile
 
+from defusedxml.common import DefusedXmlException
+from defusedxml.ElementTree import ParseError
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncConnection
+from starlette.concurrency import run_in_threadpool
 
 from yuksalish_api.access_control import ensure_module_action
 from yuksalish_api.auth import AuthenticatedUser, require_user
 from yuksalish_api.database import get_connection
 from yuksalish_api.errors import WorkspaceRepositoryError
 from yuksalish_api.events import WorkspaceEventBus
+from yuksalish_api.file_preview import OfficePreview, preview_office
 from yuksalish_api.object_storage import ObjectStorage, ObjectStorageError
 from yuksalish_api.repository import get_trip_request
 from yuksalish_api.trip_document_service import (
     MAX_ATTACHMENT_BYTES,
     MAX_SIGNATURE_BYTES,
+    confirm_original_signature,
     put_attachment,
     put_employee_signature,
     read_document,
@@ -28,6 +36,12 @@ router = APIRouter(prefix="/trip-requests", tags=["trip-documents"])
 User = Annotated[AuthenticatedUser, Depends(require_user)]
 Connection = Annotated[AsyncConnection, Depends(get_connection)]
 PRIVATE = {"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"}
+WORD_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+_preview_slots = asyncio.Semaphore(2)
+
+
+class OriginalSignatureConfirmation(BaseModel):
+    confirmed: bool
 
 
 def _storage(request: Request) -> ObjectStorage:
@@ -100,6 +114,46 @@ async def upload_employee_signature(
         raise _failure(error) from error
     await _publish(request, request_id)
     return result
+
+
+@router.put("/{request_id}/original-signature", response_model=TripRequestResponse)
+async def set_original_signature(
+    request_id: UUID, payload: OriginalSignatureConfirmation,
+    request: Request, user: User, connection: Connection,
+) -> TripRequestResponse:
+    await ensure_module_action(connection, user, "trip_approvals", "edit")
+    try:
+        await confirm_original_signature(
+            connection, user, request_id, confirmed=payload.confirmed,
+        )
+        result = await get_trip_request(connection, user, request_id)
+    except WorkspaceRepositoryError as error:
+        raise _failure(error) from error
+    await _publish(request, request_id)
+    return result
+
+
+@router.get("/{request_id}/brief-attachment/preview", response_model=OfficePreview)
+async def preview_brief_attachment(
+    request_id: UUID, request: Request, response: Response, user: User, connection: Connection,
+    sheet: int = Query(default=0, ge=0), offset: int = Query(default=0, ge=0),
+) -> OfficePreview:
+    await ensure_module_action(connection, user, "trip_approvals", "view")
+    response.headers.update(PRIVATE)
+    try:
+        async with _preview_slots:
+            content, media_type, name = await read_document(
+                connection, user, _storage(request), request_id, "attachment",
+            )
+            if media_type != WORD_MIME:
+                raise HTTPException(
+                    415, "Предпросмотр текста доступен только для DOCX", headers=PRIVATE,
+                )
+            return await run_in_threadpool(preview_office, name, content, sheet, offset)
+    except (WorkspaceRepositoryError, ObjectStorageError) as error:
+        raise _failure(error) from error
+    except (ValueError, BadZipFile, KeyError, ParseError, DefusedXmlException) as error:
+        raise HTTPException(422, "Документ недоступен для просмотра", headers=PRIVATE) from error
 
 
 @router.get("/{request_id}/documents/{kind}")

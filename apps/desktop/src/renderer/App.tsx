@@ -154,6 +154,7 @@ import {
   deleteWorkspaceTaskChecklistItem,
   downloadWorkspaceAttachment,
   downloadWorkspaceTripDocument,
+  loadWorkspaceTripBriefOfficePreview,
   extendWorkspaceTaskDeadline,
   loadWorkspace,
   prewarmAssistantMessages,
@@ -210,6 +211,7 @@ import {
   uploadWorkspaceTripBrief,
   removeWorkspaceTripBrief,
   uploadWorkspaceTripSignature,
+  setWorkspaceTripOriginalSignature,
   updateWorkspaceNotificationPreferences,
   toggleWorkspaceTaskChecklistItem,
   uploadWorkspaceAttachment,
@@ -1569,14 +1571,23 @@ export function App() {
     runTripMutation((token) => removeWorkspaceTripBrief(token, requestId));
   const handleTripSignature = (requestId: string, signature: Blob) =>
     runTripMutation((token) => uploadWorkspaceTripSignature(token, requestId, signature));
+  const handleTripOriginalSignature = (requestId: string, confirmed: boolean) =>
+    runTripMutation((token) => setWorkspaceTripOriginalSignature(token, requestId, confirmed));
+  const handleTripBriefOfficePreview = (
+    requestId: string, sheet: number, offset: number, signal?: AbortSignal,
+  ) => {
+    if (!session) return Promise.reject(new Error("Сеанс завершён"));
+    return loadWorkspaceTripBriefOfficePreview(session.accessToken, requestId, sheet, offset, signal);
+  };
   const handleTripDocument = async (
     requestId: string, kind: "attachment" | "brief" | "order" | "order-preview",
+    signal?: AbortSignal,
   ): Promise<Blob | undefined> => {
     if (session === undefined) return undefined;
     try {
-      return await downloadWorkspaceTripDocument(session.accessToken, requestId, kind);
+      return await downloadWorkspaceTripDocument(session.accessToken, requestId, kind, signal);
     } catch (error) {
-      reportError(error);
+      if (!signal?.aborted) reportError(error);
       return undefined;
     }
   };
@@ -2462,6 +2473,8 @@ export function App() {
                 onUploadBrief={handleTripBriefUpload}
                 onRemoveBrief={handleTripBriefRemoval}
                 onUploadSignature={handleTripSignature}
+                onSetOriginalSignature={handleTripOriginalSignature}
+                onLoadBriefOffice={handleTripBriefOfficePreview}
                 onDownloadDocument={handleTripDocument}
                 onOpenChat={(chatId) => void handleOpenContextChat(chatId)}
                 renderTripChat={(request) => request.chatId

@@ -1971,6 +1971,9 @@ export interface TripRequest {
   readonly briefText?: string;
   readonly expenseSource?: string;
   readonly briefAttachmentName?: string | null;
+  readonly briefAttachmentType?: string | null;
+  readonly briefAttachmentSize?: number | null;
+  readonly originalSignatureConfirmed?: boolean;
   readonly hasEmployeeSignature?: boolean;
   readonly hasSignedBrief?: boolean;
   readonly orderNumber?: string | null;
