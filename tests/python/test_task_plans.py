@@ -16,6 +16,7 @@ from yuksalish_api.tables import (
     audit_events,
     chat_members,
     chats,
+    task_checklist_items,
     task_efficiency_events,
     task_participants,
     task_plans,
@@ -350,6 +351,72 @@ async def test_import_confirm_accepts_large_weekly_plan_without_duplicates() -> 
                 assert len((await connection.execute(select(tasks.c.id).where(
                     tasks.c.id.in_(UUID(task_id) for task_id in created.task_ids),
                 ))).all()) == 150
+            finally:
+                await transaction.rollback()
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.anyio
+@pytest.mark.postgres
+async def test_annual_import_maps_content_and_excludes_historical_tasks() -> None:
+    database_url = os.environ.get("YUKSALISH_TEST_DATABASE_URL")
+    if not database_url:
+        pytest.skip("YUKSALISH_TEST_DATABASE_URL is not configured")
+    engine = create_async_engine(database_url)
+    author_id, responsible_id, executor_id = uuid4(), uuid4(), uuid4()
+    try:
+        async with engine.connect() as connection:
+            transaction = await connection.begin()
+            try:
+                for user_id, role in ((author_id, "manager"), (responsible_id, "employee"),
+                                      (executor_id, "employee")):
+                    await connection.execute(insert(users).values(
+                        id=user_id, username=f"annual-plan-{user_id.hex[:12]}",
+                        full_name="Test User", role=role, status="active",
+                        created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
+                    ))
+                payload = TaskPlanImportConfirm.model_validate({
+                    "operationId": str(uuid4()), "annualWorkPlan": True,
+                    "plan": {"title": "Иш режа 2026", "ownerUserId": str(author_id)},
+                    "items": [{
+                        "title": "Тадбирни ташкил этиш", "source": "DOCX, таблица 1, строка 3",
+                        "mode": "create", "assigneeId": str(responsible_id),
+                        "coAssigneeIds": [str(executor_id)],
+                        "dueAt": "2026-03-31T13:00:00Z", "description": "Тадбир ўтказилди",
+                        "checklist": ["Режа тузиш", "Учрашув"], "historicalCompleted": True,
+                    }],
+                })
+                user = actor(author_id, "manager")
+                created = await confirm_import(connection, user, payload)
+                task_id = UUID(created.task_ids[0])
+                task = (await connection.execute(select(tasks).where(
+                    tasks.c.id == task_id,
+                ))).mappings().one()
+                assert task["title"] == "Тадбирни ташкил этиш"
+                assert task["description"] == "Тадбир ўтказилди"
+                assert task["status"] == "completed"
+                assert task["primary_assignee_user_id"] == responsible_id
+                assert (await connection.execute(select(task_participants.c.user_id).where(
+                    task_participants.c.task_id == task_id,
+                ))).scalar_one() == executor_id
+                steps = (await connection.execute(select(task_checklist_items).where(
+                    task_checklist_items.c.task_id == task_id,
+                ).order_by(task_checklist_items.c.sort_order))).mappings().all()
+                assert [step["title"] for step in steps] == ["Режа тузиш", "Учрашув"]
+                assert all(step["is_completed"] for step in steps)
+                events = (await connection.execute(select(task_efficiency_events).where(
+                    task_efficiency_events.c.task_id == task_id,
+                ))).mappings().all()
+                assert {event["event_type"] for event in events} == {
+                    "task_created", "efficiency_excluded", "task_completed",
+                }
+                event_times = {event["event_type"]: event["occurred_at"] for event in events}
+                assert (event_times["task_created"] < event_times["efficiency_excluded"]
+                        < event_times["task_completed"])
+                assert (await confirm_import(connection, user, payload)).task_ids == (
+                    created.task_ids
+                )
             finally:
                 await transaction.rollback()
     finally:

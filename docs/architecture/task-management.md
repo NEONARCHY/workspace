@@ -41,6 +41,19 @@ desktop matches names only when exactly one active employee fits; unresolved nam
 and dates remain editable and are not silently assigned to the importer. Nothing
 is created until the reviewed plan is confirmed.
 
+The 2026 annual `Иш режа` table has a dedicated seven-column import path.
+`Тадбирнинг номи` becomes the task title, `Муддати` the reviewed deadline,
+`Амалга ошириш механизми` the ordered checklist, `Масъул` the primary assignee,
+`Бажарувчи` the co-assignees, and `Бажарилган ишлар` the description/expected
+result. Section headers are context, not tasks. The source file is read for preview
+and is not stored. Ambiguous names, department labels, recurring or moved deadlines
+require review; no person or exact date is fabricated. A green completed-work cell
+with an unambiguous past deadline proposes historical completion, which the importer
+can uncheck before the atomic confirmation. Past-due imported annual tasks receive
+an audited efficiency exclusion so retrospective entries do not change employee
+scores; future-due entries remain in the normal methodology. This uses existing
+task, checklist, event and audit tables and requires no migration.
+
 Plans have an explicitly selected owner («постановщик»), defaulting to the creator
 for manual creation and document import. The creator remains immutable for audit.
 Only an active employee may be selected. The owner, creator, or administrator may

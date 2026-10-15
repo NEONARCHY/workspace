@@ -1684,11 +1684,21 @@ export interface TaskPlanImportRow {
   readonly coexecutorsHint?: string | null;
   readonly groupKey?: string | null;
   readonly dueDateHint?: string | null;
+  readonly deadlineText?: string | null;
+  readonly mechanismItems?: readonly string[];
+  readonly completedWorkText?: string | null;
+  readonly originalTitle?: string | null;
+  readonly responsibleText?: string | null;
+  readonly executorsText?: string | null;
+  readonly section?: string | null;
+  readonly greenCompletion?: boolean;
+  readonly deadlineNeedsReview?: boolean;
 }
 
 export interface TaskPlanImportPreview {
   readonly suggestedTitle: string;
   readonly rows: readonly TaskPlanImportRow[];
+  readonly annualWorkPlan?: boolean;
 }
 
 export interface TaskPlanImportItem {
@@ -1699,12 +1709,16 @@ export interface TaskPlanImportItem {
   readonly coAssigneeIds?: readonly string[];
   readonly dueAt?: string | null;
   readonly taskId?: string | null;
+  readonly description?: string;
+  readonly checklist?: readonly string[];
+  readonly historicalCompleted?: boolean;
 }
 
 export interface TaskPlanImportConfirm {
   readonly operationId: string;
   readonly plan: TaskPlanWrite;
   readonly items: readonly TaskPlanImportItem[];
+  readonly annualWorkPlan?: boolean;
 }
 
 export type EfficiencyHistoryCompleteness = "complete" | "partial" | "unavailable";

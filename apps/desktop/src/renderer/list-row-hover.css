@@ -1,25 +1,29 @@
 /* Attention rows must remain distinct before hover, in either theme. */
-body .app-provider .team-dash-attention .team-dash-task {
-  --attention-row-surface: color-mix(in srgb, var(--ws-link) 11%, var(--ws-surface));
-  --attention-row-line: color-mix(in srgb, var(--ws-link) 28%, var(--ws-line));
-  background: var(--attention-row-surface);
-  border: 1px solid var(--attention-row-line);
+body .app-provider .team-dash-attention .team-dash-attention-list > .team-dash-task {
+  --attention-row-surface: color-mix(in srgb, var(--ws-link) 4%, var(--ws-muted-surface));
+  --attention-row-line: var(--ws-line);
+  --attention-row-fill: var(--attention-row-surface);
+  --attention-row-edge: linear-gradient(var(--attention-row-line), var(--attention-row-line));
+  background: linear-gradient(var(--attention-row-fill), var(--attention-row-fill)) padding-box,
+    var(--attention-row-sheen, linear-gradient(transparent, transparent)) top center / 80% 1px no-repeat border-box,
+    var(--attention-row-edge) border-box;
+  border: 1px solid transparent;
 }
-html[data-color-theme="dark"] body .app-provider .team-dash-attention .team-dash-task {
-  --attention-row-surface: color-mix(in srgb, var(--ws-surface-raised) 92%, var(--ws-text));
-  --attention-row-line: color-mix(in srgb, var(--ws-muted) 30%, var(--ws-line));
+html[data-color-theme="dark"] body .app-provider .team-dash-attention .team-dash-attention-list > .team-dash-task {
+  --attention-row-surface: var(--ws-surface-raised);
+  --attention-row-edge: var(--ws-satin-edge);
+  --attention-row-sheen: var(--ws-satin-sheen);
 }
 body .app-provider .team-dash-attention .team-dash-task :is(.team-dash-task-copy small, .team-dash-task-person) {
-  color: color-mix(in srgb, var(--ws-text) 84%, var(--attention-row-surface));
+  color: var(--ws-muted);
 }
-body .app-provider .team-dash-attention .team-dash-task:is(:hover, :focus-visible) {
-  background: color-mix(in srgb, var(--ws-link) 8%, var(--attention-row-surface));
-  border-color: var(--ws-link);
+body .app-provider .team-dash-attention .team-dash-attention-list > .team-dash-task:is(:hover, :focus-visible) {
+  --attention-row-fill: color-mix(in srgb, var(--ws-link) 4%, var(--attention-row-surface));
 }
 @media (forced-colors: active) {
-  body .app-provider .team-dash-attention .team-dash-task { background: Canvas; border-color: ButtonText; }
+  body .app-provider .team-dash-attention .team-dash-attention-list > .team-dash-task { background: Canvas; border-color: ButtonText; }
   body .app-provider .team-dash-attention .team-dash-task :is(.team-dash-task-copy small, .team-dash-task-person) { color: CanvasText; }
-  body .app-provider .team-dash-attention .team-dash-task:is(:hover, :focus-visible) { background: Canvas; border-color: Highlight; }
+  body .app-provider .team-dash-attention .team-dash-attention-list > .team-dash-task:is(:hover, :focus-visible) { background: Canvas; border-color: Highlight; }
 }
 
 /* A short, reversible left-to-right wash. Only this decorative layer moves. */
