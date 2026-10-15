@@ -1,5 +1,7 @@
 """Read-only extraction of plan candidates and reviewable table-cell hints."""
 
+from __future__ import annotations
+
 import re
 from calendar import monthrange
 from collections.abc import Iterator
@@ -7,8 +9,7 @@ from dataclasses import dataclass
 from datetime import date
 from io import BytesIO
 from pathlib import PurePath
-from typing import Protocol
-from xml.etree.ElementTree import Element
+from typing import TYPE_CHECKING, Protocol
 from zipfile import ZipFile
 
 import openpyxl  # type: ignore[import-untyped]
@@ -17,6 +18,10 @@ from pypdf import PdfReader
 
 from .project_import_documents import checked_zip, document_type
 from .task_plan_schemas import MAX_PLAN_IMPORT_ITEMS, TaskPlanImportPreview, TaskPlanImportRow
+
+if TYPE_CHECKING:
+    # Type only: document bytes are parsed exclusively by defusedxml below.
+    from xml.etree.ElementTree import Element  # nosec B405
 
 MAX_PLAN_BYTES = 10 * 1024 * 1024
 MAX_ROWS = MAX_PLAN_IMPORT_ITEMS
@@ -79,7 +84,7 @@ class _XmlNode(Protocol):
     tag: str
     text: str | None
 
-    def iter(self, tag: str | None = None) -> Iterator["_XmlNode"]: ...
+    def iter(self, tag: str | None = None) -> Iterator[_XmlNode]: ...
 
 
 def _docx_paragraph_text(paragraph: _XmlNode, ns: str) -> str:
