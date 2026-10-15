@@ -58,7 +58,7 @@ import {
 } from "@fluentui/react-components";
 import {
   Alert24Regular,
-  ApprovalsApp24Regular,
+  Airplane24Regular,
   Board24Regular,
   Home24Regular,
   CalendarLtr24Regular,
@@ -352,8 +352,8 @@ const navItems: readonly NavItem[] = [
   { key: "project_funding", label: "Проектные заявки", icon: <DocumentBulletList24Regular /> },
   {
     key: "trip_approvals",
-    label: "Согласование поездок",
-    icon: <ApprovalsApp24Regular />,
+    label: "Поездки",
+    icon: <Airplane24Regular />,
   },
   {
     key: "messenger",
