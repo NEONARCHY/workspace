@@ -839,6 +839,8 @@ trip_requests = sa.Table(
     sa.Column("id", uuid_type, primary_key=True),
     sa.Column("requester_user_id", uuid_type),
     sa.Column("workflow_version", sa.Integer()),
+    sa.Column("deputy_approver_user_id", uuid_type),
+    sa.Column("deleted_at", sa.DateTime(timezone=True)),
     sa.Column("purpose", sa.Text()),
     sa.Column("destination", sa.String(240)),
     sa.Column("start_date", sa.Date()),

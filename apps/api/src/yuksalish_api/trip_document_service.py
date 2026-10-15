@@ -23,7 +23,7 @@ from .errors import WorkspaceRepositoryError as Error
 from .hr_hiring_pdf import application_pdf, validate_signature
 from .hr_hiring_tables import hiring_signatures
 from .object_storage import ObjectStorage
-from .repository import _trip_deputy_user_id
+from .repository import _trip_deputy_user_id, _trip_directory_deputy_id
 from .tables import (
     hr_settings,
     trip_order_counters,
@@ -94,7 +94,9 @@ def validate_attachment(content: bytes, file_name: str) -> str:
 async def _row(
     connection: AsyncConnection, request_id: UUID, *, lock: bool = False,
 ) -> RowMapping:
-    query = select(trip_requests).where(trip_requests.c.id == request_id)
+    query = select(trip_requests).where(
+        trip_requests.c.id == request_id, trip_requests.c.deleted_at.is_(None),
+    )
     if lock:
         query = query.with_for_update()
     row = (await connection.execute(query)).mappings().first()
@@ -103,8 +105,12 @@ async def _row(
     return row
 
 
-def _require_editable(row: RowMapping, user: AuthenticatedUser) -> None:
-    if row["requester_user_id"] != user.id or row["workflow_version"] < 2:
+def _require_editable(
+    row: RowMapping, user: AuthenticatedUser, *, allow_superadmin: bool = False,
+) -> None:
+    if (row["requester_user_id"] != user.id and not (
+        allow_superadmin and user.role == "superadmin"
+    )) or row["workflow_version"] < 2:
         raise Error(403, "Изменить билдирги может только инициатор")
     if row["stage"] != "launch" or row["status"] not in _EDITABLE:
         raise Error(409, "После отправки билдирги изменить нельзя")
@@ -115,7 +121,7 @@ async def put_attachment(
     request_id: UUID, file_name: str, content: bytes,
 ) -> None:
     row = await _row(connection, request_id, lock=True)
-    _require_editable(row, user)
+    _require_editable(row, user, allow_superadmin=True)
     safe_name = _safe_name(file_name)
     media_type = await run_in_threadpool(validate_attachment, content, safe_name)
     key = f"trip-requests/{request_id}/sources/{uuid4()}"
@@ -139,7 +145,7 @@ async def remove_attachment(
     connection: AsyncConnection, user: AuthenticatedUser, request_id: UUID,
 ) -> None:
     row = await _row(connection, request_id, lock=True)
-    _require_editable(row, user)
+    _require_editable(row, user, allow_superadmin=True)
     await connection.execute(update(trip_requests).where(trip_requests.c.id == request_id).values(
         brief_attachment_key=None,
         brief_attachment_name=None,
@@ -360,16 +366,19 @@ async def read_document(
     chair_id = await connection.scalar(select(hr_settings.c.chair_user_id).where(
         hr_settings.c.id == 1,
     ))
-    deputy_id = await _trip_deputy_user_id(connection) if row.get("workflow_version") == 3 else None
+    deputy_id = (
+        row.get("deputy_approver_user_id") or await _trip_directory_deputy_id(connection)
+    ) if row.get("workflow_version") == 3 and row["stage"] != "launch" else None
     participants = (await connection.execute(select(trip_request_employees.c.user_id).where(
         trip_request_employees.c.request_id == request_id,
     ))).scalars().all()
     if (
-        user.id != row["requester_user_id"]
+        user.role != "superadmin"
+        and user.id != row["requester_user_id"]
         and not (user.id == chair_id and row["stage"] != "launch")
         and not (row.get("workflow_version") == 3 and user.id == deputy_id
                  and row["stage"] != "launch")
-        and not (row["status"] == "approved" and user.id in participants)
+        and not (row["status"] in {"approved", "annulled"} and user.id in participants)
     ):
         raise Error(404, "Документ поездки не найден")
     if kind == "order-preview":

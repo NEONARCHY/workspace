@@ -614,3 +614,19 @@
   .ws2-segmented button.active { color: CanvasText; }
   .projects-view .project-card.selected { outline: 2px solid Highlight; }
 }
+.trip-delete-confirm {
+  margin-block: 12px;
+  padding: 14px;
+  border: 1px solid var(--ws-border, #d5e0e4);
+  border-radius: 12px;
+  background: var(--ws-surface-subtle, #f4f8f8);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.trip-delete-confirm p {
+  flex-basis: 100%;
+  margin: 0 0 4px;
+}

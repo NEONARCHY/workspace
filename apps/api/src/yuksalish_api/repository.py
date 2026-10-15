@@ -190,6 +190,7 @@ TRIP_STATUS_LABELS = {
     "needs_revision": "На доработке",  # noqa: RUF001 - Russian UI label.
     "approved": "Утверждено",
     "rejected": "Отклонено",
+    "annulled": "Аннулировано",
 }
 
 Record = Mapping[str, Any] | RowMapping
@@ -691,8 +692,8 @@ def _trip_action(row: Record) -> TripActionHistoryResponse:
     )
 
 
-async def _trip_deputy_user_id(connection: AsyncConnection) -> UUID | None:
-    """Resolve the sole active first deputy by the active directory position."""
+async def _trip_directory_deputy_id(connection: AsyncConnection) -> UUID | None:
+    """Resolve the original first-deputy position for trips predating route pinning."""
     candidate_ids = (await connection.execute(
         select(users.c.id).join(positions, users.c.position_id == positions.c.id).where(
             users.c.status == "active", positions.c.is_active.is_(True),
@@ -702,28 +703,88 @@ async def _trip_deputy_user_id(connection: AsyncConnection) -> UUID | None:
     return candidate_ids[0] if len(candidate_ids) == 1 else None
 
 
+async def _trip_deputy_user_id(connection: AsyncConnection) -> UUID | None:
+    """Resolve the published trip approver, falling back to the directory position."""
+    config = await connection.scalar(
+        select(approval_nodes.c.config)
+        .join(approval_templates, approval_templates.c.id == approval_nodes.c.template_id)
+        .where(
+            approval_templates.c.template_key == "trip",
+            approval_templates.c.status == "published",
+            approval_nodes.c.node_key == "deputy_approval",
+            approval_nodes.c.kind == "approval",
+        )
+        .order_by(approval_templates.c.version.desc())
+        .limit(1)
+    ) or {}
+    if config.get("approverUserId"):
+        try:
+            approver_id = UUID(str(config["approverUserId"]))
+        except ValueError:
+            return None
+        return await connection.scalar(select(users.c.id).where(
+            users.c.id == approver_id, users.c.status == "active",
+        ))
+    position_id = config.get("approverPositionId")
+    if position_id:
+        try:
+            configured_position_id = UUID(str(position_id))
+        except ValueError:
+            return None
+        candidate_ids = (await connection.execute(
+            select(users.c.id).join(positions, users.c.position_id == positions.c.id).where(
+                users.c.status == "active", positions.c.is_active.is_(True),
+                positions.c.id == configured_position_id,
+            ).limit(2)
+        )).scalars().all()
+        return candidate_ids[0] if len(candidate_ids) == 1 else None
+    return await _trip_directory_deputy_id(connection)
+
+
+def _trip_row_deputy_id(
+    row: Record, configured_id: UUID | None, legacy_id: UUID | None = None,
+) -> UUID | None:
+    if row.get("deputy_approver_user_id"):
+        return cast(UUID, row["deputy_approver_user_id"])
+    if row.get("workflow_version") == 3 and row.get("stage") != "launch":
+        return legacy_id
+    return configured_id
+
+
+def _can_manage_trip(row: Record, current_user: AuthenticatedUser) -> bool:
+    return current_user.role == "superadmin" or row["requester_user_id"] == current_user.id
+
+
 def _trip_allowed_actions(
     row: Record, current_user: AuthenticatedUser, chair_user_id: UUID | None = None,
     deputy_user_id: UUID | None = None,
 ) -> list[TripAction]:
     stage = row["stage"]
     status = row["status"]
+    if status == "annulled":
+        return []
+    if status == "approved":
+        return ["annul"] if _can_manage_trip(row, current_user) else []
+    management_actions: list[TripAction] = (
+        ["withdraw"] if status == "running" and row["workflow_version"] >= 2
+        and _can_manage_trip(row, current_user) else []
+    )
     if stage == "launch" and row["requester_user_id"] == current_user.id:
         return ["resubmit"] if status == "needs_revision" else ["submit"]
     if stage == "deputy_approval" and row["workflow_version"] == 3 and (
-        current_user.id == deputy_user_id
+        current_user.id == (row.get("deputy_approver_user_id") or deputy_user_id)
     ):
-        return ["approve", "return", "reject"]
+        return ["approve", "return", "reject", *management_actions]
     if stage == "manager_approval" and (
         (row["workflow_version"] >= 2 and current_user.id == chair_user_id)
         or (row["workflow_version"] == 1 and _is_privileged(current_user))
     ):
-        return ["approve", "return", "reject"]
+        return ["approve", "return", "reject", *management_actions]
     if stage == "hr" and row["workflow_version"] == 1 and current_user.role in {
         "admin", "superadmin",
     }:
         return ["approve", "return", "reject"]
-    return []
+    return management_actions
 
 
 def _trip_request(
@@ -758,16 +819,17 @@ def _trip_request(
         has_order_pdf=bool(row["order_pdf_key"]),
         stage=row["stage"],
         stage_label=(
-            "Утверждение руководителем"
+            "Аннулировано" if row["status"] == "annulled"
+            else "Утверждение руководителем"
             if row["workflow_version"] == 1 and row["stage"] == "manager_approval"
             else TRIP_STAGE_LABELS[row["stage"]]
         ),
         status=row["status"],
         status_label=TRIP_STATUS_LABELS[row["status"]],
-        can_edit=(
-            row["requester_user_id"] == current_user.id
-            and row["status"] in {"draft", "needs_revision"}
-        ),
+        can_edit=_can_manage_trip(row, current_user) and row["stage"] == "launch"
+        and row["status"] in {"draft", "needs_revision"},
+        can_delete=_can_manage_trip(row, current_user) and row["stage"] == "launch"
+        and row["status"] in {"draft", "needs_revision"},
         allowed_actions=_trip_allowed_actions(row, current_user, chair_user_id, deputy_user_id),
         chat_id=str(chat_id) if chat_id else None,
         actions=list(actions),
@@ -1789,6 +1851,7 @@ async def _sync_notifications_for_user(
         select(hr_settings.c.chair_user_id).where(hr_settings.c.id == 1)
     ) if trip_rows else None
     trip_deputy_user_id = await _trip_deputy_user_id(connection) if trip_rows else None
+    legacy_trip_deputy_id = await _trip_directory_deputy_id(connection) if trip_rows else None
     accessible_chat_ids = select(chat_members.c.chat_id).where(
         chat_members.c.user_id == current_user.id
     )
@@ -1896,9 +1959,10 @@ async def _sync_notifications_for_user(
 
     for trip_row in trip_rows:
         allowed_actions = _trip_allowed_actions(
-            trip_row, current_user, trip_chair_user_id, trip_deputy_user_id,
+            trip_row, current_user, trip_chair_user_id,
+            _trip_row_deputy_id(trip_row, trip_deputy_user_id, legacy_trip_deputy_id),
         )
-        if not allowed_actions:
+        if not any(action not in {"withdraw", "annul"} for action in allowed_actions):
             continue
         event_key = (
             f"trip:{trip_row['id']}:{trip_row['stage']}:{trip_row['updated_at'].isoformat()}"
@@ -2747,7 +2811,10 @@ async def load_workspace(
         select(hr_settings.c.chair_user_id).where(hr_settings.c.id == 1)
     )
     trip_deputy_user_id = await _trip_deputy_user_id(connection)
-    trip_statement = select(trip_requests).order_by(trip_requests.c.updated_at.desc())
+    legacy_trip_deputy_id = await _trip_directory_deputy_id(connection)
+    trip_statement = select(trip_requests).where(
+        trip_requests.c.deleted_at.is_(None)
+    ).order_by(trip_requests.c.updated_at.desc())
     if current_user.role == "employee":
         participating_trip_ids = select(trip_request_employees.c.request_id).where(
             trip_request_employees.c.user_id == current_user.id
@@ -2761,11 +2828,16 @@ async def load_workspace(
                 (trip_requests.c.workflow_version >= 2)
                 & (trip_requests.c.stage != "launch")
             )
-        if current_user.id == trip_deputy_user_id:
+        if current_user.id == legacy_trip_deputy_id:
             visible_trips = visible_trips | (
                 (trip_requests.c.workflow_version == 3)
                 & (trip_requests.c.stage != "launch")
+                & (trip_requests.c.deputy_approver_user_id.is_(None))
             )
+        visible_trips = visible_trips | (
+            (trip_requests.c.deputy_approver_user_id == current_user.id)
+            & (trip_requests.c.stage != "launch")
+        )
         trip_statement = trip_statement.where(visible_trips)
     trip_rows = (await connection.execute(trip_statement)).mappings().all()
     trip_employee_ids, trip_actions = await _trip_detail_maps(
@@ -2958,7 +3030,7 @@ async def load_workspace(
                 trip_actions.get(row["id"], []),
                 trip_chat_ids.get(row["id"]),
                 trip_chair_user_id,
-                trip_deputy_user_id,
+                _trip_row_deputy_id(row, trip_deputy_user_id, legacy_trip_deputy_id),
             )
             for row in trip_rows
         ]
@@ -5993,6 +6065,45 @@ async def publish_workflow(
             ],
         )
     )
+    if template["template_key"] == "trip":
+        route_nodes = {row["node_key"]: row for row in node_rows}
+        deputy_node = route_nodes.get("deputy_approval")
+        chair_node = route_nodes.get("manager_approval")
+        if deputy_node is None or deputy_node["kind"] != "approval" or (
+            chair_node is None or chair_node["kind"] != "approval"
+        ):
+            raise WorkspaceRepositoryError(
+                422, "Маршрут поездок должен содержать этапы заместителя и председателя",
+            )
+        deputy_config = deputy_node["config"] or {}
+        if deputy_config.get("approverUserId") and deputy_config.get("approverPositionId"):
+            raise WorkspaceRepositoryError(422, "Выберите сотрудника или должность, но не оба")  # noqa: RUF001
+        if deputy_config.get("approverUserId"):
+            try:
+                selected_user_id = UUID(str(deputy_config["approverUserId"]))
+            except ValueError as error:
+                raise WorkspaceRepositoryError(422, "Некорректный сотрудник маршрута") from error
+            active_user_id = await connection.scalar(select(users.c.id).where(
+                users.c.id == selected_user_id, users.c.status == "active",
+            ))
+            if active_user_id is None:
+                raise WorkspaceRepositoryError(422, "Согласующий сотрудник неактивен")
+        elif deputy_config.get("approverPositionId"):
+            try:
+                selected_position_id = UUID(str(deputy_config["approverPositionId"]))
+            except ValueError as error:
+                raise WorkspaceRepositoryError(422, "Некорректная должность маршрута") from error
+            active_holders = (await connection.execute(
+                select(users.c.id).join(positions, users.c.position_id == positions.c.id)
+                .where(
+                    users.c.status == "active", positions.c.is_active.is_(True),
+                    positions.c.id == selected_position_id,
+                ).limit(2)
+            )).scalars().all()
+            if len(active_holders) != 1:
+                raise WorkspaceRepositoryError(
+                    422, "Для должности согласующего нужен один активный сотрудник",
+                )
     now = datetime.now(UTC)
     await connection.execute(
         update(approval_templates)
@@ -7145,7 +7256,9 @@ async def _trip_response(
     request_id: UUID,
 ) -> TripRequestResponse:
     row = (
-        (await connection.execute(select(trip_requests).where(trip_requests.c.id == request_id)))
+        (await connection.execute(select(trip_requests).where(
+            trip_requests.c.id == request_id, trip_requests.c.deleted_at.is_(None),
+        )))
         .mappings()
         .first()
     )
@@ -7156,6 +7269,12 @@ async def _trip_response(
         hr_settings.c.id == 1,
     ))
     deputy_user_id = await _trip_deputy_user_id(connection)
+    legacy_deputy_id = (
+        await _trip_directory_deputy_id(connection)
+        if row["workflow_version"] == 3 and row["stage"] != "launch"
+        and not row.get("deputy_approver_user_id") else None
+    )
+    effective_deputy_id = _trip_row_deputy_id(row, deputy_user_id, legacy_deputy_id)
     if (
         current_user.role == "employee"
         and row["requester_user_id"] != current_user.id
@@ -7168,7 +7287,7 @@ async def _trip_response(
         and not (
             row["workflow_version"] == 3
             and row["stage"] != "launch"
-            and current_user.id == deputy_user_id
+            and current_user.id == effective_deputy_id
         )
     ):
         raise WorkspaceRepositoryError(404, "Trip request was not found")
@@ -7183,7 +7302,7 @@ async def _trip_response(
             chats.c.deleted_at.is_(None),
         )),
         chair_user_id,
-        deputy_user_id,
+        effective_deputy_id,
     )
 
 
@@ -7293,8 +7412,10 @@ async def update_trip_request(
     )
     if row is None:
         raise WorkspaceRepositoryError(404, "Trip request was not found")
-    if row["requester_user_id"] != current_user.id:
-        raise WorkspaceRepositoryError(403, "Only the requester can edit this trip")
+    if row.get("deleted_at") is not None:
+        raise WorkspaceRepositoryError(404, "Trip request was not found")
+    if not _can_manage_trip(row, current_user):
+        raise WorkspaceRepositoryError(403, "Only the requester or superadmin can edit this trip")
     if row["stage"] != "launch" or row["status"] not in {"draft", "needs_revision"}:
         raise WorkspaceRepositoryError(409, "Only a draft or returned trip can be edited")
     if row["workflow_version"] == 1 and not payload.purpose:
@@ -7347,6 +7468,38 @@ async def update_trip_request(
     return await _trip_response(connection, current_user, request_id)
 
 
+async def delete_trip_request(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    request_id: UUID,
+) -> None:
+    """Hide an editable trip and its managed chat; retain documents and decision history."""
+    row = (await connection.execute(select(trip_requests).where(
+        trip_requests.c.id == request_id,
+        trip_requests.c.deleted_at.is_(None),
+    ).with_for_update())).mappings().first()
+    if row is None:
+        raise WorkspaceRepositoryError(404, "Trip request was not found")
+    if not _can_manage_trip(row, current_user):
+        raise WorkspaceRepositoryError(403, "Only the requester or superadmin can delete this trip")
+    if row["stage"] != "launch" or row["status"] not in {"draft", "needs_revision"}:
+        raise WorkspaceRepositoryError(409, "Withdraw the trip before deleting it")
+    now = datetime.now(UTC)
+    await connection.execute(update(trip_requests).where(
+        trip_requests.c.id == request_id,
+    ).values(deleted_at=now, updated_at=now))
+    await connection.execute(update(chats).where(
+        chats.c.context_type == "trip",
+        chats.c.context_id == request_id,
+        chats.c.deleted_at.is_(None),
+    ).values(deleted_at=now, updated_at=now))
+    await connection.execute(insert(trip_request_actions).values(
+        id=uuid4(), request_id=request_id, actor_user_id=current_user.id,
+        from_stage=row["stage"], to_stage=row["stage"], action="deleted",
+        comment=None, created_at=now,
+    ))
+
+
 async def act_on_trip_request(
     connection: AsyncConnection,
     current_user: AuthenticatedUser,
@@ -7364,13 +7517,22 @@ async def act_on_trip_request(
     )
     if row is None:
         raise WorkspaceRepositoryError(404, "Trip request was not found")
+    if row.get("deleted_at") is not None:
+        raise WorkspaceRepositoryError(404, "Trip request was not found")
     chair_user_id = await connection.scalar(select(hr_settings.c.chair_user_id).where(
         hr_settings.c.id == 1,
     ))
     deputy_user_id = await _trip_deputy_user_id(connection)
+    legacy_deputy_id = (
+        await _trip_directory_deputy_id(connection)
+        if row["workflow_version"] == 3 and row["stage"] != "launch"
+        and not row.get("deputy_approver_user_id") else None
+    )
+    effective_deputy_id = _trip_row_deputy_id(row, deputy_user_id, legacy_deputy_id)
     if (
         row["workflow_version"] >= 2 and payload.action == "approve"
-        and row["stage"] == "approved" and row["order_pdf_key"]
+        and row["stage"] == "approved" and row["status"] == "approved"
+        and row["order_pdf_key"]
         and row["order_signer_user_id"] == current_user.id == chair_user_id
     ):
         # A repeated HTTP request must never allocate a second order number.
@@ -7416,20 +7578,26 @@ async def act_on_trip_request(
             )
         )
         return await _trip_response(connection, current_user, request_id)
-    allowed = _trip_allowed_actions(row, current_user, chair_user_id, deputy_user_id)
+    allowed = _trip_allowed_actions(row, current_user, chair_user_id, effective_deputy_id)
     if payload.action not in allowed:
         raise WorkspaceRepositoryError(403, "This trip action is not allowed for the user")
     comment = payload.comment.strip() or None
-    if payload.action in {"return", "reject"} and comment is None:
+    if payload.action in {"return", "reject", "annul"} and comment is None:
         raise WorkspaceRepositoryError(422, "A decision comment is required")
 
     from_stage = row["stage"]
-    if payload.action in {"submit", "resubmit"}:
+    if payload.action == "withdraw":
+        if row["order_pdf_key"]:
+            raise WorkspaceRepositoryError(409, "Подписанный приказ нельзя отозвать")
+        to_stage, status, finished_at = "launch", "needs_revision", None
+    elif payload.action == "annul":
+        to_stage, status, finished_at = "approved", "annulled", datetime.now(UTC)
+    elif payload.action in {"submit", "resubmit"}:
         if row["workflow_version"] >= 2 and not row["signed_brief_key"]:
             raise WorkspaceRepositoryError(409, "Сначала подпишите билдирги")
         if row["workflow_version"] == 3 and deputy_user_id is None:
             raise WorkspaceRepositoryError(
-                409, "В справочнике должен быть один активный первый заместитель председателя",  # noqa: RUF001
+                409, "Назначьте одного активного согласующего в опубликованном маршруте поездок",
             )
         if row["workflow_version"] == 3 and deputy_user_id == chair_user_id:
             raise WorkspaceRepositoryError(
@@ -7460,7 +7628,7 @@ async def act_on_trip_request(
         "stage": to_stage, "status": status, "updated_at": now,
         "finished_at": finished_at,
     }
-    if row["workflow_version"] >= 2 and payload.action == "return":
+    if row["workflow_version"] >= 2 and payload.action in {"return", "withdraw"}:
         changed.update(
             employee_signature_key=None,
             employee_signature_sha256=None,
@@ -7468,6 +7636,10 @@ async def act_on_trip_request(
             signed_brief_key=None,
             signed_brief_sha256=None,
         )
+    if row["workflow_version"] == 3 and payload.action in {"submit", "resubmit"}:
+        changed["deputy_approver_user_id"] = deputy_user_id
+    elif payload.action == "withdraw":
+        changed["deputy_approver_user_id"] = None
     await connection.execute(
         update(trip_requests)
         .where(trip_requests.c.id == request_id)
@@ -7485,13 +7657,13 @@ async def act_on_trip_request(
             created_at=now,
         )
     )
-    if row["workflow_version"] >= 2 and payload.action in {"approve", "reject"} and (
-        payload.action == "reject" or to_stage == "approved"
+    if row["workflow_version"] >= 2 and payload.action in {"approve", "reject", "annul"} and (
+        payload.action in {"reject", "annul"} or to_stage == "approved"
     ):
         # Action-needed notifications for submission and return are produced by
         # _sync_notifications_for_user; do not send a second copy here.
         recipient_ids = {row["requester_user_id"]}
-        if payload.action == "approve":
+        if payload.action in {"approve", "annul"}:
             participant_ids = (await connection.execute(
                 select(trip_request_employees.c.user_id).where(
                     trip_request_employees.c.request_id == request_id,
@@ -7499,8 +7671,9 @@ async def act_on_trip_request(
             )).scalars().all()
             recipient_ids.update(participant_ids)
             title, body = (
-                "Командировка утверждена",
-                f"{row['destination']} · приказ зарегистрирован и доступен в карточке.",
+                ("Командировка утверждена", f"{row['destination']} · приказ доступен в карточке.")
+                if payload.action == "approve" else
+                ("Приказ о командировке аннулирован", f"{row['destination']} · {comment}")  # noqa: RUF001
             )
         else:
             title, body = "Командировка отклонена", comment or ""

@@ -1959,15 +1959,15 @@ export interface ProjectHubOverview {
 }
 
 export type TripStage = "launch" | "deputy_approval" | "manager_approval" | "hr" | "approved" | "rejected";
-export type TripStatus = "draft" | "running" | "needs_revision" | "approved" | "rejected";
-export type TripAction = "submit" | "approve" | "return" | "reject" | "resubmit" | "move";
+export type TripStatus = "draft" | "running" | "needs_revision" | "approved" | "rejected" | "annulled";
+export type TripAction = "submit" | "approve" | "return" | "reject" | "resubmit" | "move" | "withdraw" | "annul";
 
 export interface TripActionHistory {
   readonly id: string;
   readonly actorUserId: string;
   readonly fromStage?: TripStage | null;
   readonly toStage: TripStage;
-  readonly action: "created" | TripAction;
+  readonly action: "created" | "deleted" | TripAction;
   readonly comment?: string | null;
   readonly createdAt: string;
 }
@@ -1998,6 +1998,7 @@ export interface TripRequest {
   readonly status: TripStatus;
   readonly statusLabel: string;
   readonly canEdit: boolean;
+  readonly canDelete?: boolean;
   readonly allowedActions: readonly TripAction[];
   readonly chatId?: string | null;
   readonly actions: readonly TripActionHistory[];
