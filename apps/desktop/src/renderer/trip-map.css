@@ -24,11 +24,12 @@
 .trip-map-stats { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 13px; }
 .trip-map-stats span { display: inline-flex; align-items: baseline; gap: 7px; padding: 8px 12px; color: var(--ws-muted); background: var(--ws-theme-surface, #fff); border: 1px solid var(--ws-line); border-radius: 11px; font-size: 12px; }
 .trip-map-stats strong { color: var(--ws-text); font-size: 19px; font-variant-numeric: tabular-nums; }
-.trip-map-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 320px); gap: 14px; align-items: stretch; }
-.trip-map-stage { position: relative; display: grid; min-width: 0; min-height: 480px; place-items: center; overflow: hidden; isolation: isolate; border: 1px solid var(--ws-line); border-radius: 20px; background: #e4f1f4; }
-.trip-map-svg { display: block; width: 100%; aspect-ratio: 2 / 1; min-height: 430px; max-height: 70vh; touch-action: none; cursor: grab; }
+.trip-map-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 320px); gap: 14px; align-items: start; }
+.trip-map-stage { position: relative; display: grid; min-width: 0; aspect-ratio: 2 / 1; place-items: center; overflow: hidden; isolation: isolate; border: 1px solid var(--ws-line); border-radius: 20px; background: #e4f1f4; }
+.trip-map-svg { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
 .trip-map-svg:active { cursor: grabbing; }
-.trip-map-ocean { fill: #e4f1f4; }
+.trip-map-svg:focus-visible { outline: 3px solid var(--ws-link); outline-offset: -4px; }
+.trip-map-ocean { fill: url(#trip-map-ocean-gradient); }
 .trip-map-grid-line { stroke: #c7dce2; stroke-width: .65; }
 .trip-map-land { fill: #f9fcfa; stroke: #afc9c8; stroke-width: .75; vector-effect: non-scaling-stroke; }
 .trip-map-pin { cursor: pointer; outline: none; }
@@ -37,18 +38,25 @@
 .trip-map-pin.active .trip-map-pin-halo { fill: rgb(0 145 168 / 35%); stroke: #293a55; stroke-width: 2; }
 .trip-map-pin:focus-visible .trip-map-pin-halo { stroke: #293a55; stroke-width: 3; }
 .trip-map-pin text { fill: #fff; font-weight: 750; pointer-events: none; }
+.trip-map-pin .trip-map-pin-label { fill: #293a55; stroke: #fff; paint-order: stroke fill; font-weight: 700; }
 .trip-map-controls { position: absolute; z-index: 2; top: 14px; left: 14px; display: flex; align-items: center; gap: 5px; padding: 5px; border: 1px solid var(--ws-line); border-radius: 13px; background: var(--ws-theme-surface, #fff); box-shadow: 0 8px 25px -19px rgb(41 58 85 / 60%); }
 .trip-map-controls .fui-Button { min-width: 32px; }
+.trip-map-zoom-level { min-width: 35px; padding: 0 4px; color: var(--ws-link); text-align: center; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .trip-map-hover-card { position: absolute; z-index: 2; right: 14px; bottom: 34px; display: grid; gap: 3px; width: min(310px, calc(100% - 28px)); padding: 13px 15px; color: var(--ws-text); background: var(--ws-theme-surface, #fff); border: 1px solid var(--ws-line); border-radius: 13px; box-shadow: 0 14px 36px -23px rgb(41 58 85 / 70%); pointer-events: none; }
 .trip-map-hover-card strong { font-size: 15px; }.trip-map-hover-card span { color: var(--ws-link); font-size: 12px; font-weight: 600; }.trip-map-hover-card small { color: var(--ws-muted); line-height: 1.4; }
+.trip-map-gesture-hint { position: absolute; left: 13px; bottom: 8px; max-width: calc(100% - 270px); color: #345562; font-size: 11px; line-height: 1.4; pointer-events: none; }
 .trip-map-attribution { position: absolute; right: 12px; bottom: 8px; color: #345562; font-size: 10px; }.trip-map-attribution a { color: #006779; }
 .trip-map-loading { color: var(--ws-muted); font-size: 13px; }
-.trip-map-sidebar { min-width: 0; max-height: min(70vh, 620px); min-height: 480px; padding: 17px; overflow-y: auto; border: 1px solid var(--ws-line); border-radius: 20px; background: var(--ws-theme-surface, #fff); }
+.trip-map-sidebar { min-width: 0; min-height: 240px; max-height: min(70vh, 620px); padding: 17px; overflow-y: auto; border: 1px solid var(--ws-line); border-radius: 20px; background: var(--ws-theme-surface, #fff); }
 .trip-map-sidebar h3 { margin: 0 0 5px; font-size: 18px; }.trip-map-sidebar p { margin: 0 0 14px; color: var(--ws-muted); font-size: 12px; line-height: 1.45; }
 .trip-map-location-list { display: grid; gap: 7px; }
 .trip-map-location-list > button, .trip-map-unresolved button { display: flex; justify-content: space-between; gap: 12px; width: 100%; padding: 10px 12px; color: var(--ws-text); background: var(--ws-theme-surface-soft, #f3f8f9); border: 1px solid var(--ws-line); border-radius: 10px; text-align: left; cursor: pointer; }
 .trip-map-location-list > button:hover, .trip-map-unresolved button:hover { border-color: var(--ws-turquoise); }
+.trip-map-location-list > button[aria-pressed="true"] { border-color: var(--ws-turquoise); color: var(--ws-link); background: var(--ws-selected); }
+.trip-map-location-list > button:focus-visible, .trip-map-unresolved button:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 2px; }
 .trip-map-location-list small { color: var(--ws-muted); white-space: nowrap; }
+.trip-map-places-heading { margin: 0 0 12px; }
+.trip-map-trip-list + .trip-map-places-heading { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--ws-line); }
 .trip-map-selected-heading { display: flex; justify-content: space-between; gap: 7px; margin-bottom: 16px; }
 .trip-map-selected-heading span { color: var(--ws-link); font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: .06em; }
 .trip-map-selected-heading h3 { margin: 4px 0 2px; }.trip-map-selected-heading p { margin: 0; }
@@ -66,8 +74,10 @@ html[data-color-theme="dark"] .trip-map-stage, html[data-color-theme="dark"] .tr
 html[data-color-theme="dark"] .trip-map-grid-line { stroke: #2d4248; }
 html[data-color-theme="dark"] .trip-map-land { fill: #2b3e42; stroke: #618283; }
 html[data-color-theme="dark"] .trip-map-attribution, html[data-color-theme="dark"] .trip-map-attribution a { color: #c4d7d9; }
+html[data-color-theme="dark"] .trip-map-gesture-hint { color: #c4d7d9; }
+html[data-color-theme="dark"] .trip-map-pin .trip-map-pin-label { fill: #fff; stroke: #18252c; }
 html[data-color-theme="dark"] .trip-map-pin-core { stroke: #1b1c22; }
 
-@media (max-width: 1000px) { .trip-map-layout { grid-template-columns: minmax(0, 1fr); }.trip-map-sidebar { min-height: 0; max-height: 360px; }.trip-map-stage { min-height: 330px; }.trip-map-svg { min-height: 280px; } }
-@media (max-width: 600px) { .trip-header-actions { justify-content: flex-start; }.trip-map-heading { flex-wrap: wrap; }.trip-map-heading > .fui-Button { margin-left: 0; }.trip-map-stage { min-height: 270px; }.trip-map-svg { min-height: 240px; }.trip-map-controls { top: 8px; left: 8px; }.trip-map-hover-card { bottom: 30px; }.trip-map-attribution { font-size: 9px; } }
-@media (forced-colors: active) { .trip-map-stage, .trip-map-sidebar, .trip-map-stats span, .trip-map-trip, .trip-map-unresolved { border: 1px solid CanvasText; }.trip-map-ocean { fill: Canvas; }.trip-map-land { fill: Canvas; stroke: CanvasText; }.trip-map-pin-core { fill: Highlight; stroke: HighlightText; }.trip-map-pin-halo { fill: Canvas; stroke: CanvasText; }.trip-map-pin text { fill: HighlightText; }.trip-map-grid-line { stroke: GrayText; } }
+@media (max-width: 1200px) { .trip-map-layout { grid-template-columns: minmax(0, 1fr); }.trip-map-sidebar { min-height: 0; max-height: 360px; } }
+@media (max-width: 600px) { .trip-header-actions { justify-content: flex-start; }.trip-map-heading { flex-wrap: wrap; }.trip-map-heading > .fui-Button { margin-left: 0; }.trip-map-controls { top: 8px; left: 8px; right: 8px; flex-wrap: wrap; width: fit-content; max-width: calc(100% - 16px); }.trip-map-controls .fui-Button { font-size: 11px; }.trip-map-gesture-hint { display: none; }.trip-map-hover-card { bottom: 30px; }.trip-map-attribution { font-size: 9px; } }
+@media (forced-colors: active) { .trip-map-stage, .trip-map-sidebar, .trip-map-stats span, .trip-map-trip, .trip-map-unresolved { border: 1px solid CanvasText; }.trip-map-ocean { fill: Canvas; }.trip-map-land { fill: Canvas; stroke: CanvasText; }.trip-map-pin-core { fill: Highlight; stroke: HighlightText; }.trip-map-pin-halo { fill: Canvas; stroke: CanvasText; }.trip-map-pin text { fill: HighlightText; }.trip-map-pin .trip-map-pin-label { fill: CanvasText; stroke: Canvas; }.trip-map-grid-line { stroke: GrayText; } }

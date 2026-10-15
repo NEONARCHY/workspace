@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { FluentProvider, webLightTheme } from "@fluentui/react-components";
 import type { TripRequest, WorkspacePerson } from "@yuksalish/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -58,5 +58,40 @@ describe("trip world map", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Карту не удалось загрузить");
     fireEvent.click(screen.getByRole("button", { name: "Повторить" }));
     expect(await screen.findByRole("group", { name: "Карта мира с отметками утверждённых поездок" })).toBeInTheDocument();
+  });
+
+  it("frames trip locations and zooms with the wheel, selected pin and keyboard", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({ path: "M0,0L5,0L5,5Z" }) })));
+    vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true })));
+    vi.stubGlobal("PointerEvent", MouseEvent);
+    render(<FluentProvider theme={webLightTheme}><TripWorldMap
+      requests={[base]} people={people} onOpenRequest={vi.fn()} onClose={vi.fn()} />
+    </FluentProvider>);
+    const map = await screen.findByRole("group", { name: "Карта мира с отметками утверждённых поездок" });
+    await waitFor(() => expect(map.getAttribute("viewBox")).not.toBe("0 0 1000 500"));
+    const initialWidth = Number(map.getAttribute("viewBox")!.split(" ")[2]);
+    vi.spyOn(map, "getBoundingClientRect").mockReturnValue({
+      left: 0, top: 0, width: 1000, height: 500, right: 1000, bottom: 500,
+      x: 0, y: 0, toJSON: () => ({}),
+    });
+    fireEvent.wheel(map, { deltaY: -100, clientX: 500, clientY: 250 });
+    expect(Number(map.getAttribute("viewBox")!.split(" ")[2])).toBeLessThan(initialWidth);
+    fireEvent.click(screen.getByRole("button", { name: /Ташкент: 1 поездка/ }));
+    expect(screen.getByRole("heading", { name: "Ташкент" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Ташкент: 1 поездка/ }));
+    expect(screen.getByLabelText("Масштаб 8.0")).toBeInTheDocument();
+    fireEvent.keyDown(map, { key: "Home" });
+    expect(map).toHaveAttribute("viewBox", "0 0 1000 500");
+    fireEvent.click(screen.getByRole("button", { name: "Все места" }));
+    expect(Number(map.getAttribute("viewBox")!.split(" ")[2])).toBeLessThan(1000);
+    const beforePan = Number(map.getAttribute("viewBox")!.split(" ")[0]);
+    map.setPointerCapture = vi.fn();
+    fireEvent.pointerDown(map, { pointerId: 1, pointerType: "mouse", button: 0, clientX: 500, clientY: 250 });
+    fireEvent.pointerMove(map, { pointerId: 1, pointerType: "mouse", clientX: 550, clientY: 250 });
+    fireEvent.pointerUp(map, { pointerId: 1 });
+    expect(Number(map.getAttribute("viewBox")!.split(" ")[0])).toBeLessThan(beforePan);
+    fireEvent.keyDown(map, { key: "Home" });
+    fireEvent.doubleClick(map, { clientX: 500, clientY: 250 });
+    expect(Number(map.getAttribute("viewBox")!.split(" ")[2])).toBeLessThan(1000);
   });
 });
