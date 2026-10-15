@@ -4,13 +4,13 @@ Run from the repository root with Python 3.11 and Pillow with WebP support.
 Only the existing server-approved catalog is downloaded; nothing loads from
 Google at runtime. The manifest records original hashes and local adaptations.
 """
+import json
+import re
+import sys
 from concurrent.futures import ThreadPoolExecutor
 from hashlib import sha256
 from io import BytesIO
-import json
 from pathlib import Path
-import re
-import sys
 from urllib.error import HTTPError
 from urllib.request import urlopen
 
@@ -52,7 +52,7 @@ def prepare(emoji: str) -> tuple[str, dict[str, object] | None]:
             times.append(elapsed)
             next_sample = elapsed + 40  # at most 25 fps, retaining the complete loop duration
         elapsed += duration
-    durations = [b - a for a, b in zip(times, times[1:] + [elapsed])]
+    durations = [b - a for a, b in zip(times, [*times[1:], elapsed], strict=True)]
     still_path = OUT / f"{code}-still.webp"
     animation_path = OUT / f"{code}.webp"
     frames[0].save(still_path, "WEBP", lossless=True, method=6)
