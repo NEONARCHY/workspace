@@ -10,13 +10,13 @@ import pytest
 from PIL import Image, ImageDraw
 from pypdf import PdfReader
 
-from yuksalish_api import trip_document_service
+from yuksalish_api import repository, trip_document_service
 from yuksalish_api.auth import AuthenticatedUser
 from yuksalish_api.errors import WorkspaceRepositoryError
-from yuksalish_api.repository import _trip_allowed_actions
+from yuksalish_api.repository import _trip_allowed_actions, act_on_trip_request
 from yuksalish_api.trip_document_service import validate_attachment
 from yuksalish_api.trip_order_pdf import brief_pdf, order_pdf
-from yuksalish_api.workspace_schemas import CreateTripRequest
+from yuksalish_api.workspace_schemas import CreateTripRequest, TripActionRequest
 
 
 def signature() -> bytes:
@@ -62,9 +62,60 @@ def test_employee_cover_and_chair_order_keep_separate_signatures() -> None:
     assert "original.pdf" in text_of(cover)
     assert "001-WS-сон а/ф" in text_of(issued)  # noqa: RUF001
     assert "Нукус" in text_of(issued) and "лойиҳа маблағлари" in text_of(issued)
+    assert "Б У Ю Р А М А Н" in text_of(issued)  # noqa: RUF001
+    assert "Асос: Testova Zeboнинг билдиргиси." in text_of(issued)  # noqa: RUF001
+    assert "Раис" in text_of(issued) and "Testov Rais" in text_of(issued)
     assert len(PdfReader(BytesIO(cover)).pages[0].images) == 2  # logo + employee mark
     assert len(PdfReader(BytesIO(preview)).pages[0].images) == 1  # logo, no chair mark
     assert len(PdfReader(BytesIO(issued)).pages[0].images) == 2  # logo + chair mark
+
+
+def test_new_trip_needs_deputy_then_chair_without_hr_access() -> None:
+    requester_id, deputy_id, chair_id = uuid4(), uuid4(), uuid4()
+    requester = AuthenticatedUser(requester_id, "requester", "Requester", None, None, "employee")
+    deputy = AuthenticatedUser(deputy_id, "deputy", "Deputy", None, None, "employee")
+    chair = AuthenticatedUser(chair_id, "chair", "Chair", None, None, "manager")
+    row = {"stage": "deputy_approval", "status": "running", "workflow_version": 3,
+           "requester_user_id": requester_id}
+    assert _trip_allowed_actions(row, deputy, chair_id, deputy_id) == [
+        "approve", "return", "reject",
+    ]
+    assert _trip_allowed_actions(row, chair, chair_id, deputy_id) == []
+    assert _trip_allowed_actions(row, requester, chair_id, deputy_id) == []
+    row["stage"] = "manager_approval"
+    assert _trip_allowed_actions(row, deputy, chair_id, deputy_id) == []
+    assert _trip_allowed_actions(row, chair, chair_id, deputy_id) == [
+        "approve", "return", "reject",
+    ]
+
+
+def test_deputy_approval_moves_to_chair_without_issuing_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request_id, requester_id, deputy_id, chair_id = (
+        uuid4(), uuid4(), uuid4(), uuid4()
+    )
+    row = {
+        "id": request_id, "requester_user_id": requester_id,
+        "workflow_version": 3, "stage": "deputy_approval", "status": "running",
+    }
+    connection = AsyncMock()
+    result_row = MagicMock()
+    result_row.mappings.return_value.first.return_value = row
+    connection.execute.return_value = result_row
+    connection.scalar.return_value = chair_id
+    monkeypatch.setattr(repository, "_trip_deputy_user_id", AsyncMock(return_value=deputy_id))
+    monkeypatch.setattr(repository, "_trip_response", AsyncMock(return_value="updated"))
+    deputy = AuthenticatedUser(deputy_id, "deputy", "Deputy", None, None, "employee")
+    result = asyncio.run(act_on_trip_request(
+        connection, deputy, request_id, TripActionRequest(action="approve"),
+    ))
+    assert result == "updated"
+    updated = connection.execute.await_args_list[1].args[0].compile().params
+    assert updated["stage"] == "manager_approval"
+    assert updated["status"] == "running"
+    assert updated["finished_at"] is None
+    assert connection.execute.await_count == 3  # locked row, update, audit
 
 
 def test_generated_text_is_not_interpreted_as_markup() -> None:
@@ -124,7 +175,7 @@ def test_employee_can_sign_brief_without_expense_source(
     user_id = uuid4()
     user = AuthenticatedUser(user_id, "requester", "Requester", None, None, "employee")
     monkeypatch.setattr(trip_document_service, "_row", AsyncMock(return_value={
-        "requester_user_id": user_id, "workflow_version": 2,
+        "requester_user_id": user_id, "workflow_version": 3,
         "stage": "launch", "status": "draft",
         "brief_text": "Сафарга рухсат сўрайман.", "brief_attachment_key": None,
         "expense_source": "",

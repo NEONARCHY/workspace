@@ -23,6 +23,7 @@ from .errors import WorkspaceRepositoryError as Error
 from .hr_hiring_pdf import application_pdf, validate_signature
 from .hr_hiring_tables import hiring_signatures
 from .object_storage import ObjectStorage
+from .repository import _trip_deputy_user_id
 from .tables import (
     hr_settings,
     trip_order_counters,
@@ -103,7 +104,7 @@ async def _row(
 
 
 def _require_editable(row: RowMapping, user: AuthenticatedUser) -> None:
-    if row["requester_user_id"] != user.id or row["workflow_version"] != 2:
+    if row["requester_user_id"] != user.id or row["workflow_version"] < 2:
         raise Error(403, "Изменить билдирги может только инициатор")
     if row["stage"] != "launch" or row["status"] not in _EDITABLE:
         raise Error(409, "После отправки билдирги изменить нельзя")
@@ -248,6 +249,10 @@ async def prepare_signed_brief(
             storage, row["employee_signature_key"], row["employee_signature_sha256"],
         )
     chair_id = await _appointed_chair(connection)
+    if row["workflow_version"] == 3:
+        deputy_id = await _trip_deputy_user_id(connection)
+        if deputy_id is None or deputy_id == chair_id:
+            raise Error(409, "Проверьте должность первого заместителя и председателя")
     names = await _people(connection, request_id)
     requester = await connection.scalar(select(users.c.full_name).where(users.c.id == user.id))
     chair = await connection.scalar(select(users.c.full_name).where(
@@ -296,7 +301,7 @@ async def issue_order(
     chair_id = await _appointed_chair(connection)
     if user.id != chair_id:
         raise Error(403, "Приказ может подписать только назначенный председатель")
-    if row["workflow_version"] != 2 or row["stage"] != "manager_approval":
+    if row["workflow_version"] < 2 or row["stage"] != "manager_approval":
         raise Error(409, "Поездка не ожидает приказа председателя")
     await _verified(storage, row["signed_brief_key"], row["signed_brief_sha256"])
     signer = (await connection.execute(select(hiring_signatures).where(
@@ -355,12 +360,15 @@ async def read_document(
     chair_id = await connection.scalar(select(hr_settings.c.chair_user_id).where(
         hr_settings.c.id == 1,
     ))
+    deputy_id = await _trip_deputy_user_id(connection) if row.get("workflow_version") == 3 else None
     participants = (await connection.execute(select(trip_request_employees.c.user_id).where(
         trip_request_employees.c.request_id == request_id,
     ))).scalars().all()
     if (
         user.id != row["requester_user_id"]
         and not (user.id == chair_id and row["stage"] != "launch")
+        and not (row.get("workflow_version") == 3 and user.id == deputy_id
+                 and row["stage"] != "launch")
         and not (row["status"] == "approved" and user.id in participants)
     ):
         raise Error(404, "Документ поездки не найден")

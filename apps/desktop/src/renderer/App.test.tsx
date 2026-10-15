@@ -912,6 +912,9 @@ function mockServer(
         number: "TR-00000002",
         requesterUserId: currentUser.id,
         ...payload,
+        workflowVersion: 3,
+        briefText: "Тестовая билдирги",
+        hasEmployeeSignature: true,
         stage: "launch",
         stageLabel: "Запуск",
         status: "draft",
@@ -931,8 +934,8 @@ function mockServer(
       const payload = JSON.parse(String(options.body)) as { action: string };
       const changed: TripRequest = {
         ...trip,
-        stage: payload.action === "submit" ? "manager_approval" : trip.stage,
-        stageLabel: payload.action === "submit" ? "Утверждение руководителем" : trip.stageLabel,
+        stage: payload.action === "submit" ? "deputy_approval" : trip.stage,
+        stageLabel: payload.action === "submit" ? "Согласование первого заместителя" : trip.stageLabel,
         status: payload.action === "submit" ? "running" : trip.status,
         statusLabel: payload.action === "submit" ? "На согласовании" : trip.statusLabel,
         canEdit: false,
@@ -2305,7 +2308,7 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.click(await form.findByRole("button", { name: "Сохранить" }));
     expect(await screen.findByRole("heading", { name: "Бухара" })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Отправить руководителю" }));
+    fireEvent.click(screen.getByRole("button", { name: "Отправить первому заместителю" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/trip-requests/trip-created/actions"),
       expect.objectContaining({ method: "POST" }),

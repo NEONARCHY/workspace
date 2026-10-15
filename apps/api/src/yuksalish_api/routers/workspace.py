@@ -1280,7 +1280,7 @@ async def post_trip_action(
             workflow_version = await connection.scalar(select(
                 trip_requests.c.workflow_version,
             ).where(trip_requests.c.id == request_id))
-            if workflow_version == 2:
+            if workflow_version is not None and workflow_version >= 2:
                 if payload.action in {"submit", "resubmit"}:
                     await prepare_signed_brief(
                         connection, current_user, _object_storage(request), request_id,

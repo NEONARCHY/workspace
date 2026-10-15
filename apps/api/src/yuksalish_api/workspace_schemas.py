@@ -1030,7 +1030,9 @@ class ChangeProjectStageRequest(ApiModel):
     comment: str = Field(default="", max_length=4000)
 
 
-TripStage = Literal["launch", "manager_approval", "hr", "approved", "rejected"]
+TripStage = Literal[
+    "launch", "deputy_approval", "manager_approval", "hr", "approved", "rejected",
+]
 TripStatus = Literal["draft", "running", "needs_revision", "approved", "rejected"]
 TripAction = Literal["submit", "approve", "return", "reject", "resubmit", "move"]
 

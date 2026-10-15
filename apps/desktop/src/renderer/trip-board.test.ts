@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
-import type { TripRequest, TripStage } from "@yuksalish/contracts";
-import { tripColumns, tripColumnTotal, tripDropAction } from "./trip-board";
+import type { TripRequest, TripStage, WorkflowDefinition } from "@yuksalish/contracts";
+import { currentTripWorkflow, tripColumns, tripColumnTotal, tripDropAction } from "./trip-board";
 
 describe("Trip board", () => {
-  it("uses the five exact Bitrix stages and colours in order", () => {
+  it("shows the deputy and chair route without a кадровая-служба column", () => {
     expect(tripColumns).toEqual([
       { key: "launch", label: "Запуск", color: "#72b9dc" },
-      { key: "manager_approval", label: "Утверждение руководителем", color: "#849fd0" },
-      { key: "hr", label: "Кадровая служба · прежний маршрут", color: "#50bec8" },
+      { key: "deputy_approval", label: "Согласование первого заместителя", color: "#50bec8" },
+      { key: "manager_approval", label: "Утверждение председателем", color: "#849fd0" },
       { key: "approved", label: "Утверждено", color: "#62bd72" },
       { key: "rejected", label: "Отклонено", color: "#d97878" },
     ]);
@@ -15,7 +15,8 @@ describe("Trip board", () => {
   it("proposes only adjacent forward actions, return and rejection; never revives a final stage", () => {
     const allowed: Record<TripStage, Partial<Record<TripStage, string>>> = {
       launch: { manager_approval: "submit" },
-      manager_approval: { hr: "approve", launch: "return", rejected: "reject" },
+      deputy_approval: {},
+      manager_approval: { launch: "return", rejected: "reject" },
       hr: { approved: "approve", launch: "return", rejected: "reject" },
       approved: {}, rejected: {},
     };
@@ -32,8 +33,37 @@ describe("Trip board", () => {
     const request = { workflowVersion: 2, stage: "manager_approval" as const,
       status: "running" as const, allowedActions: ["approve" as const] };
     expect(tripDropAction(request, "approved")).toBe("approve");
-    expect(tripDropAction(request, "hr")).toBeUndefined();
+    expect(tripDropAction(request, "deputy_approval")).toBeUndefined();
     expect(tripDropAction(request, "approved", true)).toBe("approve");
+  });
+  it("requires the first deputy before the chair for v3 trips", () => {
+    const launch = { workflowVersion: 3, stage: "launch" as const,
+      status: "draft" as const, allowedActions: ["submit" as const] };
+    expect(tripDropAction(launch, "deputy_approval")).toBe("submit");
+    expect(tripDropAction(launch, "manager_approval")).toBeUndefined();
+    const deputy = { ...launch, stage: "deputy_approval" as const,
+      allowedActions: ["approve" as const] };
+    expect(tripDropAction(deputy, "manager_approval")).toBe("approve");
+    expect(tripDropAction(deputy, "approved")).toBeUndefined();
+    expect(tripDropAction(deputy, "manager_approval", true)).toBe("approve");
+  });
+  it("updates the old editable graph without exposing the HR node", () => {
+    const graph = { id: "trip", name: "Trips", version: 2, status: "draft", formSchema: {},
+      nodes: ["launch", "manager_approval", "hr", "approved", "rejected"].map((id, index) => ({
+        id, kind: id === "launch" ? "start" as const : "approval" as const,
+        label: id, detail: "", positionX: index * 260, positionY: 120, config: {},
+      })),
+      edges: ["launch:manager_approval", "manager_approval:hr", "hr:approved"].map((pair, index) => {
+        const [source, target] = pair.split(":");
+        return { id: String(index), source: source!, target: target!, outcome: "approve", condition: {}, sortOrder: index };
+      }),
+    } satisfies WorkflowDefinition;
+    const current = currentTripWorkflow(graph, []);
+    expect(current.nodes.map((node) => node.id)).toContain("deputy_approval");
+    expect(current.nodes.map((node) => node.id)).not.toContain("hr");
+    expect(current.edges.map((edge) => `${edge.source}:${edge.target}`)).toEqual([
+      "launch:deputy_approval", "deputy_approval:manager_approval", "manager_approval:approved",
+    ]);
   });
   it("never grants an action absent from the server response", () => {
     for (const from of tripColumns) for (const to of tripColumns) {
