@@ -1,6 +1,7 @@
 """Plan document preview never persists data and surfaces uncertain rows for review."""
 
 from io import BytesIO
+from xml.sax.saxutils import escape
 from zipfile import ZipFile
 
 import openpyxl  # type: ignore[import-untyped]
@@ -151,6 +152,54 @@ def test_docx_table_uses_each_rows_responsible_and_exact_deadline() -> None:
         "2026-10-02"
     )
     assert not any("Отчёт готов" in row.title for row in preview.rows)
+
+
+def test_annual_work_plan_preserves_columns_and_conservative_completion() -> None:
+    def cell(*lines: str, green: bool = False) -> str:
+        color = '<w:rPr><w:color w:val="00B050"/></w:rPr>' if green else ""
+        return "<w:tc>" + "".join(
+            f"<w:p><w:r>{color}<w:t>{escape(line)}</w:t></w:r></w:p>"
+            for line in lines
+        ) + "</w:tc>"
+
+    header = ("№", "Тадбирнинг номи", "Муддати", "Амалга ошириш механизми",
+              "Бажарувчи", "Масъул", "Бажарилган ишлар")
+    completed = ("1", "Тадбирни ташкил этиш", "Март", "Б. Мардаев; ҳудудий бўлинмалар",
+                 "Д. Лютфиддинов", "Тадбир ўтказилди")
+    recurring = ("2", "Мунтазам мониторинг ўтказиш", "Ҳар ойда", "1. Ҳисобот бериш",
+                 "Б. Мардаев", "Д. Лютфиддинов", "Мониторинг давом этмоқда")
+    table = "<w:tbl>" + "<w:tr>" + "".join(cell(value) for value in header) + "</w:tr>"
+    table += "<w:tr>" + cell("I. БЎЛИМ") + "</w:tr>"
+    table += ("<w:tr>" + "".join(cell(value) for value in completed[:3])
+              + cell("1. Режа тузиш", "2. Учрашув")
+              + cell(completed[3]) + cell(completed[4])
+              + cell(completed[5], green=True) + "</w:tr>")
+    table += "<w:tr>" + "".join(
+        cell(value, green=index == 6) for index, value in enumerate((
+            recurring[0], recurring[1], recurring[2], recurring[3],
+            recurring[4], recurring[5], recurring[6],
+        ))
+    ) + "</w:tr></w:tbl>"
+    document = ('<w:document xmlns:w="http://schemas.openxmlformats.org/'
+                'wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>'
+                'ИШ РЕЖА 2026</w:t></w:r></w:p>' + table + '</w:body></w:document>')
+    buffer = BytesIO()
+    with ZipFile(buffer, "w") as archive:
+        archive.writestr("word/document.xml", document)
+    preview = preview_plan_document("annual.docx", buffer.getvalue())
+    assert preview.annual_work_plan
+    assert preview.suggested_title == "Иш режа 2026"
+    assert len(preview.rows) == 2
+    first, second = preview.rows
+    assert first.title == "Тадбирни ташкил этиш"
+    assert first.assignee_hint == "Д. Лютфиддинов"
+    assert first.coexecutors_hint == "Б. Мардаев; ҳудудий бўлинмалар"
+    assert first.due_date_hint is not None and first.due_date_hint.isoformat() == "2026-03-31"
+    assert first.mechanism_items == ["Режа тузиш", "Учрашув"]
+    assert first.completed_work_text == "Тадбир ўтказилди"
+    assert first.green_completion and not first.deadline_needs_review
+    assert first.section == "I. БЎЛИМ"
+    assert second.due_date_hint is None and second.deadline_needs_review
 
 
 def test_pdf_text_preview_and_candidate_limit() -> None:

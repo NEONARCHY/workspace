@@ -20,7 +20,30 @@ type ReviewRow = {
   assigneeHint: string | null;
   coexecutorsHint: string | null;
   groupKey: string | null;
+  deadlineText: string | null;
+  deadlineNeedsReview: boolean;
+  deadlineManuallyReviewed: boolean;
+  responsibleText: string | null;
+  executorsText: string | null;
+  section: string | null;
+  greenCompletion: boolean;
+  description: string;
+  checklist: string[];
+  historicalCompleted: boolean;
 };
+
+function pastReviewedDate(value: string): boolean {
+  return Boolean(value) && new Date(`${value}T23:59:59+05:00`).getTime() < Date.now();
+}
+
+function initialDescription(row: TaskPlanImportPreview["rows"][number]): string {
+  const parts = [row.completedWorkText?.trim() ?? ""];
+  if (row.originalTitle) parts.push(`Полное название из плана:\n${row.originalTitle}`);
+  if (row.deadlineText && (row.deadlineNeedsReview || !row.dueDateHint)) {
+    parts.push(`Муддати в документе:\n${row.deadlineText}`);
+  }
+  return parts.filter(Boolean).join("\n\n").slice(0, 20_000);
+}
 
 function matchingPersonId(hint: string, people: readonly WorkspacePerson[]): string | null {
   const match = hint.match(/^\s*([\p{L}])\s*\.\s*([\p{L}-]+)\s*$/u);
@@ -96,14 +119,25 @@ export function TaskPlanImportView({
       setRows(result.rows.map((row) => {
         const assigneeId = row.assigneeHint
           ? matchingPersonId(row.assigneeHint, activePeople) ?? ""
-          : row.groupKey ? "" : currentUserId;
+          : row.groupKey || result.annualWorkPlan ? "" : currentUserId;
+        const dueDate = row.dueDateHint ?? "";
         return {
           ...row, mode: "create", assigneeId,
           coAssigneeIds: row.coexecutorsHint
             ? suggestedCoAssignees(row.coexecutorsHint, activePeople).filter((id) => id !== assigneeId) : [],
-          dueDate: row.dueDateHint ?? "", dueDateHint: row.dueDateHint ?? null,
+          dueDate, dueDateHint: row.dueDateHint ?? null,
           taskId: "", assigneeHint: row.assigneeHint ?? null,
           coexecutorsHint: row.coexecutorsHint ?? null, groupKey: row.groupKey ?? null,
+          deadlineText: row.deadlineText ?? null,
+          deadlineNeedsReview: row.deadlineNeedsReview ?? false,
+          deadlineManuallyReviewed: false,
+          responsibleText: row.responsibleText ?? null,
+          executorsText: row.executorsText ?? null,
+          section: row.section ?? null,
+          greenCompletion: row.greenCompletion ?? false,
+          description: initialDescription(row), checklist: [...(row.mechanismItems ?? [])],
+          historicalCompleted: Boolean(result.annualWorkPlan && row.greenCompletion
+            && !row.deadlineNeedsReview && pastReviewedDate(dueDate)),
         };
       }));
       setGroupParticipants(Object.fromEntries([...new Map(result.rows.filter((row) => row.groupKey)
@@ -130,7 +164,7 @@ export function TaskPlanImportView({
       setError("Укажите название плана и проверьте каждый включённый пункт.");
       return;
     }
-    if (hasStructuredAssignments && !participantsReviewed) {
+    if ((hasStructuredAssignments || preview.annualWorkPlan) && !participantsReviewed) {
       setError("Проверьте ответственного и соисполнителей по строкам документа, затем подтвердите проверку.");
       return;
     }
@@ -140,12 +174,25 @@ export function TaskPlanImportView({
       setError(`Пункт ${duplicateRoleIndex + 1}: ответственный не может быть соисполнителем этой задачи.`);
       return;
     }
+    const longStepIndex = rows.findIndex((row) => row.mode === "create"
+      && row.checklist.some((step) => step.length > 500));
+    if (longStepIndex !== -1) {
+      setError(`Пункт ${longStepIndex + 1}: один шаг плана выполнения длиннее 500 символов.`);
+      return;
+    }
+    if (included.some((row) => row.mode === "create" && row.historicalCompleted
+      && (!row.greenCompletion || !pastReviewedDate(row.dueDate)
+        || (row.deadlineNeedsReview && !row.deadlineManuallyReviewed)))) {
+      setError("Завершённой можно отметить только зелёную строку с проверенным прошедшим сроком.");
+      return;
+    }
     if (periodStart && periodEnd && periodEnd < periodStart) {
       setError("Конец периода не может быть раньше начала.");
       return;
     }
     const payload: TaskPlanImportConfirm = {
       operationId,
+      annualWorkPlan: Boolean(preview.annualWorkPlan),
       plan: { title: title.trim(), kind, periodStart: periodStart || null, periodEnd: periodEnd || null,
         ownerUserId: ownerId },
       items: included.map((row) => ({
@@ -154,6 +201,9 @@ export function TaskPlanImportView({
         taskId: row.mode === "link" ? row.taskId : null,
         assigneeId: row.mode === "create" ? row.assigneeId : null,
         coAssigneeIds: row.mode === "create" ? row.coAssigneeIds : [],
+        description: row.mode === "create" ? row.description : "",
+        checklist: row.mode === "create" ? row.checklist : [],
+        historicalCompleted: row.mode === "create" && row.historicalCompleted,
         dueAt: row.mode === "create" && row.dueDate
           ? new Date(`${row.dueDate}T18:00:00+05:00`).toISOString() : null,
       })),
@@ -185,6 +235,7 @@ export function TaskPlanImportView({
       </div>
       {preview ? <>
         <p>Найдено {rows.length} возможных пунктов. Удалите лишние, уточните названия, исполнителей и сроки. Ничего не создаётся до подтверждения.</p>
+        {preview.annualWorkPlan ? <p className="task-plan-import-annual-note">Годовой иш режа: «Масъул» → ответственный, «Бажарувчи» → соисполнители, механизм → план выполнения, выполненные работы → описание. Прошедшие сроки исключаются из оценки эффективности. Зелёные пункты с точным прошедшим сроком предложены как завершённые — проверьте их перед сохранением.</p> : null}
         <div className="task-plan-import-fields">
           <label>Название плана<Input value={title} maxLength={240} onChange={(_, data) => setTitle(data.value)} /></label>
           <label>Постановщик плана<WorkspaceSelect value={ownerId} onChange={(event) => setOwnerId(event.target.value)}>
@@ -195,10 +246,10 @@ export function TaskPlanImportView({
           <label>Начало периода<input type="date" value={periodStart} onChange={(event) => setPeriodStart(event.target.value)} /></label>
           <label>Конец периода<input type="date" value={periodEnd} onChange={(event) => setPeriodEnd(event.target.value)} /></label>
         </div>
-        {hasStructuredAssignments ? <section className="task-plan-import-assignments" aria-label="Назначения из документа">
+        {(hasStructuredAssignments || preview.annualWorkPlan) ? <section className="task-plan-import-assignments" aria-label="Назначения из документа">
           <h4>Данные из плана</h4>
-          <p>Ответственный предлагается отдельно для каждого пункта — из его строки или заголовка рабочей колонки. Дата в колонке срока заполняется автоматически; для недельного диапазона берётся последний день, если год однозначен. Неясные имена и сроки проверьте вручную; отделы не превращаются в сотрудников.</p>
-          <div className="task-plan-import-groups">{groups.map(([groupKey, hint]) => <div key={groupKey}>
+          <p>Ответственный предлагается отдельно для каждого пункта. Неясные имена, отделы и сроки проверьте вручную; отделы не превращаются в сотрудников.</p>
+          {!preview.annualWorkPlan ? <div className="task-plan-import-groups">{groups.map(([groupKey, hint]) => <div key={groupKey}>
             <strong>{groupKey}</strong><span>В документе: {hint || "не указаны"}</span>
             <label>Набор соисполнителей для массового назначения по строке
               <WorkspaceSelect multiple value={groupParticipants[groupKey] ?? []} onChange={(event) => {
@@ -211,16 +262,18 @@ export function TaskPlanImportView({
                 ? { ...row, coAssigneeIds: selected.filter((id) => id !== row.assigneeId) } : row));
               setParticipantsReviewed(false);
             }}>Применить к пунктам этой строки</Button>
-          </div>)}</div>
+          </div>)}</div> : null}
           <label className="task-plan-import-review"><input type="checkbox" checked={participantsReviewed} onChange={(event) => setParticipantsReviewed(event.target.checked)} />Я проверил ответственного и соисполнителей для каждого включённого пункта; отделы и неясные имена сопоставлены вручную или сознательно не назначены.</label>
         </section> : null}
         <div className="task-plan-import-rows">{rows.map((row, index) => <fieldset key={`${row.source}-${index}`}>
           <legend>Пункт {index + 1} · {row.source}</legend>
           {row.warning ? <p className="task-plan-import-warning">{row.warning}</p> : null}
           {row.groupKey ? <p>В документе: ответственный — {row.assigneeHint ?? "не указан"}; срок — {row.dueDateHint ?? "не указан или не распознан"}.</p> : null}
+          {preview.annualWorkPlan ? <p className="task-plan-import-source">{row.section ? `${row.section} · ` : ""}Масъул: {row.responsibleText || "не указан"} · Бажарувчи: {row.executorsText || "не указан"} · Муддати: {row.deadlineText || "не указан"}{row.deadlineNeedsReview ? " · срок требует проверки" : ""}</p> : null}
           <label>Действие<WorkspaceSelect value={row.mode} onChange={(event) => updateRow(index, { mode: event.target.value as ReviewRow["mode"] })}><option value="create">Создать задачу</option><option value="link">Привязать существующую</option><option value="skip">Не включать</option></WorkspaceSelect></label>
           {row.mode !== "skip" ? <label>Название задачи<Input value={row.title} maxLength={240} onChange={(_, data) => updateRow(index, { title: data.value })} /></label> : null}
-          {row.mode === "create" ? <><label>Ответственный / исполнитель<WorkspaceSelect value={row.assigneeId} onChange={(event) => { updateRow(index, { assigneeId: event.target.value, coAssigneeIds: row.coAssigneeIds.filter((id) => id !== event.target.value) }); setParticipantsReviewed(false); }}><option value="">Выберите сотрудника</option>{activePeople.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</WorkspaceSelect></label><label>Срок, если указан в плане<input type="date" value={row.dueDate} onChange={(event) => updateRow(index, { dueDate: event.target.value })} /></label>
+          {row.mode === "create" ? <><label>Ответственный / исполнитель<WorkspaceSelect value={row.assigneeId} onChange={(event) => { updateRow(index, { assigneeId: event.target.value, coAssigneeIds: row.coAssigneeIds.filter((id) => id !== event.target.value) }); setParticipantsReviewed(false); }}><option value="">Выберите сотрудника</option>{activePeople.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</WorkspaceSelect></label><label>Срок, если указан в плане<input type="date" value={row.dueDate} onChange={(event) => updateRow(index, { dueDate: event.target.value, deadlineManuallyReviewed: Boolean(event.target.value), historicalCompleted: row.historicalCompleted && pastReviewedDate(event.target.value) })} /></label>
+            {preview.annualWorkPlan ? <><label className="task-plan-import-wide">План выполнения · {row.checklist.length} пунктов<textarea value={row.checklist.join("\n")} onChange={(event) => updateRow(index, { checklist: event.target.value.split("\n").map((line) => line.trim()).filter(Boolean) })} rows={Math.min(5, Math.max(2, row.checklist.length))} /></label><label className="task-plan-import-wide">Описание и ожидаемый результат<textarea value={row.description} onChange={(event) => updateRow(index, { description: event.target.value })} rows={3} maxLength={20_000} /></label>{row.greenCompletion ? <label className="task-plan-import-completed"><input type="checkbox" checked={row.historicalCompleted} disabled={!pastReviewedDate(row.dueDate) || (row.deadlineNeedsReview && !row.deadlineManuallyReviewed)} onChange={(event) => updateRow(index, { historicalCompleted: event.target.checked })} />Создать как завершённую (зелёный пункт, срок прошёл)</label> : null}</> : null}
             <div className="task-plan-import-participants">
               <span>Соисполнители: {row.coAssigneeIds.length
                 ? row.coAssigneeIds.map((id) => activePeople.find((person) => person.id === id)?.name ?? id).join(", ")
