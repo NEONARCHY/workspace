@@ -12,7 +12,16 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from yuksalish_api.access_control import request_module_action
 from yuksalish_api.auth import AuthenticatedUser
 from yuksalish_api.repository import WorkspaceRepositoryError, create_task
-from yuksalish_api.tables import audit_events, task_participants, task_plans, tasks, users
+from yuksalish_api.tables import (
+    audit_events,
+    chat_members,
+    chats,
+    task_efficiency_events,
+    task_participants,
+    task_plans,
+    tasks,
+    users,
+)
 from yuksalish_api.task_plan_schemas import (
     TaskPlanImportConfirm,
     TaskPlanStatusWrite,
@@ -230,6 +239,24 @@ async def test_import_confirm_is_atomic_idempotent_and_checks_links() -> None:
                 assert created.owner_user_id == str(co_assignee_id)
                 assert created.task_ids[1] == unrelated.id
                 assert created.task_ids[0] != unrelated.id
+                imported_id = UUID(created.task_ids[0])
+                assert await connection.scalar(select(tasks.c.author_user_id).where(
+                    tasks.c.id == imported_id,
+                )) == co_assignee_id
+                assert await connection.scalar(select(tasks.c.author_user_id).where(
+                    tasks.c.id == UUID(unrelated.id),
+                )) == manager_id  # Linking an existing task does not rewrite its author.
+                chat = (await connection.execute(select(chats).where(
+                    chats.c.context_type == "task", chats.c.context_id == imported_id,
+                ))).mappings().one()
+                assert chat["created_by_user_id"] == manager_id
+                assert await connection.scalar(select(chat_members.c.member_role).where(
+                    chat_members.c.chat_id == chat["id"],
+                    chat_members.c.user_id == co_assignee_id,
+                )) == "owner"
+                assert await connection.scalar(select(task_efficiency_events.c.actor_user_id)
+                    .where(task_efficiency_events.c.task_id == imported_id,
+                           task_efficiency_events.c.event_type == "task_created")) == manager_id
                 assert (await connection.execute(select(task_participants.c.user_id).where(
                     task_participants.c.task_id == UUID(created.task_ids[0]),
                     task_participants.c.participant_role == "co_assignee",

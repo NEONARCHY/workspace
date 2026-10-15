@@ -4051,6 +4051,7 @@ async def _sync_task_chat(
     author_user_id: UUID,
     assignee_user_id: UUID,
     occurred_at: datetime | None = None,
+    created_by_user_id: UUID | None = None,
 ) -> UUID:
     """Create one task chat and keep its membership aligned with task roles."""
     now = occurred_at or datetime.now(UTC)
@@ -4072,7 +4073,7 @@ async def _sync_task_chat(
                 context_type="task",
                 context_id=task_id,
                 direct_key=None,
-                created_by_user_id=author_user_id,
+                created_by_user_id=created_by_user_id or author_user_id,
                 created_at=now,
                 updated_at=now,
             )
@@ -4211,7 +4212,12 @@ async def create_task(
     connection: AsyncConnection,
     current_user: AuthenticatedUser,
     payload: CreateTaskRequest,
+    *,
+    author_user_id: UUID | None = None,
 ) -> TaskResponse:
+    # Internal plan import may assign the plan owner as task author while the
+    # authenticated importer remains the actor of creation and audit events.
+    task_author_id = author_user_id or current_user.id
     try:
         assignee_id = UUID(payload.assignee_id) if payload.assignee_id else current_user.id
         source_message_id = UUID(payload.source_message_id) if payload.source_message_id else None
@@ -4313,7 +4319,7 @@ async def create_task(
         "description": payload.description,
         "status": "new",
         "priority": payload.priority,
-        "author_user_id": current_user.id,
+        "author_user_id": task_author_id,
         "primary_assignee_user_id": assignee_id,
         "parent_task_id": parent_task_id,
         "cycle_id": cycle_id,
@@ -4402,9 +4408,10 @@ async def create_task(
         task_id=task_id,
         title=payload.title,
         description=payload.description,
-        author_user_id=current_user.id,
+        author_user_id=task_author_id,
         assignee_user_id=assignee_id,
         occurred_at=now,
+        created_by_user_id=current_user.id,
     )
     return await _task_response(connection, task_id)
 
