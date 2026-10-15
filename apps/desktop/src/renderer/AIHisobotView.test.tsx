@@ -29,7 +29,8 @@ const profile: HisobotProfile = {
   telegramId: "123456789", fullName: "Пример Сотрудник", position: "Специалист",
   reportScope: "central", regionName: null, reportRequired: true,
   managementAccess: false, absenceKind: null, today: "2026-09-25", canSubmit: true,
-  windowOpensAt: "12:00", windowClosesAt: "18:30", todayReport: null,
+  windowOpensAt: "12:00", windowClosesAt: "21:00", deadlineAt: "18:30",
+  isOverdue: false, todayReport: null,
 };
 
 const unitReport: HisobotUnitReport = {
@@ -78,6 +79,22 @@ describe("AI Hisobot", () => {
     fireEvent.click(screen.getByRole("button", { name: "Моя история" }));
     expect(await screen.findByText("Telegram")).toBeInTheDocument();
     expect(screen.getByText("Выполнена важная задача.")).toBeInTheDocument();
+  });
+
+  it("keeps submission open for an overdue employee and labels a late report", async () => {
+    vi.mocked(loadHisobotProfile).mockResolvedValue({ ...profile, isOverdue: true });
+    render(<AIHisobotView token="token" />);
+    expect(await screen.findByText("Опоздавший · отчёт ещё не сдан")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Отправить отчёт" })).toBeInTheDocument();
+    expect(screen.getByText("12:00—21:00")).toBeInTheDocument();
+    cleanup();
+    vi.mocked(loadHisobotProfile).mockResolvedValue({
+      ...profile, todayReport: { ...report, isLate: true }, isOverdue: false,
+    });
+    vi.mocked(loadHisobotHistory).mockResolvedValue([{ ...report, isLate: true }]);
+    render(<AIHisobotView token="token" />);
+    fireEvent.click(await screen.findByRole("button", { name: "Моя история" }));
+    expect(screen.getByText(/опоздавший \(после 18:30\)/)).toBeInTheDocument();
   });
 
   it("lets a lead choose a unit report but hides that action after a personal report", async () => {

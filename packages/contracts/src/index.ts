@@ -1488,6 +1488,8 @@ export interface HisobotProfile {
   readonly canSubmitUnit?: boolean;
   readonly windowOpensAt: string;
   readonly windowClosesAt: string;
+  readonly deadlineAt: string;
+  readonly isOverdue: boolean;
   readonly todayReport: HisobotReport | null;
   readonly unit?: HisobotUnit | null;
   readonly todayUnitReport?: HisobotUnitReport | null;
