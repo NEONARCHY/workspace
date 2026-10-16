@@ -1,5 +1,13 @@
 # Message media surfaces
 
+## Attachment keyboard and mentions — 16 October 2026
+
+The file-send dialog initially focuses its caption, not Close. Enter sends;
+Shift+Enter inserts a line. Ctrl/Command+Enter remains available. IME confirmation,
+repeat keydown, empty selections and blocked sends do not submit. Deliberately
+focused buttons retain their native Enter action. Mention scope tabs use single-line
+28 px controls and an 8 px gap before participant rows; other scope switches stay unchanged.
+
 ## Recorder and composer surfaces — 16 October 2026
 
 Microphone permission/device negotiation has no transient connection banner;

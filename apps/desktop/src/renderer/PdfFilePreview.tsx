@@ -175,7 +175,7 @@ export default function PdfFilePreview({ blob, onError }: { readonly blob: Blob;
     node.scrollTop += sheet.getBoundingClientRect().top - node.getBoundingClientRect().top - 12;
     setPage(next); setPageInput(String(next));
   };
-  const changeZoom = (next: PdfZoomMode) => {
+  const changeZoom = useCallback((next: PdfZoomMode) => {
     setZoom(next);
     if (zoomFrame.current !== undefined) cancelAnimationFrame(zoomFrame.current);
     // Retain the current sheet, not the old absolute scroll offset.
@@ -184,8 +184,27 @@ export default function PdfFilePreview({ blob, onError }: { readonly blob: Blob;
       const node = frame.current, sheet = sheets.current.get(page);
       if (node && sheet) node.scrollTop += sheet.getBoundingClientRect().top - node.getBoundingClientRect().top - 12;
     });
-  };
+  }, [page]);
   const scale = loaded ? pdfPageScale(pageSizes.get(page) ?? loaded.first, frameSize, zoom) : 1;
+  const wheelScale = useRef(scale);
+  useLayoutEffect(() => { wheelScale.current = scale; }, [scale]);
+  const hasDocument = Boolean(document);
+  useEffect(() => {
+    const node = frame.current;
+    if (!node) return;
+    const wheel = (event: WheelEvent) => {
+      if (!event.ctrlKey && !event.metaKey) return;
+      // React wheel listeners may be passive; suppress browser zoom only here.
+      event.preventDefault(); event.stopPropagation();
+      if (!hasDocument || !event.deltaY) return;
+      const delta = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? node.clientHeight : 1);
+      const next = Math.max(.1, Math.min(3, wheelScale.current * Math.exp(-Math.max(-100, Math.min(100, delta)) * .002)));
+      wheelScale.current = next; // Accumulate rapid events before the next React commit.
+      changeZoom(next);
+    };
+    node.addEventListener("wheel", wheel, { passive: false });
+    return () => node.removeEventListener("wheel", wheel);
+  }, [changeZoom, hasDocument]);
   return <div className="file-viewer-pdf-reader">
     <div className="file-viewer-pdf-tools" role="group" aria-label="Просмотр документа">
       <div className="file-viewer-pdf-pagination"><Input type="number" min={1} max={document?.numPages ?? 1}
@@ -194,7 +213,7 @@ export default function PdfFilePreview({ blob, onError }: { readonly blob: Blob;
         <span>из {document?.numPages ?? "…"}</span></div>
       <div className="file-viewer-pdf-zoom">
         <Button appearance="subtle" icon={<Subtract20Regular />} aria-label="Уменьшить PDF" disabled={!document || scale <= .1} onClick={() => changeZoom(Math.max(.1, scale - .15))} />
-        <span className="file-viewer-pdf-scale">{Math.round(scale * 100)}%</span>
+        <span className="file-viewer-pdf-scale" title="Ctrl + колесо — масштаб документа">{Math.round(scale * 100)}%</span>
         <Button appearance="subtle" icon={<Add20Regular />} aria-label="Увеличить PDF" disabled={!document || scale >= 3} onClick={() => changeZoom(Math.min(3, scale + .15))} />
         <Button appearance="subtle" aria-pressed={zoom === "page"} disabled={!document} onClick={() => changeZoom("page")}>Страница целиком</Button>
         <Button appearance="subtle" aria-pressed={zoom === "width"} disabled={!document} onClick={() => changeZoom("width")}>По ширине</Button>

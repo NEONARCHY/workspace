@@ -149,8 +149,8 @@ export function CalendarEventComposer({
                     <strong>{draft.title.trim() || "Название мероприятия"}</strong>
                     <p>{draft.description.trim() || "Добавьте описание, место и участников."}</p>
                     <dl className="record-summary-facts">
-                      <div><dt>Начало</dt><dd>{dateTimeLabel(draft.startsAt)}</dd></div>
-                      <div><dt>Окончание</dt><dd>{dateTimeLabel(draft.endsAt)}</dd></div>
+                      <div className="calendar-preview-date"><dt>Начало</dt><dd>{dateTimeLabel(draft.startsAt)}</dd></div>
+                      <div className="calendar-preview-date"><dt>Окончание</dt><dd>{dateTimeLabel(draft.endsAt)}</dd></div>
                       <div><dt>Место</dt><dd>{draft.location.trim() || "Не указано"}</dd></div>
                       <div><dt>Участники</dt><dd>{draft.attendeeIds.length}</dd></div>
                     </dl>

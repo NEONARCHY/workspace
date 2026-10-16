@@ -10,6 +10,7 @@ import { FeedView } from "../src/renderer/FeedView";
 import { EmployeeProfileProvider } from "../src/renderer/EmployeeProfileLink";
 import { initialTasks, people } from "../src/renderer/test-fixtures/demo-data";
 import { useQaTheme } from "./color-theme";
+import { MessageFileControls } from "./message-file-controls";
 import "../src/renderer/styles.css";
 import "../src/renderer/responsive.css";
 import "../src/renderer/context-colors.css";
@@ -103,6 +104,7 @@ const post: FeedPost = {
 function Fixture() {
   const theme = useQaTheme();
   const view = new URLSearchParams(location.search).get("view");
+  if (view === "controls") return <FluentProvider theme={theme} className="app-provider"><EmployeeProfileProvider onOpenProfile={noop}><MessageFileControls /></EmployeeProfileProvider></FluentProvider>;
   return <FluentProvider theme={theme} className="app-provider" style={{ minHeight: "100dvh", color: "var(--ws-text)", background: "var(--ws-canvas)" }}>
     <EmployeeProfileProvider onOpenProfile={noop}><main className="app-content" style={{ height: "100dvh", padding: 16 }}>
       {view === "incoming" ? <section className="ai-referent-view"><AIReferentIncomingRegister token="qa" /></section> :
