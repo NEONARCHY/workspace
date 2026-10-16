@@ -96,9 +96,15 @@
 }
 
 .trips-view .ws2-process-overview {
-  column-gap: 10px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  padding: 12px;
   background: linear-gradient(110deg, rgb(var(--ws-theme-wash-teal-rgb, 230 241 247) / 0.9) 0%, rgb(var(--ws-theme-surface-soft-rgb, 235 244 242) / 0.9) 45%, rgb(var(--ws-theme-surface-soft-rgb, 240 238 248) / 0.92) 100%);
 }
+.trips-view .ws2-process-metrics { display: contents; }
+.trips-view .ws2-process-focus,
+.trips-view .ws2-process-metrics > div { min-width: 0; }
 
 .ws2-process-focus {
   display: inline-grid;
@@ -559,6 +565,8 @@
 }
 
 @container workspace (max-width: 610px) {
+  .trips-view .ws2-process-overview { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .trips-view .ws2-process-metrics > div:nth-child(2) { border-left: 0; }
   .workflow-process-view .workflow-hero-header {
     grid-template-columns: minmax(0, 1fr);
     align-items: start;

@@ -11,6 +11,8 @@ import { EmployeeProfileProvider } from "../src/renderer/EmployeeProfileLink";
 import { initialTasks, people } from "../src/renderer/test-fixtures/demo-data";
 import { useQaTheme } from "./color-theme";
 import { MessageFileControls } from "./message-file-controls";
+import { ApprovalsView } from "../src/renderer/ApprovalsView";
+import { TripApprovalsView } from "../src/renderer/TripApprovalsView";
 import "../src/renderer/styles.css";
 import "../src/renderer/responsive.css";
 import "../src/renderer/context-colors.css";
@@ -107,7 +109,9 @@ function Fixture() {
   if (view === "controls") return <FluentProvider theme={theme} className="app-provider"><EmployeeProfileProvider onOpenProfile={noop}><MessageFileControls /></EmployeeProfileProvider></FluentProvider>;
   return <FluentProvider theme={theme} className="app-provider" style={{ minHeight: "100dvh", color: "var(--ws-text)", background: "var(--ws-canvas)" }}>
     <EmployeeProfileProvider onOpenProfile={noop}><main className="app-content" style={{ height: "100dvh", padding: 16 }}>
-      {view === "incoming" ? <section className="ai-referent-view"><AIReferentIncomingRegister token="qa" /></section> :
+      {view === "payments" ? <ApprovalsView token="qa-only" canManage={false} canCreateRequest={false} isSuperadmin={false} currentUserId="qa" people={[]} positions={[]} requests={[]} calendarEvents={[]} attachments={[]} onSaveWorkflow={noop} onPublishWorkflow={noop} onCreateRequest={noop} onAction={noop} onDeleteRequest={noop} onReviseRequest={noop} onUploadAttachments={noop} onDownloadAttachment={noop} /> :
+      view === "trips" ? <TripApprovalsView requests={[]} people={people} currentUser={people[0]!} onCreate={async () => undefined} onUpdate={async () => undefined} onAction={async () => undefined} /> :
+      view === "incoming" ? <section className="ai-referent-view"><AIReferentIncomingRegister token="qa" /></section> :
       view === "trip" ? <TripWorldMap requests={[trip, { ...trip, id: "qa-free", destination: "Термиз 4" }]} people={people} onOpenRequest={noop} onClose={noop} /> :
        view === "hisobot" ? <div style={{ width: "min(100%, 480px)", height: "100%" }}><AIHisobotView token="qa" /></div> :
        view === "feed" ? <FeedView posts={[post]} people={people} token="" currentUserId="baxtiyor" onCreate={async () => post}
