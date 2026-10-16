@@ -84,6 +84,10 @@ describe("message editor selection commands", () => {
     fireEvent.click(screen.getByRole("button", { name: "Применить" })); expect(screen.getByRole("alert")).toHaveTextContent("http://");
     fireEvent.change(link, { target: { value: "https://example.org" } }); fireEvent.click(screen.getByRole("button", { name: "Применить" }));
     expect(readRichEditor(input).entities).toContainEqual({ type: "link", offset: 0, length: 4, url: "https://example.org" });
+    setEditorSelection(input, 0, 4); fireEvent.keyDown(input, { key: "k", code: "KeyK", ctrlKey: true });
+    fireEvent.change(screen.getByRole("textbox", { name: "Адрес ссылки" }), { target: { value: "https://example.org/updated" } });
+    fireEvent.click(screen.getByRole("button", { name: "Применить" }));
+    expect(readRichEditor(input).entities).toContainEqual({ type: "link", offset: 0, length: 4, url: "https://example.org/updated" });
     setEditorSelection(input, 5, 7); fireEvent.keyDown(input, { key: "k", code: "KeyK", ctrlKey: true });
     fireEvent.click(screen.getByRole("button", { name: "Отмена" })); expect(editorSelection(input)).toEqual({ offset: 5, text: "😀" });
   });

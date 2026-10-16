@@ -129,7 +129,7 @@ export function RichMessageEditor({ ref, value, entities = EMPTY_ENTITIES, onCha
       return [e.offset < selection.offset ? { ...e, length: selection.offset - e.offset } : undefined,
         e.offset + e.length > end ? { ...e, offset: end, length: e.offset + e.length - end } : undefined].filter(e => e !== undefined);
     });
-    if (kind !== "clear" && !active) remaining.push({ type: kind, offset: selection.offset, length: selection.text.length, ...(kind === "link" ? { url: link } : {}) });
+    if (kind !== "clear" && (!active || kind === "link")) remaining.push({ type: kind, offset: selection.offset, length: selection.text.length, ...(kind === "link" ? { url: link } : {}) });
     if (remaining.length > 128) { setError("Слишком много фрагментов форматирования"); return; }
     beforeSelection.current = { start: selection.offset, end };
     writeRichEditor(root, doc.text, remaining); restore();

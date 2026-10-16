@@ -1,5 +1,5 @@
 html body .app-provider .messenger-view .composer-textarea.composer-rich-editor {
-  border: 1px solid var(--ws-border); border-radius: 12px; padding-block: 7px;
+  border: 1px solid var(--ws-control-line); border-radius: 12px; padding-block: 7px;
   white-space: pre-wrap; overflow-wrap: anywhere; cursor: text;
 }
 .composer-rich-editor[data-empty]::before { content: attr(data-placeholder); color: var(--ws-muted); pointer-events: none; }
