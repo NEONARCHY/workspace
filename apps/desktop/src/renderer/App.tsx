@@ -1627,9 +1627,16 @@ export function App() {
     action: TripAction,
     comment = "",
     targetStage?: TripStage,
-  ) =>
-    runTripMutation((token) =>
-      actOnWorkspaceTripRequest(token, tripRequest.id, action, comment, targetStage));
+  ) => runTripMutation(async (token) => {
+    const updated = await actOnWorkspaceTripRequest(
+      token, tripRequest.id, action, comment, targetStage,
+    );
+    if (updated.status === "approved" || updated.status === "annulled"
+      || tripRequest.status === "approved") {
+      await refreshWorkspace(token).catch(reportError);
+    }
+    return updated;
+  });
 
   const handleTripBriefOfficePreview = (
     requestId: string, sheet: number, offset: number, signal?: AbortSignal,

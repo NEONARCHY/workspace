@@ -1049,6 +1049,7 @@ calendar_events = sa.Table(
     sa.Column("icon_key", sa.String(24)),
     sa.Column("id", uuid_type, primary_key=True),
     sa.Column("organizer_user_id", uuid_type),
+    sa.Column("trip_request_id", uuid_type),
     sa.Column("project_id", uuid_type),
     sa.Column("workstream_id", uuid_type),
     sa.Column("project_item_id", uuid_type),

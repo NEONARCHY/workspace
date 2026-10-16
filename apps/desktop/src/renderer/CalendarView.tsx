@@ -299,7 +299,14 @@ export function CalendarView({
     return () => observer.disconnect();
   }, []);
   const monthLabel = new Intl.DateTimeFormat("ru-RU", { month: "long", year: "numeric" }).format(month);
-  const selected = events.find((item) => item.id === selectedState?.id) ?? selectedState;
+  const selectedFromEvents = events.find((item) => item.id === selectedState?.id);
+  const selected = selectedState && selectedFromEvents
+    ? Date.parse(selectedFromEvents.updatedAt) > Date.parse(selectedState.updatedAt)
+      ? selectedFromEvents : selectedState
+    : selectedState ?? selectedFromEvents;
+  const ownAttendance = selected?.currentUserAttendanceStatus
+    ?? selected?.attendees.find((attendee) => attendee.userId === currentUserId)?.status
+    ?? (selected?.canRespond ? "pending" : undefined);
   const selectedZoom = zoomMeetings?.find(item => item.id === selectedZoomState?.id) ?? selectedZoomState;
   const selectedDayIsPast = isPastDay(selectedDay);
   const schedule = useMemo(() => filterCalendarSchedule(events, zoomMeetings ?? [], filters), [events, zoomMeetings, filters]);
@@ -987,10 +994,12 @@ export function CalendarView({
                 <Button appearance="subtle" disabled={busy} onClick={() => void cancel(selected)}>Отменить событие</Button>
               </div>
             ) : null}
-            {selected.canRespond && selected.status === "scheduled" ? (
+            {ownAttendance && selected.status === "scheduled" && selected.organizerUserId !== currentUserId ? (
               <div className="calendar-form-actions" aria-label="Ответ на приглашение">
-                <Button appearance="primary" disabled={busy} onClick={() => void respond(selected, "accepted")}>Подтвердить участие</Button>
-                <Button appearance="subtle" disabled={busy} onClick={() => void respond(selected, "declined")}>Отказаться</Button>
+                {ownAttendance === "accepted" ? <span className="calendar-attendance-confirmed" role="status">{selected.eventType === "trip" && !selected.canRespond ? "Участие в поездке утверждено" : "Вы подтвердили участие"}</span>
+                  : <Button appearance="primary" disabled={busy || !selected.canRespond} onClick={() => void respond(selected, "accepted")}>Подтвердить участие</Button>}
+                {ownAttendance === "declined" ? <span className="calendar-attendance-declined" role="status">Вы отказались от участия</span>
+                  : selected.canRespond ? <Button appearance="subtle" disabled={busy} onClick={() => void respond(selected, "declined")}>Отказаться</Button> : null}
               </div>
             ) : null}
           </div>

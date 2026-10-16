@@ -26,10 +26,11 @@ describe("authorised calendar filtering", () => {
     expect(calendarItemsOnDay(items, new Date("2026-10-13T12:00:00"), filters)).toHaveLength(2);
     expect(calendarItemsOnDay(items, new Date("2026-10-12T12:00:00"), filters)).toEqual([]);
   });
-  it("sorts meetings and Zoom together and excludes legacy task/deadline/trip entries", () => {
-    const items = filterCalendarSchedule([sampleEvent("later"), sampleEvent("legacy", { eventType: "task" })],
+  it("sorts meetings, trips and Zoom together while excluding legacy task/deadline entries", () => {
+    const items = filterCalendarSchedule([sampleEvent("later"), sampleEvent("trip", { eventType: "trip" }),
+      sampleEvent("legacy", { eventType: "task" })],
       [sampleZoom(), sampleZoom({ id: "cancelled-zoom", status: "cancelled" })], emptyCalendarFilters);
-    expect(items.map(item => item.title)).toEqual(["Zoom-сессия", "later"]);
+    expect(items.map(item => item.title)).toEqual(["Zoom-сессия", "later", "trip"]);
   });
   it("rejects invalid/reversed dates and malformed event intervals", () => {
     expect(calendarRangeError("2026-02-31", "")).not.toBe("");

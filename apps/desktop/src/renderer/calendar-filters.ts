@@ -38,7 +38,7 @@ function overlapsDates(start: number, end: number, from: string, to: string): bo
 /** Filter only the records already authorised by the server; never fetch another person's calendar. */
 export function filterCalendarSchedule(events: readonly CalendarEvent[], zoom: readonly ZoomMeeting[], filters: CalendarFilters): CalendarScheduleItem[] {
   const items: CalendarScheduleItem[] = [
-    ...events.filter(event => event.eventType === "meeting" || event.eventType === "general")
+    ...events.filter(event => ["meeting", "general", "trip"].includes(event.eventType))
       .map(record => ({ kind: "event" as const, key: `event:${record.id}`, title: record.title, record })),
     ...zoom.filter(record => record.status === "scheduled")
       .map(record => ({ kind: "zoom" as const, key: `zoom:${record.id}`, title: record.topic, record })),

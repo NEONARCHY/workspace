@@ -73,6 +73,36 @@ it("serializes attendance responses and prevents closing while a response is pen
   expect(respond).toHaveBeenCalledTimes(1);
   expect(respond).toHaveBeenCalledWith(event, "accepted");
 });
+it("replaces the confirm action with a green confirmation even before event props refresh", async () => {
+  const accepted = { ...event, currentUserAttendanceStatus: "accepted" as const,
+    attendees: [{ userId: "me", status: "accepted" as const }],
+    updatedAt: "2026-10-13T09:30:00", canRespond: true };
+  const respond = vi.fn(async () => accepted);
+  setup(undefined, respond);
+  fireEvent.click(within(screen.getByRole("grid")).getByRole("button", { name: /Рабочая встреча/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Подтвердить участие" }));
+  await waitFor(() => expect(screen.getByText("Вы подтвердили участие")).toBeInTheDocument());
+  expect(screen.queryByRole("button", { name: "Подтвердить участие" })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Отказаться" })).toBeEnabled();
+  expect(respond).toHaveBeenCalledTimes(1);
+});
+it("shows an approved trip as read-only without asking travelers to RSVP", () => {
+  const trip = sampleEvent("Командировка · Самарканд", {
+    eventType: "trip", allDay: true, canRespond: false, canEdit: false,
+    startsAt: "2026-10-13T00:00:00+05:00", endsAt: "2026-10-14T00:00:00+05:00",
+    currentUserAttendanceStatus: "accepted",
+    attendees: [{ userId: "me", status: "accepted" }],
+  });
+  render(<CalendarView events={[trip]} people={[]} currentUserId="me"
+    onCreate={vi.fn()} onUpdate={vi.fn()} onCancel={vi.fn()} onRespond={vi.fn()} />);
+  fireEvent.change(screen.getByLabelText("Перейти к дате"), { target: { value: "2026-10-13" } });
+  fireEvent.click(within(screen.getByRole("grid")).getByRole("button", { name: /Командировка/ }));
+  const dialog = screen.getByRole("dialog", { name: trip.title });
+  expect(within(dialog).getByText("Участие в поездке утверждено")).toBeInTheDocument();
+  expect(within(dialog).queryByRole("button", { name: "Подтвердить участие" })).not.toBeInTheDocument();
+  expect(within(dialog).queryByRole("button", { name: "Отказаться" })).not.toBeInTheDocument();
+  expect(within(dialog).queryByRole("button", { name: "Изменить" })).not.toBeInTheDocument();
+});
 it("opens Zoom in a calendar modal and navigates to its module only on an explicit action", () => {
   const { openZoom } = setup();
   fireEvent.click(within(screen.getByRole("grid")).getByRole("button", { name: /Zoom-сессия/ }));
