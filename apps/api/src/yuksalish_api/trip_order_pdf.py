@@ -25,12 +25,14 @@ from reportlab.platypus import (  # type: ignore[import-untyped]
     TableStyle,
 )
 
+from .hr_hiring_templates import _latin
+
 _ASSETS = Path(__file__).parent / "hr_assets"
 _LOGO = Path(__file__).parent / "trip_assets" / "yuksalish-logo-color.png"
 _FONT_LOCK = Lock()
 _MONTHS = (
-    "январь", "февраль", "март", "апрель", "май", "июнь",
-    "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь",
+    "yanvar", "fevral", "mart", "aprel", "may", "iyun",
+    "iyul", "avgust", "sentabr", "oktabr", "noyabr", "dekabr",
 )
 
 
@@ -80,7 +82,7 @@ def _style(
 
 
 def _text(value: str) -> str:
-    return escape(" ".join(value.split()))
+    return escape(_latin(" ".join(value.split())))
 
 
 def _signature_image(content: bytes) -> Image:
@@ -112,42 +114,55 @@ def _build(story: list[object]) -> bytes:
 def brief_pdf(
     *, requester: str, chair: str, purpose: str, destination: str,
     start: date, end: date, employees: list[str], expense_source: str,
-    brief_text: str, attachment_name: str | None, signature: bytes,
+    brief_text: str, attachment_name: str | None, signature: bytes | None,
     signed_on: date,
 ) -> bytes:
-    """Create the signed Workspace cover brief; the uploaded original stays separate."""
+    """Create a Latin-script brief for the chair's resolution and optional legacy signature."""
     _fonts()
     regular = _style("brief-body")
     small = _style("brief-small", size=9.5, leading=14)
+    centered = _style("brief-title", size=16, leading=22, bold=True)
+    centered.alignment = 1
+    recipient = _style("brief-recipient", size=11, leading=17, bold=True)
+    recipient.alignment = 2
     story: list[object] = [
-        Paragraph("БИЛДИРГИ", _style("brief-title", size=16, leading=22, bold=True)),
-        Paragraph(f"“Юксалиш” ҳаракати раиси {_text(chair)}га", regular),  # noqa: RUF001
-        Paragraph(f"Кимдан: {_text(requester)}", regular),
-        Spacer(1, 10),
-        Paragraph(f"Манзил: {_text(destination)}", regular),
-        Paragraph(f"Муддат: {start:%d.%m.%Y} — {end:%d.%m.%Y}", regular),
-        Paragraph("Иштирокчилар: " + "; ".join(_text(name) for name in employees), regular),
+        Table([[
+            Spacer(1, 66),
+            Paragraph(f'“Yuksalish” harakati raisi<br/>{_text(chair)}ga', recipient),
+        ]], colWidths=[235, 243], style=TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 0),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ])),
+        Spacer(1, 18),
+        Paragraph("BILDIRGI", centered),
+        Spacer(1, 14),
     ]
     if purpose.strip():
-        story.insert(4, Paragraph(f"Мақсад: {_text(purpose)}", regular))
-    if expense_source.strip():
-        story.append(Paragraph(f"Харажатлар манбаи: {_text(expense_source)}", regular))
+        story.append(Paragraph(f"Safar maqsadi: {_text(purpose)}", regular))
     if brief_text.strip():
         for paragraph in brief_text.strip().splitlines():
             if paragraph.strip():
                 story.append(Paragraph(_text(paragraph), regular))
+    else:
+        story.append(Paragraph(
+            f"{start:%d.%m.%Y} - {end:%d.%m.%Y} kunlari {_text(destination)}ga "
+            "xizmat safariga yuborishga ruxsat berishingizni soʻrayman.", regular,  # noqa: RUF001
+        ))
+    if employees:
+        story.append(Paragraph(
+            "Safar ishtirokchilari: " + "; ".join(_text(name) for name in employees), regular,
+        ))
+    if expense_source.strip():
+        story.append(Paragraph(f"Xarajatlar manbai: {_text(expense_source)}", regular))
     if attachment_name:
         story.append(Paragraph(
-            f"Илова: {_text(attachment_name)}. Асл файл алоҳида сақланади.", small
+            f"Ilova: {_text(attachment_name)}. Asl fayl alohida saqlanadi.", small
         ))
-    story.extend([
-        Spacer(1, 18),
-        KeepTogether([
-            Paragraph(f"{_text(requester)} · {signed_on:%d.%m.%Y}", small),
-            _signature_image(signature),
-            Paragraph("Ходимнинг график имзоси", small),
-        ]),
-    ])
+    story.append(Spacer(1, 28))
+    story.append(Paragraph(f"{signed_on:%d.%m.%Y} y. &nbsp;&nbsp; {_text(requester)}", regular))
+    if signature is not None:
+        story.append(_signature_image(signature))
     return _build(story)
 
 
@@ -156,7 +171,7 @@ def order_pdf(
     start: date, end: date, employees: list[tuple[str, str]],
     expense_source: str, requester: str, chair: str, signature: bytes | None,
 ) -> bytes:
-    """Issue an Uzbek-Cyrillic order with a separate Workspace registration number."""
+    """Issue an Uzbek-Latin order with a separate Workspace registration number."""
     _fonts()
     body = _style("order-body", size=11, leading=18)
     bold = _style("order-bold", size=11, leading=18, bold=True)
@@ -166,14 +181,14 @@ def order_pdf(
     right.alignment = 2
     month = _MONTHS[issued.month - 1]
     period = (
-        f"{start.day} {_MONTHS[start.month - 1]} куни" if start == end
-        else f"{start.day}-{end.day} {_MONTHS[start.month - 1]} кунлари"
+        f"{start.day} {_MONTHS[start.month - 1]} kuni" if start == end
+        else f"{start.day}-{end.day} {_MONTHS[start.month - 1]} kunlari"
         if start.month == end.month and start.year == end.year
-        else f"{start:%d.%m.%Y} — {end:%d.%m.%Y} кунлари"
+        else f"{start:%d.%m.%Y} - {end:%d.%m.%Y} kunlari"
     )
     date_line = Table([[
-        Paragraph(f"{issued.year} йил “{issued.day}” {month}", body),
-        Paragraph("Тошкент шаҳри", right),
+        Paragraph(f"{issued.year}-yil “{issued.day}” {month}", body),
+        Paragraph("Toshkent shahri", right),
     ]], colWidths=[239, 239])
     date_line.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
@@ -181,44 +196,44 @@ def order_pdf(
         ("RIGHTPADDING", (0, 0), (-1, -1), 0),
     ]))
     story: list[object] = [
-        Paragraph("БУЙРУҚ", centered),
-        Paragraph(f"{_text(order_number)}-сон а/ф", centered),  # noqa: RUF001
+        Paragraph("BUYRUQ", centered),
+        Paragraph(f"{_text(order_number)}-son a/f", centered),
         Spacer(1, 12), date_line, Spacer(1, 8),
-        Paragraph("“Хизмат сафарига юбориш тўғрисида”", bold),
+        Paragraph("“Xizmat safariga yuborish toʻgʻrisida”", bold),  # noqa: RUF001
         Spacer(1, 8),
     ]
     if purpose.strip():
         story.append(Paragraph(_text(purpose), body))
-    story.extend([Spacer(1, 8), Paragraph("Б У Ю Р А М А Н :", centered), Spacer(1, 6)])  # noqa: RUF001
+    story.extend([Spacer(1, 8), Paragraph("B U Y U R A M A N :", centered), Spacer(1, 6)])
     if len(employees) == 1:
         name, job_title = employees[0]
         person = f"{_text(job_title)} {_text(name)}" if job_title else _text(name)
         story.append(Paragraph(
-            f"1. Ҳаракатнинг {person} жорий йилнинг {period} "
-            f"{_text(destination)}га хизмат сафарига юборилсин.", body,  # noqa: RUF001
+            f"1. Harakatning {person} joriy yilning {period} "
+            f"{_text(destination)}ga xizmat safariga yuborilsin.", body,
         ))
     else:
         story.append(Paragraph(
-            f"1. Ҳаракатнинг қуйидаги ходимлари жорий йилнинг {period} "
-            f"{_text(destination)}га хизмат сафарига юборилсин:", body,  # noqa: RUF001
+            f"1. Harakatning quyidagi xodimlari joriy yilning {period} "
+            f"{_text(destination)}ga xizmat safariga yuborilsin:", body,
         ))
         for index, (name, job_title) in enumerate(employees, start=1):
             suffix = f" — {_text(job_title)}" if job_title else ""
             story.append(Paragraph(f"{index}) {_text(name)}{suffix};", body))
     if expense_source.strip():
         story.append(Paragraph(
-            "2. Хизмат сафари билан боғлиқ харажатлар "
-            f"{_text(expense_source)} ҳисобидан қопланиши маълумот учун қабул қилинсин.",
+            "2. Xizmat safari bilan bogʻliq xarajatlar "  # noqa: RUF001
+            f"{_text(expense_source)} hisobidan qoplanishi maʼlumot uchun qabul qilinsin.",  # noqa: RUF001
             body,
         ))
     story.extend([
         Spacer(1, 12),
-        Paragraph(f"Асос: {_text(requester)}нинг билдиргиси.", body),  # noqa: RUF001
+        Paragraph(f"Asos: {_text(requester)}ning bildirgisi.", body),
         Spacer(1, 24),
     ])
     signature_cell: object = _signature_image(signature) if signature is not None else Spacer(1, 50)
     signature_row = Table([[
-        Paragraph("Раис", bold), signature_cell, Paragraph(_text(chair), right),
+        Paragraph("Rais", bold), signature_cell, Paragraph(_text(chair), right),
     ]], colWidths=[150, 150, 178])
     signature_row.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),

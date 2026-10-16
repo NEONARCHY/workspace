@@ -22,8 +22,6 @@ import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
 import { SlidingSegmented } from "./SlidingSegmented";
 import { employeeScope, type EmployeeScope } from "./employee-scope";
 import { assistantPeopleIds } from "./assistant-form-handoff";
-import { TripSignaturePad } from "./TripSignaturePad";
-import { WorkspaceFileDropzone } from "./WorkspaceFileDropzone";
 import type { FileViewerSource } from "./FileViewer";
 import { TripDestinationPicker } from "./TripDestinationPicker";
 
@@ -42,9 +40,12 @@ const moveLabels: Readonly<Record<TripAction, string>> = {
 };
 const dateLabel = (value: string) => new Date(`${value}T00:00:00`).toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
 const isFinished = (request: TripRequest) => ["approved", "rejected", "annulled"].includes(request.status);
-const needsNewSignature = (request: TripRequest) => (request.workflowVersion ?? 1) >= 2 &&
-  (!(request.hasEmployeeSignature || (request.briefAttachmentName && request.originalSignatureConfirmed)) ||
-    (!request.briefText && !request.briefAttachmentName));
+const needsBriefForSubmission = (request: TripRequest) => {
+  if ((request.workflowVersion ?? 1) < 2) return false;
+  if (request.briefText?.trim()) return false;
+  return !(request.hasEmployeeSignature || (request.briefAttachmentName && request.originalSignatureConfirmed)) ||
+    (!request.briefText && !request.briefAttachmentName);
+};
 
 interface TripApprovalsViewProps {
   readonly assistantDraft?: AssistantActionDraft;
@@ -57,12 +58,8 @@ interface TripApprovalsViewProps {
   readonly onUpdate: (request: TripRequest, payload: TripRequestInput) => Promise<TripRequest | undefined>;
   readonly onDelete?: (request: TripRequest) => Promise<void>;
   readonly onAction: (request: TripRequest, action: TripAction, comment?: string, targetStage?: TripStage) => Promise<TripRequest | undefined>;
-  readonly onUploadBrief?: (requestId: string, file: File) => Promise<TripRequest | undefined>;
-  readonly onRemoveBrief?: (requestId: string) => Promise<TripRequest | undefined>;
-  readonly onUploadSignature?: (requestId: string, content: Blob) => Promise<TripRequest | undefined>;
-  readonly onSetOriginalSignature?: (requestId: string, confirmed: boolean) => Promise<TripRequest | undefined>;
   readonly onLoadBriefOffice?: (requestId: string, sheet: number, offset: number, signal?: AbortSignal) => Promise<OfficePreviewResult>;
-  readonly onDownloadDocument?: (requestId: string, kind: "attachment" | "brief" | "order" | "order-preview", signal?: AbortSignal) => Promise<Blob | undefined>;
+  readonly onDownloadDocument?: (requestId: string, kind: "attachment" | "brief" | "brief-preview" | "order" | "order-preview", signal?: AbortSignal) => Promise<Blob | undefined>;
   readonly onOpenChat?: (chatId: string) => void;
   readonly renderTripChat?: (request: TripRequest) => ReactNode;
   readonly workflow?: WorkflowDefinition;
@@ -82,7 +79,7 @@ function emptyForm(currentUserId: string): TripFormState {
     employeeIds: [currentUserId], briefText: "", expenseSource: "" };
 }
 
-export function TripApprovalsView({ focusRequestId, requests, people, departments, currentUser, onCreate, onUpdate, onDelete, onAction, onUploadBrief, onRemoveBrief, onUploadSignature, onSetOriginalSignature, onLoadBriefOffice, onDownloadDocument, onOpenChat, renderTripChat, workflow, positions = [], canManageWorkflow = false, onSaveWorkflow, onPublishWorkflow, assistantDraft }: TripApprovalsViewProps) {
+export function TripApprovalsView({ focusRequestId, requests, people, departments, currentUser, onCreate, onUpdate, onDelete, onAction, onLoadBriefOffice, onDownloadDocument, onOpenChat, renderTripChat, workflow, positions = [], canManageWorkflow = false, onSaveWorkflow, onPublishWorkflow, assistantDraft }: TripApprovalsViewProps) {
   const boardPan = useMiddleMousePan<HTMLDivElement>();
   const restoreFocusTarget = useRestoreFocusTarget();
   const [selectedId, setSelectedId] = useState(focusRequestId ?? "");
@@ -113,13 +110,9 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
   const [employeeQuery, setEmployeeQuery] = useState("");
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
-  const briefFileRef = useRef<HTMLInputElement>(null);
-  const pendingCreatedRef = useRef<TripRequest | undefined>(undefined);
-  const [briefFile, setBriefFile] = useState<File>();
   const [documentPreview, setDocumentPreview] = useState<FileViewerSource & {
-    updatedAt: string; kind: "attachment" | "brief" | "order" | "order-preview";
+    updatedAt: string; kind: "attachment" | "brief" | "brief-preview" | "order" | "order-preview";
   }>();
-  const [previewedBriefVersion, setPreviewedBriefVersion] = useState("");
   const [error, setError] = useState("");
   const selected = requests.find((request) => request.id === selectedId);
   const canChooseOthers = ["manager", "admin", "superadmin"].includes(currentUser.role);
@@ -155,21 +148,10 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
       .join(" ").toLocaleLowerCase("ru-RU").includes(query.trim().toLocaleLowerCase("ru-RU"));
   });
 
-  const openRequest = (id: string) => { pendingCreatedRef.current = undefined; setBriefFile(undefined); setDocumentPreview(undefined); setPreviewedBriefVersion(""); setFormOpen(false); setFormMode(null); setSelectedId(id); setDetailOpen(true); setPendingDecision(undefined); setConfirmDeleteId(""); setError(""); };
+  const openRequest = (id: string) => { setDocumentPreview(undefined); setFormOpen(false); setFormMode(null); setSelectedId(id); setDetailOpen(true); setPendingDecision(undefined); setConfirmDeleteId(""); setError(""); };
   const closeDetail = () => { if (!busyRef.current) { setDetailOpen(false); setPendingDecision(undefined); setConfirmDeleteId(""); setError(""); } };
-  const closeForm = () => { if (!busyRef.current) { if (pendingCreatedRef.current) { setSelectedId(pendingCreatedRef.current.id); setDetailOpen(true); } pendingCreatedRef.current = undefined; setBriefFile(undefined); setFormOpen(false); setFormMode(null); setError(""); } };
-  const create = () => { pendingCreatedRef.current = undefined; setBriefFile(undefined); setDetailOpen(false); setForm(emptyForm(currentUser.id)); setEmployeeQuery(""); setFormMode("create"); setFormOpen(true); setError(""); };
-
-  const chooseBriefFile = (file?: File) => {
-    if (!file) return;
-    if (!file.size || file.size > 10 * 1024 * 1024 || !/\.(pdf|docx|jpe?g|png)$/i.test(file.name)) {
-      setBriefFile(undefined);
-      setError("Выберите PDF, DOCX, JPG или PNG размером до 10 МиБ.");
-      return;
-    }
-    setBriefFile(file);
-    setError("");
-  };
+  const closeForm = () => { if (!busyRef.current) { setFormOpen(false); setFormMode(null); setError(""); } };
+  const create = () => { setDetailOpen(false); setForm(emptyForm(currentUser.id)); setEmployeeQuery(""); setFormMode("create"); setFormOpen(true); setError(""); };
 
   const save = async () => {
     if (busyRef.current) return;
@@ -180,86 +162,40 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
     busyRef.current = true; setBusy(true); setError("");
     try {
       const payload: TripRequestInput = { ...form, purpose: form.purpose.trim(), destination: form.destination.trim() };
-      const existing = formMode === "edit" ? selected : pendingCreatedRef.current;
+      const existing = formMode === "edit" ? selected : undefined;
       const saved = existing ? await onUpdate(existing, payload) : await onCreate(payload);
       if (!saved) { setError("Не удалось сохранить поездку. Проверьте данные и подключение к серверу."); return; }
-      if (formMode === "create") pendingCreatedRef.current = saved;
       setSelectedId(saved.id);
-      if (briefFile) {
-        const uploaded = await onUploadBrief?.(saved.id, briefFile);
-        if (!uploaded) {
-          setError("Черновик сохранён, но билдирги не загрузилась. Проверьте файл или подключение и повторите сохранение — новая поездка не создастся.");
-          return;
-        }
-      }
-      pendingCreatedRef.current = undefined;
-      setBriefFile(undefined);
-      setPreviewedBriefVersion("");
       setFormOpen(false);
       setDetailOpen(true);
       setFormMode(null);
+      if (saved.briefText?.trim() && (saved.workflowVersion ?? 1) >= 2) openDocument(saved, "brief-preview");
     } catch { setError("Не удалось сохранить поездку. Попробуйте ещё раз."); }
     finally { busyRef.current = false; setBusy(false); }
   };
 
-  const changeBrief = async (request: TripRequest, file?: File, remove = false) => {
-    if (busyRef.current || (!remove && !file)) return;
-    if (file && (!file.size || file.size > 10 * 1024 * 1024)) {
-      setError("Файл билдирги должен быть не больше 10 МиБ."); return;
-    }
-    busyRef.current = true; setBusy(true); setError("");
-    try {
-      const updated = remove
-        ? await onRemoveBrief?.(request.id)
-        : file ? await onUploadBrief?.(request.id, file) : undefined;
-      if (!updated) setError("Не удалось сохранить документ. Проверьте формат файла и подключение.");
-      else { setDocumentPreview(undefined); setPreviewedBriefVersion(""); }
-    } catch { setError("Не удалось сохранить документ. Попробуйте ещё раз."); }
-    finally { busyRef.current = false; setBusy(false); if (briefFileRef.current) briefFileRef.current.value = ""; }
-  };
-  const saveSignature = async (request: TripRequest, content: Blob): Promise<boolean> => {
-    if (busyRef.current || !onUploadSignature) return false;
-    busyRef.current = true; setBusy(true); setError("");
-    try {
-      const updated = await onUploadSignature(request.id, content);
-      if (!updated) { setError("Не удалось сохранить подпись. Проверьте формат PNG."); return false; }
-      return true;
-    } catch { setError("Не удалось сохранить подпись. Попробуйте ещё раз."); return false; }
-    finally { busyRef.current = false; setBusy(false); }
-  };
-  const confirmOriginalSignature = async (request: TripRequest, confirmed: boolean) => {
-    if (busyRef.current || !onSetOriginalSignature) return;
-    busyRef.current = true; setBusy(true); setError("");
-    try {
-      const updated = await onSetOriginalSignature(request.id, confirmed);
-      if (!updated) setError("Не удалось сохранить подтверждение подписи. Повторите попытку.");
-    } catch { setError("Не удалось сохранить подтверждение подписи. Повторите попытку."); }
-    finally { busyRef.current = false; setBusy(false); }
-  };
   const loadDocumentPreview = useCallback(async (file: FileViewerSource, signal?: AbortSignal) => {
     const content = await onDownloadDocument?.(file.id, documentPreview?.kind ?? "attachment", signal);
     if (!content) throw new Error("Не удалось открыть документ поездки");
-    if (!signal?.aborted && documentPreview?.kind === "attachment") setPreviewedBriefVersion(`${file.id}:${documentPreview.updatedAt}`);
     return content;
   }, [onDownloadDocument, documentPreview]);
   const loadBriefOffice = useCallback(async (file: FileViewerSource, sheet: number, offset: number, signal?: AbortSignal) => {
     if (!onLoadBriefOffice) throw new Error("Предпросмотр DOCX недоступен");
     const content = await onLoadBriefOffice(file.id, sheet, offset, signal);
-    if (!signal?.aborted && documentPreview?.kind === "attachment") setPreviewedBriefVersion(`${file.id}:${documentPreview.updatedAt}`);
     return content;
-  }, [onLoadBriefOffice, documentPreview]);
-  const openDocument = (request: TripRequest, kind: "attachment" | "brief" | "order" | "order-preview") => {
+  }, [onLoadBriefOffice]);
+  const openDocument = (request: TripRequest, kind: "attachment" | "brief" | "brief-preview" | "order" | "order-preview") => {
     const original = kind === "attachment" || (kind === "brief" && request.originalSignatureConfirmed);
     setDocumentPreview({
       id: request.id, kind, updatedAt: request.updatedAt,
-      fileName: original ? request.briefAttachmentName ?? "bildirgi" : kind === "brief" ? "bildirgi-signed.pdf"
+      fileName: original ? request.briefAttachmentName ?? "bildirgi" : kind === "brief" ? "bildirgi.pdf" : kind === "brief-preview" ? "bildirgi-preview.pdf"
         : kind === "order" ? `prikaz-${request.orderNumber ?? request.number}.pdf` : "prikaz-preview.pdf",
       contentType: original ? request.briefAttachmentType ?? "" : "application/pdf",
       byteSize: original ? request.briefAttachmentSize ?? 0 : 0,
     });
   };
   const downloadDocument = async (
-    request: TripRequest, kind: "attachment" | "brief" | "order" | "order-preview",
+    request: TripRequest, kind: "attachment" | "brief" | "brief-preview" | "order" | "order-preview",
   ) => {
     if (!onDownloadDocument || busyRef.current) return;
     busyRef.current = true; setBusy(true); setError("");
@@ -270,7 +206,8 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
       const link = document.createElement("a");
       link.href = url;
       link.download = kind === "attachment" ? request.briefAttachmentName ?? "bildirgi"
-        : kind === "brief" ? request.originalSignatureConfirmed ? request.briefAttachmentName ?? "bildirgi" : "bildirgi-signed.pdf"
+        : kind === "brief" ? request.originalSignatureConfirmed ? request.briefAttachmentName ?? "bildirgi" : "bildirgi.pdf"
+          : kind === "brief-preview" ? "bildirgi-preview.pdf"
           : kind === "order" ? `prikaz-${request.orderNumber ?? request.number}.pdf`
             : "prikaz-preview.pdf";
       link.click();
@@ -350,7 +287,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
       {view === "kanban" && visibleRequests.some((request) => request.stage === "hr") ? <WorkspaceNotice tone="info" className="trip-board-help" role="status"><span>Заявка прежнего маршрута на кадровом этапе доступна во вкладке «Список».</span></WorkspaceNotice> : null}
       {visibleRequests.length === 0 ? <WorkspaceNotice tone="info" className="trip-board-help" role="status"><span>{requests.length ? "По выбранным фильтрам поездок нет. Измените поиск или выберите «Все»." : "Поездок пока нет. Создайте первую командировку — она появится в колонке «Запуск»."}</span></WorkspaceNotice> : null}
       {view === "kanban" ? (
-        <SpatialBoard canDrop={(id, target) => { const request = requests.find(item => item.id === id); const action = request && tripDropAction(request, target as TripStage, isAdministrator); return !busy && !!action && !(request && (action === "submit" || action === "resubmit") && needsNewSignature(request)); }} onMove={async (id, target) => { const request = requests.find(item => item.id === id); const targetStage = target as TripStage; const action = request && tripDropAction(request, targetStage, isAdministrator); if (request && action && !((action === "submit" || action === "resubmit") && needsNewSignature(request))) { if (action === "move") await commitAction(request, action, `Перенос на этап «${displayTripColumns.find((column) => column.key === targetStage)?.label ?? targetStage}»`, targetStage); else await act(request, action); } }}>
+        <SpatialBoard canDrop={(id, target) => { const request = requests.find(item => item.id === id); const action = request && tripDropAction(request, target as TripStage, isAdministrator); return !busy && !!action && !(request && (action === "submit" || action === "resubmit") && needsBriefForSubmission(request)); }} onMove={async (id, target) => { const request = requests.find(item => item.id === id); const targetStage = target as TripStage; const action = request && tripDropAction(request, targetStage, isAdministrator); if (request && action && !((action === "submit" || action === "resubmit") && needsBriefForSubmission(request))) { if (action === "move") await commitAction(request, action, `Перенос на этап «${displayTripColumns.find((column) => column.key === targetStage)?.label ?? targetStage}»`, targetStage); else await act(request, action); } }}>
         <div className="approval-kanban trip-kanban middle-pan-surface" role="region" tabIndex={0} aria-label="Стадии поездок" aria-busy={busy} {...boardPan}>
           {displayTripColumns.map((column) => {
             const items = visibleRequests.filter((request) => request.stage === column.key);
@@ -362,7 +299,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
               <div className="approval-column-stack" tabIndex={0} aria-label={`Поездки на этапе «${column.label}»`}>
                 {items.map((request) => {
                   const forward = request.allowedActions.find((action) => action === "submit" || action === "resubmit" || action === "approve");
-                  const movable = !busy && displayTripColumns.some((target) => { const action = tripDropAction(request, target.key, isAdministrator); return action && !((action === "submit" || action === "resubmit") && needsNewSignature(request)); });
+                  const movable = !busy && displayTripColumns.some((target) => { const action = tripDropAction(request, target.key, isAdministrator); return action && !((action === "submit" || action === "resubmit") && needsBriefForSubmission(request)); });
                   return <SpatialCard id={request.id} lane={column.key} label={request.purpose || request.destination} disabled={!movable} key={request.id} data-trip-id={request.id} className={`approval-board-card trip-board-card ${movable ? "movable" : ""}`}>
                     <button type="button" className="approval-card-open" aria-label={`Открыть поездку ${request.number}: ${request.purpose || request.destination}`} onClick={() => openRequest(request.id)}>
                       <span className="approval-card-topline"><span>{request.number}</span>{request.status === "needs_revision" ? <em>Доработка</em> : null}</span>
@@ -372,7 +309,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
                       {personLink(request.requesterUserId, <><Avatar size={24} name={personName(request.requesterUserId)} color="colorful" /><span>{personName(request.requesterUserId)}</span></>, "approval-card-owner")}
                       <span className="approval-card-meta"><span>{request.stageLabel}</span><span>{request.employeeIds.length} участн.</span></span>
                     </button>
-                    <footer><span>{movable ? "Можно перенести" : request.statusLabel}</span>{request.chatId && onOpenChat ? <Button size="small" className="context-chat-button" appearance="subtle" icon={<Chat24Regular />} aria-label={`Открыть чат поездки ${request.number}`} onClick={() => onOpenChat(request.chatId!)} /> : null}{forward ? <Button size="small" appearance="subtle" disabled={busy || ((forward === "submit" || forward === "resubmit") && needsNewSignature(request))} aria-label={`${forward === "submit" && request.workflowVersion === 3 ? "Отправить первому заместителю" : actionLabels[forward]}: ${request.number}`} onClick={() => void act(request, forward)}>{moveLabels[forward]}</Button> : null}</footer>
+                    <footer><span>{movable ? "Можно перенести" : request.statusLabel}</span>{request.chatId && onOpenChat ? <Button size="small" className="context-chat-button" appearance="subtle" icon={<Chat24Regular />} aria-label={`Открыть чат поездки ${request.number}`} onClick={() => onOpenChat(request.chatId!)} /> : null}{forward ? <Button size="small" appearance="subtle" disabled={busy || ((forward === "submit" || forward === "resubmit") && needsBriefForSubmission(request))} aria-label={`${forward === "submit" && request.workflowVersion === 3 ? "Отправить первому заместителю" : actionLabels[forward]}: ${request.number}`} onClick={() => void act(request, forward)}>{moveLabels[forward]}</Button> : null}</footer>
                   </SpatialCard>;
                 })}
                 {!items.length ? <div className="approval-column-empty">Нет поездок</div> : null}
@@ -404,25 +341,23 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
             <dl className="bp7-facts"><div><dt>Инициатор</dt><dd>{personLink(selected.requesterUserId, personName(selected.requesterUserId))}</dd></div><div><dt>Период</dt><dd>{selected.startDate} — {selected.endDate}</dd></div></dl>
             <div className="trip-employees"><h3>Сотрудники</h3>{selected.employeeIds.map((id) => <span key={id}>{personLink(id, personName(id), "trip-employee-link")}</span>)}</div>
             {(selected.workflowVersion ?? 1) >= 2 ? <section className="trip-document-panel" aria-label="Документы поездки">
-              <div className="trip-document-heading"><div><h3>Билдирги и приказ</h3><p>Проверьте данные, оригинал и подпись до отправки первому заместителю.</p></div>{selected.orderNumber ? <Badge appearance="tint" color="success">Приказ № {selected.orderNumber}</Badge> : null}</div>
+              <div className="trip-document-heading"><div><h3>Билдирги и приказ</h3><p>Проверьте текст и PDF билдирги до отправки первому заместителю.</p></div>{selected.orderNumber ? <Badge appearance="tint" color="success">Приказ № {selected.orderNumber}</Badge> : null}</div>
               <dl className="trip-document-facts">{selected.expenseSource ? <div><dt>Источник расходов</dt><dd>{selected.expenseSource}</dd></div> : null}<div><dt>Текст билдирги</dt><dd>{selected.briefText || (selected.briefAttachmentName ? "См. приложенный оригинал" : "Не добавлен")}</dd></div></dl>
               <div className="trip-document-files">
-                {selected.canEdit && onUploadBrief ? <><input ref={briefFileRef} className="sr-only" type="file" accept=".pdf,.docx,.jpg,.jpeg,.png" aria-label="Загрузить оригинал билдирги" onChange={(event) => { const file = event.target.files?.[0]; if (file) void changeBrief(selected, file); }} /><Button type="button" disabled={busy} onClick={() => briefFileRef.current?.click()}>{selected.briefAttachmentName ? "Заменить оригинал" : "Прикрепить оригинал"}</Button></> : null}
-                {selected.briefAttachmentName ? <><Button type="button" disabled={busy} onClick={() => openDocument(selected, "attachment")}>Открыть оригинал · {selected.briefAttachmentName}</Button>{selected.canEdit && onRemoveBrief ? <Button type="button" disabled={busy} onClick={() => void changeBrief(selected, undefined, true)}>Убрать оригинал</Button> : null}</> : null}
-                {selected.hasSignedBrief ? <Button type="button" disabled={busy} onClick={() => openDocument(selected, "brief")}>{selected.originalSignatureConfirmed ? "Открыть подписанный оригинал" : "Открыть подписанную билдирги PDF"}</Button> : null}
+                {selected.briefAttachmentName ? <Button type="button" disabled={busy} onClick={() => openDocument(selected, "attachment")}>Открыть прежний оригинал · {selected.briefAttachmentName}</Button> : null}
+                {selected.stage === "launch" && selected.briefText?.trim() ? <Button type="button" appearance="primary" disabled={busy} onClick={() => openDocument(selected, "brief-preview")}>Предпросмотр билдирги PDF</Button> : null}
+                {selected.hasSignedBrief ? <Button type="button" disabled={busy} onClick={() => openDocument(selected, "brief")}>{selected.originalSignatureConfirmed ? "Открыть прежний подписанный оригинал" : "Открыть билдирги PDF"}</Button> : null}
                 {selected.stage === "manager_approval" ? <Button type="button" disabled={busy} onClick={() => openDocument(selected, "order-preview")}>Предпросмотр приказа</Button> : null}
                 {selected.hasOrderPdf ? <Button type="button" appearance="primary" disabled={busy} onClick={() => openDocument(selected, "order")}>Открыть утверждённый приказ PDF</Button> : null}
               </div>
-              {selected.canEdit && selected.requesterUserId === currentUser.id && selected.briefAttachmentName && onSetOriginalSignature ? <div className="trip-original-signature-choice"><Checkbox checked={Boolean(selected.originalSignatureConfirmed)} disabled={busy || (!selected.originalSignatureConfirmed && previewedBriefVersion !== `${selected.id}:${selected.updatedAt}`)} label="Оригинал билдирги уже подписан мной" onChange={(_, data) => void confirmOriginalSignature(selected, Boolean(data.checked))} /><p>{selected.originalSignatureConfirmed ? "Используем прикреплённый оригинал без дополнительной подписи. Снимите отметку, если нужно подписать в системе." : selected.briefAttachmentName.toLowerCase().endsWith(".docx") ? "Откройте документ. Встроенный просмотр Word показывает текст; для проверки подписи скачайте оригинал в просмотрщике." : "Сначала откройте и проверьте оригинал целиком. Если подпись уже есть в файле, подтвердите это здесь."}</p></div> : null}
-              {selected.canEdit && selected.requesterUserId === currentUser.id && onUploadSignature && !selected.originalSignatureConfirmed ? <TripSignaturePad saved={selected.hasEmployeeSignature} disabled={busy} onSave={(content) => saveSignature(selected, content)} /> : null}
-              {selected.canEdit && needsNewSignature(selected) ? <WorkspaceNotice tone="warning" className="trip-document-reminder">Перед отправкой добавьте текст или оригинал билдирги и подтвердите подпись: в прикреплённом оригинале либо в системе. После исправления заявки подпись нужно подтвердить снова. Если данные менял суперадмин, подпись подтверждает инициатор.</WorkspaceNotice> : null}
+              {selected.canEdit && needsBriefForSubmission(selected) ? <WorkspaceNotice tone="warning" className="trip-document-reminder">Перед отправкой напишите текст билдирги, сохраните черновик и проверьте PDF. Для старых заявок с прикреплённым оригиналом действуют прежние требования к подписи.</WorkspaceNotice> : null}
               {selected.status === "approved" ? <WorkspaceNotice tone="success" role="status" className="trip-document-approved">Приказ зарегистрирован и подписан председателем. Участникам направлены уведомления.</WorkspaceNotice> : null}
               {selected.status === "annulled" ? <WorkspaceNotice tone="warning" role="status" className="trip-document-reminder">Приказ аннулирован. Исходный подписанный документ и история решений сохранены.</WorkspaceNotice> : null}
             </section> : selected.stage === "hr" ? <WorkspaceNotice tone="warning" className="trip-document-reminder">Эта поездка проходит прежний маршрут через кадровую службу.</WorkspaceNotice> : null}
             <div className="bp7-actions">
-              {selected.canEdit ? <Button disabled={busy || Boolean(pendingDecision)} icon={<Edit24Regular />} onClick={() => { pendingCreatedRef.current = undefined; setBriefFile(undefined); setForm({ purpose: selected.purpose, destination: selected.destination, startDate: selected.startDate, endDate: selected.endDate, employeeIds: selected.employeeIds, briefText: selected.briefText ?? "", expenseSource: selected.expenseSource ?? "" }); setEmployeeQuery(""); setError(""); setFormMode("edit"); }}>Изменить</Button> : null}
+              {selected.canEdit ? <Button disabled={busy || Boolean(pendingDecision)} icon={<Edit24Regular />} onClick={() => { setDocumentPreview(undefined); setForm({ purpose: selected.purpose, destination: selected.destination, startDate: selected.startDate, endDate: selected.endDate, employeeIds: selected.employeeIds, briefText: selected.briefText ?? "", expenseSource: selected.expenseSource ?? "" }); setEmployeeQuery(""); setError(""); setFormMode("edit"); }}>Изменить</Button> : null}
               {selected.canDelete && onDelete ? <Button disabled={busy || Boolean(pendingDecision)} onClick={() => setConfirmDeleteId(selected.id)}>Удалить заявку</Button> : null}
-              {selected.allowedActions.map((action) => <Button className={`trip-decision-action action-${action}`} disabled={busy || Boolean(pendingDecision) || ((action === "submit" || action === "resubmit") && needsNewSignature(selected))} appearance={action === "approve" || action === "submit" || action === "resubmit" ? "primary" : "secondary"} key={action} onClick={() => void act(selected, action)}>{action === "approve" && (selected.workflowVersion ?? 1) >= 2 && selected.stage === "manager_approval" ? "Утвердить и выпустить приказ" : action === "approve" && selected.stage === "deputy_approval" ? "Согласовать и передать председателю" : action === "submit" && selected.workflowVersion === 3 ? "Отправить первому заместителю" : action === "submit" && selected.workflowVersion === 2 ? "Отправить председателю" : actionLabels[action]}</Button>)}
+              {selected.allowedActions.map((action) => <Button className={`trip-decision-action action-${action}`} disabled={busy || Boolean(pendingDecision) || ((action === "submit" || action === "resubmit") && needsBriefForSubmission(selected))} appearance={action === "approve" || action === "submit" || action === "resubmit" ? "primary" : "secondary"} key={action} onClick={() => void act(selected, action)}>{action === "approve" && (selected.workflowVersion ?? 1) >= 2 && selected.stage === "manager_approval" ? "Утвердить и выпустить приказ" : action === "approve" && selected.stage === "deputy_approval" ? "Согласовать и передать председателю" : action === "submit" && selected.workflowVersion === 3 ? "Отправить первому заместителю" : action === "submit" && selected.workflowVersion === 2 ? "Отправить председателю" : actionLabels[action]}</Button>)}
               {isAdministrator && (selected.workflowVersion ?? 1) === 1 ? displayTripColumns.filter((column) => column.key !== selected.stage).map((column) => <Button data-stage={column.key} disabled={busy || Boolean(pendingDecision)} key={`move:${column.key}`} onClick={() => void commitAction(selected, "move", `Перенос на этап «${column.label}»`, column.key)}>{column.label}</Button>) : null}
             </div>
             {confirmDeleteId === selected.id ? <div className="trip-delete-confirm" role="group" aria-label="Подтверждение удаления заявки"><p>Удалить заявку из рабочего списка? История и документы останутся в архиве системы.</p><Button appearance="primary" disabled={busy} onClick={() => void deleteRequest(selected)}>Да, удалить</Button><Button disabled={busy} onClick={() => setConfirmDeleteId("")}>Отмена</Button></div> : null}
@@ -430,23 +365,18 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
           </article>{renderTripChat ? renderTripChat(selected) : <div className="embedded-chat-unavailable">Чат поездки недоступен.</div>}</div> : formMode !== null ? (
           <form className="bp7-modal trip-form record-composer" noValidate aria-busy={busy} onSubmit={(event) => { event.preventDefault(); void save(); }}>
             <RecordComposer title={formMode === "create" ? "Создать заявку на поездку" : "Изменить заявку на поездку"} titleId="trip-composer-title" eyebrow="Согласование поездок" busy={busy} error={error} submitLabel="Сохранить" onClose={closeForm}
-              hint="После сохранения проверьте билдирги и подтвердите подпись в оригинале либо подпишите в системе."
+              hint="После сохранения откроется PDF билдирги. Проверьте его, при необходимости измените текст, затем отправьте на согласование."
               stages={<div className="record-stages" tabIndex={0} role="region" aria-label="Маршрут согласования">{displayTripColumns.filter((column) => column.key !== "rejected" && column.key !== "hr").map((column) => <span key={column.key} aria-current={column.key === (formMode === "edit" ? selected?.stage : "launch") ? "step" : undefined} style={{ "--record-stage-color": column.color } as CSSProperties}>{column.label}</span>)}</div>}
               aside={<>
                 <RecordSummary title="Сводка поездки"><div className="record-summary-title">{form.destination.trim() || "Место поездки не указано"}</div>
                   <dl className="record-summary-facts"><div><dt>Даты</dt><dd>{form.startDate || "Не указано"} — {form.endDate || "Не указано"}</dd></div><div><dt>Инициатор</dt><dd>{formMode === "edit" && selected ? personLink(selected.requesterUserId, personName(selected.requesterUserId)) : personLink(currentUser.id, currentUser.name)}</dd></div><div><dt>Участников</dt><dd>{form.employeeIds.length}</dd></div></dl>
                   <ul className="record-summary-people">{form.employeeIds.map((id) => <EmployeeProfileLink as="li" key={id} userId={people.some((person) => person.id === id) ? id : undefined} personName={personName(id)}>{personName(id)}</EmployeeProfileLink>)}</ul>
                 </RecordSummary>
-                <section className="record-summary-card record-summary-note"><h3>Что произойдёт дальше</h3><p>Выбранный оригинал билдирги загрузится вместе с черновиком. Проверьте файл и подтвердите подпись в оригинале либо поставьте её в системе. Первый заместитель согласует заявку, затем председатель утвердит её или вернёт на уточнение.</p><p>После утверждения приказ получит отдельный номер серии WS и появится во вкладке «Утверждено».</p></section>
+                <section className="record-summary-card record-summary-note"><h3>Что произойдёт дальше</h3><p>После сохранения вы увидите PDF билдирги до отправки. Текст можно изменить. Первый заместитель согласует заявку, затем председатель утвердит её или вернёт на уточнение.</p><p>После утверждения приказ получит отдельный номер серии WS и появится во вкладке «Утверждено».</p></section>
               </>}>
-              <RecordSection title="Билдирги" description="Укажите место поездки, напишите текст или выберите готовый оригинал. Файл загрузится при сохранении черновика."><div className="record-field-grid">
+              <RecordSection title="Билдирги" description="Укажите, куда едете, и напишите текст. После сохранения появится предварительный PDF, который можно проверить и изменить до отправки."><div className="record-field-grid">
                 <TripDestinationPicker value={form.destination} onChange={(destination) => setForm((current) => ({ ...current, destination }))} disabled={busy} />
-                <div className="record-field-wide trip-composer-brief-file">
-                  <WorkspaceFileDropzone label="Оригинал билдирги" hint="PDF, DOCX, JPG или PNG · до 10 МиБ" actionLabel={briefFile ? "Заменить файл" : "Выбрать файл"} files={briefFile ? [briefFile] : []} accept=".pdf,.docx,.jpg,.jpeg,.png" disabled={busy} ariaLabel="Загрузить билдирги" onFiles={(files) => chooseBriefFile(files[0])} />
-                  {briefFile ? <Button type="button" appearance="subtle" onClick={() => { setBriefFile(undefined); setError(""); }}>Убрать выбранный файл</Button> : null}
-                  {formMode === "edit" && selected?.briefAttachmentName ? <p>Сейчас прикреплён: {selected.briefAttachmentName}. Новый файл заменит его после сохранения.</p> : null}
-                </div>
-                <label className="record-field-wide">Текст билдирги<Textarea aria-label="Текст билдирги" resize="vertical" rows={5} placeholder="Опишите основание, мероприятие и цель поездки" value={form.briefText} onChange={(_, data) => setForm({ ...form, briefText: data.value })} /></label>
+                <label className="record-field-wide">Текст билдирги<Textarea aria-label="Текст билдирги" resize="vertical" rows={5} required placeholder="Опишите основание, мероприятие и цель поездки" value={form.briefText} onChange={(_, data) => setForm({ ...form, briefText: data.value })} /></label>
               </div></RecordSection>
               {formMode === "create" && <RecordSection title="Иконка чата поездки" description="По умолчанию — самолёт. После создания иконку можно изменить в чате."><ChatIconPicker value={form.chatIconKey ?? "plane"} onChange={(chatIconKey) => setForm({ ...form, chatIconKey })} disabled={busy} /></RecordSection>}
               <RecordSection title="Даты поездки"><div className="record-field-grid">

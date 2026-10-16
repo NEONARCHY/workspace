@@ -64,7 +64,7 @@ where = [
 
 [tool.setuptools.package-data]
 hisobot_import = ["spec/*.json"]
-yuksalish_api = ["organization_knowledge.json", "hr_assets/*.ttf", "hr_assets/*.md", "hr_assets/*.json", "hr_assets/*.pdf"]
+yuksalish_api = ["organization_knowledge.json", "hr_assets/*.ttf", "hr_assets/*.md", "hr_assets/*.json", "hr_assets/*.pdf", "trip_assets/*.png"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests/python"]

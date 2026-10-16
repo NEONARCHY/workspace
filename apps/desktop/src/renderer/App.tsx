@@ -213,10 +213,6 @@ import {
   updateWorkspaceProject,
   updateWorkspaceTask,
   updateWorkspaceTripRequest,
-  uploadWorkspaceTripBrief,
-  removeWorkspaceTripBrief,
-  uploadWorkspaceTripSignature,
-  setWorkspaceTripOriginalSignature,
   updateWorkspaceNotificationPreferences,
   toggleWorkspaceTaskChecklistItem,
   uploadWorkspaceAttachment,
@@ -1603,14 +1599,6 @@ export function App() {
     runTripMutation((token) =>
       actOnWorkspaceTripRequest(token, tripRequest.id, action, comment, targetStage));
 
-  const handleTripBriefUpload = (requestId: string, file: File) =>
-    runTripMutation((token) => uploadWorkspaceTripBrief(token, requestId, file));
-  const handleTripBriefRemoval = (requestId: string) =>
-    runTripMutation((token) => removeWorkspaceTripBrief(token, requestId));
-  const handleTripSignature = (requestId: string, signature: Blob) =>
-    runTripMutation((token) => uploadWorkspaceTripSignature(token, requestId, signature));
-  const handleTripOriginalSignature = (requestId: string, confirmed: boolean) =>
-    runTripMutation((token) => setWorkspaceTripOriginalSignature(token, requestId, confirmed));
   const handleTripBriefOfficePreview = (
     requestId: string, sheet: number, offset: number, signal?: AbortSignal,
   ) => {
@@ -1618,7 +1606,7 @@ export function App() {
     return loadWorkspaceTripBriefOfficePreview(session.accessToken, requestId, sheet, offset, signal);
   };
   const handleTripDocument = async (
-    requestId: string, kind: "attachment" | "brief" | "order" | "order-preview",
+    requestId: string, kind: "attachment" | "brief" | "brief-preview" | "order" | "order-preview",
     signal?: AbortSignal,
   ): Promise<Blob | undefined> => {
     if (session === undefined) return undefined;
@@ -2508,10 +2496,6 @@ export function App() {
                 onUpdate={handleUpdateTrip}
                 onDelete={handleDeleteTrip}
                 onAction={handleTripAction}
-                onUploadBrief={handleTripBriefUpload}
-                onRemoveBrief={handleTripBriefRemoval}
-                onUploadSignature={handleTripSignature}
-                onSetOriginalSignature={handleTripOriginalSignature}
                 onLoadBriefOffice={handleTripBriefOfficePreview}
                 onDownloadDocument={handleTripDocument}
                 onOpenChat={(chatId) => void handleOpenContextChat(chatId)}

@@ -163,7 +163,7 @@ async def preview_brief_attachment(
 @router.get("/{request_id}/documents/{kind}")
 async def download_trip_document(
     request_id: UUID,
-    kind: Literal["attachment", "brief", "order", "order-preview"],
+    kind: Literal["attachment", "brief", "brief-preview", "order", "order-preview"],
     request: Request,
     user: User,
     connection: Connection,
