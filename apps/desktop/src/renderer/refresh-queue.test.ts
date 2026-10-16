@@ -8,6 +8,19 @@ function deferred<T>() {
 }
 
 describe("acknowledged message refresh races", () => {
+  it("joins a slow refresh without extending it on every recovery timer tick", async () => {
+    const first = deferred<number>();
+    const load = vi.fn().mockReturnValue(first.promise);
+    const apply = vi.fn();
+    const refresh = createRefreshQueue(load, apply, () => "token");
+    const pending = refresh("token");
+    for (let tick = 0; tick < 50; tick++) void refresh("token", { trailing: false });
+    first.resolve(1);
+    await pending;
+    expect(load).toHaveBeenCalledOnce();
+    expect(apply).toHaveBeenCalledWith(1);
+  });
+
   it("cannot replace an acknowledged message with a response started before the acknowledgement", async () => {
     const old = deferred<string[]>(), fresh = deferred<string[]>();
     let messages = ["before"];

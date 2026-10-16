@@ -5,10 +5,10 @@ export function createRefreshQueue<T>(
   currentToken: () => string | undefined,
 ) {
   const running = new Map<string, { again: boolean; invalidated: boolean; promise: Promise<void> }>();
-  const refresh = (token: string): Promise<void> => {
+  const refresh = (token: string, options?: { readonly trailing?: boolean }): Promise<void> => {
     const existing = running.get(token);
     if (existing) {
-      existing.again = true;
+      if (options?.trailing !== false) existing.again = true;
       return existing.promise;
     }
     const entry = { again: false, invalidated: false, promise: Promise.resolve() };

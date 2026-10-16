@@ -845,8 +845,15 @@ export function App() {
         void refreshWorkspace(session.accessToken).catch(reportError);
       }
     };
-    refresh();
-    const timer = window.setInterval(refresh, activeSection === "messenger" ? 10_000 : 60_000);
+    const poll = () => {
+      if (document.visibilityState !== "hidden") {
+        // Recovery ticks join a slow request without keeping its trailing
+        // queue alive indefinitely. Actual events still request a fresh read.
+        void refreshWorkspace(session.accessToken, { trailing: false }).catch(reportError);
+      }
+    };
+    poll();
+    const timer = window.setInterval(poll, activeSection === "messenger" ? 10_000 : 60_000);
     window.addEventListener("yuksalish:workday-changed", refresh);
     window.addEventListener("online", refresh);
     window.addEventListener("focus", refresh);
