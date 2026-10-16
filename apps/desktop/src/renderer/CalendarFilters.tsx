@@ -1,14 +1,14 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
-import { useId, useState } from "react";
+import { useId, useState, type ReactNode } from "react";
 import { Button, Checkbox, Combobox, Option } from "@fluentui/react-components";
 import { Input } from "./WorkspaceInput";
 import type { WorkspacePerson } from "@yuksalish/contracts";
-import { Search20Regular } from "@fluentui/react-icons";
+import { ChevronDown20Regular, ChevronUp20Regular, Search20Regular } from "@fluentui/react-icons";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
 import { calendarRangeError, type CalendarFilters as Filters } from "./calendar-filters";
 
-export function CalendarFilters({ value, onChange, onReset, people, token, currentUserId, disabled, compact = false }: {
+export function CalendarFilters({ value, onChange, onReset, people, token, currentUserId, disabled, actions }: {
   readonly value: Filters;
   readonly onChange: (filters: Filters) => void;
   readonly onReset: () => void;
@@ -16,7 +16,7 @@ export function CalendarFilters({ value, onChange, onReset, people, token, curre
   readonly token: string;
   readonly currentUserId: string;
   readonly disabled: boolean;
-  readonly compact?: boolean;
+  readonly actions?: ReactNode;
 }) {
   const bodyId = useId();
   const [expanded, setExpanded] = useState(false);
@@ -27,9 +27,9 @@ export function CalendarFilters({ value, onChange, onReset, people, token, curre
   const issue = calendarRangeError(value.from, value.to);
   const activeCount = [value.employeeId, value.query.trim(), value.from || value.to, !value.showCancelled].filter(Boolean).length;
   return <section className="calendar-filters" aria-label="Фильтры календаря">
-    {compact && <Button className="calendar-filter-toggle" disabled={disabled} aria-expanded={expanded} aria-controls={bodyId}
-      onClick={() => setExpanded(current => !current)}>Фильтры{activeCount ? ` · ${activeCount}` : ""}<span aria-hidden="true">{expanded ? "−" : "+"}</span></Button>}
-    <div id={bodyId} className="calendar-filter-body" hidden={compact && !expanded}>
+    <div className="calendar-filter-heading"><Button className="calendar-filter-toggle" appearance="subtle" icon={expanded ? <ChevronUp20Regular /> : <ChevronDown20Regular />} iconPosition="after" disabled={disabled} aria-expanded={expanded} aria-controls={bodyId}
+      onClick={() => setExpanded(current => !current)}>Фильтры{activeCount ? ` · ${activeCount}` : ""}</Button>{actions}</div>
+    <div id={bodyId} className="calendar-filter-body" hidden={!expanded}>
     <div className="calendar-filter-fields">
       <div className="calendar-filter-field">
         <span>Сотрудник</span>

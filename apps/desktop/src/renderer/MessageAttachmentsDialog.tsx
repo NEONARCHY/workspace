@@ -50,6 +50,11 @@ export function MessageAttachmentsDialog({ files, caption, blockedReason, errorM
 }) {
   const photos = files.every(file => fileViewerKind({ fileName: file.name, contentType: file.type }) === "image");
   const [dropError, setDropError] = useState("");
+  const captionRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const focusFrame = requestAnimationFrame(() => captionRef.current?.focus({ preventScroll: true }));
+    return () => cancelAnimationFrame(focusFrame);
+  }, []);
   return <WorkspaceDialog open onOpenChange={(_, data) => { if (!data.open) onClose(); }}>
     <DialogSurface className="message-attachments-dialog" aria-label="Отправка вложений" onPaste={event => {
       const files = Array.from(event.clipboardData.files);
@@ -60,7 +65,10 @@ export function MessageAttachmentsDialog({ files, caption, blockedReason, errorM
       if (Array.from(event.dataTransfer.items).some(item => item.webkitGetAsEntry?.()?.isDirectory)) { setDropError("Добавьте отдельные файлы: папки не поддерживаются."); return; }
       setDropError(""); onFiles(Array.from(event.dataTransfer.files));
     }} onKeyDown={event => {
-      if ((event.ctrlKey || event.metaKey) && event.key === "Enter" && !blockedReason && files.length) { event.preventDefault(); onSend(); }
+      if (event.key !== "Enter" || event.shiftKey || event.altKey || event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
+      if (event.target !== captionRef.current && !event.ctrlKey && !event.metaKey) return;
+      event.preventDefault(); event.stopPropagation();
+      if (!event.repeat && !blockedReason && files.length) onSend();
     }}><DialogBody>
       <DialogTitle action={<Button appearance="subtle" icon={<Dismiss20Regular />} aria-label="Закрыть отправку вложений" onClick={onClose} />}>
         {photos ? `Выбрано фото: ${files.length}` : `Выбрано файлов: ${files.length}`}
@@ -71,7 +79,7 @@ export function MessageAttachmentsDialog({ files, caption, blockedReason, errorM
         </div>
         <p className="attachment-original-note">Оригиналы без сжатия</p>
         <label className="attachment-caption-label" htmlFor="attachment-message-caption">Подпись</label>
-        <Textarea id="attachment-message-caption" aria-label="Подпись к вложениям" value={caption} maxLength={20000} resize="vertical" onChange={(_, data) => onCaption(data.value)} />
+        <Textarea ref={captionRef} id="attachment-message-caption" aria-label="Подпись к вложениям" value={caption} maxLength={20000} resize="vertical" onChange={(_, data) => onCaption(data.value)} />
         {blockedReason && <WorkspaceNotice tone="warning" role="alert">{blockedReason}</WorkspaceNotice>}
         {errorMessage && !blockedReason && <WorkspaceNotice tone="error" role="alert">{errorMessage}</WorkspaceNotice>}
         {dropError && <WorkspaceNotice tone="error" role="alert">{dropError}</WorkspaceNotice>}

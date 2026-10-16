@@ -65,7 +65,12 @@ it("separates light approval tools from the canvas without changing dark or high
   }
   expect(contrast("#006779", color("action-surface"))).toBeGreaterThanOrEqual(4.5);
   expect(approvalsCss).toMatch(/@media \(forced-colors: none\)\s*\{\s*html:not\(\[data-color-theme="dark"\]\)/);
-  expect(block(approvalsCss, `${scope} .approval-commandbar`)).toContain("background: var(--approval-summary-surface);");
+  const tripScope = 'html:not([data-color-theme="dark"]) .trips-view';
+  const sharedSummary = block(approvalsCss, `${scope} .approval-commandbar,\n  ${tripScope} .ws2-process-overview`);
+  expect(sharedSummary).toContain("background: var(--approval-summary-surface);");
+  expect(sharedSummary).toContain("border-color: transparent;");
+  expect(sharedSummary).toContain("box-shadow: 0 4px 14px -8px rgb(41 58 85 / 24%);");
+  expect(block(approvalsCss, `${scope} .approval-metric-actionable,\n  ${tripScope} .ws2-process-focus`)).toContain("background: var(--approval-action-surface);");
   expect(block(approvalsCss, `${scope} .approval-view-toolbar .ws2-segmented`)).toContain("--sliding-indicator-background: var(--approval-control-selected);");
   expect(block(approvalsCss, `${scope} .approval-view-toolbar .ws2-segmented > button:not([aria-pressed="true"]):hover`)).toContain("background: var(--approval-control-hover);");
   expect(approvalsCss).toContain("outline: 2px solid var(--ws-link);");

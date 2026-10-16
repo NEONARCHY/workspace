@@ -50,6 +50,7 @@ from .routers import (
     support,
     surveys,
     task_plans,
+    task_proposals,
     telegram_access,
     trip_documents,
     updates,
@@ -202,6 +203,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(workspace.router, prefix=runtime_settings.api_prefix)
     application.include_router(trip_documents.router, prefix=runtime_settings.api_prefix)
     application.include_router(task_plans.router, prefix=runtime_settings.api_prefix)
+    application.include_router(task_proposals.router, prefix=runtime_settings.api_prefix)
     application.include_router(project_hub.router, prefix=runtime_settings.api_prefix)
     application.include_router(project_imports.router, prefix=runtime_settings.api_prefix)
     application.include_router(surveys.router, prefix=runtime_settings.api_prefix)

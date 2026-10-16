@@ -59,6 +59,7 @@ from .tables import (
     task_dependencies,
     task_efficiency_events,
     task_participants,
+    task_proposals,
     tasks,
     trip_request_actions,
     trip_request_employees,
@@ -1936,6 +1937,29 @@ async def _sync_notifications_for_user(
             occurred_at=task_row["updated_at"],
         )
 
+    pending_extensions = (await connection.execute(
+        select(task_deadline_requests, users.c.full_name.label("requester_name"))
+        .join(users, users.c.id == task_deadline_requests.c.requester_user_id)
+        .where(
+            task_deadline_requests.c.task_id.in_([
+                row["id"] for row in task_rows
+                if row["author_user_id"] == current_user.id
+                and row["status"] not in {"completed", "cancelled"}
+            ]),
+            task_deadline_requests.c.status == "pending",
+        )
+    )).mappings().all()
+    task_by_id = {row["id"]: row for row in task_rows}
+    for extension in pending_extensions:
+        task_row = task_by_id[extension["task_id"]]
+        if task_row["due_at"] != extension["old_due_at"]:
+            continue
+        active_attention_keys.add(f"task:deadline:request:{extension['id']}")
+        await _notify_task_deadline_request(
+            connection, task_row, extension["id"], extension["requester_name"],
+            extension["proposed_due_at"], extension["reason"], extension["created_at"],
+        )
+
     for request_row in request_rows:
         for stage in stages_by_request.get(request_row["id"], []):
             if not stage.can_act:
@@ -2008,6 +2032,7 @@ async def _sync_notifications_for_user(
         and not item["event_key"].startswith("ai-letter:")
         and not item["event_key"].startswith("hisobot:")
         and not item["event_key"].startswith("support:")
+        and not item["event_key"].startswith("task-proposal:")
     ]
     if stale_ids:
         await connection.execute(
@@ -2062,6 +2087,15 @@ async def _sync_notifications_for_user(
                             or_(
                                 workspace_notifications.c.entity_id.in_(
                                     [row["id"] for row in task_rows]
+                                ),
+                                and_(
+                                    workspace_notifications.c.event_key.like("task-proposal:%"),
+                                    workspace_notifications.c.entity_id.in_(
+                                        select(task_proposals.c.id).where(or_(
+                                            task_proposals.c.creator_user_id == current_user.id,
+                                            task_proposals.c.author_user_id == current_user.id,
+                                        )),
+                                    ),
                                 ),
                                 and_(
                                     workspace_notifications.c.entity_id.is_(None),
@@ -4428,7 +4462,9 @@ async def create_task(
     now = datetime.now(UTC)
     cycle_id: UUID | None = None
     if payload.cycle is not None:
-        cycle_id = await _create_task_cycle(connection, current_user, payload.cycle, now)
+        cycle_id = await _create_task_cycle(
+            connection, current_user, payload.cycle, now, author_user_id=task_author_id,
+        )
     values = {
         "id": task_id,
         "title": payload.title.strip(),
@@ -4537,6 +4573,8 @@ async def _create_task_cycle(
     current_user: AuthenticatedUser,
     payload: TaskCreateCycleRequest,
     now: datetime,
+    *,
+    author_user_id: UUID | None = None,
 ) -> UUID:
     try:
         ZoneInfo(payload.timezone)
@@ -4569,7 +4607,7 @@ async def _create_task_cycle(
             timezone=payload.timezone,
             next_run_at=next_run_at,
             is_enabled=payload.is_enabled,
-            created_by_user_id=current_user.id,
+            created_by_user_id=author_user_id or current_user.id,
             created_at=now,
             updated_at=now,
         )
@@ -4771,6 +4809,23 @@ async def extend_task_deadline(
     return await _task_response(connection, task_id)
 
 
+async def _notify_task_deadline_request(
+    connection: AsyncConnection, task: Record, request_id: UUID, requester_name: str,
+    proposed_due_at: datetime, reason: str, created_at: datetime,
+) -> None:
+    await _upsert_notification(
+        connection, user_id=task["author_user_id"],
+        event_key=f"task:deadline:request:{request_id}",
+        kind="task", priority="attention", title="Запрос на перенос срока задачи",
+        body=(
+            f"{requester_name} просит перенести срок задачи «{task['title']}». "
+            f"Текущий срок: {_due_label(task['due_at'])}. "
+            f"Предлагаемый срок: {_due_label(proposed_due_at)}. Причина: {reason}"
+        ),
+        section="tasks", entity_id=task["id"], requires_action=True, occurred_at=created_at,
+    )
+
+
 async def request_task_deadline_extension(
     connection: AsyncConnection,
     current_user: AuthenticatedUser,
@@ -4807,13 +4862,19 @@ async def request_task_deadline_extension(
     await connection.execute(update(messages).where(messages.c.id == message_id).values(
         system_kind="task_deadline_request",
     ))
+    request_id = uuid4()
+    now = datetime.now(UTC)
     await connection.execute(insert(task_deadline_requests).values(
-        id=uuid4(), task_id=task_id, message_id=message_id,
+        id=request_id, task_id=task_id, message_id=message_id,
         requester_user_id=current_user.id, old_due_at=row["due_at"],
         proposed_due_at=payload.proposed_due_at, reason=payload.reason,
         status="pending", decided_by_user_id=None, decided_at=None,
-        created_at=datetime.now(UTC),
+        created_at=now,
     ))
+    await _notify_task_deadline_request(
+        connection, row, request_id, current_user.full_name,
+        payload.proposed_due_at, payload.reason, now,
+    )
     return await _task_response(connection, task_id)
 
 
@@ -4864,6 +4925,9 @@ async def decide_task_deadline_extension(
     await connection.execute(update(task_deadline_requests).where(
         task_deadline_requests.c.id == request_id,
     ).values(status=desired, decided_by_user_id=current_user.id, decided_at=now))
+    await connection.execute(update(workspace_notifications).where(
+        workspace_notifications.c.event_key == f"task:deadline:request:{request_id}",
+    ).values(resolved_at=now, requires_action=False))
     if request_row["requester_user_id"] != current_user.id:
         await _upsert_notification(
             connection,

@@ -73,6 +73,73 @@ describe("My tasks participation filter", () => {
   });
 });
 
+describe("Deadline request decisions and task content hierarchy", () => {
+  const withRequest = (id: string, overrides: Partial<WorkspaceTask> = {}): WorkspaceTask => {
+    const value = task(id, 90, { authorId: people[0]!.id, ...overrides });
+    return { ...value, deadlineRequests: [{
+      id: `request-${id}`, messageId: `message-${id}`, requesterUserId: people[1]!.id,
+      oldDueAt: value.dueAt!, proposedDueAt: new Date(Date.parse(value.dueAt!) + 86_400_000).toISOString(),
+      reason: "Ждём подтверждающий документ", status: "pending", createdAt: new Date().toISOString(),
+    }] };
+  };
+
+  it("filters only my live pending decisions and marks requests in the list", () => {
+    const mine = withRequest("my-extension");
+    const foreign = withRequest("another-author", { authorId: people[1]!.id });
+    const completed = withRequest("completed-extension", { status: "completed" });
+    const stale = { ...withRequest("stale-extension"), dueAt: new Date(2030, 1, 1).toISOString() };
+    const resolved = withRequest("resolved-extension");
+    const tasks = [mine, foreign, completed, stale, { ...resolved, deadlineRequests:
+      resolved.deadlineRequests!.map((item) => ({ ...item, status: "rejected" as const })) }];
+    render(wrap(<TasksView {...props(tasks)} />));
+    expect(row("my-extension")).toHaveTextContent("Перенос срока · ждёт вашего решения");
+    expect(row("another-author")).toHaveTextContent("Запрошен перенос срока");
+    const filter = screen.getByRole("button", { name: "Перенос срока" });
+    expect(filter).toHaveTextContent("1");
+    fireEvent.click(filter);
+    expect(row("my-extension")).toBeInTheDocument();
+    for (const id of ["another-author", "completed-extension", "stale-extension", "resolved-extension"]) {
+      expect(screen.queryByRole("button", { name: `Открыть задачу: ${id}` })).toBeNull();
+    }
+    fireEvent.change(screen.getByRole("textbox", { name: "Поиск задач" }), { target: { value: "unknown" } });
+    expect(screen.queryByRole("button", { name: "Открыть задачу: my-extension" })).toBeNull();
+    fireEvent.change(screen.getByRole("textbox", { name: "Поиск задач" }), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Kanban" }));
+    expect(document.querySelectorAll(".kanban-card")).toHaveLength(1);
+    expect(screen.getByText("Перенос срока · ждёт вашего решения")).toBeVisible();
+  });
+
+  it("opens a notification-focused task directly at the deadline decision", async () => {
+    const original = withRequest("notification-task");
+    const onDecideDeadline = vi.fn().mockResolvedValue(original);
+    render(wrap(<TasksView {...props([original])} focusTaskId={original.id} onDecideDeadline={onDecideDeadline} />));
+    const panel = screen.getByRole("region", { name: "Запрос на перенос срока" });
+    expect(within(panel).getByText("Ждём подтверждающий документ")).toBeVisible();
+    expect(within(panel).getByText(people[1]!.name)).toBeVisible();
+    fireEvent.click(within(panel).getByRole("button", { name: "Согласовать перенос срока" }));
+    await waitFor(() => expect(onDecideDeadline).toHaveBeenCalledWith(original, "request-notification-task", true));
+  });
+
+  it("puts delivered work and files before settings and keeps secondary controls collapsed", () => {
+    const original = task("work-first", 90, { authorId: people[0]!.id, resultText: "Готовый отчёт" });
+    render(wrap(<TasksView {...props([original])} focusTaskId={original.id} />));
+    const review = document.querySelector(".task-review-section")!;
+    const attachments = document.querySelector(".task-detail .attachment-panel-dropzone")!;
+    const settings = document.querySelector(".task-secondary-settings")!;
+    expect(review.compareDocumentPosition(attachments) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(attachments.compareDocumentPosition(settings) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText("Готовый отчёт")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Добавить цикл" })).toBeNull();
+    const toggle = screen.getByRole("button", { name: "Команда и настройки задачи" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("button", { name: "Добавить цикл" })).toBeVisible();
+    fireEvent.click(toggle);
+    expect(screen.queryByRole("button", { name: "Добавить цикл" })).toBeNull();
+  });
+});
+
 describe("Task list deadline colours and overdue filter", () => {
   it("enlarges card avatars without losing employee profile access or participant removal", () => {
     const original = task("larger-avatars", 90, { authorId: people[0]!.id, assigneeId: people[0]!.id,
@@ -84,6 +151,7 @@ describe("Task list deadline colours and overdue filter", () => {
     expect(document.querySelectorAll(".task-detail-sticky-header .task-person-avatar")).toHaveLength(1);
     expect(document.querySelectorAll(".participant-chip .task-person-avatar")).toHaveLength(2);
     expect(avatars[2]!.closest(".employee-profile-link")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Команда и настройки задачи" }));
     fireEvent.click(screen.getByRole("button", { name: `Убрать участника ${people[1]!.name}` }));
     expect(p.onRemoveParticipant).toHaveBeenCalledWith(original, people[1]!.id);
   });

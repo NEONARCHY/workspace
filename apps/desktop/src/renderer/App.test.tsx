@@ -962,6 +962,9 @@ function mockServer(
     if (url.endsWith("/tasks/project-options")) {
       return response([{ id: "hub-routes", code: "MR", title: "Маршруты" }]);
     }
+    if (url.endsWith("/task-proposals") && (!options?.method || options.method === "GET")) {
+      return response([]);
+    }
     if (url.endsWith("/task-plans") && (!options?.method || options.method === "GET")) {
       return response([]);
     }
@@ -1736,6 +1739,7 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.click(screen.getByRole("button", { name: "Сохранить карточку" }));
     expect(await screen.findByRole("heading", { name: "Полная карточка BP-5" })).toBeInTheDocument();
 
+    fireEvent.click(screen.getByRole("button", { name: "Команда и настройки задачи" }));
     changeField(screen.getByLabelText("Новый участник"), {
       target: { value: people[0]!.id },
     });
@@ -1817,7 +1821,9 @@ describe("corporate workspace authentication alpha", () => {
     await loginToWorkspace();
 
     fireEvent.click(screen.getByRole("button", { name: "Задачи" }));
-    fireEvent.click(screen.getAllByRole("button", { name: /^Открыть задачу:/ })[0]!);
+    // This test also runs alone, before the lazy Tasks module is warm.
+    fireEvent.click((await screen.findAllByRole("button", { name: /^Открыть задачу:/ }, { timeout: 10_000 }))[0]!);
+    fireEvent.click(screen.getByRole("button", { name: "Команда и настройки задачи" }));
     fireEvent.click(screen.getByRole("button", { name: "Справка: Чек-лист" }));
     expect(await screen.findByText(/Отмечайте выполненные пункты по мере работы/)).toBeInTheDocument();
     fireEvent.keyDown(document, { key: "Escape" });
@@ -1842,6 +1848,7 @@ describe("corporate workspace authentication alpha", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Задачи" }));
     fireEvent.click(screen.getAllByRole("button", { name: /^Открыть задачу:/ })[0]!);
+    fireEvent.click(screen.getByRole("button", { name: "Команда и настройки задачи" }));
     fireEvent.click(screen.getByRole("button", { name: "Добавить подзадачу" }));
     changeField(screen.getByRole("textbox", { name: "Название подзадачи" }), {
       target: { value: "Сверить итоговые цифры" },
@@ -2448,7 +2455,8 @@ describe("corporate workspace authentication alpha", () => {
     }));
     await screen.findByRole("button", { name: "Новое событие" });
     const calendar = screen.getByRole("region", { name: "Календарь" });
-    expect(within(calendar).getByRole("heading", { name: "Календарь" })).toBeInTheDocument();
+    expect(within(calendar).queryByRole("heading", { name: "Календарь" })).not.toBeInTheDocument();
+    expect(within(calendar).getByRole("button", { name: "Фильтры" })).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByRole("button", {
       name: `Открыть задачу: ${initialTasks[0]!.title}`,
     })).not.toBeInTheDocument();

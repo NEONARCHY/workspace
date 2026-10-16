@@ -5,6 +5,7 @@ import { RecordMobileLabel, RecordTablePager, SortHeading, tableCollator, useTab
 import { TaskParticipantAvatar } from "./TaskParticipantAvatar";
 import { isTaskOverdue, taskDeadlineTone } from "./task-deadline";
 import { useTaskDeadlineClock } from "./useTaskDeadlineClock";
+import { pendingTaskDeadlineRequest } from "./task-deadline-request";
 
 const statuses: Record<TaskStatus, string> = { new: "Новая", in_progress: "В работе", awaiting_review: "На проверке", completed: "Завершена", overdue: "Просрочена", cancelled: "Отменена" };
 
@@ -59,6 +60,7 @@ export function TaskRecords({ tasks, plans = [], plansLoading = false, plansErro
         <tbody role="rowgroup">{sorted.slice(paging.start, paging.start + paging.size).map(task => <tr role="row" key={task.id} data-deadline={taskDeadlineTone(task, now)} className={`task-row record-row ${selectedId === task.id ? "selected" : ""}`} onClick={event => { if (!(event.target as HTMLElement).closest("button")) { event.currentTarget.querySelector("button")?.focus(); onSelect(task.id); } }}>
           <td role="cell" className="record-title"><span className="list-row-hover-wash" aria-hidden="true" /><button {...restoreFocusTarget} className="record-open" type="button" aria-haspopup="dialog" aria-label={`Открыть задачу: ${task.title}`} onClick={() => onSelect(task.id)}><strong>{task.title}</strong></button>
             <div className="record-secondary">{task.checklistTotal > 0 && <span>Чек-лист {task.checklistDone}/{task.checklistTotal}</span>}{task.comments.length > 0 && <span>Обсуждение · {task.comments.length}</span>}{task.cycle && <span>Повторяется</span>}</div>
+            {pendingTaskDeadlineRequest(task) ? <Badge className="task-deadline-request-badge" appearance="tint" color="warning">{task.authorId === currentUserId ? "Перенос срока · ждёт вашего решения" : "Запрошен перенос срока"}</Badge> : null}
             {task.checklistTotal > 0 ? <span className="task-record-progress" aria-hidden="true"><i style={{ width: `${Math.round(task.checklistDone / task.checklistTotal * 100)}%` }} /></span> : null}
           </td>
           <td role="cell"><RecordMobileLabel>Участники</RecordMobileLabel><div className="task-participant-group" aria-label="Участники задачи">{participants(task).map(({ userId, role }) =>

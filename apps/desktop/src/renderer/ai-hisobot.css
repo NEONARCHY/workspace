@@ -41,14 +41,14 @@
 .hisobot-unit-compose .hisobot-panel-description { margin-bottom: 16px; }
 .hisobot-unit-compose textarea { min-height: 180px; }
 .hisobot-compose-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 13px; color: var(--ws-theme-muted, #7a898f); font-size: 12px; }
-.hisobot-compose-footer button, .hisobot-filters button { border: 0; border-radius: 10px; padding: 11px 16px; background: #08798a; color: white; font-weight: 700; cursor: pointer; }
+.hisobot-compose-footer button, .hisobot-filter-search > button { border: 0; border-radius: 10px; padding: 11px 16px; background: #08798a; color: white; font-weight: 700; cursor: pointer; }
 .hisobot-compose-footer button:disabled { opacity: .45; cursor: not-allowed; }
 .hisobot-status-icon { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 14px; background: var(--ws-theme-surface-soft, #e7f4f1); color: var(--ws-theme-ink-teal, #08798a); }
 .hisobot-status h2 { margin: 18px 0 7px; font-size: 20px; }
 .hisobot-status p { color: var(--ws-theme-muted, #657781); line-height: 1.55; font-size: 13px; }
 .hisobot-window { display: flex; justify-content: space-between; border-top: 1px solid var(--ws-theme-line, #e7eeee); padding: 12px 0; color: var(--ws-theme-muted, #71818a); font-size: 13px; }
 .hisobot-window strong { color: var(--ws-theme-ink, #294953); }
-.hisobot-list-page { min-height: 0; overflow-y: auto; padding-bottom: 12px; }
+.hisobot-list-page { min-height: 0; min-width: 0; container: hisobot-list / inline-size; overflow-y: auto; padding-bottom: 12px; }
 .hisobot-list-heading { display: flex; align-items: baseline; gap: 14px; margin: 2px 0 14px; }
 .hisobot-list-heading h2 { margin: 0; font-size: 20px; }
 .hisobot-list-heading span { color: var(--ws-theme-muted, #71818a); font-size: 12px; }
@@ -63,10 +63,19 @@
 .hisobot-report-byline { margin: 0; color: var(--ws-theme-muted, #77878e); font-size: 12px; }
 .hisobot-report-content { max-height: 280px; overflow-y: auto; margin: 14px 0; white-space: pre-wrap; line-height: 1.55; font-size: 13px; }
 .hisobot-report-foot { border-top: 1px solid var(--ws-theme-line, #edf1f1); padding-top: 10px; color: var(--ws-theme-muted, #809098); font-size: 11px; }
-.hisobot-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 14px; }
-.hisobot-filters label { display: flex; align-items: center; font-size: 12px; }
-.hisobot-filters input, .hisobot-filters select { min-height: 38px; border: 1px solid var(--ws-theme-line, #d6e3e3); border-radius: 9px; padding: 6px 10px; background: var(--ws-theme-surface, white); color: var(--ws-theme-ink, #2a4650); font: inherit; }
-.hisobot-filters input[type="search"] { min-width: 220px; flex: 1; }
+.hisobot-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: end; gap: 12px; margin-bottom: 14px; }
+.hisobot-filters > label { display: grid; min-width: 0; gap: 6px; font-size: 12px; color: var(--ws-muted); }
+.ai-hisobot-view .hisobot-filters :is(.ws-date-time-trigger, .workspace-select.workspace-select, .fui-Input) { box-sizing: border-box; min-width: 0; width: 100%; min-height: 40px; }
+.hisobot-filter-search { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; min-width: 0; }
+.hisobot-filter-search > .workspace-search { --search-width: 100%; --search-growth: 0px; }
+.hisobot-filter-search > .fui-Input { flex: 1; }
+.hisobot-filter-search input[type="search"] { min-width: 0; width: 100%; }
+.hisobot-filter-search > button { flex: none; min-height: 40px; height: 40px; padding-block: 0; }
+@container hisobot-list (max-width: 620px) {
+  .hisobot-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hisobot-filter-scope { grid-column: 1 / -1; }
+}
+@container hisobot-list (max-width: 320px) { .hisobot-filters { grid-template-columns: minmax(0, 1fr); } }
 .hisobot-load-more { display: block; margin: 16px auto 0; border: 1px solid var(--ws-theme-line, #afced0); border-radius: 10px; padding: 10px 15px; background: var(--ws-theme-surface, #fff); color: var(--ws-theme-ink-teal, #006779); font-weight: 700; cursor: pointer; }
 .hisobot-error, .hisobot-success, .hisobot-empty, .hisobot-loading, .hisobot-exempt { border-radius: 11px; padding: 13px 15px; font-size: 13px; }
 .hisobot-error { background: var(--ws-theme-wash-danger, #fff0ed); color: var(--ws-theme-ink-danger, #a54232); }

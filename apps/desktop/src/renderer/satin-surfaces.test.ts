@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { expect, it } from "vitest";
 const css = readFileSync("src/renderer/satin-surfaces.css", "utf8");
-it("ports the dark Maqro sweep stops and subtle stroke without changing light surfaces", () => {
+it("ports the dark Maqro sweep stops and subtle stroke", () => {
   expect(css).toContain('html[data-color-theme="dark"]');
   for (const stop of ["13%", "27%", "40%", "50%", "60%", "73%", "87%"]) expect(css).toContain(stop);
   expect(css).toContain("12.09%");
@@ -10,6 +10,15 @@ it("ports the dark Maqro sweep stops and subtle stroke without changing light su
   expect(css).not.toMatch(/(?:^|\n)\s*position:/);
   expect(css).toContain("@media (forced-colors: none)");
   expect(css).not.toMatch(/!important|transition:\s*all|filter:|animation:/);
+});
+it("adapts satin to selected incoming filters in light mode without a second inset ring or geometry changes", () => {
+  expect(css).toContain('html[data-color-theme="light"] body .ai-incoming-register .ai-referent-summary > button[aria-pressed="true"]');
+  const light = css.slice(0, css.indexOf('html[data-color-theme="dark"]'));
+  expect(light).toContain("border-color: transparent");
+  expect(light).toContain("background-clip: padding-box, border-box, border-box");
+  expect(light).toContain("linear-gradient(var(--ws-surface), var(--ws-surface))");
+  expect(light).toContain("rgb(var(--ws-theme-ink-teal-rgb, 0 103 121) / 12%) 50%");
+  expect(light).not.toMatch(/inset|border-width:|border-radius:|padding:/);
 });
 it("uses real satin for topbar triggers and incoming counters, with a stronger selected sweep instead of an inset ring", () => {
   expect(css).toContain(".context-trigger, .ai-incoming-register .ai-referent-summary > button");

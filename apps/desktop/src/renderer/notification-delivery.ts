@@ -29,7 +29,7 @@ export function initialKnownNotificationIds(
     const occurred = Date.parse(item.occurredAt);
     return Number.isFinite(occurred) && occurred <= now + 5000 && !isObsoleteHisobotNotification(item, now);
   }).sort((a, b) => Date.parse(b.occurredAt) - Date.parse(a.occurredAt))[0];
-  return new Set(notifications.filter(item => item.id !== latest?.id || item.readAt || item.desktopDeliveredAt).map(item => item.id));
+  return new Set(notifications.filter(item => item.id !== latest?.id || item.readAt || item.desktopDeliveredAt || item.resolvedAt).map(item => item.id));
 }
 
 /** Persist successful native delivery across reloads/tabs even if the server

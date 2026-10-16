@@ -31,6 +31,8 @@ html:root body .app-provider :is(.workspace-view, .team-dashboard, .telegram-acc
   border-radius: 20px;
 }
 .workspace-view .ws-section-header::before, .workspace-view .ws-section-header::after { content: none; }
+/* Process summaries own the same gap above and below; do not add a second header gap. */
+body .app-provider :is(.approvals-view, .trips-view) > .ws-section-header { margin-bottom: 0; }
 .ws-section-header > :not(.ws-section-header-art, .ws-illustrated-header-art) {
   position: relative;
   z-index: 1;

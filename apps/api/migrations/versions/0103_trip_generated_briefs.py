@@ -1,7 +1,7 @@
 """Record whether a trip brief was generated from structured facts.
 
-Revision ID: 0102_trip_generated_briefs
-Revises: 0101_leave_approval
+Revision ID: 0103_trip_generated_briefs
+Revises: 0102_merge_leave_task
 """
 
 from collections.abc import Sequence
@@ -9,8 +9,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0102_trip_generated_briefs"
-down_revision: str = "0101_leave_approval"
+revision: str = "0103_trip_generated_briefs"
+down_revision: str = "0102_merge_leave_task"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

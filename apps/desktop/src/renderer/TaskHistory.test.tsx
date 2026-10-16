@@ -26,6 +26,13 @@ it("loads on expansion and shows who approved, both deadlines, reason and incomp
   expect(screen.getByText(/Срок:.*11\.10\.2026.*20\.10\.2026/)).toBeTruthy();
   expect(screen.getByText(/Ранние действия могли не фиксироваться/)).toBeTruthy();
   expect(loadTaskHistory).toHaveBeenCalledWith("test", "task", 0);
+  const toggle = screen.getByRole("button", { name: "Маршрут и история" });
+  const disclosure = document.getElementById(toggle.getAttribute("aria-controls")!);
+  expect(disclosure).toHaveAttribute("data-open", "true");
+  fireEvent.click(toggle);
+  expect(disclosure).toHaveAttribute("inert");
+  expect(disclosure).toHaveAttribute("aria-hidden", "true");
+  expect(screen.queryByRole("button", { name: "Обновить маршрут" })).not.toBeInTheDocument();
 });
 
 it("shows a retryable error without inventing history", async () => {

@@ -131,6 +131,8 @@ import type {
   WorkspaceTask,
   TaskHistoryPage,
   WorkspaceTaskCreateInput,
+  TaskProposal,
+  TaskProposalWrite,
   TotpSetup,
   WorkspacePosition,
   WorkspaceDepartment,
@@ -1651,6 +1653,22 @@ export function createWorkspaceTask(
     { method: "POST", body: JSON.stringify(payload) },
     token,
   );
+}
+
+export async function loadTaskProposals(token: string): Promise<readonly TaskProposal[]> {
+  const proposals = await apiRequest<readonly TaskProposal[]>("/task-proposals", {}, token);
+  if (!Array.isArray(proposals)) throw new Error("Сервер вернул некорректный список заявок");
+  return proposals;
+}
+
+export function proposeWorkspaceTask(token: string, payload: TaskProposalWrite): Promise<TaskProposal> {
+  return apiRequest("/task-proposals", { method: "POST", body: JSON.stringify(payload) }, token);
+}
+
+export function decideTaskProposal(token: string, id: string, action: "approve" | "reject" | "cancel", reason = ""): Promise<TaskProposal> {
+  return apiRequest(`/task-proposals/${encodeURIComponent(id)}/decision`, {
+    method: "POST", body: JSON.stringify({ action, reason }),
+  }, token);
 }
 
 export function loadTaskHistory(token: string, taskId: string, offset = 0): Promise<TaskHistoryPage> {
