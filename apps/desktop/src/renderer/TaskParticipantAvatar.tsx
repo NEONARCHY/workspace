@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Avatar } from "@fluentui/react-components";
+import { EmployeeAvatar as Avatar } from "./EmployeeAvatar";
 import { motion, useMotionValue, useReducedMotion, useSpring } from "framer-motion";
 import type { WorkspacePerson } from "@yuksalish/contracts";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, time, timedelta
 from typing import Any, Literal
 from uuid import UUID, uuid4
+from zoneinfo import ZoneInfo
 
-from sqlalchemy import and_, insert, select, update
+from sqlalchemy import and_, func, insert, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncConnection
@@ -14,6 +15,7 @@ from .tables import (
     absence_request_actions,
     absence_requests,
     attachments,
+    leave_requests,
     trip_request_employees,
     trip_requests,
     users,
@@ -181,6 +183,9 @@ async def _ensure_no_conflict(
     ends_at: datetime,
     excluded: UUID | None = None,
 ) -> None:
+    local = ZoneInfo("Asia/Tashkent")
+    starts_on = starts_at.astimezone(local).date()
+    ends_on = ends_at.astimezone(local).date()
     condition = [
         absence_requests.c.requester_user_id == user_id,
         absence_requests.c.status.in_(("pending", "approved", "acknowledged")),
@@ -202,13 +207,31 @@ async def _ensure_no_conflict(
         .where(
             trip_requests.c.id.in_(trip_ids),
             trip_requests.c.status == "approved",
-            trip_requests.c.start_date < ends_at.date(),
-            trip_requests.c.end_date >= starts_at.date(),
+            trip_requests.c.start_date < ends_on,
+            trip_requests.c.end_date >= starts_on,
         )
         .limit(1)
     )
     if trip is not None:
         raise AbsenceError(409, "Имеется наложение периода утверждённой командировки")
+    leave = await connection.scalar(
+        select(leave_requests.c.id)
+        .where(
+            leave_requests.c.requester_user_id == user_id,
+            leave_requests.c.status.in_(("pending_hr", "pending_deputy", "approved")),
+            func.coalesce(leave_requests.c.starts_on, leave_requests.c.requested_starts_on)
+            <= ends_on,
+            func.coalesce(
+                leave_requests.c.ends_on,
+                leave_requests.c.requested_ends_on,
+                leave_requests.c.requested_starts_on,
+            )
+            >= starts_on,
+        )
+        .limit(1)
+    )
+    if leave is not None:
+        raise AbsenceError(409, "Имеется наложение периода заявки на отпуск")
 
 
 async def create_absence(
@@ -439,12 +462,50 @@ async def presence_summary(
         .all()
     )
     by_user = {row["requester_user_id"]: row for row in active}
+    local = ZoneInfo("Asia/Tashkent")
+    today = now.astimezone(local).date()
+    on_leave = (
+        (
+            await connection.execute(
+                select(leave_requests).where(
+                    leave_requests.c.status == "approved",
+                    leave_requests.c.starts_on <= today,
+                    leave_requests.c.ends_on >= today,
+                )
+            )
+        )
+        .mappings()
+        .all()
+    )
+    leave_by_user = {row["requester_user_id"]: row for row in on_leave}
     return [
         PresenceSummaryItemResponse(
             user_id=str(person["id"]),
-            status=(by_user[person["id"]]["kind"] if person["id"] in by_user else "working"),
-            starts_at=(by_user[person["id"]]["starts_at"] if person["id"] in by_user else None),
-            ends_at=(by_user[person["id"]]["ends_at"] if person["id"] in by_user else None),
+            status=(
+                by_user[person["id"]]["kind"]
+                if person["id"] in by_user
+                else "vacation"
+                if person["id"] in leave_by_user
+                else "working"
+            ),
+            starts_at=(
+                by_user[person["id"]]["starts_at"]
+                if person["id"] in by_user
+                else datetime.combine(leave_by_user[person["id"]]["starts_on"], time.min, local)
+                if person["id"] in leave_by_user
+                else None
+            ),
+            ends_at=(
+                by_user[person["id"]]["ends_at"]
+                if person["id"] in by_user
+                else datetime.combine(
+                    leave_by_user[person["id"]]["ends_on"] + timedelta(days=1),
+                    time.min,
+                    local,
+                )
+                if person["id"] in leave_by_user
+                else None
+            ),
         )
         for person in people
     ]

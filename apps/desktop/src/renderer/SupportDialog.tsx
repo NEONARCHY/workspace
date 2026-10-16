@@ -1,4 +1,5 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
+import { employeeDisplayName } from "./employee-display-name";
 import { LoadingSkeleton } from "./LoadingSkeleton";
 import {
   Button,
@@ -211,7 +212,7 @@ export function SupportDialog({
                       onClick={() => setSelectedId(item.id)}
                     >
                       <span><b>{item.subject}</b><em className={`status-${item.status}`}>{statusCopy[item.status]}</em></span>
-                      <small>{isInbox ? `${item.authorName} · @${item.authorUsername}` : categories.find((entry) => entry.key === item.category)?.label}</small>
+                      <small>{isInbox ? `${employeeDisplayName(item.authorName)} · @${item.authorUsername}` : categories.find((entry) => entry.key === item.category)?.label}</small>
                       <time>{timeLabel(item.updatedAt)}</time>
                     </button>
                   ))}
@@ -239,11 +240,11 @@ export function SupportDialog({
                         <div><span>{categories.find((entry) => entry.key === selected.category)?.label}</span><h2>{selected.subject}</h2></div>
                         <em className={`status-${selected.status}`}>{statusCopy[selected.status]}</em>
                       </header>
-                      {isInbox ? <p className="support-author">{selected.authorName} · @{selected.authorUsername}</p> : null}
+                      {isInbox ? <p className="support-author">{employeeDisplayName(selected.authorName)} · @{selected.authorUsername}</p> : null}
                       <div className="support-message-list">
                         {selected.messages.map((message) => (
                           <article key={message.id} className={`support-message kind-${message.kind}`}>
-                            <span><b>{message.authorName}</b><small>{messageKindCopy[message.kind]}</small><time>{timeLabel(message.createdAt)}</time></span>
+                            <span><b>{employeeDisplayName(message.authorName)}</b><small>{messageKindCopy[message.kind]}</small><time>{timeLabel(message.createdAt)}</time></span>
                             <p>{message.body}</p>
                           </article>
                         ))}

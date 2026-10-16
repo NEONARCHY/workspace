@@ -1155,6 +1155,100 @@ AbsenceKind = Literal["vacation", "personal_time", "late_arrival", "sick_leave",
 AbsenceStatus = Literal["draft", "pending", "approved", "acknowledged", "rejected", "cancelled"]
 AbsenceAction = Literal["submit", "approve", "acknowledge", "reject", "cancel"]
 
+LeaveStatus = Literal[
+    "pending_hr", "pending_deputy", "needs_revision", "approved", "rejected", "withdrawn"
+]
+LeaveDecision = Literal["approve", "return", "reject"]
+
+
+class LeaveActionHistoryResponse(ApiModel):
+    id: str
+    actor_user_id: str
+    from_status: LeaveStatus | None
+    to_status: LeaveStatus
+    action: Literal[
+        "created", "revised", "hr_approved", "deputy_approved", "returned", "rejected", "withdrawn"
+    ]
+    comment: str | None
+    created_at: datetime
+
+
+class LeaveRequestResponse(ApiModel):
+    id: str
+    requester_user_id: str
+    application_text: str
+    requested_starts_on: date
+    requested_ends_on: date | None
+    starts_on: date | None
+    ends_on: date | None
+    work_year_starts_on: date | None
+    work_year_ends_on: date | None
+    calendar_days: int | None
+    paid_days: int | None
+    return_on: date | None
+    accounting_officer: str | None
+    order_employee_name: str | None
+    order_job_title: str | None
+    order_signer_name: str | None
+    status: LeaveStatus
+    status_label: str
+    order_number: str | None
+    order_year: int | None
+    signed_by_user_id: str | None
+    approved_at: datetime | None
+    can_revise: bool
+    can_review_hr: bool
+    can_review_deputy: bool
+    can_withdraw: bool
+    has_order: bool
+    actions: list[LeaveActionHistoryResponse] = Field(default_factory=list)
+    created_at: datetime
+    updated_at: datetime
+
+
+class LeaveContextResponse(ApiModel):
+    hr_user_id: str
+    deputy_user_id: str
+    can_configure_signature: bool
+    signature_ready: bool
+
+
+class LeaveWriteRequest(ApiModel):
+    application_text: str = Field(min_length=1, max_length=12000)
+    starts_on: date
+    ends_on: date | None = None
+
+    @model_validator(mode="after")
+    def valid_leave(self) -> "LeaveWriteRequest":
+        self.application_text = self.application_text.strip()
+        if not self.application_text:
+            raise ValueError("Текст заявления обязателен")
+        if self.ends_on is not None and self.ends_on < self.starts_on:
+            raise ValueError("Конец отпуска не может быть раньше начала")
+        return self
+
+
+class LeaveHrDecisionRequest(ApiModel):
+    action: LeaveDecision
+    starts_on: date | None = None
+    ends_on: date | None = None
+    work_year_starts_on: date | None = None
+    work_year_ends_on: date | None = None
+    calendar_days: int | None = Field(default=None, ge=1, le=366)
+    paid_days: int | None = Field(default=None, ge=1, le=366)
+    return_on: date | None = None
+    accounting_officer: str = Field(default="", max_length=200)
+    order_employee_name: str = Field(default="", max_length=200)
+    order_job_title: str = Field(default="", max_length=240)
+    order_signer_name: str = Field(default="", max_length=200)
+    order_number: str = Field(default="", max_length=40)
+    comment: str = Field(default="", max_length=4000)
+
+
+class LeaveDeputyDecisionRequest(ApiModel):
+    action: LeaveDecision
+    comment: str = Field(default="", max_length=4000)
+
 
 class AbsenceActionHistoryResponse(ApiModel):
     id: str
@@ -1501,6 +1595,7 @@ NotificationSection = Literal[
     "team_overview",
     "payment_requests",
     "trip_approvals",
+    "leave_approvals",
     "calendar",
     "absences",
     "zoom_meetings",
@@ -1573,6 +1668,7 @@ NavigationKey = Literal[
     "project_hub",
     "project_funding",
     "trip_approvals",
+    "leave_approvals",
     "messenger",
     "calendar",
     "zoom_meetings",
@@ -1597,6 +1693,7 @@ DEFAULT_NAVIGATION: list[NavigationKey] = [
     "project_hub",
     "project_funding",
     "trip_approvals",
+    "leave_approvals",
     "messenger",
     "calendar",
     "zoom_meetings",
@@ -1668,18 +1765,22 @@ class NavigationOrder(ApiModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="forbid")
     # Derived from the catalog so adding a section never silently breaks reordering.
     order: list[NavigationKey] = Field(
-        min_length=len(DEFAULT_NAVIGATION) - 1, max_length=len(DEFAULT_NAVIGATION)
+        min_length=len(DEFAULT_NAVIGATION) - 2, max_length=len(DEFAULT_NAVIGATION)
     )
     revision: int = Field(ge=0)
 
     @field_validator("order")
     @classmethod
     def complete_order(cls, value: list[NavigationKey]) -> list[NavigationKey]:
-        # A pre-Home client may save its complete former menu during rollout.
-        if len(value) == len(DEFAULT_NAVIGATION) - 1 and set(value) == set(DEFAULT_NAVIGATION) - {
-            "home"
-        }:
-            return ["home", *value]
+        # Older clients may omit Home and/or the newly added leave module.
+        missing = set(DEFAULT_NAVIGATION) - set(value)
+        if len(value) != len(set(value)) or missing - {"home", "leave_approvals"}:
+            raise ValueError("Меню должно содержать все разделы без повторений")
+        value = list(value)
+        if "home" in missing:
+            value.insert(0, "home")
+        if "leave_approvals" in missing:
+            value.insert(value.index("trip_approvals") + 1, "leave_approvals")
         if set(value) != set(DEFAULT_NAVIGATION):
             raise ValueError("Меню должно содержать все разделы без повторений")
         return value

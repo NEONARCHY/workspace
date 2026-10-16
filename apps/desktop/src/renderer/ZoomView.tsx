@@ -13,7 +13,9 @@ import type {
   ZoomMeetingInput,
   ZoomMeetingsRegistry,
 } from "@yuksalish/contracts";
-import { Avatar, Button, Checkbox, Input, Textarea } from "@fluentui/react-components";
+import { Button, Checkbox, Input, Textarea } from "@fluentui/react-components";
+import { EmployeeAvatar as Avatar } from "./EmployeeAvatar";
+import { employeeDisplayName } from "./employee-display-name";
 import {
   Add24Regular,
   ArrowClockwise20Regular,
@@ -464,8 +466,8 @@ export function ZoomView({
                       <strong>{meeting.topic}</strong>
                       <small><EmployeeProfileLink
                         userId={meeting.organizerUserId ?? undefined}
-                        personName={meeting.organizerName}
-                      >{meeting.organizerName}</EmployeeProfileLink> · {meeting.durationMinutes} мин</small>
+                        personName={employeeDisplayName(meeting.organizerName)}
+                      >{employeeDisplayName(meeting.organizerName)}</EmployeeProfileLink> · {meeting.durationMinutes} мин</small>
                     </span>
                     <span className={`zoom-status ${meeting.status}`}>{statusLabels[meeting.status]}</span>
                   </button>
@@ -591,10 +593,10 @@ export function ZoomView({
                 {dayText(selected.startsAt, timeZone)}, {timeText(selected.startsAt, timeZone)}–
                 {timeText(selected.endsAt, timeZone)}
               </p>
-              <EmployeeProfileLink userId={selected.organizerUserId ?? undefined} personName={selected.organizerName} className="zoom-organizer">
-                <Avatar name={selected.organizerName} size={32} color="colorful" aria-hidden="true" />
+              <EmployeeProfileLink userId={selected.organizerUserId ?? undefined} personName={employeeDisplayName(selected.organizerName)} className="zoom-organizer">
+                <Avatar name={employeeDisplayName(selected.organizerName)} size={32} color="colorful" aria-hidden="true" />
                 <span>
-                  <strong>{selected.organizerName}</strong>
+                  <strong>{employeeDisplayName(selected.organizerName)}</strong>
                   <small>Организатор</small>
                 </span>
               </EmployeeProfileLink>

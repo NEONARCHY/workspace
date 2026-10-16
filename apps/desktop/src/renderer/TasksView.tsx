@@ -1,3 +1,4 @@
+import { EmployeeAvatar as Avatar } from "./EmployeeAvatar";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { LoadingSkeleton } from "./LoadingSkeleton";
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
@@ -20,7 +21,6 @@ import type {
   WorkspaceTaskCreateInput,
 } from "@yuksalish/contracts";
 import {
-  Avatar,
   Badge,
   Button,
   Checkbox,

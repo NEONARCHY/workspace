@@ -36,6 +36,14 @@ def test_personal_payloads_reject_unknown_fields_duplicates_and_missing_modules(
         InterfaceLocaleUpdate.model_validate({"locale": "en", "revision": 0})
 
 
+def test_old_client_navigation_gains_leave_without_losing_manual_order() -> None:
+    old_order = [key for key in reversed(DEFAULT_NAVIGATION) if key != "leave_approvals"]
+    normalized = NavigationOrder.model_validate({"order": old_order, "revision": 0}).order
+    trip_index = normalized.index("trip_approvals")
+    assert normalized[trip_index + 1] == "leave_approvals"
+    assert [key for key in normalized if key != "leave_approvals"] == old_order
+
+
 async def exercise_personal_preferences(url: str) -> None:
     # Permit an isolated per-run database while still refusing the live database.
     assert (make_url(url).database or "").startswith("yuksalish_test")

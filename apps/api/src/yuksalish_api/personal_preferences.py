@@ -54,6 +54,8 @@ async def get_preferences(
         navigation.insert(0, "home")
     if "incoming_letters" not in navigation and "ai_referent" in navigation:
         navigation.insert(navigation.index("ai_referent") + 1, "incoming_letters")
+    if "leave_approvals" not in navigation and "trip_approvals" in navigation:
+        navigation.insert(navigation.index("trip_approvals") + 1, "leave_approvals")
     navigation += [key for key in DEFAULT_NAVIGATION if key not in navigation]
     return PersonalPreferencesResponse(
         pinned_chat_ids=pinned,

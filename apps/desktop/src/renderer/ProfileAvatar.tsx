@@ -2,6 +2,7 @@ import { Avatar } from "@fluentui/react-components";
 import { useEffect, useState } from "react";
 import type { WorkspacePerson } from "@yuksalish/contracts";
 import { loadProfileAvatar } from "./workspace-api";
+import { employeeInitials } from "./employee-display-name";
 
 const avatarUrls = new Map<string, string>();
 type AvatarPerson = Pick<WorkspacePerson, "id" | "name" | "avatarVersion">;
@@ -31,7 +32,7 @@ export function ProfileAvatar({ person, token, size, "aria-hidden": ariaHidden }
   }, [person.id, person.avatarVersion]);
   const version = changed?.userId === person.id && changed.baseVersion === person.avatarVersion
     ? changed.version : person.avatarVersion;
-  if (!version || !token) return <Avatar name={person.name} size={size} color="colorful" aria-hidden={ariaHidden} />;
+  if (!version || !token) return <Avatar name={person.name} initials={employeeInitials(person.name)} size={size} color="colorful" aria-hidden={ariaHidden} />;
   const cacheKey = `${person.id}:${version}`;
   return <LoadedProfileAvatar key={cacheKey} person={{ ...person, avatarVersion: version }} token={token} size={size} cacheKey={cacheKey} aria-hidden={ariaHidden} />;
 }
@@ -55,5 +56,5 @@ function LoadedProfileAvatar({ person, token, size, cacheKey, "aria-hidden": ari
     }).catch(() => { if (active) setUrl(undefined); });
     return () => { active = false; };
   }, [cacheKey, person.avatarVersion, person.id, token, url]);
-  return <Avatar name={person.name} size={size} color="colorful" image={url ? { src: url } : undefined} aria-hidden={ariaHidden} />;
+  return <Avatar name={person.name} initials={employeeInitials(person.name)} size={size} color="colorful" image={url ? { src: url } : undefined} aria-hidden={ariaHidden} />;
 }

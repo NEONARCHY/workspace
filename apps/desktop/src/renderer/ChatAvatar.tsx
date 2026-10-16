@@ -1,5 +1,5 @@
 import type { ChatAvatarIconKey, ChatSummary, WorkspacePerson } from "@yuksalish/contracts";
-import { Avatar } from "@fluentui/react-components";
+import { EmployeeAvatar as Avatar } from "./EmployeeAvatar";
 import { Building2, BriefcaseBusiness, CalendarDays, Compass, FileText, FolderKanban, Globe2, Plane, Sparkles, Star, Target, UsersRound } from "lucide-react";
 import { ProfileAvatar } from "./ProfileAvatar";
 

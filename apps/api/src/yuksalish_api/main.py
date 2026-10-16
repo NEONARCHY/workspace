@@ -39,6 +39,7 @@ from .routers import (
     home,
     hr,
     hr_hiring,
+    leaves,
     members,
     messenger,
     modules,
@@ -193,6 +194,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(members.router, prefix=runtime_settings.api_prefix)
     application.include_router(hr.router, prefix=runtime_settings.api_prefix)
     application.include_router(hr_hiring.router, prefix=runtime_settings.api_prefix)
+    application.include_router(leaves.router, prefix=runtime_settings.api_prefix)
     application.include_router(modules.router, prefix=runtime_settings.api_prefix)
     application.include_router(authentication.router, prefix=runtime_settings.api_prefix)
     application.include_router(assistant.router, prefix=runtime_settings.api_prefix)

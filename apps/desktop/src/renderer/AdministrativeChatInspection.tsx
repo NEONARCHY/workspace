@@ -8,6 +8,7 @@ import { Input } from "./WorkspaceInput";
 import { Dismiss20Regular, LockClosed20Regular, Search20Regular } from "@fluentui/react-icons";
 import { WorkspaceSelect as Select } from "./WorkspaceSelect";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
+import { employeeDisplayName } from "./employee-display-name";
 
 import {
   createAdministrativeChatInspection,
@@ -179,7 +180,7 @@ export function AdministrativeChatInspectionView({ token, onClose }: {
           <p className="admin-inspection-reason"><strong>Основание:</strong> {inspection.reason}</p>
           <div className="admin-inspection-messages" role="log" aria-label={`Сообщения: ${inspection.chat.title}`}>
             {inspection.messages.map((message) => <article key={message.id} className={message.deletedAt ? "deleted" : ""}>
-              <header><EmployeeProfileLink userId={message.authorUserId} personName={message.authorName}><strong>{message.authorName}</strong></EmployeeProfileLink><time dateTime={message.createdAt}>{formatDateTime(message.createdAt)}</time></header>
+              <header><EmployeeProfileLink userId={message.authorUserId} personName={employeeDisplayName(message.authorName)}><strong>{employeeDisplayName(message.authorName)}</strong></EmployeeProfileLink><time dateTime={message.createdAt}>{formatDateTime(message.createdAt)}</time></header>
               <p>{message.body}</p>
               {message.editedAt && !message.deletedAt ? <small>изменено</small> : null}
             </article>)}
