@@ -937,6 +937,51 @@ absence_request_actions = sa.Table(
     sa.Column("created_at", sa.DateTime(timezone=True)),
 )
 
+leave_requests = sa.Table(
+    "leave_requests",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("requester_user_id", uuid_type),
+    sa.Column("application_text", sa.Text()),
+    sa.Column("application_key", sa.String(240)),
+    sa.Column("application_sha256", sa.String(64)),
+    sa.Column("requested_starts_on", sa.Date()),
+    sa.Column("requested_ends_on", sa.Date()),
+    sa.Column("starts_on", sa.Date()),
+    sa.Column("ends_on", sa.Date()),
+    sa.Column("work_year_starts_on", sa.Date()),
+    sa.Column("work_year_ends_on", sa.Date()),
+    sa.Column("calendar_days", sa.SmallInteger()),
+    sa.Column("paid_days", sa.SmallInteger()),
+    sa.Column("return_on", sa.Date()),
+    sa.Column("accounting_officer", sa.String(200)),
+    sa.Column("order_employee_name", sa.String(200)),
+    sa.Column("order_job_title", sa.String(240)),
+    sa.Column("order_signer_name", sa.String(200)),
+    sa.Column("status", sa.String(24)),
+    sa.Column("order_number", sa.String(40)),
+    sa.Column("order_year", sa.Integer()),
+    sa.Column("order_key", sa.String(240)),
+    sa.Column("order_sha256", sa.String(64)),
+    sa.Column("signed_by_user_id", uuid_type),
+    sa.Column("approved_at", sa.DateTime(timezone=True)),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
+
+leave_request_actions = sa.Table(
+    "leave_request_actions",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("request_id", uuid_type),
+    sa.Column("actor_user_id", uuid_type),
+    sa.Column("from_status", sa.String(24)),
+    sa.Column("to_status", sa.String(24)),
+    sa.Column("action", sa.String(24)),
+    sa.Column("comment", sa.Text()),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+)
+
 feed_posts = sa.Table(
     "feed_posts",
     metadata,

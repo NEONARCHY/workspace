@@ -18,6 +18,7 @@ export const moduleKeys = [
   "project_hub",
   "project_funding",
   "trip_approvals",
+  "leave_approvals",
   "absences",
   "members",
   "hr",
@@ -655,6 +656,87 @@ export type AbsenceKind = "vacation" | "personal_time" | "late_arrival" | "sick_
 export type AbsenceStatus = "draft" | "pending" | "approved" | "acknowledged" | "rejected" | "cancelled";
 export type AbsenceAction = "submit" | "approve" | "acknowledge" | "reject" | "cancel";
 
+export type LeaveStatus = "pending_hr" | "pending_deputy" | "needs_revision" | "approved" | "rejected" | "withdrawn";
+export type LeaveDecision = "approve" | "return" | "reject";
+
+export interface LeaveActionHistory {
+  readonly id: string;
+  readonly actorUserId: string;
+  readonly fromStatus: LeaveStatus | null;
+  readonly toStatus: LeaveStatus;
+  readonly action: "created" | "revised" | "hr_approved" | "deputy_approved" | "returned" | "rejected" | "withdrawn";
+  readonly comment: string | null;
+  readonly createdAt: string;
+}
+
+export interface LeaveRequest {
+  readonly id: string;
+  readonly requesterUserId: string;
+  readonly applicationText: string;
+  readonly requestedStartsOn: string;
+  readonly requestedEndsOn: string | null;
+  readonly startsOn: string | null;
+  readonly endsOn: string | null;
+  readonly workYearStartsOn: string | null;
+  readonly workYearEndsOn: string | null;
+  readonly calendarDays: number | null;
+  readonly paidDays: number | null;
+  readonly returnOn: string | null;
+  readonly accountingOfficer: string | null;
+  readonly orderEmployeeName: string | null;
+  readonly orderJobTitle: string | null;
+  readonly orderSignerName: string | null;
+  readonly status: LeaveStatus;
+  readonly statusLabel: string;
+  readonly orderNumber: string | null;
+  readonly orderYear: number | null;
+  readonly signedByUserId: string | null;
+  readonly approvedAt: string | null;
+  readonly canRevise: boolean;
+  readonly canReviewHr: boolean;
+  readonly canReviewDeputy: boolean;
+  readonly canWithdraw: boolean;
+  readonly hasOrder: boolean;
+  readonly actions: readonly LeaveActionHistory[];
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface LeaveContext {
+  readonly hrUserId: string;
+  readonly deputyUserId: string;
+  readonly canConfigureSignature: boolean;
+  readonly signatureReady: boolean;
+}
+
+export interface LeaveRequestInput {
+  readonly applicationText: string;
+  readonly startsOn: string;
+  readonly endsOn?: string | null;
+}
+
+export interface LeaveHrDecisionInput {
+  readonly action: LeaveDecision;
+  readonly startsOn?: string;
+  readonly endsOn?: string;
+  readonly workYearStartsOn?: string;
+  readonly workYearEndsOn?: string;
+  readonly calendarDays?: number;
+  readonly paidDays?: number;
+  readonly returnOn?: string;
+  readonly accountingOfficer?: string;
+  readonly orderEmployeeName?: string;
+  readonly orderJobTitle?: string;
+  readonly orderSignerName?: string;
+  readonly orderNumber?: string;
+  readonly comment?: string;
+}
+
+export interface LeaveDeputyDecisionInput {
+  readonly action: LeaveDecision;
+  readonly comment?: string;
+}
+
 export interface AbsenceActionHistory {
   readonly id: string;
   readonly actorUserId: string;
@@ -800,6 +882,7 @@ export type NotificationSection = Extract<
   | "project_hub"
   | "project_funding"
   | "trip_approvals"
+  | "leave_approvals"
   | "calendar"
   | "absences"
   | "zoom_meetings"

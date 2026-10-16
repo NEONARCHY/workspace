@@ -37,6 +37,15 @@ def test_permission_normalization_preserves_safe_dependencies() -> None:
 
 
 def test_request_paths_map_to_server_enforced_module_actions() -> None:
+    assert request_module_action("/api/v1/leave-requests", "POST") == (
+        "leave_approvals", "create",
+    )
+    assert request_module_action("/api/v1/leave-requests/id/hr-review", "POST") == (
+        "leave_approvals", "approve",
+    )
+    assert request_module_action("/api/v1/leave-requests/id/deputy-decision", "POST") == (
+        "leave_approvals", "approve",
+    )
     assert request_module_action("/api/v1/survey-analyses", "GET") == ("survey_analytics", "view")
     assert request_module_action("/api/v1/survey-analyses", "POST") == (
         "survey_analytics", "create",

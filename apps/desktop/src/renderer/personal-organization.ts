@@ -25,6 +25,10 @@ export function normalizeNavigation(order: readonly NavigationKey[]): Navigation
       }
     }
   }
+  if (known.includes("trip_approvals") && missing.includes("leave_approvals")) {
+    known.splice(known.indexOf("trip_approvals") + 1, 0, "leave_approvals");
+    missing.splice(missing.indexOf("leave_approvals"), 1);
+  }
   return [...known, ...missing];
 }
 

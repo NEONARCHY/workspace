@@ -95,8 +95,8 @@ describe("topbar insights", () => {
     let finish!: (value: typeof contextRates) => void;
     vi.mocked(loadExchangeRates).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
     fireEvent.click(screen.getByRole("button", { name: "Обновить" }));
-    expect(screen.getByRole("button", { name: /Курсы валют.*Данные устарели/ })).toHaveAttribute("data-stale", "true");
+    expect(screen.getByRole("button", { name: /Курсы валют.*Данные устарели/, hidden: true })).toHaveAttribute("data-stale", "true");
     finish(contextRates);
-    await waitFor(() => expect(screen.getByRole("button", { name: /^Курсы валют:/ })).not.toHaveAttribute("data-stale"));
+    await waitFor(() => expect(screen.getByRole("button", { name: /^Курсы валют:/, hidden: true })).not.toHaveAttribute("data-stale"));
   });
 });

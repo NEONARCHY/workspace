@@ -77,6 +77,7 @@ import {
   News24Regular,
   PeopleTeam24Regular,
   PersonAvailable24Regular,
+  Beach24Regular,
   PersonAccounts24Regular,
   Settings24Regular,
   Edit16Regular,
@@ -112,6 +113,7 @@ import { WorkingUserIdsContext } from "./TaskParticipantAvatar";
 import { AdaptiveNavigation } from "./AdaptiveNavigation";
 import { AiModulesNavigation, groupAiNavigation } from "./AiModulesNavigation";
 import { RecoveryBoundary } from "./RecoveryBoundary";
+import { LeaveView } from "./LeaveView";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { employeeDisplayName, employeeDisplayPerson } from "./employee-display-name";
 import { EmployeeProfileProvider } from "./EmployeeProfileLink";
@@ -357,6 +359,7 @@ const navItems: readonly NavItem[] = [
     label: "Поездки",
     icon: <Airplane24Regular />,
   },
+  { key: "leave_approvals", label: "Отпуска", icon: <Beach24Regular /> },
   {
     key: "messenger",
     label: "Мессенджер",
@@ -2582,6 +2585,13 @@ export function App() {
                   await uploadFiles("absence", requestId, [file]);
                 }}
               />
+            ) : null}
+            {displayedSection === "leave_approvals" ? (
+              <LeaveView key={focusTarget?.section === "leave_approvals" ? focusTarget.revision : undefined}
+                token={session.accessToken} people={workspace.people}
+                currentUserId={workspace.currentUser.id}
+                focusRequestId={focusTarget?.section === "leave_approvals" ? focusTarget.entityId : undefined}
+                canCreate={modulePermissions.leave_approvals?.create === true} />
             ) : null}
             {displayedSection === "members" ? (
               <MembersView

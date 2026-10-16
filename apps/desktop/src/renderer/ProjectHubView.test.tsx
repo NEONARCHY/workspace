@@ -260,7 +260,7 @@ describe("standalone project hub", () => {
     const board = await screen.findByRole("region", { name: "Канбан проектных заявок" });
     const pendingLane = within(board).getByRole("region", { name: "На согласовании" });
     const approvedLane = within(board).getByRole("region", { name: "Согласовано" });
-    expect(pendingLane).toHaveTextContent(/100\s*UZS/);
+    await waitFor(() => expect(pendingLane).toHaveTextContent(/100\s*UZS/));
     expect(pendingLane).toHaveTextContent(/2,50\s*USD/);
     expect(pendingLane).not.toHaveTextContent(/300\s*UZS/);
     expect(approvedLane).toHaveTextContent(/300\s*UZS/);

@@ -56,6 +56,11 @@ import type {
   AbsenceAction,
   AbsenceRequest,
   AbsenceRequestInput,
+  LeaveContext,
+  LeaveRequest,
+  LeaveRequestInput,
+  LeaveHrDecisionInput,
+  LeaveDeputyDecisionInput,
   AdministrativeChatInspection,
   PersonalChatAction,
   PersonalPreferences,
@@ -2401,6 +2406,45 @@ export function downloadWorkspaceTripDocument(
 
 export function createWorkspaceAbsence(token: string, payload: AbsenceRequestInput): Promise<AbsenceRequest> {
   return apiRequest<AbsenceRequest>("/absence-requests", { method: "POST", body: JSON.stringify(payload) }, token);
+}
+
+export function loadWorkspaceLeaves(token: string, signal?: AbortSignal): Promise<readonly LeaveRequest[]> {
+  return apiRequest<readonly LeaveRequest[]>("/leave-requests", { signal }, token);
+}
+
+export function loadWorkspaceLeaveContext(token: string, signal?: AbortSignal): Promise<LeaveContext> {
+  return apiRequest<LeaveContext>("/leave-requests/context", { signal }, token);
+}
+
+export function createWorkspaceLeave(token: string, payload: LeaveRequestInput): Promise<LeaveRequest> {
+  return apiRequest<LeaveRequest>("/leave-requests", { method: "POST", body: JSON.stringify(payload) }, token);
+}
+
+export function reviseWorkspaceLeave(token: string, id: string, payload: LeaveRequestInput): Promise<LeaveRequest> {
+  return apiRequest<LeaveRequest>(`/leave-requests/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(payload) }, token);
+}
+
+export function reviewWorkspaceLeaveHr(token: string, id: string, payload: LeaveHrDecisionInput): Promise<LeaveRequest> {
+  return apiRequest<LeaveRequest>(`/leave-requests/${encodeURIComponent(id)}/hr-review`, { method: "POST", body: JSON.stringify(payload) }, token);
+}
+
+export function reviewWorkspaceLeaveDeputy(token: string, id: string, payload: LeaveDeputyDecisionInput): Promise<LeaveRequest> {
+  return apiRequest<LeaveRequest>(`/leave-requests/${encodeURIComponent(id)}/deputy-decision`, { method: "POST", body: JSON.stringify(payload) }, token);
+}
+
+export function withdrawWorkspaceLeave(token: string, id: string): Promise<LeaveRequest> {
+  return apiRequest<LeaveRequest>(`/leave-requests/${encodeURIComponent(id)}/withdraw`, { method: "POST" }, token);
+}
+
+export function loadWorkspaceLeaveDocument(token: string, id: string, kind: "application" | "order-preview" | "order", signal?: AbortSignal): Promise<Blob> {
+  return boundedRequest(`${getApiBaseUrl()}/api/v1/leave-requests/${encodeURIComponent(id)}/documents/${kind}`,
+    { headers: { Authorization: `Bearer ${token}` }, signal }, (response) => response.blob(), 120_000);
+}
+
+export function saveWorkspaceLeaveSignature(token: string, signature: Blob): Promise<LeaveContext> {
+  return boundedRequest(`${getApiBaseUrl()}/api/v1/leave-requests/signature`,
+    { method: "PUT", headers: { Authorization: `Bearer ${token}`, "Content-Type": "image/png" }, body: signature },
+    (response) => response.json() as Promise<LeaveContext>, 120_000);
 }
 
 export function updateWorkspaceAbsence(token: string, requestId: string, payload: AbsenceRequestInput): Promise<AbsenceRequest> {
