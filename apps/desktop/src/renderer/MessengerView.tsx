@@ -507,7 +507,7 @@ function Conversation({
     if (!contextMenu) return;
     const close = () => { setContextMenu(undefined); setReactionPreview(false); };
     const escape = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
+      if (event.key !== "Escape" || contextMenu.portalContainer.querySelector(".reaction-picker-context-popover")) return;
       event.preventDefault();
       event.stopPropagation();
       close();
@@ -978,7 +978,8 @@ function Conversation({
         const own = message.authorId === currentUserId;
         const hasVoice = attachments.some((attachment) => attachment.ownerType === "message" && attachment.ownerId === message.id && attachment.mediaKind === "voice");
         const mayDelete = message.canDelete ?? (own || message.canPin || ["admin", "superadmin"].includes(currentUserRole));
-        return <MessageContextMenu x={contextMenu.x} y={contextMenu.y} portalContainer={contextMenu.portalContainer} autoFocus={Boolean(contextMenu.trigger)} onPointerDown={(event) => event.stopPropagation()}>
+        return <MessageContextMenu x={contextMenu.x} y={contextMenu.y} portalContainer={contextMenu.portalContainer} autoFocus={Boolean(contextMenu.trigger)} onPointerDown={(event) => event.stopPropagation()}
+          accessory={<ReactionPicker key={message.id} variant="context" userId={currentUserId} disabled={!canSend || busy} active={(message.reactions ?? []).filter((reaction) => reaction.reactedByCurrentUser).map((reaction) => reaction.emoji)} onSelect={(emoji) => { void run(() => onReactMessage(message, emoji)); setContextMenu(undefined); }} />}>
           <Button disabled={!canSend || (contextMenu.selectedQuote?.text.length ?? 0) > 4096} title={(contextMenu.selectedQuote?.text.length ?? 0) > 4096 ? "Цитата — не более 4096 символов" : undefined} appearance="subtle" icon={<Reply size={20} />} onClick={() => { setReply({ ...message, selectedQuote: contextMenu.selectedQuote }); setContextMenu(undefined); composerInputRef.current?.focus(); }}>{contextMenu.selectedQuote ? "Ответить с цитатой" : "Ответить"}</Button>
           {message.canPin && !message.isPinned ? <Button appearance="subtle" icon={<Pin size={20} />} onClick={() => { void run(() => onPinMessage(message, true)); setContextMenu(undefined); }}>Закрепить</Button> : null}
           {message.isPinned && message.pinProtected ? <span className="message-context-note">Закреп председателя · нельзя снять</span> : null}
