@@ -68,6 +68,7 @@ from .tables import (
     workspace_notifications,
     workspace_projects,
 )
+from .trip_brief_generator import generate_trip_brief
 from .workday_service import working_user_ids
 from .workspace_schemas import (
     ApprovalActionHistoryResponse,
@@ -810,6 +811,7 @@ def _trip_request(
         end_date=row["end_date"],
         employee_ids=[str(value) for value in employee_ids],
         brief_text=row["brief_text"] or "",
+        brief_format=row.get("brief_format") or "manual",
         expense_source=row["expense_source"] or "",
         brief_attachment_name=row["brief_attachment_name"],
         brief_attachment_type=row["brief_attachment_type"],
@@ -7384,6 +7386,16 @@ async def create_trip_request(
     current_user: AuthenticatedUser,
     payload: CreateTripRequest,
 ) -> TripRequestResponse:
+    try:
+        brief_text = (
+            generate_trip_brief(
+                destination=payload.destination, start=payload.start_date,
+                end=payload.end_date, purpose=payload.purpose,
+                expense_source=payload.expense_source,
+            ) if payload.brief_format == "generated" else payload.brief_text.strip()
+        )
+    except ValueError as error:
+        raise WorkspaceRepositoryError(422, str(error)) from error
     employee_ids = await _validate_trip_employees(connection, current_user, payload.employee_ids)
     request_id = uuid4()
     now = datetime.now(UTC)
@@ -7396,7 +7408,8 @@ async def create_trip_request(
             destination=payload.destination,
             start_date=payload.start_date,
             end_date=payload.end_date,
-            brief_text=payload.brief_text.strip(),
+            brief_text=brief_text,
+            brief_format=payload.brief_format,
             expense_source=payload.expense_source.strip(),
             stage="launch",
             status="draft",
@@ -7463,6 +7476,23 @@ async def update_trip_request(
         raise WorkspaceRepositoryError(409, "Only a draft or returned trip can be edited")
     if row["workflow_version"] == 1 and not payload.purpose:
         raise WorkspaceRepositoryError(422, "Цель обязательна для поездки прежнего маршрута")
+    brief_format = row.get("brief_format") or "manual"
+    if "brief_format" in payload.model_fields_set:
+        if brief_format == "generated" and payload.brief_format != "generated":
+            raise WorkspaceRepositoryError(
+                422, "Автоматическую билдирги нельзя заменить ручным текстом"
+            )
+        brief_format = payload.brief_format
+    try:
+        brief_text = (
+            generate_trip_brief(
+                destination=payload.destination, start=payload.start_date,
+                end=payload.end_date, purpose=payload.purpose,
+                expense_source=payload.expense_source,
+            ) if brief_format == "generated" else payload.brief_text.strip()
+        )
+    except ValueError as error:
+        raise WorkspaceRepositoryError(422, str(error)) from error
     employee_ids = await _validate_trip_employees(connection, current_user, payload.employee_ids)
     values: dict[str, object] = {
         "purpose": payload.purpose,
@@ -7472,8 +7502,9 @@ async def update_trip_request(
         "updated_at": datetime.now(UTC),
     }
     if row["workflow_version"] >= 2:
-        if "brief_text" in payload.model_fields_set:
-            values["brief_text"] = payload.brief_text.strip()
+        if "brief_text" in payload.model_fields_set or brief_format == "generated":
+            values["brief_text"] = brief_text
+        values["brief_format"] = brief_format
         if "expense_source" in payload.model_fields_set:
             values["expense_source"] = payload.expense_source.strip()
         # A revision must be signed again; no old signature may cover new terms.

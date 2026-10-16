@@ -85,6 +85,26 @@
   font-size: 13px;
 }
 
+.trip-dialog .trip-brief-paper {
+  max-width: 670px;
+  padding: 24px clamp(18px, 4vw, 36px);
+  border: 1px solid var(--ws-line, #d8e5e7);
+  border-radius: 14px;
+  background: var(--ws-surface, #fff);
+  box-shadow: 0 10px 28px rgb(41 58 85 / 7%);
+  color: var(--ws-text, #293a55);
+}
+.trip-dialog .trip-brief-paper-kicker,
+.trip-dialog .trip-brief-paper-foot {
+  display: block;
+  color: var(--ws-muted, #526b77);
+  font-size: 12px;
+  letter-spacing: .04em;
+}
+.trip-dialog .trip-brief-paper-kicker { padding-bottom: 12px; border-bottom: 1px solid var(--ws-line, #d8e5e7); font-weight: 700; }
+.trip-dialog .trip-brief-paper p { margin: 20px 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; line-height: 1.7; }
+.trip-dialog .trip-brief-paper-foot { padding-top: 12px; border-top: 1px solid var(--ws-line, #d8e5e7); }
+
 @media (max-width: 640px) {
   .trip-dialog .trip-document-panel { padding: 14px; }
   .trip-dialog .trip-document-files > .fui-Button { width: 100%; justify-content: flex-start; }
@@ -95,5 +115,6 @@
   .trip-dialog .trip-document-panel,
   .trip-dialog .trip-original-signature-choice,
   .trip-dialog .trip-signature-pad canvas,
-  .trip-dialog .trip-document-approved { background: Canvas; border: 1px solid CanvasText; color: CanvasText; }
+  .trip-dialog .trip-document-approved,
+  .trip-dialog .trip-brief-paper { background: Canvas; border: 1px solid CanvasText; color: CanvasText; }
 }

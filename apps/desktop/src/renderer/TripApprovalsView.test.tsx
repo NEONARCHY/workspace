@@ -117,14 +117,18 @@ describe("Trip approvals interaction", async () => {
       requests={[]} people={people} currentUser={people[0]!}
       onCreate={onCreate} onUpdate={vi.fn()} onAction={vi.fn()}
       assistantDraft={{ kind: "trip", ready: true, fields: {
-        purpose: "Рабочая встреча", destination: "Навои", startDate: "2030-10-01", endDate: "2030-10-02",
+        purpose: "Yuridik klinika ishtirokchilari hududda sayyor qabul o'tkazadi", destination: "Навои", startDate: "2030-10-01", endDate: "2030-10-02",
         employees: `${people[1]!.name}\n${people[2]!.name}`,
       } }} /></FluentProvider>);
     expect(onCreate).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
+    expect(onCreate).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByRole("textbox", { name: "Источник покрытия расходов" }), { target: { value: "KAS loyihasi mablagʻlari" } });
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
     await waitFor(() => expect(onCreate).toHaveBeenCalledWith(expect.objectContaining({
-      purpose: "", destination: "Навои", employeeIds: [people[1]!.id, people[2]!.id],
+      purpose: "Yuridik klinika ishtirokchilari hududda sayyor qabul o'tkazadi", destination: "Навои", employeeIds: [people[1]!.id, people[2]!.id],
       startDate: "2030-10-01", endDate: "2030-10-02",
+      briefFormat: "generated", briefText: "", expenseSource: "KAS loyihasi mablagʻlari",
     })));
   });
   it("opens an unsent prefilled trip when the assistant prepared it", () => {
@@ -137,13 +141,13 @@ describe("Trip approvals interaction", async () => {
         startDate: "2030-10-01", endDate: "2030-10-02",
       } }}
     /></FluentProvider>);
-    expect(screen.queryByRole("textbox", { name: "Цель поездки" })).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Основание и мероприятие" })).toHaveValue("Встреча в регионе");
     expect(screen.getByRole("combobox", { name: "Куда едем" })).toHaveValue("Навои");
     expect(onCreate).not.toHaveBeenCalled();
   });
-  it("keeps the brief text and opens its PDF for review after saving", async () => {
+  it("generates a structured brief and opens its PDF for review after saving", async () => {
     const saved = { ...request, id: "new-trip", stage: "launch" as const, status: "draft" as const,
-      workflowVersion: 3, briefText: "Рабочая встреча", canEdit: true,
+      workflowVersion: 3, briefText: "Safar rejalashtirilgan.", briefFormat: "generated" as const, canEdit: true,
       allowedActions: ["submit"] as TripRequest["allowedActions"] };
     const onCreate = vi.fn(async () => saved);
     const onDownloadDocument = vi.fn(async () => new Blob(["pdf"], { type: "application/pdf" }));
@@ -152,15 +156,17 @@ describe("Trip approvals interaction", async () => {
       onCreate={onCreate} onUpdate={vi.fn()} onAction={vi.fn()}
       onDownloadDocument={onDownloadDocument} /></FluentProvider>);
     fireEvent.click(screen.getByRole("button", { name: "Новая командировка" }));
-    expect(screen.queryByRole("textbox", { name: "Цель поездки" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("textbox", { name: "Источник покрытия расходов" })).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Основание и мероприятие" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Источник покрытия расходов" })).toBeInTheDocument();
     expect(screen.queryByLabelText("Загрузить билдирги")).not.toBeInTheDocument();
     fireEvent.change(screen.getByRole("combobox", { name: "Куда едем" }), { target: { value: "Термиз" } });
-    fireEvent.change(screen.getByRole("textbox", { name: "Текст билдирги" }), { target: { value: "Рабочая встреча" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Основание и мероприятие" }), { target: { value: "Yuridik klinika ishtirokchilari sayyor qabul o'tkazadi" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Источник покрытия расходов" }), { target: { value: "KAS loyihasi mablagʻlari" } });
+    expect(screen.getByText(/Safar davomida Yuridik klinika/)).toBeInTheDocument();
     expect(onCreate).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
     await waitFor(() => expect(screen.getByText("bildirgi-preview.pdf")).toBeInTheDocument());
-    expect(onCreate).toHaveBeenCalledWith(expect.objectContaining({ briefText: "Рабочая встреча" }));
+    expect(onCreate).toHaveBeenCalledWith(expect.objectContaining({ briefFormat: "generated", briefText: "" }));
     fireEvent.click(screen.getByText("Показать файл"));
     await waitFor(() => expect(onDownloadDocument).toHaveBeenCalledWith("new-trip", "brief-preview", expect.any(AbortSignal)));
     expect(screen.getByRole("button", { name: "Изменить" })).toBeInTheDocument();

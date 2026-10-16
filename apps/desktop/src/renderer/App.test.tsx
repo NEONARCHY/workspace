@@ -922,6 +922,7 @@ function mockServer(
         ...payload,
         workflowVersion: 3,
         briefText: "Тестовая билдирги",
+        briefFormat: "generated",
         hasEmployeeSignature: true,
         stage: "launch",
         stageLabel: "Запуск",
@@ -2366,6 +2367,12 @@ describe("corporate workspace authentication alpha", () => {
     act(() => destination.focus());
     await waitFor(() => expect(destination).toHaveFocus());
     changeField(destination, { target: { value: "Бухара" } });
+    changeField(form.getByRole("textbox", { name: "Основание и мероприятие" }), {
+      target: { value: "Yuridik klinika ishtirokchilari sayyor qabul o'tkazadi" },
+    });
+    changeField(form.getByRole("textbox", { name: "Источник покрытия расходов" }), {
+      target: { value: "KAS loyihasi mablagʻlari" },
+    });
     fireEvent.click(await form.findByRole("button", { name: "Сохранить" }));
     expect(await screen.findByRole("heading", { name: "Бухара" })).toBeInTheDocument();
 
