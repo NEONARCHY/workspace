@@ -16,12 +16,17 @@ local task/calendar packages remain excluded. No push/merge authorized.
 Verified: 25 approval/trip tests; release-note validation and 15 workflow tests.
 Read-only Edge fixture uses actual ApprovalsView/TripApprovalsView + complete CSS;
 16 geometry checks across both themes at 1440/1024/720/390, equal cell widths/heights,
-equal outer padding, no clipped text, keyboard filter actions. Forced-colour/reduced
-motion snapshot also inspected. The 16 cases additionally assert equal vertical
+equal outer padding, no clipped text, keyboard filter actions. The 16 cases additionally assert equal vertical
 gaps above and below the summary (12 px desktop / 8 px compact browser). Full-page
 screenshots show the actual header, summary and filters together. Forced-colour/reduced
 motion snapshot also inspected. Artifacts: ignored `tmp/approval-counter-spacing-qa/`.
 No live approvals submitted; installed Electron not tested.
 
-Next: update TEST web only and record actual version/readiness.
 Build ID `localtest-20261016-approval-counter-spacing`.
+Deployed TEST `2.0.043`, built `2026-10-16T13:41:47.136Z`, source
+`454e72744b9d7b6fdc81603402b228f7ca7b262a`. Production build passed; HTTPS
+root/version checked, web healthy, API `0.23.0` ready. Only web recreated.
+Previous image `sha256:edc8c0336b4ac9d0094d0ec7b674b558fe206bb11c8d9f8cceaef2b9ecb39527`.
+QA Vite 5178 stopped after exact PID verification. Local commits only, no push/merge.
+
+Next: collect owner feedback; do not publish source/merge without authorization.
