@@ -36,8 +36,11 @@ try {
         "compose", "--env-file", $resolvedEnvFile,
         "-f", $composeBase, "-f", $composeLan
     )
-    $gatewayId = [string](& docker @baseCompose ps -a -q gateway | Select-Object -First 1)
+    # Keep the native command outside a pipeline so LASTEXITCODE reflects this
+    # Compose call instead of a previous command (for example, release metadata).
+    $gatewayIds = @(& docker @baseCompose ps -a -q gateway)
     if ($LASTEXITCODE -ne 0) { throw "Could not inspect the existing gateway container." }
+    $gatewayId = [string]($gatewayIds | Select-Object -First 1)
     if ($gatewayId.Trim()) {
         $labelsJson = & docker inspect --format '{{json .Config.Labels}}' $gatewayId.Trim()
         if ($LASTEXITCODE -ne 0) { throw "Could not inspect the gateway Compose configuration." }
