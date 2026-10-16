@@ -2504,6 +2504,12 @@ export function subscribeToWorkspaceEvents(
   let retry = 1_000;
   let reconnectTimer: number | undefined;
   let eventTimer: number | undefined;
+  let heartbeatTimer: number | undefined;
+  let responseTimer: number | undefined;
+  const clearHeartbeat = () => {
+    window.clearInterval(heartbeatTimer);
+    window.clearTimeout(responseTimer);
+  };
   const scheduleRefresh = () => {
     if (eventTimer !== undefined || stopped) return;
     eventTimer = window.setTimeout(() => {
@@ -2513,23 +2519,35 @@ export function subscribeToWorkspaceEvents(
   };
   const connect = () => {
     if (stopped) return;
-    socket = new WebSocket(websocketUrl.toString());
+    const connection = socket = new WebSocket(websocketUrl.toString());
+    // A half-open connection never emits close by itself. Bound both the
+    // authentication handshake and subsequent liveness checks.
+    responseTimer = window.setTimeout(() => connection.close(), 10_000);
     socket.addEventListener("open", () => {
-      if (!stopped) socket.send(JSON.stringify({ type: "authenticate", token }));
+      if (!stopped && connection === socket) connection.send(JSON.stringify({ type: "authenticate", token }));
     });
     socket.addEventListener("message", (event) => {
-      if (stopped) return;
+      if (stopped || connection !== socket) return;
       try {
         const payload: unknown = JSON.parse(String(event.data));
         if (!payload || typeof payload !== "object" || !("type" in payload)) return;
         if (payload.type === "authenticated") {
           retry = 1_000;
+          clearHeartbeat();
+          heartbeatTimer = window.setInterval(() => {
+            try {
+              connection.send(JSON.stringify({ type: "ping" }));
+              responseTimer = window.setTimeout(() => connection.close(), 10_000);
+            } catch { connection.close(); }
+          }, 20_000);
           scheduleRefresh(); // catch changes missed while disconnected
-        } else if (payload.type !== "pong") scheduleRefresh();
+        } else if (payload.type === "pong") window.clearTimeout(responseTimer);
+        else scheduleRefresh();
       } catch { onError(new Error("Не удалось прочитать обновление. Данные можно обновить вручную.")); }
     });
     socket.addEventListener("close", (event) => {
-      if (stopped) return;
+      if (stopped || connection !== socket) return;
+      clearHeartbeat();
       onError(new Error("Связь с сервером прервана. Переподключаемся; несохранённый ввод остаётся на экране."));
       if ([1008, 4401, 4403].includes(event.code)) return;
       reconnectTimer = window.setTimeout(connect, retry);
@@ -2541,6 +2559,7 @@ export function subscribeToWorkspaceEvents(
     stopped = true;
     window.clearTimeout(reconnectTimer);
     window.clearTimeout(eventTimer);
+    clearHeartbeat();
     socket?.close();
   };
 }
