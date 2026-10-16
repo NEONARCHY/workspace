@@ -2389,7 +2389,7 @@ export function loadWorkspaceTripBriefOfficePreview(
 
 export function downloadWorkspaceTripDocument(
   token: string, requestId: string,
-  kind: "attachment" | "brief" | "order" | "order-preview",
+  kind: "attachment" | "brief" | "brief-preview" | "order" | "order-preview",
   signal?: AbortSignal,
 ): Promise<Blob> {
   return boundedRequest(

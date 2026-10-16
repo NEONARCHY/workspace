@@ -16,9 +16,6 @@ vi.mock("./FileViewer", () => ({
     <button type="button" onClick={() => void onLoad(attachment, new AbortController().signal).then(onClose)}>Показать файл</button>
   </div>,
 }));
-vi.mock("./TripSignaturePad", () => ({
-  TripSignaturePad: () => <div data-testid="signature-pad">Нарисуйте подпись</div>,
-}));
 vi.mock("./TripWorldMap", () => ({
   TripWorldMap: ({ requests, onClose }: { requests: readonly TripRequest[]; onClose: () => void }) =>
     <div data-testid="trip-map">Доступно поездок: {requests.length}<button type="button" onClick={onClose}>К поездкам</button></div>,
@@ -144,57 +141,29 @@ describe("Trip approvals interaction", async () => {
     expect(screen.getByRole("combobox", { name: "Куда едем" })).toHaveValue("Навои");
     expect(onCreate).not.toHaveBeenCalled();
   });
-  it("shows only the destination field and uploads a selected brief on save", async () => {
+  it("keeps the brief text and opens its PDF for review after saving", async () => {
     const saved = { ...request, id: "new-trip", stage: "launch" as const, status: "draft" as const,
-      canEdit: true, allowedActions: ["submit"] as TripRequest["allowedActions"] };
+      workflowVersion: 3, briefText: "Рабочая встреча", canEdit: true,
+      allowedActions: ["submit"] as TripRequest["allowedActions"] };
     const onCreate = vi.fn(async () => saved);
-    const onUploadBrief = vi.fn(async () => ({ ...saved, briefAttachmentName: "bildirgi.pdf" }));
+    const onDownloadDocument = vi.fn(async () => new Blob(["pdf"], { type: "application/pdf" }));
     render(<FluentProvider theme={webLightTheme}><TripApprovalsView
-      requests={[]} people={people} currentUser={people[0]!}
+      requests={[saved]} people={people} currentUser={people[0]!}
       onCreate={onCreate} onUpdate={vi.fn()} onAction={vi.fn()}
-      onUploadBrief={onUploadBrief} /></FluentProvider>);
+      onDownloadDocument={onDownloadDocument} /></FluentProvider>);
     fireEvent.click(screen.getByRole("button", { name: "Новая командировка" }));
-    const brief = screen.getByLabelText("Загрузить билдирги");
     expect(screen.queryByRole("textbox", { name: "Цель поездки" })).not.toBeInTheDocument();
     expect(screen.queryByRole("textbox", { name: "Источник покрытия расходов" })).not.toBeInTheDocument();
-    expect(screen.queryByText("Общее")).not.toBeInTheDocument();
-    expect(brief).toHaveAttribute("type", "file");
+    expect(screen.queryByLabelText("Загрузить билдирги")).not.toBeInTheDocument();
     fireEvent.change(screen.getByRole("combobox", { name: "Куда едем" }), { target: { value: "Термиз" } });
-    const file = new File(["%PDF-1.4"], "bildirgi.pdf", { type: "application/pdf" });
-    fireEvent.change(brief, { target: { files: [file] } });
-    expect(screen.getByText("bildirgi.pdf")).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: "Текст билдирги" }), { target: { value: "Рабочая встреча" } });
     expect(onCreate).not.toHaveBeenCalled();
-    expect(onUploadBrief).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
-    await waitFor(() => expect(onUploadBrief).toHaveBeenCalledWith("new-trip", file));
-    expect(onCreate).toHaveBeenCalledWith(expect.objectContaining({
-      purpose: "", expenseSource: "",
-    }));
-  });
-  it("retries a failed brief upload without creating another trip", async () => {
-    const saved = { ...request, id: "saved-trip", stage: "launch" as const, status: "draft" as const,
-      canEdit: true, allowedActions: ["submit"] as TripRequest["allowedActions"] };
-    const onCreate = vi.fn(async () => saved);
-    const onUpdate = vi.fn(async () => saved);
-    const onUploadBrief = vi.fn()
-      .mockResolvedValueOnce(undefined)
-      .mockResolvedValueOnce({ ...saved, briefAttachmentName: "bildirgi.pdf" });
-    render(<FluentProvider theme={webLightTheme}><TripApprovalsView
-      requests={[]} people={people} currentUser={people[0]!}
-      onCreate={onCreate} onUpdate={onUpdate} onAction={vi.fn()}
-      onUploadBrief={onUploadBrief} /></FluentProvider>);
-    fireEvent.click(screen.getByRole("button", { name: "Новая командировка" }));
-    fireEvent.change(screen.getByRole("combobox", { name: "Куда едем" }), { target: { value: "Термиз" } });
-    fireEvent.change(screen.getByLabelText("Загрузить билдирги"), { target: {
-      files: [new File(["%PDF-1.4"], "bildirgi.pdf", { type: "application/pdf" })],
-    } });
-    fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("Черновик сохранён, но билдирги не загрузилась");
-    expect(screen.getByRole("combobox", { name: "Куда едем" })).toHaveValue("Термиз");
-    fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
-    await waitFor(() => expect(onUploadBrief).toHaveBeenCalledTimes(2));
-    expect(onCreate).toHaveBeenCalledTimes(1);
-    expect(onUpdate).toHaveBeenCalledExactlyOnceWith(saved, expect.objectContaining({ purpose: "" }));
+    await waitFor(() => expect(screen.getByText("bildirgi-preview.pdf")).toBeInTheDocument());
+    expect(onCreate).toHaveBeenCalledWith(expect.objectContaining({ briefText: "Рабочая встреча" }));
+    fireEvent.click(screen.getByText("Показать файл"));
+    await waitFor(() => expect(onDownloadDocument).toHaveBeenCalledWith("new-trip", "brief-preview", expect.any(AbortSignal)));
+    expect(screen.getByRole("button", { name: "Изменить" })).toBeInTheDocument();
   });
   it("keeps selected employees while searching and previews the trip without sending it", async () => {
     const { onCreate } = setup();
@@ -255,43 +224,36 @@ describe("Trip approvals interaction", async () => {
     fireEvent.click(screen.getByText("Показать файл"));
     await waitFor(() => expect(onDownloadDocument).toHaveBeenCalledWith(modern.id, "order-preview", expect.any(AbortSignal)));
   });
-  it("does not let a new trip be sent without a fresh signature confirmation", () => {
+  it("allows a written modern brief without an employee signature", () => {
+    const modern = { ...request, workflowVersion: 3, stage: "launch" as const,
+      status: "draft" as const, allowedActions: ["submit"] as TripRequest["allowedActions"],
+      canEdit: true, briefText: "Тестовая билдирги", hasEmployeeSignature: false };
+    setup(modern);
+    fireEvent.click(card().querySelector(".approval-card-open")!);
+    expect(screen.getByRole("button", { name: "Отправить первому заместителю" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Предпросмотр билдирги PDF" })).toBeInTheDocument();
+    expect(screen.queryByTestId("signature-pad")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Прикрепить оригинал/ })).not.toBeInTheDocument();
+  });
+  it("lets an editable version-two trip send written text without a signature", () => {
     const modern = { ...request, workflowVersion: 2, stage: "launch" as const,
       status: "draft" as const, allowedActions: ["submit"] as TripRequest["allowedActions"],
       canEdit: true, briefText: "Тестовая билдирги", expenseSource: "Проект",
       hasEmployeeSignature: false };
     setup(modern);
     fireEvent.click(card().querySelector(".approval-card-open")!);
-    expect(screen.getByRole("button", { name: "Отправить председателю" })).toBeDisabled();
-    expect(screen.getByText(/После исправления заявки подпись нужно подтвердить снова/)).toBeInTheDocument();
-  });
-  it("opens the attached brief in the viewer before confirming an existing signature", async () => {
-    const modern = { ...request, workflowVersion: 2, stage: "launch" as const,
-      status: "draft" as const, allowedActions: ["submit"] as TripRequest["allowedActions"],
-      canEdit: true, briefAttachmentName: "bildirgi.jpg", briefAttachmentType: "image/jpeg",
-      briefAttachmentSize: 1024, hasEmployeeSignature: false, originalSignatureConfirmed: false };
-    const onSetOriginalSignature = vi.fn(async () => ({ ...modern, originalSignatureConfirmed: true }));
-    const onDownloadDocument = vi.fn(async () => new Blob(["photo"], { type: "image/jpeg" }));
-    const renderView = (item: TripRequest) => <FluentProvider theme={webLightTheme}><TripApprovalsView
-      requests={[item]} people={people} currentUser={people[0]!} onCreate={vi.fn()}
-      onUpdate={vi.fn()} onAction={vi.fn()} onSetOriginalSignature={onSetOriginalSignature}
-      onDownloadDocument={onDownloadDocument} onUploadSignature={vi.fn()}
-    /></FluentProvider>;
-    installSpatialGeometry();
-    const view = render(renderView(modern));
-    fireEvent.click(card().querySelector(".approval-card-open")!);
-    const confirmation = screen.getByRole("checkbox", { name: "Оригинал билдирги уже подписан мной" });
-    expect(confirmation).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Отправить председателю" })).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: /Открыть оригинал/ }));
-    fireEvent.click(await screen.findByText("Показать файл"));
-    await waitFor(() => expect(confirmation).toBeEnabled());
-    expect(onDownloadDocument).toHaveBeenCalledWith(modern.id, "attachment", expect.any(AbortSignal));
-    fireEvent.click(confirmation);
-    await waitFor(() => expect(onSetOriginalSignature).toHaveBeenCalledWith(modern.id, true));
-    view.rerender(renderView({ ...modern, originalSignatureConfirmed: true }));
     expect(screen.getByRole("button", { name: "Отправить председателю" })).toBeEnabled();
-    expect(screen.queryByTestId("signature-pad")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Предпросмотр билдирги PDF" })).toBeInTheDocument();
+  });
+  it("does not silently submit an older attachment-only draft without signed evidence", () => {
+    const older = { ...request, workflowVersion: 2, stage: "launch" as const,
+      status: "draft" as const, allowedActions: ["submit"] as TripRequest["allowedActions"],
+      canEdit: true, briefText: "", briefAttachmentName: "original.pdf",
+      hasEmployeeSignature: false, originalSignatureConfirmed: false };
+    setup(older);
+    fireEvent.click(card().querySelector(".approval-card-open")!);
+    expect(screen.getByRole("button", { name: "Отправить председателю" })).toBeDisabled();
+    expect(screen.getByText(/Для старых заявок.*прежние требования к подписи/)).toBeInTheDocument();
   });
   it("blocks skipped stages and cards without permission", async () => {
     const { onAction } = setup({ ...request, stage: "launch", status: "draft", allowedActions: [] });
