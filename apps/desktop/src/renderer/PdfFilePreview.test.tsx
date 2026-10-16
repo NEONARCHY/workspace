@@ -41,6 +41,28 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.clearAllMocks(); });
 
 describe("continuous document reader", () => {
+  it("zooms only the document with Ctrl/Command wheel, accumulates bursts and removes the listener", async () => {
+    const view = setup(3);
+    await waitFor(() => expect(mocks.render).toHaveBeenCalledWith(3, expect.anything()));
+    const region = screen.getByRole("region", { name: "Страницы документа" });
+    const first = screen.getByRole("group", { name: "Страница 1" });
+    const original = parseFloat(first.style.width);
+    expect(fireEvent.wheel(region, { deltaY: -100, cancelable: true })).toBe(true);
+    expect(parseFloat(first.style.width)).toBe(original);
+    act(() => {
+      for (let index = 0; index < 2; index++) expect(region.dispatchEvent(new WheelEvent("wheel", { deltaY: -100, ctrlKey: true, cancelable: true }))).toBe(false);
+    });
+    await waitFor(() => expect(parseFloat(first.style.width)).toBeCloseTo(original * Math.exp(.4)));
+    expect(screen.getByRole("button", { name: "Страница целиком" })).toHaveAttribute("aria-pressed", "false");
+    expect(fireEvent.wheel(region, { deltaY: 100, metaKey: true, cancelable: true })).toBe(false);
+    await waitFor(() => expect(parseFloat(first.style.width)).toBeCloseTo(original * Math.exp(.2)));
+    act(() => { for (let index = 0; index < 30; index++) fireEvent.wheel(region, { deltaY: -100, ctrlKey: true }); });
+    await waitFor(() => expect(screen.getByText("300%")).toBeInTheDocument());
+    act(() => { for (let index = 0; index < 40; index++) fireEvent.wheel(region, { deltaY: 100, ctrlKey: true }); });
+    await waitFor(() => expect(screen.getByText("10%")).toBeInTheDocument());
+    view.unmount();
+    expect(region.dispatchEvent(new WheelEvent("wheel", { deltaY: -100, ctrlKey: true, cancelable: true }))).toBe(true);
+  });
   it("starts with the whole first page, prefills the next pages and bounds active canvases", async () => {
     const { onError } = setup();
     await waitFor(() => expect(mocks.render).toHaveBeenCalledWith(3, expect.anything()));

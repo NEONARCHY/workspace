@@ -41,16 +41,15 @@ def prepare(emoji: str) -> tuple[str, dict[str, object] | None]:
     frames: list[Image.Image] = []
     times: list[int] = []
     elapsed = 0
-    next_sample = 0
     for index in range(image.n_frames):
         image.seek(index)
         # Decoding populates each WebP frame's duration.
         image.load()
         duration = int(image.info.get("duration", 40))
-        if elapsed >= next_sample:
-            frames.append(image.convert("RGBA").resize((64, 64), Image.Resampling.LANCZOS))
-            times.append(elapsed)
-            next_sample = elapsed + 40  # at most 25 fps, retaining the complete loop duration
+        # Preserve native timing (usually 30 ms in these WebP sources); dropping frames made
+        # smooth source motion look choppy even when the UI rendered at 60 Hz.
+        frames.append(image.convert("RGBA").resize((64, 64), Image.Resampling.LANCZOS))
+        times.append(elapsed)
         elapsed += duration
     durations = [b - a for a, b in zip(times, [*times[1:], elapsed], strict=True)]
     still_path = OUT / f"{code}-still.webp"
@@ -62,7 +61,8 @@ def prepare(emoji: str) -> tuple[str, dict[str, object] | None]:
     print(f"{code}: {len(frames)} frames / {len(animation)} bytes", flush=True)
     return code, {"source": url, "sourceSha256": sha256(source).hexdigest(),
                   "sha256": sha256(animation).hexdigest(), "bytes": len(animation),
-                  "frames": len(frames), "durationMs": elapsed}
+                  "frames": len(frames), "durationMs": elapsed,
+                  "minFrameMs": min(durations), "maxFrameMs": max(durations)}
 
 
 if __name__ == "__main__":

@@ -3,6 +3,7 @@ html body .reaction-picker-popover.fui-PopoverSurface {
   display: flex;
   flex-direction: column;
   width: min(352px, calc(100vw - 24px));
+  height: min(440px, calc(100dvh - 24px));
   max-height: min(440px, calc(100dvh - 24px));
   padding: 0;
   overflow: hidden;
@@ -15,9 +16,11 @@ html body .reaction-picker-popover.fui-PopoverSurface {
 html body .reaction-picker-popover::before,
 html body .reaction-picker-popover::after { content: none; }
 .reaction-picker-header { display: flex; align-items: center; gap: 8px; padding: 12px 12px 8px; }
-.reaction-picker-search { flex: 1; min-width: 0; }
-.reaction-picker-close { flex: none; }
-.reaction-picker-scroll { min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--ws-muted) transparent; padding: 0 8px 8px; }
+html body .reaction-picker-search.fui-Input { flex: 1; min-width: 0; height: 36px; border: 1px solid var(--ws-line); border-radius: 12px; background: var(--ws-canvas); color: var(--ws-text); box-shadow: none; }
+html body .reaction-picker-search.fui-Input:focus-within { border-color: var(--ws-link); }
+html body .reaction-picker-search.fui-Input::after { content: none; }
+html body .reaction-picker-close.fui-Button { flex: 0 0 36px; width: 36px; min-width: 36px; height: 36px; min-height: 36px; padding: 0; border-radius: 10px; }
+.reaction-picker-scroll { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: var(--ws-muted) transparent; padding: 0 8px 8px; }
 .reaction-picker-scroll::-webkit-scrollbar { width: 5px; }
 .reaction-picker-scroll::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
 .reaction-picker-scroll::-webkit-scrollbar-thumb { border-radius: 4px; background: var(--ws-muted); }
@@ -59,10 +62,10 @@ html body .reaction-picker-categories .fui-Button:focus-visible { outline: 2px s
   .reaction-picker-cells > button[aria-pressed="true"] { border-color: Highlight; }
   .reaction-picker-cells > button:focus-visible { outline-color: Highlight; }
 }
-.message-context-stack { position: fixed; z-index: 10000; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; width: max-content; }
-.message-context-stack > .message-context-menu { position: relative; left: auto; top: auto; flex: 0 1 auto; min-height: 0; max-width: 100%; overflow-y: auto; }
-.reaction-context-strip { display: flex; align-items: center; flex: 0 0 auto; gap: 2px; padding: 5px; max-width: 100%; box-sizing: border-box; overflow-x: auto; border: 1px solid var(--ws-line); border-radius: 28px; background: var(--ws-surface); box-shadow: 0 8px 28px rgb(0 0 0 / 18%); }
-html body .reaction-context-strip > button { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 34px; width: 34px; min-width: 34px; height: 34px; min-height: 34px; padding: 4px; border: 1px solid transparent; border-radius: 50%; background: transparent; color: var(--ws-text); cursor: pointer; }
+.message-context-stack { position: fixed; z-index: 10000; display: flex; flex-direction: column; align-items: stretch; gap: 8px; width: 210px; }
+.message-context-stack > .message-context-menu { position: relative; left: auto; top: auto; flex: 0 1 auto; min-height: 0; width: 100%; box-sizing: border-box; max-width: 100%; overflow-y: auto; }
+.reaction-context-strip { display: flex; align-items: center; flex: 0 0 auto; gap: 2px; padding: 5px; width: 100%; max-width: 100%; box-sizing: border-box; overflow-x: auto; border: 1px solid var(--ws-line); border-radius: 28px; background: var(--ws-surface); box-shadow: 0 8px 28px rgb(0 0 0 / 18%); }
+html body .reaction-context-strip > button { display: inline-flex; align-items: center; justify-content: center; flex: 1 1 0; width: 0; min-width: 0; height: 26px; min-height: 26px; padding: 0; border: 1px solid transparent; border-radius: 50%; background: transparent; color: var(--ws-text); cursor: pointer; }
 html body .reaction-context-strip > button:hover:not(:disabled), html body .reaction-context-strip > button[aria-pressed="true"] { background: var(--ws-selected); }
 html body .reaction-context-strip > button[aria-pressed="true"] { border-color: var(--ws-link); }
 html body .reaction-context-strip > button:focus-visible { outline: 2px solid var(--ws-link); outline-offset: -2px; }

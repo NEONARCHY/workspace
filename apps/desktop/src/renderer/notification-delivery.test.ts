@@ -40,7 +40,7 @@ describe("initialKnownNotificationIds", () => {
   it("keeps yesterday's latest event eligible but never falls back to older events after acknowledgement", () => {
     const items = [notification("yesterday", { occurredAt: new Date(now - 24 * 60 * 60_000).toISOString() }), notification("earlier", { occurredAt: new Date(now - 48 * 60 * 60_000).toISOString() })];
     expect([...initialKnownNotificationIds(items, now)]).toEqual(["earlier"]);
-    for (const acknowledgement of [{ readAt: new Date(now).toISOString() }, { desktopDeliveredAt: new Date(now).toISOString() }]) {
+    for (const acknowledgement of [{ readAt: new Date(now).toISOString() }, { desktopDeliveredAt: new Date(now).toISOString() }, { resolvedAt: new Date(now).toISOString() }]) {
       expect(initialKnownNotificationIds([{ ...items[0]!, ...acknowledgement }, items[1]!], now).size).toBe(2);
     }
   });

@@ -1,8 +1,23 @@
-import { describe, expect, it, vi } from "vitest";
-import { createReactionArtworkWarmer, reactionArtworkUrls } from "./reaction-artwork-preload";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { createReactionArtworkWarmer, reactionArtworkUrls, warmReactionThumbnail } from "./reaction-artwork-preload";
 import { reactionCatalog, reactionStillUrl, reactionAnimatedUrl } from "./reaction-catalog";
 
 describe("reaction artwork warmup", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it("retains decoded thumbnails across repeated warmups without hidden animated players", async () => {
+    const decode = vi.fn(async () => {});
+    const created: { src: string }[] = [];
+    vi.stubGlobal("Image", class {
+      src = "";
+      decode = decode;
+      constructor() { created.push(this); }
+    });
+    await warmReactionThumbnail("/qa-still.webp");
+    await warmReactionThumbnail("/qa-still.webp");
+    expect(decode).toHaveBeenCalledOnce();
+    expect(created).toHaveLength(1);
+    expect(created[0]).toMatchObject({ src: "/qa-still.webp", decode });
+  });
   it("covers every still and animation without duplicate downloads", () => {
     expect(new Set(reactionArtworkUrls).size).toBe(reactionArtworkUrls.length);
     for (const item of reactionCatalog) {

@@ -59,6 +59,7 @@
 
   /* Shared queue chrome: two compact metric rows, then tools and real records. */
   .web-platform .workflow-process-view { --ws2-process-section-gap: 8px; }
+  .web-platform .workflow-process-view:is(.approvals-view, .trips-view) { --ws2-process-section-gap: 8px; }
   .web-platform .approvals-view .approvals-tabs { max-width: 100%; margin-top: 8px; }
   .web-platform .approvals-view .approval-mode-switch { max-width: 100%; padding: 3px; border-radius: 12px; }
   .web-platform .approvals-view .approval-mode-switch button { min-height: 44px; padding: 6px 10px; font-size: 12px; white-space: normal; line-height: 1.25; }
@@ -73,6 +74,8 @@
   .web-platform .app-provider :is(.approvals-view, .trips-view, .projects-view) .ws2-segmented > button { min-height: 44px; height: auto; padding: 6px 10px; font-size: 12px; }
   .web-platform :is(.approvals-view, .trips-view) :is(.approval-search, .trip-search) { min-height: 44px; }
   .web-platform .workflow-process-view .ws2-process-overview { margin: 0; padding: 6px; gap: 4px; border-radius: 14px; }
+  .web-platform .trips-view .ws2-process-overview { margin-top: var(--ws2-process-section-gap); }
+  .web-platform :is(.approvals-view, .trips-view) .ws2-process-toolbar { padding-block: var(--ws2-process-section-gap); }
   .web-platform .workflow-process-view .ws2-process-focus { min-width: 0; min-height: 44px; padding: 6px 8px; gap: 4px; }
   .web-platform .workflow-process-view .ws2-process-metrics > div { min-width: 0; padding: 6px 8px; gap: 4px; }
   .web-platform .workflow-process-view :is(.ws2-process-focus, .ws2-process-metrics) strong { font-size: 22px; }

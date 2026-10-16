@@ -28,9 +28,11 @@ export function reactionImageUrl(emoji: string): string {
 export function reactionAnimatedUrl(emoji: string): string | undefined {
   const code = reactionCode(emoji);
   return animatedReactions.has(code)
-    ? `${import.meta.env.BASE_URL}emoji/noto/${code}.webp` : undefined;
+    ? `${import.meta.env.BASE_URL}emoji/noto/${code}.webp?v=native-2` : undefined;
 }
 
 export function reactionStillUrl(emoji: string): string {
-  return reactionAnimatedUrl(emoji)?.replace(/\.webp$/, "-still.webp") ?? reactionImageUrl(emoji);
+  const code = reactionCode(emoji);
+  return animatedReactions.has(code)
+    ? `${import.meta.env.BASE_URL}emoji/noto/${code}-still.webp` : reactionImageUrl(emoji);
 }

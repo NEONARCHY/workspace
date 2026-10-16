@@ -9,7 +9,7 @@
 .calendar-event-composer .record-field-grid .fui-Input,
 .calendar-event-composer .record-field-grid .fui-Textarea,
 .calendar-event-composer .record-field-grid .person-picker-trigger { width: 100%; }
-.calendar-composer-preview { display: grid; gap: 9px; }
+.calendar-composer-preview { display: grid; gap: 9px; container: calendar-preview / inline-size; }
 .calendar-project-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .calendar-project-fields > label { display: grid; gap: 6px; min-width: 0; color: var(--ws-muted); font-size: 13px; font-weight: 600; }
 .calendar-project-item-field { grid-column: 1 / -1; }
@@ -20,6 +20,12 @@
 .calendar-composer-preview > strong { color: var(--ws-text); font-size: 21px; line-height: 1.25; overflow-wrap: anywhere; }
 .calendar-composer-preview > p { margin: 0; color: var(--ws-muted); line-height: 1.45; overflow-wrap: anywhere; }
 .calendar-composer-preview .record-summary-facts { margin-top: 8px; }
+.calendar-composer-preview .record-summary-facts > .calendar-preview-date { grid-template-columns: max-content minmax(0, 1fr); align-items: baseline; }
+.calendar-composer-preview .calendar-preview-date dd { white-space: nowrap; overflow-wrap: normal; text-align: right; font-variant-numeric: tabular-nums; }
+@container calendar-preview (max-width: 225px) {
+  .calendar-composer-preview .record-summary-facts > .calendar-preview-date { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .calendar-composer-preview .calendar-preview-date dd { text-align: left; }
+}
 .calendar-composer-attendees { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px 12px; max-height: 220px; margin-top: 12px; padding: 10px; overflow-y: auto; border: 1px solid var(--ws-line); border-radius: 12px; background: var(--ws-surface); scrollbar-width: thin; }
 .calendar-composer-attendees .fui-Checkbox { min-width: 0; }
 .calendar-composer-attendees .fui-Checkbox__label { overflow-wrap: anywhere; }

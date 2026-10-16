@@ -105,7 +105,7 @@ export async function transitionColorTheme(update: () => void, origin?: { readon
     const animation = root.animate([
       { clipPath: `circle(0px at ${x}px ${y}px)` },
       { clipPath: `circle(${radius}px at ${x}px ${y}px)` },
-    ], { duration: 560, easing: "cubic-bezier(.4,0,.2,1)", fill: "forwards", pseudoElement: "::view-transition-new(root)" });
+    ], { duration: 680, easing: "cubic-bezier(.2,.65,.25,1)", fill: "forwards", pseudoElement: "::view-transition-new(root)" });
     reveal = animation;
     try { await animation.finished; } catch { /* A new choice owns the next wave. */ }
     await view.finished;

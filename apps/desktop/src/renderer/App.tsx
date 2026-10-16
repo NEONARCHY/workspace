@@ -808,7 +808,7 @@ export function App() {
         || !kindEnabled[notification.kind]
         || (notification.kind !== "hisobot" && notification.isReminder && !preferences.remindersEnabled)
       ) continue;
-      if (notification.desktopDeliveredAt || notification.readAt || isObsoleteHisobotNotification(notification)) continue;
+      if (notification.desktopDeliveredAt || notification.readAt || notification.resolvedAt || isObsoleteHisobotNotification(notification)) continue;
       void deliverNotificationOnce(session.user.id, notification.id, () => workspacePlatform.showNotification({
         id: notification.id,
         title: "Yuksalish Workspace",
@@ -2352,6 +2352,7 @@ export function App() {
                 onSubmitResult={handleSubmitTaskResult}
                 onAcceptResult={handleAcceptTaskResult}
                 onExtendDeadline={handleExtendTaskDeadline}
+                onDecideDeadline={handleDecideTaskDeadline}
                 onSetEfficiencyExclusion={handleTaskEfficiencyExclusion}
                 onUploadAttachments={handleUploadTaskAttachments}
                 onDeleteAttachment={handleDeleteTaskAttachment}

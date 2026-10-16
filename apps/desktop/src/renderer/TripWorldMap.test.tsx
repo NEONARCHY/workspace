@@ -51,6 +51,8 @@ describe("trip world map", () => {
     expect(screen.queryByRole("button", { name: "Сбросить выбор места" })).not.toBeInTheDocument();
     expect(within(locationList).getByRole("button", { name: /Ташкент/ })).toBeInTheDocument();
     expect(screen.getByText("Поездки без точной отметки")).toBeInTheDocument();
+    expect(within(locationList).getByRole("region", { name: "Поездки без точной отметки" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "К поездкам" }).previousElementSibling).toHaveTextContent("на карте");
     expect(screen.queryByText("TR-003")).not.toBeInTheDocument();
   });
 

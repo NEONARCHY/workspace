@@ -7,7 +7,7 @@ copyright Google, licensed under [CC BY 4.0](https://creativecommons.org/license
 Full license: `/licenses/Noto-Animated-Emoji-CC-BY-4.0.txt`.
 These are Google artwork, not Apple/iOS or Telegram assets.
 
-Adaptations: resized from 512 to 64 px using Lanczos, sampled to at most 25 fps,
+Adaptations: resized from 512 to 64 px using Lanczos, preserving every native frame and its original timing,
 encoded as lossy animated WebP (quality 78), full loop duration preserved,
 infinite looping; lossless first-frame WebP supplied for reduced motion/offscreen.
 Frozen sources, original SHA-256 hashes and local output metadata are in

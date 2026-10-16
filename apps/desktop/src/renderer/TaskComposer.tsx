@@ -8,6 +8,7 @@ import type {
   WorkspaceTask,
   WorkspaceTaskCreateInput,
   TaskProjectOption,
+  TaskProposalWrite,
 } from "@yuksalish/contracts";
 import {
   Button,
@@ -59,6 +60,7 @@ interface TaskComposerProps {
   readonly sourceLabel?: string;
   readonly calendarEventId?: string;
   readonly onClose: () => void;
+  readonly onPropose?: (payload: TaskProposalWrite) => Promise<void>;
   readonly onSubmit: (
     payload: WorkspaceTaskCreateInput,
   ) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
@@ -105,7 +107,12 @@ export function TaskComposer({
   calendarEventId,
   onClose,
   onSubmit,
+  onPropose,
 }: TaskComposerProps) {
+  const [authorId, setAuthorId] = useState(currentUserId);
+  const canPropose = Boolean(onPropose);
+  const proposalRequestId = useRef(crypto.randomUUID());
+  const needsConsent = Boolean(onPropose && authorId !== currentUserId);
   const [title, setTitle] = useState(initialTitle);
   const [description, setDescription] = useState(initialDescription);
   const [projectId, setProjectId] = useState(assistantFields.projectId ?? "");
@@ -174,6 +181,7 @@ export function TaskComposer({
         if (typeof value.project === "string") setSuggestedProject(value.project);
         if (typeof value.projectTouched === "boolean") setProjectTouched(value.projectTouched);
         if (typeof value.assigneeId === "string") setAssigneeId(value.assigneeId);
+        if (canPropose && typeof value.authorId === "string") setAuthorId(value.authorId);
         if (["low", "normal", "high", "urgent"].includes(String(value.priority))) setPriority(value.priority as WorkspaceTask["priority"]);
         if (typeof value.dueAt === "string") setDueAt(value.dueAt);
         if (Array.isArray(value.participants)) setParticipants(value.participants as DraftParticipant[]);
@@ -190,13 +198,13 @@ export function TaskComposer({
       } catch { /* A damaged local draft must not block task creation. */ }
     }).catch(() => undefined).finally(() => { draftReady.current = true; });
     return () => { active = false; };
-  }, [draftKey, persistDraft]);
+  }, [draftKey, persistDraft, canPropose]);
 
   useEffect(() => {
     if (!persistDraft || !draftReady.current || !draftEdited.current) return;
     const snapshot = JSON.stringify({
       title, description, projectId, project: suggestedProject, projectTouched,
-      assigneeId, priority, dueAt, participants,
+      assigneeId, authorId, priority, dueAt, participants,
       checklist, dependencies, repeatEnabled, cycleKind, cycleInterval,
       cycleNextRun, cycleCalendarRule, cycleWeekdays, cycleMonthDays,
     });
@@ -210,7 +218,7 @@ export function TaskComposer({
       window.removeEventListener("yuksalish:prepare-web-update", save);
     };
   }, [draftKey, persistDraft, title, description, projectId, suggestedProject, projectTouched,
-    assigneeId, priority, dueAt, participants,
+    assigneeId, authorId, priority, dueAt, participants,
     checklist, dependencies, repeatEnabled, cycleKind, cycleInterval, cycleNextRun,
     cycleCalendarRule, cycleWeekdays, cycleMonthDays]);
 
@@ -222,7 +230,8 @@ export function TaskComposer({
     () => new Map(tasks.map((task) => [task.id, task])),
     [tasks],
   );
-  const assignee = peopleById.get(assigneeId);
+  const effectiveAssigneeId = needsConsent ? currentUserId : assigneeId;
+  const assignee = peopleById.get(effectiveAssigneeId);
   const suggestedMatches = suggestedProject && !projectTouched && !projectId
     ? projectOptions.filter((option) => [option.title, option.code].some((value) =>
       value.toLocaleLowerCase("ru") === suggestedProject.trim().toLocaleLowerCase("ru")))
@@ -233,7 +242,7 @@ export function TaskComposer({
   const activePeople = people.filter((person) => !person.status || person.status === "active");
   const availableParticipants = activePeople.filter(
     (person) =>
-      person.id !== assigneeId
+      person.id !== effectiveAssigneeId
       && !participants.some((participant) => participant.userId === person.id),
   );
   const teamQuery = teamSearch.trim().toLocaleLowerCase("ru");
@@ -252,7 +261,7 @@ export function TaskComposer({
   );
 
   const addParticipant = () => {
-    if (!participantId || participantId === assigneeId) return;
+    if (!participantId || participantId === effectiveAssigneeId) return;
     setParticipants((current) => [
       ...current.filter((participant) => participant.userId !== participantId),
       { userId: participantId, role: participantRole },
@@ -261,13 +270,14 @@ export function TaskComposer({
   };
 
   const addDepartment = (asResponsible = false) => {
+    if (asResponsible && needsConsent) return;
     const department = departments.find((item) => item.id === departmentId);
     if (!department) return;
     const activeIds = (department.memberIds ?? []).filter((id) => activePeople.some((person) => person.id === id));
     if (!activeIds.length) { setError("В этом отделе пока нет активных сотрудников."); return; }
     const coordinatorId = asResponsible
       ? (department.leadUserId && activeIds.includes(department.leadUserId) ? department.leadUserId : activeIds[0]!)
-      : assigneeId;
+      : effectiveAssigneeId;
     if (asResponsible) setAssigneeId(coordinatorId);
     setParticipants((current) => {
       const next = new Map(current.map((item) => [item.userId, item]));
@@ -325,7 +335,7 @@ export function TaskComposer({
       setError("Укажите название задачи.");
       return;
     }
-    if (!assigneeId) {
+    if (!effectiveAssigneeId) {
       setError("Выберите ответственного сотрудника.");
       return;
     }
@@ -377,20 +387,27 @@ export function TaskComposer({
         setError("Выбранный проект больше недоступен. Обновите список или выберите «Без проекта».");
         return;
       }
-      const created = await onSubmit({
+      const payload: WorkspaceTaskCreateInput = {
         title: title.trim(),
         description: description.trim(),
         project: selectedProject?.title ?? "Без проекта",
         projectId: selectedProject?.id ?? null,
-        assigneeId,
+        assigneeId: needsConsent ? currentUserId : assigneeId,
         calendarEventId,
         priority,
         dueAt: dueAt ? new Date(dueAt).toISOString() : undefined,
-        participants,
+        participants: participants.filter((item) => item.userId !== effectiveAssigneeId),
         checklist: checklist.map((item) => ({ title: item })),
         dependencies,
         cycle: buildCycle(),
-      });
+      };
+      if (needsConsent && onPropose) {
+        await onPropose({ requestId: proposalRequestId.current, authorUserId: authorId, task: payload });
+        if (persistDraft) void workspacePlatform.clearDraft(draftKey).catch(() => undefined);
+        onClose();
+        return;
+      }
+      const created = await onSubmit(payload);
       if (created === undefined) {
         setError("Не удалось добавить задачу. Проверьте подключение и повторите.");
       } else if (persistDraft) {
@@ -419,9 +436,9 @@ export function TaskComposer({
             eyebrow="Задачи / Создание"
             busy={busy}
             error={error}
-            submitLabel="Добавить задачу"
-            submitDisabled={!title.trim() || !assigneeId}
-            hint="Задача и все её правила сохранятся одним действием."
+            submitLabel={needsConsent ? "Отправить на подтверждение" : "Добавить задачу"}
+            submitDisabled={!title.trim() || !effectiveAssigneeId}
+            hint={needsConsent ? "Задача появится только после личного подтверждения выбранным постановщиком." : "Задача и все её правила сохранятся одним действием."}
             onClose={onClose}
             aside={(
               <>
@@ -433,6 +450,7 @@ export function TaskComposer({
                     <strong>{title.trim() || "Название новой задачи"}</strong>
                     <p>{description.trim() || "Добавьте ожидаемый результат и важные детали."}</p>
                     <dl className="record-summary-facts">
+                      {onPropose ? <div><dt>Постановщик</dt><dd>{peopleById.get(authorId)?.name ?? "Выберите сотрудника"}</dd></div> : null}
                       <div><dt>Ответственный</dt><dd>{assignee ? <EmployeeProfileLink userId={assignee.id} personName={assignee.name}>{assignee.name}</EmployeeProfileLink> : "Не выбран"}</dd></div>
                       <div><dt>Проект</dt><dd>{selectedProject?.title ?? "Без проекта"}</dd></div>
                       <div className="record-summary-deadline"><dt>Срок</dt><dd>{dateTimeLabel(dueAt)}</dd></div>
@@ -441,7 +459,7 @@ export function TaskComposer({
                 </RecordSummary>
                 <RecordSummary title="Что произойдёт">
                   <ul className="task-composer-rule-summary">
-                    <li><People20Regular aria-hidden="true" /><span>Участники получат доступ к карточке и её чату.</span></li>
+                    <li><People20Regular aria-hidden="true" /><span>{needsConsent ? "Сначала постановщик получит заявку. Задача, чат и доступ участников появятся только после одобрения." : "Участники получат доступ к карточке и её чату."}</span></li>
                     <li><CheckmarkCircle20Regular aria-hidden="true" /><span>Готовый результат отправится постановщику на проверку.</span></li>
                     <li><Calendar20Regular aria-hidden="true" /><span>{repeatEnabled ? `Новая задача будет появляться: ${cycleLabels[cycleKind].toLocaleLowerCase("ru")}.` : "Задача создастся без автоматического повторения."}</span></li>
                   </ul>
@@ -488,14 +506,27 @@ export function TaskComposer({
                     ? <small>Проект «{suggestedProject}» не найден в доступных. Выберите его вручную или оставьте задачу без проекта.</small> : null}
                   {projectsError ? <small role="alert">{projectsError} {onRetryProjects ? <Button type="button" appearance="subtle" onClick={onRetryProjects}>Повторить</Button> : null}</small> : null}
                 </label>
+                {onPropose ? <label>
+                  <span>Постановщик</span>
+                  <PersonPicker label="Постановщик новой задачи" people={activePeople}
+                    departments={departments} disabled={busy} value={authorId}
+                    onChange={(next) => {
+                      setAuthorId(next || currentUserId);
+                      if (next && next !== currentUserId) {
+                        setAssigneeId(currentUserId);
+                        setParticipants((current) => current.filter((item) => item.userId !== currentUserId));
+                      }
+                    }} />
+                  <small>{needsConsent ? "Вы — исполнитель. Выбранный сотрудник должен лично одобрить всю форму." : "Если выбрать другого человека, ему придёт заявка на подтверждение."}</small>
+                </label> : null}
                 <label>
                   <span>Ответственный <b aria-hidden="true">*</b></span>
                   <PersonPicker
                     label="Ответственный новой задачи"
                     people={activePeople}
                     departments={departments}
-                    disabled={busy}
-                    value={assigneeId}
+                    disabled={busy || needsConsent}
+                    value={effectiveAssigneeId}
                     onChange={(next) => {
                       setAssigneeId(next);
                       setParticipants((current) => current.filter((item) => item.userId !== next));
@@ -574,9 +605,9 @@ export function TaskComposer({
                       </WorkspaceSelect></label>
                       <div className="task-team-department-buttons">
                         <Button type="button" disabled={!departmentId} onClick={() => addDepartment(false)}>Добавить участников</Button>
-                        <Button type="button" appearance="primary" disabled={!departmentId} onClick={() => addDepartment(true)}>Назначить отдел ответственным</Button>
+                        <Button type="button" appearance="primary" disabled={!departmentId || needsConsent} onClick={() => addDepartment(true)}>Назначить отдел ответственным</Button>
                       </div>
-                      <small>Главное лицо отдела станет ответственным; если оно не назначено — первый активный сотрудник. Остальные будут соисполнителями.</small>
+                      <small>{needsConsent ? "В заявке ответственным остаётесь вы. Сотрудников отдела можно добавить соисполнителями или наблюдателями." : "Главное лицо отдела станет ответственным; если оно не назначено — первый активный сотрудник. Остальные будут соисполнителями."}</small>
                     </div>
                   </>}
                 </div>

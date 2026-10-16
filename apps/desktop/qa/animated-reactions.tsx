@@ -4,17 +4,22 @@ import { useEffect, useState } from "react";
 import { FluentProvider } from "@fluentui/react-components";
 import { ReactionPicker, reactionEmojis } from "../src/renderer/ReactionPicker";
 import { ReactionEmoji } from "../src/renderer/ReactionEmoji";
+import { MessageContextMenu } from "../src/renderer/MessageContextMenu";
+import { ColorThemeToggle } from "../src/renderer/ColorThemeToggle";
 import { useQaTheme } from "./color-theme";
 import "../src/renderer/styles.css";
 import "../src/renderer/design-system.css";
+import "../src/renderer/workspace-2-messenger.css";
 import "../src/renderer/dark-theme.css";
 import "../src/renderer/workspace-popups.css";
 import "../src/renderer/satin-surfaces.css";
+import "../src/renderer/workspace-field-borders.css";
 
 function Fixture() {
   const theme = useQaTheme();
   const [result, setResult] = useState("Нажмите «Измерить», затем откройте выбор реакций. Замер начнётся через 1 секунду.");
   const [run, setRun] = useState(0);
+  const [context, setContext] = useState(false);
   useEffect(() => {
     if (!run) return;
     let frame = 0, last = 0, start = 0, activeMax = 0;
@@ -36,6 +41,14 @@ function Fixture() {
   }, [run]);
   return <FluentProvider theme={theme} className="app-provider" style={{ minHeight: "100dvh", padding: 24, background: "var(--ws-canvas)", color: "var(--ws-text)" }}>
     <h1>Анимированные реакции</h1>
+    <ColorThemeToggle />
+    <button onClick={() => setContext(value => !value)}>Контекстное меню</button>
+    {context && <MessageContextMenu x={600} y={380} portalContainer={document.body} onPointerDown={event => event.stopPropagation()}
+      accessory={<ReactionPicker userId="qa-animation" variant="context" onSelect={() => setContext(false)} />}>
+      <button role="menuitem" onClick={() => setContext(false)}>Ответить</button>
+      <button role="menuitem" onClick={() => setContext(false)}>Копировать выделенное</button>
+      <button role="menuitem" onClick={() => setContext(false)}>Переслать</button>
+    </MessageContextMenu>}
     <p>Настоящий общий компонент; одновременно видимые реакции и открытый выбор.</p>
     <button onClick={() => { setResult("Измерение…"); setRun(value => value + 1); }}>Измерить 5 секунд</button>
     <output aria-label="Результат замера" style={{ display: "block", marginBlock: 12, overflowWrap: "anywhere" }}>{result}</output>
