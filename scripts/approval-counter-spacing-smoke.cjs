@@ -8,6 +8,7 @@ let browser;
   const errors = []; page.on('pageerror', error => errors.push(error.message));
   const dir = 'tmp/approval-counter-spacing-qa'; fs.mkdirSync(dir, { recursive: true });
   const report = [];
+  let paymentLightSurface;
   for (const theme of ['light', 'dark']) for (const view of ['payments', 'trips']) {
     await page.goto(`http://127.0.0.1:5178/qa/detail-layout.html?view=${view}&theme=${theme}`);
     await page.evaluate(() => document.body.classList.add('web-platform'));
@@ -39,6 +40,16 @@ let browser;
       }, { root, view });
       assert.ok(Math.abs(vertical.above - vertical.below) < 1, JSON.stringify({ theme, view, width, vertical }));
       report.push({ theme, view, width, vertical });
+      if (theme === 'light' && width === 1440) {
+        const surface = await page.locator(root).evaluate(node => {
+          const css = getComputedStyle(node), first = getComputedStyle(node.querySelector('button'));
+          const label = getComputedStyle(node.querySelector('button > span'));
+          return { background: css.background, border: css.border, shadow: css.boxShadow, radius: css.borderRadius, padding: css.padding,
+            first: first.background, firstRadius: first.borderRadius, labelSize: label.fontSize, labelHeight: label.lineHeight };
+        });
+        if (view === 'payments') paymentLightSurface = surface;
+        else assert.deepEqual(surface, paymentLightSurface, 'Light trip summary must match the payment surface');
+      }
       await page.locator(root).screenshot({ path: `${dir}/${theme}-${view}-${width}.png` });
       if (width === 1440) await page.screenshot({ path: `${dir}/${theme}-${view}-full.png` });
     }

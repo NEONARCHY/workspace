@@ -11,15 +11,18 @@
     --approval-action-surface: #edf6f4;
     --approval-action-selected: #cce8e2;
   }
-  html:not([data-color-theme="dark"]) .approvals-view .approval-commandbar {
+  html:not([data-color-theme="dark"]) .approvals-view .approval-commandbar,
+  html:not([data-color-theme="dark"]) .trips-view .ws2-process-overview {
     border-color: transparent;
     background: var(--approval-summary-surface);
     box-shadow: 0 4px 14px -8px rgb(41 58 85 / 24%);
   }
-  html:not([data-color-theme="dark"]) .approvals-view .approval-metric-actionable {
+  html:not([data-color-theme="dark"]) .approvals-view .approval-metric-actionable,
+  html:not([data-color-theme="dark"]) .trips-view .ws2-process-focus {
     background: var(--approval-action-surface);
   }
   html:not([data-color-theme="dark"]) .approvals-view .approval-metric-actionable:hover,
+  html:not([data-color-theme="dark"]) .trips-view .ws2-process-focus:hover,
   html:not([data-color-theme="dark"]) .approvals-view .approval-metric-actionable[aria-pressed="true"] {
     background: var(--approval-action-selected);
   }
