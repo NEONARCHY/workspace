@@ -1,6 +1,5 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { LoadingSkeleton } from "./LoadingSkeleton";
-import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
 import { CalendarAudienceActions } from "./CalendarAudienceActions";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
@@ -372,7 +371,6 @@ export function CalendarView({
       return new Date(month.getFullYear(), month.getMonth(), day);
     });
   }, [month]);
-  const visibleEventsPerDay = 2;
 
   useEffect(() => {
     if (!createFromChat || createFromChat.key === lastChatDraftKey.current) return;
@@ -695,15 +693,9 @@ export function CalendarView({
   </>;
   return (
     <section ref={frameRef} className={`workspace-view calendar-view calendar-ux ${agendaCompact ? "calendar-agenda-compact" : "calendar-agenda-inline"}${agendaDense ? " calendar-agenda-dense" : ""}${view === "list" ? " calendar-tiles-mode" : ""}`} aria-label="Календарь">
-        <WorkspaceSectionHeader motif="calendar" className="calendar-toolbar">
-          <div className="calendar-title">
-            <span>Рабочий календарь</span>
-            <h1>Календарь</h1>
-            <p>Встречи, мероприятия и Zoom</p>
-          </div>
-          <div className="calendar-toolbar-actions">
-            <Button
-              className="ws-section-header-primary"
+      <CalendarFilters value={filters} onChange={changeFilters} onReset={resetFilters}
+        people={people} token={token} currentUserId={currentUserId} disabled={Boolean(draft) || busy} actions={<Button
+              className="calendar-new-event"
               appearance="primary"
               icon={<Add24Regular />}
               disabled={Boolean(draft) || busy}
@@ -714,16 +706,13 @@ export function CalendarView({
               }}
             >
               Новое событие
-            </Button>
-          </div>
-        </WorkspaceSectionHeader>
-      <CalendarFilters value={filters} onChange={changeFilters} onReset={resetFilters}
-        people={people} token={token} currentUserId={currentUserId} disabled={Boolean(draft) || busy} compact={agendaCompact} />
+            </Button>} />
       <div className="calendar-main">
         <div className="calendar-view-bar">
           <div className="calendar-view-summary"><h2>{view === "list" && (filters.from || filters.to) ? "Выбранный период" : monthLabel}</h2>
             <span role="status" aria-live="polite">Событий: {(view === "list" ? listItems : monthItems).length}{hasFilters ? " · По выбранным фильтрам" : ""}</span></div>
           <div className="calendar-view-controls">
+
             <div className="calendar-month-navigation" aria-label="Навигация по месяцам">
               <Button appearance="subtle" icon={<ChevronLeft24Regular />} aria-label="Предыдущий месяц" disabled={Boolean(draft) || busy || (view === "list" && Boolean(filters.from || filters.to))} onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))} />
               <Button appearance="subtle" disabled={Boolean(draft) || busy} onClick={goToToday}>Сегодня</Button>
@@ -768,8 +757,6 @@ export function CalendarView({
               const key = dayKey(day);
                const dayItems = calendarItemsOnDay(schedule, day, filters);
                const dayItemCount = dayItems.length;
-               const previewCount = agendaDense ? 1 : visibleEventsPerDay;
-               const visibleItems = dayItems.slice(0, previewCount);
               const outside = day.getMonth() !== month.getMonth();
               const today = key === dayKey(new Date());
               const active = key === dayKey(selectedDay);
@@ -808,13 +795,13 @@ export function CalendarView({
                   <div className="calendar-day-header">
                     <span className="calendar-day-number">{day.getDate()}</span>
                     {today ? <span className="calendar-today-label">Сегодня</span> : null}
-                    {dayItemCount > previewCount && !agendaCompact ? <button {...agendaFocusTarget} type="button" className="calendar-more-events"
+                    {dayItemCount > 0 && !agendaCompact ? <button {...agendaFocusTarget} type="button" className="calendar-more-events"
                       title={`Показать все события: ${dayItemCount}`} aria-label={`Все события: ${label}`}
-                      disabled={Boolean(draft) || busy} onClick={event => { event.stopPropagation(); chooseDay(day); sideRef.current?.focus({ preventScroll: true }); }}>{agendaDense ? dayItemCount : `+${dayItemCount - previewCount}`}</button>
+                      disabled={Boolean(draft) || busy} onClick={event => { event.stopPropagation(); chooseDay(day); sideRef.current?.focus({ preventScroll: true }); }}>{dayItemCount}</button>
                       : dayItemCount > 0 ? <span className="calendar-day-count">{dayItemCount}</span> : null}
                   </div>
                   <div className="calendar-day-events">
-                    {visibleItems.map((item) => (
+                    {dayItems.map((item) => (
                       <button
                         {...eventFocusTarget}
                         className={`calendar-event-pill ${item.kind === "zoom" ? "zoom" : `${item.record.eventType} ${item.record.status}`}`}
