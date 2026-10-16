@@ -26,7 +26,7 @@ import { employeeScope, type EmployeeScope } from "./employee-scope";
 import { assistantPeopleIds } from "./assistant-form-handoff";
 import type { FileViewerSource } from "./FileViewer";
 import { TripDestinationPicker } from "./TripDestinationPicker";
-import { tripBriefError, tripBriefPreview } from "./trip-brief-generator";
+import { editedTripBriefError, tripBriefError, tripBriefPreview } from "./trip-brief-generator";
 
 const ExternalFileViewer = lazy(() => import("./FileViewer").then(module => ({ default: module.ExternalFileViewer })));
 const TripWorldMap = lazy(() => import("./TripWorldMap").then(module => ({ default: module.TripWorldMap })));
@@ -75,7 +75,7 @@ interface TripFormState {
   chatIconKey?: ChatAvatarIconKey;
   purpose: string; destination: string; startDate: string; endDate: string;
   employeeIds: readonly string[]; briefText: string; expenseSource: string;
-  briefFormat: "manual" | "generated";
+  briefFormat: "manual" | "generated" | "edited";
 }
 function emptyForm(currentUserId: string): TripFormState {
   const today = new Date().toISOString().slice(0, 10);
@@ -170,8 +170,10 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
       setError("Укажите место, даты и хотя бы одного участника поездки."); return;
     }
     if (form.endDate < form.startDate) { setError("Дата окончания не может быть раньше даты начала."); return; }
-    const briefError = form.briefFormat === "generated" ? tripBriefError(form) : undefined;
+    const briefError = form.briefFormat !== "manual" ? tripBriefError(form) : undefined;
     if (briefError) { setError(briefError); return; }
+    const editedError = form.briefFormat === "edited" ? editedTripBriefError(form.briefText) : undefined;
+    if (editedError) { setError(editedError); return; }
     busyRef.current = true; setBusy(true); setError("");
     try {
       const payload: TripRequestInput = { ...form, purpose: form.purpose.trim(), destination: form.destination.trim(),
@@ -388,9 +390,9 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
                 </RecordSummary>
                 <section className="record-summary-card record-summary-note"><h3>Что произойдёт дальше</h3><p>После сохранения вы увидите PDF билдирги до отправки. Текст можно изменить. Первый заместитель согласует заявку, затем председатель утвердит её или вернёт на уточнение.</p><p>После утверждения приказ получит отдельный номер серии WS и появится во вкладке «Утверждено».</p></section>
               </>}>
-              <RecordSection title="Билдирги" description={form.briefFormat === "generated" ? "Укажите факты поездки. Билдирги составится автоматически на узбекской латинице; вы проверите PDF до отправки." : "Ручной текст прежней заявки сохранён. После правок проверьте PDF до отправки."}><div className="record-field-grid">
+              <RecordSection title="Билдирги" description={form.briefFormat === "manual" ? "Ручной текст прежней заявки сохранён. После правок проверьте PDF до отправки." : "Укажите факты поездки. Билдирги составится автоматически; вы можете поправить текст перед сохранением и проверить PDF до отправки."}><div className="record-field-grid">
                 <TripDestinationPicker value={form.destination} onChange={(destination) => setForm((current) => ({ ...current, destination }))} disabled={busy} />
-                {form.briefFormat === "generated" ? <>
+                {form.briefFormat !== "manual" ? <>
                   <label className="record-field-wide">Основание и мероприятие<Textarea aria-label="Основание и мероприятие" resize="vertical" rows={3} required maxLength={600} placeholder="Например: EI va KAS loyihasi doirasida yuridik klinika ishtirokchilari sayyor qabul o'tkazadi" value={form.purpose} onChange={(_, data) => setForm({ ...form, purpose: data.value })} /><small>Опишите проверенные факты на узбекском языке, не более 600 знаков. Кириллица в PDF преобразуется в латиницу.</small></label>
                   <label className="record-field-wide">Источник покрытия расходов<Input aria-label="Источник покрытия расходов" required maxLength={300} placeholder="Например: loyiha mablagʻlari" value={form.expenseSource} onChange={(_, data) => setForm({ ...form, expenseSource: data.value })} /></label>
                 </> : <label className="record-field-wide">Текст билдирги<Textarea aria-label="Текст билдирги" resize="vertical" rows={5} required maxLength={6000} value={form.briefText} onChange={(_, data) => setForm({ ...form, briefText: data.value })} /></label>}
@@ -400,8 +402,18 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
                 <label>Дата начала<WorkspaceDateTimePicker mode="date" ariaLabel="Дата начала" required value={form.startDate} onChange={(value) => setForm({ ...form, startDate: value })} /></label>
                 <label>Дата окончания<WorkspaceDateTimePicker mode="date" ariaLabel="Дата окончания" required value={form.endDate} min={form.startDate} onChange={(value) => setForm({ ...form, endDate: value })} /></label>
               </div></RecordSection>
-              {form.briefFormat === "generated" ? <RecordSection title="Предварительный текст" description="Это содержание будущей билдирги. После сохранения откроется официальный PDF с адресатом, участниками и местом для резолюции председателя.">
-                <div className="trip-brief-paper" role="region" aria-label="Предварительный текст билдирги"><span className="trip-brief-paper-kicker">YUKSALISH · BILDIRGI</span><p>{tripBriefPreview(form)}</p><span className="trip-brief-paper-foot">Черновик · можно изменить до отправки</span></div>
+              {form.briefFormat !== "manual" ? <RecordSection title="Предварительный текст" description="Проверьте содержание будущей билдирги. После сохранения откроется официальный PDF с адресатом, участниками и местом для резолюции председателя.">
+                <div className="trip-brief-paper" role="region" aria-label="Предварительный текст билдирги">
+                  <span className="trip-brief-paper-kicker">YUKSALISH · BILDIRGI</span>
+                  {form.briefFormat === "edited"
+                    ? <Textarea className="trip-brief-paper-editor" aria-label="Редактируемый текст билдирги" resize="vertical" rows={8} required maxLength={6000} value={form.briefText} onChange={(_, data) => { setForm((current) => ({ ...current, briefText: data.value })); setError(""); }} disabled={busy} />
+                    : <p>{tripBriefPreview(form)}</p>}
+                  <div className="trip-brief-paper-actions"><span className="trip-brief-paper-foot">{form.briefFormat === "edited" ? "Ваш текст · проверьте даты, место и источник расходов после правок полей выше" : "Автоматический черновик · правки сохранятся в PDF"}</span>
+                    {form.briefFormat === "edited"
+                      ? <Button type="button" disabled={busy} onClick={() => { setForm((current) => ({ ...current, briefFormat: "generated", briefText: "" })); setError(""); }}>Вернуть автотекст</Button>
+                      : <Button type="button" disabled={busy || Boolean(tripBriefError(form))} onClick={() => { setForm((current) => ({ ...current, briefFormat: "edited", briefText: tripBriefPreview(current) })); setError(""); }}>Редактировать текст</Button>}
+                  </div>
+                </div>
               </RecordSection> : null}
               <RecordSection title="Участники поездки" description={canChooseOthers ? "Отметьте сотрудников, которые отправятся в поездку. Поиск не сбрасывает выбор." : "Вы можете создать поездку для себя."}>
                 {canChooseOthers && departments ? <EmployeeScopeSwitch value={employeeListScope} onChange={setEmployeeListScope} label="Группа участников поездки" /> : null}

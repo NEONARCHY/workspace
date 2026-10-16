@@ -103,10 +103,14 @@
 }
 .trip-dialog .trip-brief-paper-kicker { padding-bottom: 12px; border-bottom: 1px solid var(--ws-line, #d8e5e7); font-weight: 700; }
 .trip-dialog .trip-brief-paper p { margin: 20px 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; line-height: 1.7; }
-.trip-dialog .trip-brief-paper-foot { padding-top: 12px; border-top: 1px solid var(--ws-line, #d8e5e7); }
+.trip-dialog .trip-brief-paper-editor { width: 100%; margin: 18px 0; }
+.trip-dialog .trip-brief-paper-editor textarea { font: inherit; line-height: 1.7; }
+.trip-dialog .trip-brief-paper-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 12px; border-top: 1px solid var(--ws-line, #d8e5e7); }
+.trip-dialog .trip-brief-paper-foot { min-width: 0; }
 
 @media (max-width: 640px) {
   .trip-dialog .trip-document-panel { padding: 14px; }
+  .trip-dialog .trip-brief-paper-actions { align-items: stretch; flex-direction: column; }
   .trip-dialog .trip-document-files > .fui-Button { width: 100%; justify-content: flex-start; }
   .trip-dialog .trip-signature-controls > .fui-Button { flex: 1 1 130px; }
 }

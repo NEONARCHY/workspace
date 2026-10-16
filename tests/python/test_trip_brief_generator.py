@@ -13,7 +13,10 @@ from pypdf import PdfReader
 from yuksalish_api import repository
 from yuksalish_api.auth import AuthenticatedUser
 from yuksalish_api.errors import WorkspaceRepositoryError
-from yuksalish_api.trip_brief_generator import generate_trip_brief
+from yuksalish_api.trip_brief_generator import (
+    generate_trip_brief,
+    validate_edited_trip_brief,
+)
 from yuksalish_api.trip_order_pdf import brief_pdf
 from yuksalish_api.workspace_schemas import CreateTripRequest, UpdateTripRequest
 
@@ -84,6 +87,40 @@ def test_cross_month_range_has_both_dates() -> None:
     assert "31-oktabrdan 2026-yil 2-noyabrgacha" in text
 
 
+def test_edited_brief_preserves_paragraphs_and_rejects_placeholders() -> None:
+    original = generate_trip_brief(**_facts())
+    edited = original.replace("Safar davomida", "Safar doirasida")
+    assert validate_edited_trip_brief(edited) == edited
+    assert "\n\n" in validate_edited_trip_brief(edited)
+    with pytest.raises(ValueError, match="Текст билдирги"):
+        validate_edited_trip_brief("test " * 40)
+    with pytest.raises(ValueError, match="Текст билдирги"):
+        validate_edited_trip_brief(edited + " https://example.com")
+
+
+def test_server_saves_reviewed_brief_instead_of_regenerating_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user_id = uuid4()
+    user = AuthenticatedUser(user_id, "requester", "Requester", None, None, "employee")
+    connection = AsyncMock()
+    monkeypatch.setattr(repository, "_validate_trip_employees", AsyncMock(return_value=[user_id]))
+    monkeypatch.setattr(repository, "_sync_context_chat", AsyncMock())
+    monkeypatch.setattr(repository, "_trip_response", AsyncMock(return_value="saved"))
+    facts = _facts()
+    edited = generate_trip_brief(**facts).replace("Safar davomida", "Safar doirasida")
+    payload = CreateTripRequest(
+        purpose=facts["purpose"], destination=facts["destination"],
+        start_date=facts["start"], end_date=facts["end"],
+        expense_source=facts["expense_source"], employee_ids=[str(user_id)],
+        brief_format="edited", brief_text=edited,
+    )
+    assert asyncio.run(repository.create_trip_request(connection, user, payload)) == "saved"
+    values = connection.execute.await_args_list[0].args[0].compile().params
+    assert values["brief_format"] == "edited"
+    assert values["brief_text"] == edited
+
+
 def test_server_ignores_forged_brief_text_and_saves_generated_version(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -139,6 +176,18 @@ def test_edit_regenerates_brief_and_invalidates_prepared_pdf(
     assert values["brief_text"] == generate_trip_brief(**facts)
     assert values["signed_brief_key"] is None
     assert values["signed_brief_sha256"] is None
+    edited = values["brief_text"].replace("Safar davomida", "Safar doirasida")
+    calls_before_edit = connection.execute.await_count
+    assert asyncio.run(repository.update_trip_request(
+        connection, user, request_id,
+        payload.model_copy(update={"brief_format": "edited", "brief_text": edited}),
+    )) == "updated"
+    edited_values = (
+        connection.execute.await_args_list[calls_before_edit + 1].args[0].compile().params
+    )
+    assert edited_values["brief_format"] == "edited"
+    assert edited_values["brief_text"] == edited
+    assert edited_values["signed_brief_key"] is None
     calls_before_rejection = connection.execute.await_count
     with pytest.raises(WorkspaceRepositoryError, match="нельзя заменить"):
         asyncio.run(repository.update_trip_request(
