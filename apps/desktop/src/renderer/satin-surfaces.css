@@ -2,6 +2,29 @@
    Opaque padding-box fill prevents the border gradient entering the content.
    No pseudo-element, mask, positioning, z-index or extra DOM layer is used. */
 @media (forced-colors: none) {
+  /* Explicit light-theme exception: only the selected incoming filter.
+     Same tapered sweep as dark, with light surface/teal ink instead of white. */
+  html[data-color-theme="light"] body .ai-incoming-register .ai-referent-summary > button[aria-pressed="true"] {
+    border-color: transparent;
+    background-image: var(--ws-incoming-selected-fill, linear-gradient(var(--ws-surface), var(--ws-surface))),
+      linear-gradient(90deg, transparent, rgb(var(--ws-theme-ink-teal-rgb, 0 103 121) / 65%) 22%, rgb(var(--ws-theme-ink-teal-rgb, 0 103 121) / 28%) 78%, transparent),
+      conic-gradient(from 0deg,
+        rgb(var(--ws-theme-ink-teal-rgb, 0 103 121) / 85%) 0%, rgb(var(--ws-theme-ink-teal-rgb, 0 103 121) / 65%) 13%,
+        rgb(var(--ws-theme-ink-teal-rgb, 0 103 121) / 24%) 27%, rgb(var(--ws-theme-ink-teal-rgb, 0 103 121) / 12%) 50%,
+        rgb(var(--ws-theme-ink-teal-rgb, 0 103 121) / 24%) 73%, rgb(var(--ws-theme-ink-teal-rgb, 0 103 121) / 65%) 87%,
+        rgb(var(--ws-theme-ink-teal-rgb, 0 103 121) / 85%) 100%);
+    background-origin: border-box, border-box, border-box;
+    background-clip: padding-box, border-box, border-box;
+    background-size: auto, 80% 1px, auto;
+    background-position: center, top center, center;
+    background-repeat: no-repeat;
+    box-shadow: 0 10px 27px -19px rgb(0 103 121 / 24%);
+  }
+  html[data-color-theme="light"] body .ai-incoming-register .ai-referent-summary > .primary[aria-pressed="true"] {
+    --ws-incoming-selected-fill: linear-gradient(116deg, var(--ws-theme-wash-teal), var(--ws-surface));
+  }
+}
+@media (forced-colors: none) {
   html[data-color-theme="dark"] .app-shell .app-rail.sidebar-palette,
   html[data-color-theme="dark"] .browser-navigation-dialog .app-rail.sidebar-palette {
     border-color: transparent;

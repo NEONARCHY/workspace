@@ -15,6 +15,12 @@ Shared cards, calendar/message panes, floating windows and remaining account, ma
 
 ### Shared expanding searches — 14 October 2026
 
+Light-theme exception, 16 October: only the selected incoming-letter summary
+filter uses the same tapered satin border as dark mode, with teal light-theme
+ink and an opaque light fill. The previous solid border plus inset ring is
+removed. Unselected light cards, dark surfaces, geometry and focus/forced-colour
+signals remain unchanged.
+
 Search height follows the complete adjacent control surface, including segmented
 group padding, rather than its inset button. Only visible controls on the same
 row participate; resizing remeasures the row. The temporary gooey split keeps

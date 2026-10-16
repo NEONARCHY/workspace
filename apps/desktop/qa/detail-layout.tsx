@@ -4,6 +4,7 @@ import { FluentProvider } from "@fluentui/react-components";
 import type { FeedPost, TripRequest } from "@yuksalish/contracts";
 import { TasksView } from "../src/renderer/TasksView";
 import { AIHisobotView } from "../src/renderer/AIHisobotView";
+import { AIReferentIncomingRegister } from "../src/renderer/AIReferentIncomingRegister";
 import { TripWorldMap } from "../src/renderer/TripWorldMap";
 import { FeedView } from "../src/renderer/FeedView";
 import { EmployeeProfileProvider } from "../src/renderer/EmployeeProfileLink";
@@ -104,7 +105,8 @@ function Fixture() {
   const view = new URLSearchParams(location.search).get("view");
   return <FluentProvider theme={theme} className="app-provider" style={{ minHeight: "100dvh", color: "var(--ws-text)", background: "var(--ws-canvas)" }}>
     <EmployeeProfileProvider onOpenProfile={noop}><main className="app-content" style={{ height: "100dvh", padding: 16 }}>
-      {view === "trip" ? <TripWorldMap requests={[trip, { ...trip, id: "qa-free", destination: "Термиз 4" }]} people={people} onOpenRequest={noop} onClose={noop} /> :
+      {view === "incoming" ? <section className="ai-referent-view"><AIReferentIncomingRegister token="qa" /></section> :
+      view === "trip" ? <TripWorldMap requests={[trip, { ...trip, id: "qa-free", destination: "Термиз 4" }]} people={people} onOpenRequest={noop} onClose={noop} /> :
        view === "hisobot" ? <div style={{ width: "min(100%, 480px)", height: "100%" }}><AIHisobotView token="qa" /></div> :
        view === "feed" ? <FeedView posts={[post]} people={people} token="" currentUserId="baxtiyor" onCreate={async () => post}
          onComment={async () => post} onReact={async () => post} onPin={async () => post} onDelete={async () => true} /> :
