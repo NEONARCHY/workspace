@@ -195,6 +195,7 @@ def request_module_action(path: str, method: str) -> tuple[str, ModuleAction] | 
         (("/incoming-letters",), "incoming_letters"),
         (("/projects",), "projects"),
         (("/trip-requests",), "trip_approvals"),
+        (("/leave-requests",), "leave_approvals"),
         (("/absence-requests",), "absences"),
         (("/zoom-meetings",), "zoom_meetings"),
         (("/members",), "members"),
@@ -226,6 +227,10 @@ def request_module_action(path: str, method: str) -> tuple[str, ModuleAction] | 
         ("/accept-result", "/return-for-revision")
     ):
         return module_key, "approve"
+    if module_key == "leave_approvals" and normalized.endswith(
+        ("/hr-review", "/deputy-decision")
+    ):
+        return module_key, "approve"
     if upper_method == "GET":
         return module_key, "view"
     collection_paths = {
@@ -238,6 +243,7 @@ def request_module_action(path: str, method: str) -> tuple[str, ModuleAction] | 
         "/ai-referent/letters",
         "/projects",
         "/trip-requests",
+        "/leave-requests",
         "/absence-requests",
         "/zoom-meetings",
         "/feed/posts",

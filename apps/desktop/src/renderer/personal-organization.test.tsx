@@ -13,6 +13,10 @@ const labels = Object.fromEntries(navigationKeys.map((key) => [key, key])) as Re
 
 describe("Personal organization", () => {
   it("moves identities in both directions without losing hidden or future sections", () => {
+    const oldOrder = ["home", "tasks", "trip_approvals", "messenger"] as NavigationKey[];
+    expect(normalizeNavigation(oldOrder).slice(0, 5)).toEqual([
+      "home", "tasks", "trip_approvals", "leave_approvals", "messenger",
+    ]);
     expect(moveBefore(["a", "b", "c"], "a", "c")).toEqual(["b", "c", "a"]);
     expect(moveBefore(["a", "b", "c"], "c", "a")).toEqual(["c", "a", "b"]);
     expect(moveBefore(["a", "b"], "foreign", "a")).toEqual(["a", "b"]);

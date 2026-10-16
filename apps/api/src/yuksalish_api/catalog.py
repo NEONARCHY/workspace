@@ -125,6 +125,14 @@ MODULE_CATALOG = (
         status="available",
     ),
     ModuleDescriptor(
+        key="leave_approvals",
+        label=LocalizedLabel(
+            ru="Отпуска", uz_cyrl="Таътиллар", uz_latn="Taʼtillar",
+        ),
+        route="/leave-approvals",
+        status="available",
+    ),
+    ModuleDescriptor(
         key="messenger",
         label=LocalizedLabel(ru="Мессенджер", uz_cyrl="Мессенжер", uz_latn="Messenjer"),
         route="/messenger",
