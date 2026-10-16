@@ -2448,7 +2448,8 @@ describe("corporate workspace authentication alpha", () => {
     }));
     await screen.findByRole("button", { name: "Новое событие" });
     const calendar = screen.getByRole("region", { name: "Календарь" });
-    expect(within(calendar).getByRole("heading", { name: "Календарь" })).toBeInTheDocument();
+    expect(within(calendar).queryByRole("heading", { name: "Календарь" })).not.toBeInTheDocument();
+    expect(within(calendar).getByRole("button", { name: "Фильтры" })).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByRole("button", {
       name: `Открыть задачу: ${initialTasks[0]!.title}`,
     })).not.toBeInTheDocument();
