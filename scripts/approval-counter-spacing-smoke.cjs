@@ -30,7 +30,17 @@ let browser;
       assert.ok(geometry.items.every(item => item.scroll <= item.client + 1 && item.x >= geometry.outer.x && item.x + item.w <= geometry.outer.x + geometry.outer.w + 1), JSON.stringify({ theme, view, width, geometry }));
       assert.ok(Math.max(...geometry.items.map(item => item.h)) - Math.min(...geometry.items.map(item => item.h)) < 1, JSON.stringify(geometry));
       report.push({ theme, view, width, geometry });
+      const vertical = await page.evaluate(({ root, view }) => {
+        const summary = document.querySelector(root).getBoundingClientRect();
+        const header = document.querySelector(view === 'payments' ? '.approvals-toolbar' : '.workflow-hero-header').getBoundingClientRect();
+        const toolbar = document.querySelector(view === 'payments' ? '.approval-view-toolbar' : '.trip-commandbar');
+        const controls = [...toolbar.children].map(child => child.getBoundingClientRect());
+        return { above: summary.top - header.bottom, below: Math.min(...controls.map(box => box.top)) - summary.bottom };
+      }, { root, view });
+      assert.ok(Math.abs(vertical.above - vertical.below) < 1, JSON.stringify({ theme, view, width, vertical }));
+      report.push({ theme, view, width, vertical });
       await page.locator(root).screenshot({ path: `${dir}/${theme}-${view}-${width}.png` });
+      if (width === 1440) await page.screenshot({ path: `${dir}/${theme}-${view}-full.png` });
     }
     await page.locator(root).getByRole('button').focus(); await page.keyboard.press('Enter');
     if (view === 'payments') assert.equal(await page.locator(root).getByRole('button').getAttribute('aria-pressed'), 'true');

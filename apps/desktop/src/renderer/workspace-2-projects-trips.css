@@ -53,6 +53,7 @@
   --workflow-hero-glow: rgb(101 200 197 / 17%);
   --ws2-process-section-gap: 10px;
 }
+.workflow-process-view:is(.approvals-view, .trips-view) { --ws2-process-section-gap: 12px; }
 .projects-view.workflow-process-view { --workflow-hero-accent: #68b8a5; --workflow-hero-glow: rgb(104 184 165 / 18%); }
 .trips-view.workflow-process-view { --workflow-hero-accent: #79aee0; --workflow-hero-glow: rgb(121 174 224 / 17%); }
 .workflow-process-view .workflow-hero-header {
