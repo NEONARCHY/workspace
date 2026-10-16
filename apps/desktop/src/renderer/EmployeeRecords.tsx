@@ -6,11 +6,13 @@ import { RecordMobileLabel, RecordTablePager, SortHeading, tableCollator, useTab
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { DepartmentIcon } from "./DepartmentIcon";
+import { SkeletonTableRows } from "./LoadingSkeleton";
 
 export const employeeRoleLabels: Record<WorkspaceRole, string> = { superadmin: "Суперадминистратор", admin: "Администратор", manager: "Руководитель", employee: "Сотрудник" };
 export const employeeStatusLabel = (status: string) => ({ active: "Активен", pending: "Ожидает активации", invited: "Приглашён", disabled: "Отключён", blocked: "Заблокирован", archived: "Уволен" })[status] ?? status;
 
-export function EmployeeRecords({ token, employees, departments, filterKey, selectedIds, onOpen, onToggle, onTogglePage }: {
+export function EmployeeRecords({ token, employees, departments, filterKey, selectedIds, onOpen, onToggle, onTogglePage, loading = false }: {
+  readonly loading?: boolean;
   token: string;
   employees: readonly DirectoryEmployee[];
   departments: readonly WorkspaceDepartment[];
@@ -37,7 +39,7 @@ export function EmployeeRecords({ token, employees, departments, filterKey, sele
   const selectedOnPage = pageEmployees.filter((employee) => selectedIds.has(employee.id)).length;
   const pageSelection = selectedOnPage === 0 ? false : selectedOnPage === pageEmployees.length ? true : "mixed";
   return <div className="record-table-frame employee-records">
-    <div className="record-table-scroll" role="region" aria-label="Список сотрудников" tabIndex={0}>
+    <div className="record-table-scroll" role="region" aria-label="Список сотрудников" tabIndex={0} aria-busy={loading}>
       <table role="table" className="record-table employee-record-table" aria-label="Сотрудники">
         <thead role="rowgroup"><tr role="row">
           <th role="columnheader" className="record-selection-heading" scope="col">
@@ -50,7 +52,7 @@ export function EmployeeRecords({ token, employees, departments, filterKey, sele
           </th>
           {[["name", "Сотрудник"], ["position", "Должность"], ["department", "Подразделение"], ["username", "Логин"], ["role", "Роль"], ["status", "Состояние"]].map(([column, label]) => <SortHeading key={column} column={column!} sort={sort} onSort={onSort}>{label}</SortHeading>)}
         </tr></thead>
-        <tbody role="rowgroup">{pageEmployees.map(employee => <tr role="row"
+        {loading ? <SkeletonTableRows columns={7} rows={7} label="Загружаем сотрудников и должности" rowClassName="record-row employee-row" selectionColumn={0} personColumn={1} /> : <tbody role="rowgroup">{pageEmployees.map(employee => <tr role="row"
           className={`record-row employee-row${selectedIds.has(employee.id) ? " selected" : ""}`}
           aria-selected={selectedIds.has(employee.id)}
           key={employee.id}
@@ -73,10 +75,10 @@ export function EmployeeRecords({ token, employees, departments, filterKey, sele
           <td role="cell" className="record-username"><RecordMobileLabel>Логин</RecordMobileLabel>@{employee.username}</td>
           <td role="cell"><RecordMobileLabel>Роль</RecordMobileLabel><span className={`role-mark role-${employee.role}`}>{employeeRoleLabels[employee.role]}</span></td>
           <td role="cell"><RecordMobileLabel>Состояние</RecordMobileLabel><Badge appearance="tint" color={employee.status === "active" ? "success" : employee.status === "invited" ? "brand" : employee.status === "archived" ? "subtle" : "warning"}>{employeeStatusLabel(employee.status)}</Badge></td>
-        </tr>)}</tbody>
+        </tr>)}</tbody>}
       </table>
-      {!employees.length && <div className="record-table-empty"><strong>Сотрудники не найдены</strong><span>Измените поисковый запрос или фильтры.</span></div>}
+      {!loading && !employees.length && <div className="record-table-empty"><strong>Сотрудники не найдены</strong><span>Измените поисковый запрос или фильтры.</span></div>}
     </div>
-    <RecordTablePager total={sorted.length} paging={paging} label="сотрудники" />
+    {!loading && <RecordTablePager total={sorted.length} paging={paging} label="сотрудники" />}
   </div>;
 }

@@ -1,4 +1,5 @@
 import { useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { LoadingSkeleton, SkeletonBlock } from "./LoadingSkeleton";
 import type { PlaceWeather, WeatherConditions } from "@yuksalish/contracts";
 import { Button, Popover, PopoverSurface, PopoverTrigger } from "@fluentui/react-components";
 import { ArrowLeft, ArrowRight, ChevronDown, ChevronRight, CircleDollarSign, Cloud, CloudFog,
@@ -94,19 +95,21 @@ export function TopbarInsights({ token }: { readonly token: string }) {
     <ContextWeatherIcon weather={place.weather} /><span><b>{place.region}</b><small>{place.city} · ветер {number(place.weather?.windSpeed)} м/с</small></span>
     <span className="context-place-reading"><strong>{number(place.weather?.temperature, 0)}°</strong><small>AQI {number(place.air?.usAqi, 0)}</small></span><ChevronRight size={16} aria-hidden /></button>;
   return <div className="topbar-insights">
-    <Popover open={open === "rates"} onOpenChange={(event, data) => {
+    <Popover surfaceMotion={null} open={open === "rates"} onOpenChange={(event, data) => {
       toggle("rates", data.open);
       if (!data.open && "key" in event && event.key === "Escape") close("rates");
     }} positioning={{ position: "below", align: "end", offset: 8, autoSize: "height", overflowBoundaryPadding: 12 }} trapFocus>
       <PopoverTrigger disableButtonEnhancement><button ref={currencyTrigger} type="button" className="context-trigger context-currency-trigger" data-stale={staleRates || undefined}
         aria-label={`Курсы валют: 1 USD — ${usd ? number(Number(usd.rateUzs), 2) : "нет данных"} UZS${staleRates ? ". Данные устарели" : ""}`} aria-expanded={open === "rates"}>
-        <CircleDollarSign size={18} aria-hidden /><span><small>USD <ArrowRight size={11} aria-hidden /> UZS</small><strong>{usd ? number(Number(usd.rateUzs), 2) : rates.pending ? "Загрузка…" : "Нет данных"}</strong></span><ChevronDown size={13} aria-hidden /></button></PopoverTrigger>
+        <CircleDollarSign size={18} aria-hidden /><span><small>USD <ArrowRight size={11} aria-hidden /> UZS</small><strong>{usd ? number(Number(usd.rateUzs), 2) : rates.pending ? <SkeletonBlock width="80px" height="16px" /> : "Нет данных"}</strong></span><ChevronDown size={13} aria-hidden /></button></PopoverTrigger>
       {/* Explicit overflow keeps Fluent autoSize from adding a second scrollbar. */}
-      <PopoverSurface className="topbar-context-surface" style={{ overflowY: "hidden" }} aria-label="Курсы валют">
+      <PopoverSurface className="topbar-context-surface" data-surface-resize-motion="off" style={{ overflowY: "hidden" }} aria-label="Курсы валют">
         <div className="context-panel-head"><div><span className="context-kicker">Центральный банк Узбекистана</span><h2>Курсы валют</h2></div><button type="button" className="context-icon-action" aria-label="Закрыть курсы валют" onClick={() => close("rates")}><X size={19} aria-hidden /></button></div>
         <div className="context-panel-body">
           {rates.error && <p className="context-notice" role="alert">{rates.error}</p>}
-          {rates.pending && !rates.value && <p role="status">Загружаем официальный курс…</p>}
+          {rates.pending && !rates.value && <LoadingSkeleton layout="custom" label="Загружаем официальный курс…"><div className="context-rate-list">
+            {Array.from({ length: 6 }, (_, index) => <div className="context-rate-row" key={index}><SkeletonBlock width="30px" /><SkeletonBlock width="80%" /><div className="ws-skeleton-copy"><SkeletonBlock width="90px" /><SkeletonBlock width="30px" height="12px" /></div><SkeletonBlock width="40px" height="12px" /></div>)}
+          </div><div className="context-converter ws-skeleton-copy"><SkeletonBlock width="160px" /><SkeletonBlock height="36px" /><SkeletonBlock width="65%" height="24px" /></div></LoadingSkeleton>}
           {staleRates && rates.value && <p className="context-notice">Показаны последние сохранённые курсы. Источник сейчас недоступен.</p>}
           {rates.value && <>
             <p className="context-source-note">Действуют с {new Date(`${rates.value.effectiveDate}T12:00:00+05:00`).toLocaleDateString("ru-RU")} · за 1 единицу валюты</p>
@@ -121,18 +124,20 @@ export function TopbarInsights({ token }: { readonly token: string }) {
         <div className="context-panel-footer"><a href="https://cbu.uz/ru/arkhiv-kursov-valyut/" target="_blank" rel="noopener noreferrer">Источник: ЦБ</a><span>{contextTime(rates.value?.fetchedAt)}</span><Button appearance="subtle" size="small" icon={<RefreshCw size={15} aria-hidden />} disabled={rates.pending} onClick={rates.refresh}>Обновить</Button></div>
       </PopoverSurface>
     </Popover>
-    <Popover open={open === "weather"} onOpenChange={(event, data) => {
+    <Popover surfaceMotion={null} open={open === "weather"} onOpenChange={(event, data) => {
       toggle("weather", data.open);
       if (!data.open && "key" in event && event.key === "Escape") close("weather");
     }} positioning={{ position: "below", align: "end", offset: 8, autoSize: "height", overflowBoundaryPadding: 12 }} trapFocus>
       <PopoverTrigger disableButtonEnhancement><button ref={weatherTrigger} type="button" className="context-trigger context-weather-trigger" data-stale={staleWeather || undefined}
         aria-label={`Погода в Ташкенте: ${number(tashkent?.weather?.temperature)} градусов${staleWeather ? ". Данные устарели" : ""}`} aria-expanded={open === "weather"}>
-        <ContextWeatherIcon weather={tashkent?.weather} /><span><small>Ташкент</small><strong>{tashkent?.weather ? `${number(tashkent.weather.temperature, 0)}°` : weather.pending ? "…" : "—"}</strong></span><ChevronDown size={13} aria-hidden /></button></PopoverTrigger>
-      <PopoverSurface className="topbar-context-surface context-weather-surface" style={{ overflowY: "hidden" }} aria-label="Погода Узбекистана">
+        <ContextWeatherIcon weather={tashkent?.weather} /><span><small>Ташкент</small><strong>{tashkent?.weather ? `${number(tashkent.weather.temperature, 0)}°` : weather.pending ? <SkeletonBlock width="30px" height="16px" /> : "—"}</strong></span><ChevronDown size={13} aria-hidden /></button></PopoverTrigger>
+      <PopoverSurface className="topbar-context-surface context-weather-surface" data-surface-resize-motion="off" style={{ overflowY: "hidden" }} aria-label="Погода Узбекистана">
         <div className="context-panel-head"><div><span className="context-kicker">Сейчас · Узбекистан</span><h2>{detail?.region ?? "Погода по областям"}</h2></div><button type="button" className="context-icon-action" aria-label="Закрыть погоду" onClick={() => close("weather")}><X size={19} aria-hidden /></button></div>
         <div className="context-panel-body" ref={bodyMotion}>
           {weather.error && <p className="context-notice" role="alert">{weather.error}</p>}
-          {weather.pending && !weather.value && <p role="status">Получаем погоду и качество воздуха…</p>}
+          {weather.pending && !weather.value && <LoadingSkeleton layout="custom" label="Получаем погоду и качество воздуха…"><div className="context-place-list">
+            {Array.from({ length: 7 }, (_, index) => <div className="context-place-row" key={index}><SkeletonBlock width="24px" height="24px" /><span className="ws-skeleton-copy"><SkeletonBlock width="80%" /><SkeletonBlock width="65%" height="12px" /></span><span className="context-place-reading ws-skeleton-copy"><SkeletonBlock width="35px" height="20px" /><SkeletonBlock width="50px" height="12px" /></span><SkeletonBlock width="16px" height="16px" /></div>)}
+          </div></LoadingSkeleton>}
           {weather.value?.weatherStale && <p className="context-notice">{tashkent?.weather ? "Погода из кэша — источник временно недоступен." : "Погода временно недоступна. Попробуйте обновить."}</p>}
           {weather.value?.airStale && <p className="context-notice">{tashkent?.air ? "Качество воздуха из кэша — источник временно недоступен." : "Данные качества воздуха временно недоступны."}</p>}
           {detail ? <><button ref={back} className="context-back" type="button" onClick={() => setSelectedPlace(undefined)}><ArrowLeft size={16} aria-hidden />К списку областей</button><WeatherDetail place={detail} /></> : <>

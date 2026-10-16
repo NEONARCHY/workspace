@@ -16,7 +16,8 @@
 .trip-destination-hint button { padding: 0; color: var(--ws-link); background: none; border: 0; font: inherit; text-decoration: underline; cursor: pointer; }
 .trip-destination-hint button:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 2px; }
 
-.trip-map-workspace { min-width: 0; padding: 4px 0 22px; color: var(--ws-text); }
+.trips-view.trip-map-mode { overflow-y: auto; }
+.trip-map-workspace { min-width: 0; padding: 4px 0 16px; color: var(--ws-text); }
 .trip-map-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin: 0 0 16px; }
 .trip-map-heading h2 { margin: 3px 0 4px; font-size: clamp(22px, 2vw, 29px); letter-spacing: -.03em; }
 .trip-map-heading p { max-width: 650px; margin: 0; color: var(--ws-muted); font-size: 13px; line-height: 1.5; }
@@ -26,7 +27,7 @@
 .trip-map-stats strong { color: var(--ws-text); font-size: 19px; font-variant-numeric: tabular-nums; }
 .trip-map-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 320px); gap: 14px; align-items: start; }
 .trip-map-stage { position: relative; display: grid; min-width: 0; aspect-ratio: 2 / 1; place-items: center; overflow: hidden; isolation: isolate; border: 1px solid var(--ws-line); border-radius: 20px; background: #e4f1f4; }
-.trip-map-svg { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+.trip-map-svg { display: block; width: 100%; height: 100%; border-radius: inherit; touch-action: none; cursor: grab; }
 .trip-map-svg:active { cursor: grabbing; }
 .trip-map-svg:focus-visible { outline: 3px solid var(--ws-link); outline-offset: -4px; }
 .trip-map-ocean { fill: url(#trip-map-ocean-gradient); }
@@ -58,6 +59,7 @@
 .trip-map-places-heading { margin: 0 0 12px; }
 .trip-map-trip-list + .trip-map-places-heading { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--ws-line); }
 .trip-map-selected-heading { display: flex; justify-content: space-between; gap: 7px; margin-bottom: 16px; }
+.trip-map-selected-heading > .trip-map-clear-selection { align-self: flex-start; flex: 0 0 36px; width: 36px; min-width: 36px; height: 36px; min-height: 36px; padding: 0; }
 .trip-map-selected-heading span { color: var(--ws-link); font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: .06em; }
 .trip-map-selected-heading h3 { margin: 4px 0 2px; }.trip-map-selected-heading p { margin: 0; }
 .trip-map-trip-list { display: grid; gap: 9px; }
@@ -79,5 +81,6 @@ html[data-color-theme="dark"] .trip-map-pin .trip-map-pin-label { fill: #fff; st
 html[data-color-theme="dark"] .trip-map-pin-core { stroke: #1b1c22; }
 
 @media (max-width: 1200px) { .trip-map-layout { grid-template-columns: minmax(0, 1fr); }.trip-map-sidebar { min-height: 0; max-height: 360px; } }
+@media (any-pointer: coarse) { .trip-map-selected-heading > .trip-map-clear-selection { flex-basis: 48px; width: 48px; min-width: 48px; height: 48px; min-height: 48px; } }
 @media (max-width: 600px) { .trip-header-actions { justify-content: flex-start; }.trip-map-heading { flex-wrap: wrap; }.trip-map-heading > .fui-Button { margin-left: 0; }.trip-map-controls { top: 8px; left: 8px; right: 8px; flex-wrap: wrap; width: fit-content; max-width: calc(100% - 16px); }.trip-map-controls .fui-Button { font-size: 11px; }.trip-map-gesture-hint { display: none; }.trip-map-hover-card { bottom: 30px; }.trip-map-attribution { font-size: 9px; } }
 @media (forced-colors: active) { .trip-map-stage, .trip-map-sidebar, .trip-map-stats span, .trip-map-trip, .trip-map-unresolved { border: 1px solid CanvasText; }.trip-map-ocean { fill: Canvas; }.trip-map-land { fill: Canvas; stroke: CanvasText; }.trip-map-pin-core { fill: Highlight; stroke: HighlightText; }.trip-map-pin-halo { fill: Canvas; stroke: CanvasText; }.trip-map-pin text { fill: HighlightText; }.trip-map-pin .trip-map-pin-label { fill: CanvasText; stroke: Canvas; }.trip-map-grid-line { stroke: GrayText; } }

@@ -1,6 +1,7 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
+import { LoadingSkeleton } from "./LoadingSkeleton";
 import { useEffect, useRef, useState } from "react";
-import { Button, Checkbox, Spinner } from "@fluentui/react-components";
+import { Button, Checkbox } from "@fluentui/react-components";
 import { Input } from "./WorkspaceInput";
 import type { EdoAccessConfiguration, EdoAccessUpdate, EdoVisibility, WorkspacePerson } from "@yuksalish/contracts";
 import { WorkspaceSelect } from "./WorkspaceSelect";
@@ -71,7 +72,7 @@ export function EdoIncomingAccess({ token, people }: {
     </div><Button disabled={saving} onClick={reload}>Обновить настройки</Button></div>
     {error ? <WorkspaceNotice tone="error" role="alert">{error}</WorkspaceNotice> : null}
     {notice ? <p role="status">{notice}</p> : null}
-    {!config && !error ? <Spinner label="Загружаем настройки доступа" /> : null}
+    {!config && !error ? <LoadingSkeleton layout="form" label="Загружаем настройки доступа" /> : null}
     {config ? <div className="edo-access-form">
       <label>Найти сотрудника<Input aria-label="Поиск сотрудника для доступа к письмам" value={search} disabled={saving}
         onChange={(_event, data) => setSearch(data.value)} placeholder="Имя сотрудника" /></label>

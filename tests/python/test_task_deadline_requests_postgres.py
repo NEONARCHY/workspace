@@ -2,14 +2,22 @@
 
 import os
 from datetime import UTC, datetime, timedelta
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 from pydantic import SecretStr
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import create_async_engine
 
+from yuksalish_api.efficiency_service import (
+    calculate_aggregate,
+    period_for,
+    reconcile_deadline_decisions,
+)
 from yuksalish_api.main import create_app
 from yuksalish_api.settings import Settings
+from yuksalish_api.tables import task_deadline_requests, task_efficiency_events
 
 
 @pytest.mark.anyio
@@ -49,6 +57,19 @@ async def test_task_deadline_extension_requires_setter_decision() -> None:
         assert created.status_code == 201
         task = created.json()
         task_id = task["id"]
+        history_url = f"/api/v1/tasks/{task_id}/history"
+        assert (await client.get(history_url)).status_code == 401
+        private = await client.post("/api/v1/tasks", headers=headers("malika"), json={
+            "title": "History access boundary", "assigneeId": sessions["baxtiyor"]["user"]["id"],
+        })
+        assert private.status_code == 201
+        private_id = private.json()["id"]
+        assert (await client.get(
+            f"/api/v1/tasks/{private_id}/history", headers=headers("dilshod"),
+        )).status_code == 404
+        assert (await client.delete(
+            f"/api/v1/tasks/{private_id}", headers=headers("malika"),
+        )).status_code == 204
         for username, role in (("baxtiyor", "co_assignee"), ("aziza", "observer")):
             added = await client.put(
                 f"/api/v1/tasks/{task_id}/participants", headers=headers("malika"),
@@ -97,6 +118,39 @@ async def test_task_deadline_extension_requires_setter_decision() -> None:
         assert approved.status_code == 200
         assert approved.json()["deadlineRequests"][-1]["status"] == "approved"
         assert datetime.fromisoformat(approved.json()["dueAt"]) == proposed
+        history = await client.get(history_url, headers=headers("aziza"))
+        assert history.status_code == 200, history.text
+        trail = history.json()
+        assert trail["historyComplete"] is True
+        assert sum(item["kind"] == "deadline_approved" for item in trail["events"]) == 1
+        assert any(item["kind"] == "deadline_requested" for item in trail["events"])
+        engine = create_async_engine(database_url)
+        try:
+            async with engine.connect() as connection:
+                events = (await connection.execute(select(task_efficiency_events).where(
+                    task_efficiency_events.c.task_id == UUID(task_id),
+                ))).mappings().all()
+                decisions = (await connection.execute(select(task_deadline_requests).where(
+                    task_deadline_requests.c.task_id == UUID(task_id),
+                ))).mappings().all()
+                # Both the normal ledger and older missing-event records must
+                # respect the persisted approval before the original deadline.
+                for source in (events, [event for event in events
+                                        if event["event_type"] != "deadline_changed"]):
+                    for username in ("baxtiyor", "dilshod"):
+                        arguments = {
+                            "user_id": UUID(sessions[username]["user"]["id"]),
+                            "period": period_for(due),
+                            "tracking_started_at": min(event["occurred_at"] for event in events),
+                        }
+                        reconciled = reconcile_deadline_decisions(source, decisions)
+                        before_new_due = calculate_aggregate(
+                            reconciled, **arguments, as_of=due + timedelta(hours=1),
+                        )
+                        assert before_new_due["overdue_count"] == 0
+                        assert before_new_due["eligible_count"] == 0
+        finally:
+            await engine.dispose()
         assert (await client.post(
             decision_url, headers=headers("malika"), json={"approved": True},
         )).status_code == 200

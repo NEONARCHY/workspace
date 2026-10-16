@@ -1,4 +1,5 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
+import { LoadingSkeleton, SkeletonBlock } from "./LoadingSkeleton";
 import { Input } from "./WorkspaceInput";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
@@ -248,9 +249,16 @@ export function IncomingLettersView({ token, people, currentUserId, canEdit, foc
     <div className="edo-incoming-layout">
       <div className="edo-incoming-list" aria-label="Список входящих писем">
         {error ? <WorkspaceNotice tone="error" role="alert" className="edo-incoming-error" actions={<><button type="button" onClick={() => void refreshList()}>Повторить</button></>}>{error}</WorkspaceNotice> : null}
-        {loading ? <p role="status" className="edo-incoming-empty">Загружаем письма…</p> : null}
-        {!loading && !error && registry?.data.length === 0 ? <p className="edo-incoming-empty">Письма по выбранным условиям не найдены.</p> : null}
-        {!loading && !error && registry?.data.map((item) => <button type="button" key={item.id}
+        {loading && !registry ? <LoadingSkeleton layout="custom" label="Загружаем письма…">
+          {Array.from({ length: 5 }, (_, index) => <div className="edo-incoming-row" key={index}>
+            <span className="edo-incoming-row-head"><SkeletonBlock width="36%" /><SkeletonBlock width="80px" height="22px" /></span>
+            <span className="edo-incoming-row-org"><SkeletonBlock width="75%" /></span>
+            <span className="edo-incoming-row-desc"><SkeletonBlock width="90%" /></span>
+            <span className="edo-incoming-row-foot"><SkeletonBlock width="65%" height="12px" /></span>
+          </div>)}
+        </LoadingSkeleton> : null}
+        {!error && registry?.data.length === 0 ? <p className="edo-incoming-empty">Письма по выбранным условиям не найдены.</p> : null}
+        {!error && registry?.data.map((item) => <button type="button" key={item.id}
           className={`edo-incoming-row${selectedId === item.id ? " is-selected" : ""}`}
           data-status={item.status ?? "new"}
           aria-pressed={selectedId === item.id} onClick={() => selectLetter(item.id)}>
@@ -269,7 +277,7 @@ export function IncomingLettersView({ token, people, currentUserId, canEdit, foc
       </div>
       <div className="edo-incoming-detail" aria-label="Карточка письма">
         {selectedId === undefined ? <div className="edo-incoming-empty">Выберите письмо, чтобы увидеть содержание и документы.</div> : null}
-        {detailLoading ? <p role="status" className="edo-incoming-empty">Открываем письмо…</p> : null}
+        {detailLoading ? <LoadingSkeleton layout="form" label="Открываем письмо…" /> : null}
         {detailError ? <WorkspaceNotice tone="error" role="alert" className="edo-incoming-error" actions={<><button type="button" onClick={() => selectedId !== undefined && void refreshDetail(selectedId)}>Повторить</button></>}>{detailError}
           </WorkspaceNotice> : null}
         {letter && !detailLoading ? <>

@@ -461,8 +461,10 @@
   position: relative;
   z-index: 2;
   display: flex;
+  align-items: center;
+  flex: none;
   gap: 4px;
-  padding: 0 20px 10px;
+  padding: 8px 20px;
   border-bottom: 1px solid var(--ws-theme-line, #e4ecea);
   background: rgb(var(--ws-theme-surface-rgb, 251 253 252) / 0.96);
 }

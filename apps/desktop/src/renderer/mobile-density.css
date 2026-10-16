@@ -22,6 +22,9 @@
   .web-platform .browser-compact .global-bar:has(.topbar-insights) .notification-bell-wrap { order: 3; }
   .web-platform .browser-compact .global-bar:has(.topbar-insights) .color-theme-toggle-wrap { order: 4; }
   .web-platform .browser-compact .global-bar:has(.topbar-insights) .assistant-launcher-space { order: 5; }
+  .web-platform .browser-compact .app-stage .global-bar:has(.topbar-insights) .assistant-launcher-space[data-vacated] {
+    flex: 0 0 0; width: 0; min-width: 0; max-width: 0; margin-inline-start: -6px;
+  }
   .web-platform .browser-compact .global-bar:has(.topbar-insights) .workspace-identity-menu { order: 6; }
   .web-platform .browser-compact .global-bar:has(.topbar-insights) .connection-indicator { position: static; order: 7; }
   .web-platform .browser-compact .global-bar:has(.topbar-insights) .context-currency-trigger { order: 8; }

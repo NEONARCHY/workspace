@@ -1,11 +1,12 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
+import { SkeletonBlock, SkeletonTableRows } from "./LoadingSkeleton";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type {
   AIReferentIncomingLetter,
   AIReferentIncomingRegistry,
 } from "@yuksalish/contracts";
-import { Button, Spinner } from "@fluentui/react-components";
+import { Button } from "@fluentui/react-components";
 import {
   ArrowClockwise20Regular,
   ArrowDownload20Regular,
@@ -93,7 +94,6 @@ export function AIReferentIncomingRegister({ token, focusLetterId }: AIReferentI
       if (sequence === requestSequence.current) setRegistry(next);
     } catch (reason) {
       if (sequence === requestSequence.current) {
-        setRegistry(undefined);
         setError(reason instanceof Error ? reason.message : "Не удалось загрузить входящие письма.");
       }
     } finally {
@@ -102,7 +102,7 @@ export function AIReferentIncomingRegister({ token, focusLetterId }: AIReferentI
   }, [token, filter, page]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => { void refresh(query); }, 250);
+    const timer = window.setTimeout(() => { void refresh(query); }, query ? 250 : 0);
     const poll = window.setInterval(() => { void refresh(query, true); }, 15000);
     return () => { window.clearTimeout(timer); window.clearInterval(poll); requestSequence.current += 1; };
   }, [query, refresh]);
@@ -135,17 +135,17 @@ export function AIReferentIncomingRegister({ token, focusLetterId }: AIReferentI
     <div className="ai-incoming-register ai-referent-page">
       <section className="ai-referent-summary" aria-label="Сводка входящих писем">
         <button type="button" className="primary" aria-pressed={filter === "registered"} onClick={() => selectFilter("registered")}>
-          <span>Зарегистрировано</span><strong>{registry?.registeredCount ?? 0}</strong>
+          <span>Зарегистрировано</span><strong>{registry ? registry.registeredCount : <SkeletonBlock width="32px" height="1em" />}</strong>
           <small>Письма, внесённые роботом в платформу</small>
         </button>
         <button type="button" aria-pressed={filter === "all"} onClick={() => selectFilter("all")}>
-          <strong>{registry?.totalCount ?? 0}</strong><span>всего входящих</span>
+          <strong>{registry ? registry.totalCount : <SkeletonBlock width="32px" height="1em" />}</strong><span>всего входящих</span>
         </button>
         <button type="button" aria-pressed={filter === "attention"} onClick={() => selectFilter("attention")}>
-          <strong>{registry?.attentionCount ?? 0}</strong><span>требуют внимания</span>
+          <strong>{registry ? registry.attentionCount : <SkeletonBlock width="32px" height="1em" />}</strong><span>требуют внимания</span>
         </button>
         <button type="button" aria-pressed={filter === "attachments"} onClick={() => selectFilter("attachments")}>
-          <strong>{registry?.withAttachmentsCount ?? 0}</strong><span>с вложениями</span>
+          <strong>{registry ? registry.withAttachmentsCount : <SkeletonBlock width="32px" height="1em" />}</strong><span>с вложениями</span>
         </button>
       </section>
 
@@ -188,16 +188,15 @@ export function AIReferentIncomingRegister({ token, focusLetterId }: AIReferentI
       </div>
 
       {error ? <WorkspaceNotice tone="error" className="ai-referent-feedback" role="alert">{error}</WorkspaceNotice> : null}
-      {loading ? <div className="ai-referent-loading"><Spinner label="Загружаем входящие письма" /></div> : null}
-      {!loading && !error && letters.length === 0 ? (
+      {registry && !error && letters.length === 0 ? (
         <div className="ai-referent-empty">
           <MailInbox20Regular />
           <h2>{query || filter !== "all" ? "По этому запросу писем нет" : "Входящих писем пока нет"}</h2>
           <p>{query || filter !== "all" ? "Попробуйте изменить поиск или фильтр." : "После синхронизации записи робота появятся здесь автоматически."}</p>
         </div>
       ) : null}
-      {!loading && letters.length > 0 ? (
-        <div className="ai-incoming-table-wrap" role="region" aria-label="Реестр входящих писем" tabIndex={0}>
+      {letters.length > 0 || loading && !registry ? (
+        <div className="ai-incoming-table-wrap" role="region" aria-label="Реестр входящих писем" tabIndex={0} aria-busy={loading} data-skeleton-frame={loading && !registry || undefined}>
           <table className="ai-incoming-table">
             <thead>
               <tr>
@@ -207,7 +206,7 @@ export function AIReferentIncomingRegister({ token, focusLetterId }: AIReferentI
                 <th scope="col">Статус</th>
               </tr>
             </thead>
-            <tbody>
+            {loading && !registry ? <SkeletonTableRows columns={4} rows={7} label="Загружаем входящие письма" /> : <tbody>
               {letters.map((letter) => (
                 <tr key={letter.id} ref={letter.id === focusLetterId ? focusedRow : undefined}
                   tabIndex={letter.id === focusLetterId ? -1 : undefined}
@@ -236,7 +235,7 @@ export function AIReferentIncomingRegister({ token, focusLetterId }: AIReferentI
                   </td>
                 </tr>
               ))}
-            </tbody>
+            </tbody>}
           </table>
         </div>
       ) : null}

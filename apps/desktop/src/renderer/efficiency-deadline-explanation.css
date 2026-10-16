@@ -1,0 +1,9 @@
+.eff-deadline-explanation { margin-block: 12px; padding: 12px 14px; border: 1px solid var(--ws-line); border-radius: 12px; color: var(--ws-text); background: var(--ws-surface); font-size: 13px; line-height: 1.6; }
+.eff-deadline-explanation summary { cursor: pointer; font-weight: 600; overflow-wrap: anywhere; }
+.eff-deadline-explanation summary:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 3px; border-radius: 4px; }
+.eff-deadline-explanation p { margin-block: 10px 0; }
+.eff-deadline-explanation ul { padding-inline-start: 20px; margin-block: 10px; }
+.eff-deadline-explanation li + li { margin-top: 8px; }
+@media (forced-colors: active) {
+  .eff-deadline-explanation { background: Canvas; color: CanvasText; border-color: CanvasText; }
+}

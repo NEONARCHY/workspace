@@ -1,6 +1,7 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
+import { LoadingSkeleton, SkeletonBlock } from "./LoadingSkeleton";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Button, Field, Select, Spinner } from "@fluentui/react-components";
+import { Button, Field, Select } from "@fluentui/react-components";
 import { ArrowUpload24Regular, Document24Regular, Folder24Regular } from "@fluentui/react-icons";
 import { Input } from "./WorkspaceInput";
 import { WorkspaceSelect } from "./WorkspaceSelect";
@@ -44,6 +45,7 @@ function Distribution({ rows, question, configuration }: { readonly rows: readon
 
 export function SurveyAnalyticsView({ token, canCreate, canEdit }: { readonly token: string; readonly canCreate: boolean; readonly canEdit: boolean }) {
   const [analyses, setAnalyses] = useState<readonly SurveyAnalysis[]>([]);
+  const [loadedToken, setLoadedToken] = useState<string>();
   const [detail, setDetail] = useState<SurveyAnalysisDetail>();
   const [configuration, setConfiguration] = useState<SurveyConfiguration>();
   const [title, setTitle] = useState("");
@@ -81,13 +83,13 @@ export function SurveyAnalyticsView({ token, canCreate, canEdit }: { readonly to
   };
   const refresh = useCallback(async () => {
     setLoading(true); setError("");
-    try { setAnalyses(await listSurveyAnalyses(token)); }
+    try { setAnalyses(await listSurveyAnalyses(token)); setLoadedToken(token); }
     catch (failure) { setError(message(failure)); }
     finally { setLoading(false); }
   }, [token]);
   useEffect(() => {
     let active = true;
-    void listSurveyAnalyses(token).then((items) => { if (active) setAnalyses(items); })
+    void listSurveyAnalyses(token).then((items) => { if (active) { setAnalyses(items); setLoadedToken(token); } })
       .catch((failure: unknown) => { if (active) setError(message(failure)); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
@@ -178,7 +180,9 @@ export function SurveyAnalyticsView({ token, canCreate, canEdit }: { readonly to
         <div className="survey-panel-heading"><div><span className="survey-section-label">Библиотека</span><h2>Мои анализы</h2></div><Folder24Regular aria-hidden="true" /></div>
         <div className="survey-library-search-row"><Field label="Поиск анализов"><Input className="survey-library-search" aria-label="Поиск анализов" placeholder="Название анализа" value={listQuery} onChange={(_, data) => setListQuery(data.value)} /></Field></div>
         <label className="survey-check"><input type="checkbox" checked={archive} onChange={(event) => setArchive(event.target.checked)} />Показать архив</label>
-        {loading ? <Spinner label="Загрузка личных анализов" /> : <div className="survey-analysis-list">
+        {loading && loadedToken !== token ? <LoadingSkeleton layout="custom" label="Загрузка личных анализов"><div className="survey-analysis-list">
+          {Array.from({ length: 3 }, (_, index) => <div className="survey-analysis-item" key={index}><div className="ws-skeleton-copy"><SkeletonBlock width="78%" /><SkeletonBlock width="55%" /></div></div>)}
+        </div></LoadingSkeleton> : <div className="survey-analysis-list">
           {visibleAnalyses.map((item) => <Button key={item.id}
             className="survey-analysis-item" aria-pressed={detail?.analysis.id === item.id} disabled={busy || dirty}
             onClick={() => void perform(async () => accept(await loadSurveyAnalysis(token, item.id)))}>

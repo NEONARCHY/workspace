@@ -11,6 +11,16 @@ it("ports the dark Maqro sweep stops and subtle stroke without changing light su
   expect(css).toContain("@media (forced-colors: none)");
   expect(css).not.toMatch(/!important|transition:\s*all|filter:|animation:/);
 });
+it("uses real satin for topbar triggers and incoming counters, with a stronger selected sweep instead of an inset ring", () => {
+  expect(css).toContain(".context-trigger, .ai-incoming-register .ai-referent-summary > button");
+  expect(css).toContain('.context-trigger[aria-expanded="true"]');
+  expect(css).toContain('.ai-incoming-register .ai-referent-summary > button[aria-pressed="true"]');
+  expect(css).toContain("rgb(var(--ws-theme-ink-teal-rgb) / 85%) 0%");
+  expect(css).toContain("rgb(var(--ws-theme-ink-teal-rgb) / 12%) 50%");
+  expect(css).toContain("--ws-satin-fill: linear-gradient(116deg, var(--ws-theme-wash-teal), var(--ws-theme-surface))");
+  expect(css).toMatch(/\.ai-incoming-register \.ai-referent-summary > button\[aria-pressed="true"\] \{\s*box-shadow: 0 10px/);
+  expect(css).not.toMatch(/border-width:|border-style:|border-radius:|padding:|margin:/);
+});
 it("keeps semantic/focus signals and floating positions intact while covering fields", () => {
   expect(css).not.toMatch(/--ws-control-line:|--ws-focus|outline:/);
   expect(css).toContain(".fui-MenuPopover:not(.reaction-picker-popover)");

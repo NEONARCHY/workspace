@@ -1,5 +1,61 @@
 # Message media surfaces
 
+## Recorder and composer surfaces — 16 October 2026
+
+Microphone permission/device negotiation has no transient connection banner;
+the same composer remains mounted and usable until MediaRecorder starts. The
+swap to the recorder happens before paint, including error/retry states. Typing
+or Escape cancels a pending request; a late stream is stopped without recording.
+Repeated mic clicks never create parallel requests. Actual failures still
+explain the problem and offer retry/cancel. Browser permission is still required;
+no permission bypass, pre-recording, auto-upload or artificial start delay exists.
+Stream/context cleanup also runs on setup failures.
+
+While recording, the existing microphone analyser appends measured amplitudes to
+a left-to-right SVG path every 90 ms. The path contains at most 120 visible bars
+(a trailing 10.8-second window); it never rebuilds chat history per sample. Stop,
+cancel and unmount release the analyser/RAF/stream. The ready preview keeps the
+existing recorded-sample waveform. Narrow conversation panes move the live track
+below the timer and explicit stop/cancel controls.
+
+The live track and ready preview now share a fixed 40 px row (48 px for coarse
+pointers/mobile controls), matching the former recording height. The preview's
+54 px minimum/padding no longer enlarges the composer after stop. The preview uses
+one centered row without a duplicate time label; desktop Play is a 32 px circle
+(48 px coarse/mobile target). The status time below “Запись готова” shows remaining
+audio time during playback/seek, holds on pause and resets to full duration after
+end. Sending always uses the original full recording duration. Only recorder preview is changed, not received
+voice messages. Both states use the same narrow-pane row arrangement, with two
+stable action columns below the track at <=520 px. Long labels may ellipsize there
+but keep their complete accessible names. Error explanations and the volume
+popover are not cropped or hidden to force the normal-state height.
+
+Attach, calendar, mention, microphone and rewrite tools share one surface role:
+the former microphone neutral fill in light mode, the paperclip's shared button
+surface in dark mode. Hover/pressed roles, disabled text, microphone guard tooltip
+and native forced-colour/focus states remain separate.
+
+## Compact bubble footers and voice — 16 October 2026
+
+Document captions get an 8 px gap before file rows. The final size line contains
+the timestamp, wrapping the longer edited label when necessary, so captions no longer
+force an empty footer below the file. Mention-only text messages use a wrapping
+footer containing chips and time, without a separate metadata row.
+
+Voice playback uses the bubble itself, a circular 44 px play button, waveform,
+speed and volume controls. Duration/elapsed time, size and message metadata share
+the lower line and wrap at narrow widths. Forwarded recordings retain the original
+author profile link in a single “Переслано от” line, without a nested card or the
+generated voice placeholder. Audio remains lazy-loaded on explicit play; retry,
+seek, speed, output-device and volume handling remain intact. The waveform remains
+the existing deterministic visual approximation, not newly decoded audio samples.
+
+Dark message bubbles have no decorative border or inset satin highlight. Keyboard
+focus, search/selection feedback and system forced-colour boundaries remain
+separate. Curved 20 px tails overlap the rounded final group corners on each side;
+standalone photos/conferences still suppress painted tails. Arrival/send animations
+and their timing are unchanged.
+
 ## Composer isolation — 15 October 2026
 
 Draft keystrokes reuse the memoized message-history subtree. Message data, permissions,
@@ -69,7 +125,7 @@ width matches the message; timestamps occupy reserved space at the card bottom,
 clear of the participant disclosure and meeting actions.
 
 Text bubbles get a curved tail only at the end of a sender group. Its fill
-overlaps the square lower corner to avoid a transparent seam; incoming tails
+overlaps the rounded lower corner to avoid a transparent seam; incoming tails
 are mirrored on the left. Forced-colour mode does not use these painted tails.
 
 Employee profile identity photos are 128 px, or 96 px in narrow dialogs.
@@ -88,7 +144,7 @@ media, audio players and attachment deletion keep their separate controls.
 File-only messages without captions place their timestamp beside the final
 file's size, reserving inline space so neither overlaps. The attachment list
 has no extra top margin; document rows are 44px high inside 8px bubble insets.
-Real captions retain a normal metadata footer instead of covering file content.
+Real captions use the same wrapping size-line metadata without covering file content.
 
 Mouse/pen reaction affordances appear after 500ms within a message. Leaving
 early, switching messages or unmounting cancels the pending timer. Keyboard

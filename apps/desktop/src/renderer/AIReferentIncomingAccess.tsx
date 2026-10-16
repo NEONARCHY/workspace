@@ -1,4 +1,5 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
+import { LoadingSkeleton } from "./LoadingSkeleton";
 import { useEffect, useRef, useState } from "react";
 import type {
   AIReferentIncomingAccess as AccessConfiguration,
@@ -6,7 +7,7 @@ import type {
   AIReferentIncomingRuleMode,
   WorkspacePerson,
 } from "@yuksalish/contracts";
-import { Button, Checkbox, Spinner } from "@fluentui/react-components";
+import { Button, Checkbox } from "@fluentui/react-components";
 import { Input } from "./WorkspaceInput";
 import { WorkspaceSelect } from "./WorkspaceSelect";
 import { loadAIReferentIncomingAccess, saveAIReferentIncomingAccess } from "./workspace-api";
@@ -72,7 +73,7 @@ export function AIReferentIncomingAccess({ token, people }: {
     </div><Button disabled={saving} onClick={() => { setAttempt((value) => value + 1); setSelected(""); setDraft(undefined); setConfig(undefined); setError(""); }}>Обновить настройки</Button></div>
     {error ? <WorkspaceNotice tone="error" role="alert" className="ai-referent-feedback">{error}</WorkspaceNotice> : null}
     {notice ? <p role="status">{notice}</p> : null}
-    {!config && !error ? <Spinner label="Загружаем видимость" /> : null}
+    {!config && !error ? <LoadingSkeleton layout="form" label="Загружаем видимость" /> : null}
     {config ? <div className="ai-referent-access-editor">
       <label>Найти сотрудника<Input aria-label="Поиск сотрудника для видимости" value={search} disabled={saving}
         onChange={(_event, data) => setSearch(data.value)} placeholder="Имя или логин" /></label>

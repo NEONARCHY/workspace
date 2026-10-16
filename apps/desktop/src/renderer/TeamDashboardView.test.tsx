@@ -167,8 +167,8 @@ describe("TeamDashboardView", () => {
   it("opens flow groups in one drawer and resets task detail when another group is selected", () => {
     renderDashboard();
 
-    fireEvent.click(screen.getByRole("button", { name: /Просрочены.*1/i }));
-    let drawer = screen.getByRole("dialog", { name: "Просрочены" });
+    fireEvent.click(screen.getByRole("button", { name: /Срок истёк.*1/i }));
+    let drawer = screen.getByRole("dialog", { name: "Срок истёк" });
     expect(within(drawer).getByText("Подготовить договор")).toBeInTheDocument();
     expect(within(drawer).queryByText("Проверить бюджет")).not.toBeInTheDocument();
 
@@ -211,7 +211,7 @@ describe("TeamDashboardView", () => {
     const statuses = screen.getByRole("group", { name: "Задачи по статусам" });
     expect(within(statuses).getAllByRole("button")).toHaveLength(4);
     expect(document.querySelector(".team-dash-flow-bar")).toBeNull();
-    for (const [label, count] of [["Новые", 1], ["В работе", 0], ["На проверке", 1], ["Просрочены", 1]] as const) {
+    for (const [label, count] of [["Новые", 1], ["В работе", 0], ["На проверке", 1], ["Срок истёк", 1]] as const) {
       const tile = within(statuses).getByRole("button", { name: `${label} ${count}` });
       fireEvent.click(tile);
       expect(tile).toHaveAttribute("aria-pressed", "true");
@@ -225,7 +225,49 @@ describe("TeamDashboardView", () => {
     render(<FluentProvider theme={workspaceTheme}><TeamDashboardView token="test-token" tasks={tasks} people={people} currentUserId="manager" efficiency={efficiency} efficiencyLoading={false} onSelectTask={vi.fn()} /></FluentProvider>);
     const statuses = screen.getByRole("group", { name: "Задачи по статусам" });
     expect(within(statuses).getByRole("button", { name: "В работе 1" })).toBeInTheDocument();
-    fireEvent.click(within(statuses).getByRole("button", { name: "Просрочены 0" }));
-    expect(within(screen.getByRole("dialog", { name: "Просрочены" })).queryByText("Перенесённая задача")).toBeNull();
+    fireEvent.click(within(statuses).getByRole("button", { name: "Срок истёк 0" }));
+    expect(within(screen.getByRole("dialog", { name: "Срок истёк" })).queryByText("Перенесённая задача")).toBeNull();
+    fireEvent.click(within(statuses).getByRole("button", { name: "В работе 1" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "В работе" })).getByRole("button", { name: /Перенесённая задача/ }));
+    const detail = screen.getByRole("dialog", { name: "Перенесённая задача" });
+    expect(within(detail).getByText("В работе")).toBeInTheDocument();
+    expect(within(detail).queryByText("Просрочена")).not.toBeInTheDocument();
+  });
+
+  it("keeps expired excluded/review tasks visible without presenting their deadline count as an efficiency violation", () => {
+    const tasks = [
+      task({ id: "excluded", title: "Внешняя зависимость", assigneeId: "employee", status: "in_progress", dueAt: "2026-09-07T09:00:00Z", efficiencyExcluded: true }),
+      task({ id: "submitted", title: "Результат на проверке", assigneeId: "employee", status: "awaiting_review", dueAt: "2026-09-07T09:00:00Z" }),
+      task({ id: "future-excluded", title: "Будущее исключение", assigneeId: "employee", status: "in_progress", dueAt: "2026-10-07T09:00:00Z", efficiencyExcluded: true }),
+    ];
+    const overview = { ...efficiency, employees: efficiency.employees.map(row => row.userId === "employee"
+      ? { ...row, percentage: 100, onTimeCount: 1, eligibleCount: 1, overdueCount: 0, excludedCount: 1 } : row) };
+    const onSelect = vi.fn();
+    render(<FluentProvider theme={workspaceTheme}><TeamDashboardView token="test-token" tasks={tasks} people={people} currentUserId="manager" efficiency={overview} efficiencyLoading={false} onSelectTask={onSelect} /></FluentProvider>);
+    const row = screen.getByRole("button", { name: /Дилшод Рахимов.*3 активные задачи/ });
+    expect(within(row).getByText("Истёк срок: 2")).toBeInTheDocument();
+    expect(within(row).getByText("Истёк срок: 2")).not.toHaveClass("is-danger");
+    expect(within(row).getByText("Счётчик сроков, не нарушений исполнителя")).toBeInTheDocument();
+    expect(within(row).getByText("Из них не снижают процент: 1 · исключены")).toBeInTheDocument();
+    expect(within(row).getByText("100%")).toBeInTheDocument();
+    expect(screen.queryByText(/2 проср\./)).toBeNull();
+    expect(screen.getByText("Исключена из эффективности — процент не снижает. Причина — в маршруте задачи")).toBeInTheDocument();
+    expect(screen.getByText("Ожидает решения постановщика. Вовремя сданный результат не снижает процент; время сдачи — в маршруте задачи")).toBeInTheDocument();
+    const explanation = screen.getByText("Почему истёкший срок не всегда снижает эффективность?");
+    fireEvent.click(explanation);
+    expect(explanation.closest("details")).toHaveAttribute("open");
+    fireEvent.click(screen.getByRole("button", { name: "Срок истёк 2" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Срок истёк" })).getByRole("button", { name: /Внешняя зависимость/ }));
+    const detail = screen.getByRole("dialog", { name: "Внешняя зависимость" });
+    expect(within(detail).getByText("Исключена из эффективности — процент не снижает. Причина — в маршруте задачи")).toBeInTheDocument();
+    fireEvent.click(within(detail).getByRole("button", { name: "Открыть полную карточку" }));
+    expect(onSelect).toHaveBeenCalledWith("excluded");
+  });
+
+  it("does not infer an exemption from a monthly score or an awaiting-review status", () => {
+    renderDashboard();
+    expect(screen.getByText("Истёкший срок сам по себе не доказывает нарушение исполнителя. Проверьте месяц расчёта и маршрут задачи")).toBeInTheDocument();
+    expect(screen.queryByText(/Из них не снижают процент/)).toBeNull();
+    expect(screen.queryByText(/^Результат сдан вовремя$/)).toBeNull();
   });
 });

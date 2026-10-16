@@ -623,6 +623,38 @@ describe("AIReferentView", () => {
     await waitFor(() => expect(opener).toHaveFocus());
   });
 
+  it("retains loaded incoming rows during background refresh without a page preloader", async () => {
+    render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate /></FluentProvider>);
+    await screen.findByText("Входящее письмо");
+    vi.mocked(loadAIReferentIncomingRegistry).mockImplementationOnce(() => new Promise(() => {}));
+    fireEvent.click(screen.getByRole("button", { name: "Обновить" }));
+    await waitFor(() => expect(screen.getByRole("region", { name: "Реестр входящих писем" })).toHaveAttribute("aria-busy", "true"));
+    expect(screen.getByText("Входящее письмо")).toBeVisible();
+    expect(screen.queryByRole("status", { name: "Загружаем входящие письма" })).toBeNull();
+  });
+
+  it("keeps confirmed empty incoming mail on refresh rather than flashing fake table rows", async () => {
+    vi.mocked(loadAIReferentIncomingRegistry).mockResolvedValueOnce({ ...incomingRegistry, letters: [], filteredCount: 0, totalCount: 0 });
+    const { container } = render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate /></FluentProvider>);
+    const empty = await screen.findByRole("heading", { name: "Входящих писем пока нет" });
+    vi.mocked(loadAIReferentIncomingRegistry).mockImplementationOnce(() => new Promise(() => {}));
+    fireEvent.click(screen.getByRole("button", { name: "Обновить" }));
+    expect(empty).toBeVisible();
+    expect(container.querySelector(".ws-skeleton-table-body")).toBeNull();
+  });
+
+  it("uses the real incoming registry header and four columns while the initial request is pending", async () => {
+    vi.mocked(loadAIReferentIncomingRegistry).mockImplementationOnce(() => new Promise(() => {}));
+    const { container } = render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate /></FluentProvider>);
+    const region = await screen.findByRole("region", { name: "Реестр входящих писем" });
+    expect(region).toHaveAttribute("data-skeleton-frame");
+    expect(within(region).getAllByRole("columnheader").map(cell => cell.textContent)).toEqual(["Входящий №", "Отправитель и тема", "Документы", "Статус"]);
+    expect(container.querySelectorAll(".ai-incoming-table tbody tr:first-child td")).toHaveLength(4);
+    expect(container.querySelector(".ai-incoming-table tbody")).toHaveAttribute("data-skeleton-deferred");
+    expect(screen.queryByRole("heading", { name: "Входящих писем пока нет" })).toBeNull();
+    await waitFor(() => expect(loadAIReferentIncomingRegistry).toHaveBeenCalled());
+  });
+
   it("keeps incoming pagination above the list and resets it when filtering", async () => {
     vi.mocked(loadAIReferentIncomingRegistry).mockResolvedValue({ ...incomingRegistry, filteredCount: 260 });
     render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate /></FluentProvider>);

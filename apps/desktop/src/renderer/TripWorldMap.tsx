@@ -1,3 +1,4 @@
+import { LoadingSkeleton } from "./LoadingSkeleton";
 import { useCallback, useEffect, useMemo, useRef, useState,
   type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent } from "react";
 import { ArrowLeft20Regular, Dismiss20Regular, ZoomIn20Regular, ZoomOut20Regular } from "@fluentui/react-icons";
@@ -46,8 +47,11 @@ export function TripWorldMap({ requests, people, onOpenRequest, onClose }: TripW
   const didAutoFrame = useRef(false);
   const svgRef = useRef<SVGSVGElement>(null);
   const sidebarRef = useRef<HTMLElement>(null);
+  const backButtonRef = useRef<HTMLButtonElement>(null);
   const drag = useRef<{ x: number; y: number; width: number; height: number;
     viewport: TripMapViewport } | undefined>(undefined);
+
+  useEffect(() => { backButtonRef.current?.focus({ preventScroll: true }); }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -205,7 +209,7 @@ export function TripWorldMap({ requests, people, onOpenRequest, onClose }: TripW
     <header className="trip-map-heading">
       <div><span className="view-kicker">География командировок</span><h2>Карта поездок</h2>
         <p>Утверждённые поездки, доступные вам. Приближайте карту и открывайте место, чтобы увидеть участников и даты.</p></div>
-      <Button icon={<ArrowLeft20Regular />} onClick={onClose}>К поездкам</Button>
+      <Button ref={backButtonRef} icon={<ArrowLeft20Regular />} onClick={onClose}>К поездкам</Button>
     </header>
     <div className="trip-map-stats" aria-label="Сводка карты">
       <span><strong>{approved.length}</strong> {plural(approved.length, "утверждённая поездка", "утверждённые поездки", "утверждённых поездок")}</span>
@@ -251,7 +255,7 @@ export function TripWorldMap({ requests, people, onOpenRequest, onClose }: TripW
                 fontSize={11 / viewport.zoom} strokeWidth={3 / viewport.zoom}>{location.place.name}</text> : null}
             </g>;
           })}
-        </svg> : !error ? <div className="trip-map-loading" role="status">Загружаем карту мира…</div> : null}
+        </svg> : !error ? <LoadingSkeleton layout="map" label="Загружаем карту мира…" /> : null}
         {hovered ? <div className="trip-map-hover-card" role="status">
           <strong>{hovered.place.name}</strong><span>{tripCount(hovered.requests.length)}</span>
           <small>{period(hovered.requests[0]!)} · {hovered.requests[0]!.employeeIds.map((id) => nameById.get(id) ?? "Сотрудник").join(", ")}</small>
@@ -261,7 +265,7 @@ export function TripWorldMap({ requests, people, onOpenRequest, onClose }: TripW
       </div>
       <aside ref={sidebarRef} className="trip-map-sidebar" aria-label="Поездки на карте">
         {selected ? <>
-          <div className="trip-map-selected-heading"><div><span>Выбранное место</span><h3>{selected.place.name}</h3><p>{selected.place.context}</p></div><Button appearance="subtle" icon={<Dismiss20Regular />} aria-label="Сбросить выбор места" onClick={() => setSelectedId("")} /></div>
+          <div className="trip-map-selected-heading"><div><span>Выбранное место</span><h3>{selected.place.name}</h3><p>{selected.place.context}</p></div><Button className="trip-map-clear-selection" appearance="subtle" icon={<Dismiss20Regular />} aria-label="Сбросить выбор места" onClick={() => setSelectedId("")} /></div>
           <div className="trip-map-trip-list">{selected.requests.map((request) => <article key={request.id} className="trip-map-trip">
             <span>{request.number} · {period(request)}</span><strong>{request.purpose || request.destination}</strong>
             <p>{request.employeeIds.map((id) => nameById.get(id) ?? "Сотрудник").join(", ")}</p>

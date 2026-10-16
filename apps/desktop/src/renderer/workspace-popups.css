@@ -20,7 +20,8 @@ html body :is(
   .rail-ai-popover, .task-participant-popover, .task-section-help-surface,
   .media-volume-popover, .message-reaction-submenu, .task-deadline-request-popover
 ) {
-  border: 0;
+  /* Reserve the dark satin hairline in both themes, including custom menus. */
+  border: 1px solid transparent;
   border-radius: var(--ws-popup-radius);
   background: var(--ws-popup-menu-fill);
   color: var(--ws-text);
@@ -36,7 +37,7 @@ html body :is(
     .rail-ai-popover, .task-participant-popover, .task-section-help-surface,
     .media-volume-popover, .message-reaction-submenu, .task-deadline-request-popover
   ) {
-    border: 1px solid transparent;
+    border-color: transparent;
     --ws-satin-fill: linear-gradient(var(--ws-theme-surface), var(--ws-theme-surface));
     background-image: linear-gradient(var(--ws-theme-surface), var(--ws-theme-surface)), var(--ws-satin-sheen), var(--ws-satin-edge);
     background-origin: border-box;

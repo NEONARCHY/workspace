@@ -1,7 +1,8 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
+import { LoadingSkeleton } from "./LoadingSkeleton";
 import { useEffect, useRef, useState } from "react";
 import type { DirectoryBootstrap, NavigationKey, SidebarVisibility, WorkspacePerson } from "@yuksalish/contracts";
-import { Button, Checkbox, DialogSurface, Field, Spinner } from "@fluentui/react-components";
+import { Button, Checkbox, DialogSurface, Field } from "@fluentui/react-components";
 import { Dismiss20Regular, Navigation24Regular } from "@fluentui/react-icons";
 import { PersonPicker } from "./PersonPicker";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
@@ -71,7 +72,7 @@ export function SidebarVisibilityManagement({ token, directory, currentUser, ini
     <div className="sidebar-visibility-scroll">
       <Field label="Сотрудник"><PersonPicker token={token} people={people} departments={directory.departments} value={userId} label="Сотрудник для настройки меню" disabled={busy} onChange={selectEmployee} /></Field>
       <p className="sidebar-visibility-explanation">Скрытие убирает кнопку, но не меняет права доступа. Для ограничения доступа используйте «Права модулей». Настройки профиля остаются доступны.</p>
-      {loading && userId ? <div className="sidebar-visibility-loading"><Spinner size="small" label="Загружаем меню" /></div> : saved?.userId === userId ? <>
+      {loading && userId ? <LoadingSkeleton layout="rows" rows={6} label="Загружаем меню" /> : saved?.userId === userId ? <>
         <div className="sidebar-visibility-list-head"><strong>Показывать в меню</strong><Button type="button" appearance="subtle" disabled={busy || !hidden.length} onClick={() => { setHidden([]); setNotice(""); }}>Вернуть все кнопки</Button></div>
         <div className="sidebar-visibility-list">{sections.map((section) => <Checkbox key={section.key} label={section.label} checked={!hidden.includes(section.key)} disabled={busy} onChange={(_, data) => { setHidden((current) => data.checked ? current.filter((key) => key !== section.key) : [...current, section.key]); setNotice(""); }} />)}</div>
       </> : !error ? <p>Выберите сотрудника, чтобы настроить его меню.</p> : null}

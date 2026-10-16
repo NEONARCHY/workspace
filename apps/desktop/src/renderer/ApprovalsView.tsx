@@ -1,4 +1,5 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
+import { LoadingSkeleton } from "./LoadingSkeleton";
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useModalFocus } from "./useModalFocus";
@@ -1929,7 +1930,7 @@ export function ApprovalsView({
                     </RecordSummary>
                     <section className="record-summary-card record-summary-note"><h3>Запуск согласования</h3><p>Проверьте реквизиты и приложите документы. Кнопка «Отправить по маршруту» создаст заявку и запустит действующий процесс согласования.</p><p>Условия и ответственных определяет маршрут. История появится после отправки.</p></section>
                   </>}>
-                  {paymentTargetsLoading ? <p role="status">Загружаем проекты и направления…</p> : null}
+                  {paymentTargetsLoading ? <LoadingSkeleton layout="form" rows={2} label="Загружаем проекты и направления…" /> : null}
                   {paymentTargetsError ? <WorkspaceNotice tone="error" role="alert" actions={<><Button type="button" disabled={paymentTargetsLoading} onClick={() => {
                     setPaymentTargetsLoading(true);
                     void loadPaymentProjectTargets(token).then((targets) => { setPaymentTargets(targets); setPaymentTargetsError(""); })

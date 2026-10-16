@@ -1,6 +1,7 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
+import { LoadingSkeleton } from "./LoadingSkeleton";
 import { useEffect, useRef, useState } from "react";
-import { Button, Spinner } from "@fluentui/react-components";
+import { Button } from "@fluentui/react-components";
 import type { EdoEmployeeSyncStatus } from "@yuksalish/contracts";
 import { loadEdoEmployeeSync, retryEdoEmployeeSync } from "./workspace-api";
 
@@ -53,7 +54,7 @@ function EdoEmployeeSyncSession({ token }: { readonly token: string }) {
       <Button disabled={busy} onClick={() => setAttempt((value) => value + 1)}>Обновить синхронизацию</Button>
       {error ? <WorkspaceNotice tone="error" role="alert">{error}</WorkspaceNotice> : null}
       {notice ? <p role="status">{notice}</p> : null}
-      {!data && !error ? <Spinner label="Проверяем синхронизацию сотрудников" /> : null}
+      {!data && !error ? <LoadingSkeleton layout="rows" label="Проверяем синхронизацию сотрудников" /> : null}
       {data ? <>
         <p>{!data.enabled ? "Автоматическая синхронизация выключена." : !data.configured
           ? "Настройки подключения не готовы. Обратитесь к администратору сервера."

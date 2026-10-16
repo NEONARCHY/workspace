@@ -401,7 +401,22 @@ export interface CreateChatInput {
   readonly avatarIconKey?: ChatAvatarIconKey | null;
 }
 
+export interface MessageEntity {
+  readonly type: "bold" | "italic" | "underline" | "strikethrough" | "code" | "quote" | "link";
+  /** UTF-16 offsets into the plain message body. */
+  readonly offset: number;
+  readonly length: number;
+  readonly url?: string;
+}
+
+export interface MessageQuote {
+  readonly offset: number;
+  readonly text: string;
+}
+
 export interface MessageOptions {
+  readonly entities?: readonly MessageEntity[];
+  readonly replyQuote?: MessageQuote | null;
   readonly replyToMessageId?: string | null;
   readonly mentionUserIds: readonly string[];
 }
@@ -426,6 +441,12 @@ export interface ChatSummary {
 }
 
 export interface ChatMessage {
+  readonly entities?: readonly MessageEntity[];
+  readonly replyQuote?: MessageQuote | null;
+  readonly pinProtected?: boolean;
+  readonly pinHiddenForMe?: boolean;
+  readonly canUnpinForSelf?: boolean;
+  readonly canUnpinForAll?: boolean;
   readonly id: string;
   readonly chatId: string;
   readonly authorId: string;
@@ -1600,6 +1621,26 @@ export interface WorkspaceTask {
   readonly comments: readonly TaskComment[];
   readonly dependencies: readonly TaskDependency[];
   readonly cycle?: TaskCycle | null;
+}
+
+export interface TaskHistoryEvent {
+  readonly id: string;
+  readonly kind: string;
+  readonly occurredAt: string;
+  readonly actorUserId?: string | null;
+  readonly actorName?: string | null;
+  readonly oldDueAt?: string | null;
+  readonly dueAt?: string | null;
+  readonly oldStatus?: string | null;
+  readonly status?: string | null;
+  readonly reasonCode?: string | null;
+  readonly reason?: string | null;
+}
+
+export interface TaskHistoryPage {
+  readonly events: readonly TaskHistoryEvent[];
+  readonly historyComplete: boolean;
+  readonly nextOffset?: number | null;
 }
 
 export interface TaskDeadlineRequest {

@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { FluentProvider, webLightTheme } from "@fluentui/react-components";
 import type { ChatMessage } from "@yuksalish/contracts";
 import { afterEach, expect, it, vi } from "vitest";
+import { changeField, editorCaret } from "./test-fixtures/rich-editor";
 import { MessengerView } from "./MessengerView";
 import { initialChats, initialTasks, people } from "./test-fixtures/demo-data";
 
@@ -54,21 +55,21 @@ it("copies the last own message into the composer with ArrowUp and saves it with
     onEditMessage,
   });
 
-  fireEvent.change(screen.getByLabelText("Поиск в переписке"), { target: { value: "Старое" } });
+  changeField(screen.getByLabelText("Поиск в переписке"), { target: { value: "Старое" } });
   expect(screen.queryByText("Последнее своё")).not.toBeInTheDocument();
   const composer = screen.getByLabelText("Новое сообщение");
   composer.focus();
   fireEvent.keyDown(composer, { key: "ArrowUp" });
   const editor = screen.getByLabelText("Редактирование сообщения");
-  expect(editor).toHaveValue(own.body);
+  expect(editor).toHaveTextValue(own.body);
   expect(editor).toHaveFocus();
-  expect((editor as HTMLInputElement).selectionStart).toBe(own.body.length);
-  fireEvent.change(editor, { target: { value: "Исправленный текст" } });
+  expect(editorCaret(editor)).toBe(own.body.length);
+  changeField(editor, { target: { value: "Исправленный текст" } });
   fireEvent.keyDown(editor, { key: "Enter" });
-  await waitFor(() => expect(onEditMessage).toHaveBeenCalledWith(own, "Исправленный текст", []));
+  await waitFor(() => expect(onEditMessage).toHaveBeenCalledWith(own, "Исправленный текст", [], []));
   await waitFor(() => expect(screen.queryByLabelText("Редактирование сообщения")).not.toBeInTheDocument());
   expect(composer).toHaveFocus();
-  expect(screen.getByLabelText("Поиск в переписке")).toHaveValue("Старое");
+  expect(screen.getByLabelText("Поиск в переписке")).toHaveTextValue("Старое");
 });
 
 it("suggests participants and saves new mentions while editing", async () => {
@@ -81,12 +82,12 @@ it("suggests participants and saves new mentions while editing", async () => {
 
   fireEvent.keyDown(screen.getByLabelText("Новое сообщение"), { key: "ArrowUp" });
   const editor = screen.getByLabelText("Редактирование сообщения");
-  fireEvent.change(editor, { target: { value: "Проверьте документ @" } });
+  changeField(editor, { target: { value: "Проверьте документ @" } });
   expect(screen.getByRole("region", { name: "Упомянуть участников" })).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "@Бахтиёр Самугов" }));
-  expect(editor).toHaveValue("Проверьте документ");
+  expect(editor).toHaveTextValue("Проверьте документ");
   fireEvent.keyDown(editor, { key: "Enter" });
-  await waitFor(() => expect(onEditMessage).toHaveBeenCalledWith(own, "Проверьте документ", ["baxtiyor"]));
+  await waitFor(() => expect(onEditMessage).toHaveBeenCalledWith(own, "Проверьте документ", ["baxtiyor"], []));
 });
 
 it("preserves the composer draft and current edit; Escape returns focus without saving", () => {
@@ -94,23 +95,23 @@ it("preserves the composer draft and current edit; Escape returns focus without 
   const props = renderKeyboardMessenger({ messages: [own] });
   const composer = screen.getByLabelText("Новое сообщение");
   for (const draft of ["Черновик", " "]) {
-    fireEvent.change(composer, { target: { value: draft } });
+    changeField(composer, { target: { value: draft } });
     fireEvent.keyDown(composer, { key: "ArrowUp" });
     expect(screen.queryByLabelText("Редактирование сообщения")).not.toBeInTheDocument();
-    expect(composer).toHaveValue(draft);
+    expect(composer).toHaveTextValue(draft);
   }
-  fireEvent.change(composer, { target: { value: "" } });
+  changeField(composer, { target: { value: "" } });
   fireEvent.keyDown(composer, { key: "ArrowUp" });
   const editor = screen.getByLabelText("Редактирование сообщения");
-  fireEvent.change(editor, { target: { value: "Несохранённое изменение" } });
+  changeField(editor, { target: { value: "Несохранённое изменение" } });
   fireEvent.keyDown(editor, { key: "ArrowUp" });
-  expect(editor).toHaveValue("Несохранённое изменение");
+  expect(editor).toHaveTextValue("Несохранённое изменение");
   fireEvent.keyDown(editor, { key: "Escape" });
   expect(screen.queryByLabelText("Редактирование сообщения")).not.toBeInTheDocument();
   expect(composer).toHaveFocus();
   expect(props.onEditMessage).not.toHaveBeenCalled();
   fireEvent.keyDown(composer, { key: "ArrowUp" });
-  expect(screen.getByLabelText("Редактирование сообщения")).toHaveValue(own.body);
+  expect(screen.getByLabelText("Редактирование сообщения")).toHaveTextValue(own.body);
 });
 
 it.each(["ctrlKey", "altKey", "metaKey", "shiftKey", "isComposing"])("ignores ArrowUp with %s", (modifier) => {

@@ -1,4 +1,5 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
+import { LoadingSkeleton } from "./LoadingSkeleton";
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
 import { CalendarAudienceActions } from "./CalendarAudienceActions";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -890,7 +891,7 @@ export function CalendarView({
             <Textarea aria-label="Описание события" placeholder="Описание и детали" value={draft.description} onChange={(_event, data) => setDraft({ ...draft, description: data.value })} />
             {canLinkProjects ? <div>
               <h3>Связь с проектом</h3>
-              {projectTargetsLoading ? <p role="status">Загружаем проекты…</p> : null}
+              {projectTargetsLoading ? <LoadingSkeleton layout="form" rows={1} label="Загружаем проекты…" /> : null}
               {projectTargetsError ? <WorkspaceNotice tone="error" role="alert" actions={<><Button onClick={() => setProjectTargetsAttempt((value) => value + 1)}>Повторить</Button></>}>{projectTargetsError} </WorkspaceNotice> : null}
               <CalendarProjectLinkFields value={draft} targets={projectTargets} onChange={setDraft} />
             </div> : null}

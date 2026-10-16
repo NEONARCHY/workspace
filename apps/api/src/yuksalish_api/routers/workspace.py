@@ -80,6 +80,7 @@ from yuksalish_api.repository import (
     get_attachment,
     list_task_project_options,
     load_feed_post,
+    load_task_history,
     load_workspace,
     mark_all_notifications_read,
     mark_chat_read,
@@ -156,6 +157,7 @@ from yuksalish_api.workspace_schemas import (
     TaskCycleRequest,
     TaskDependencyRequest,
     TaskEfficiencyExclusionRequest,
+    TaskHistoryResponse,
     TaskParticipantRequest,
     TaskProjectOption,
     TaskResponse,
@@ -678,6 +680,19 @@ async def post_task(
         raise _translate(error) from error
     await _event_bus(request).publish({"type": "task.created", "entityId": result.id})
     return result
+
+
+@router.get("/tasks/{task_id}/history", response_model=TaskHistoryResponse)
+async def get_task_history(
+    task_id: UUID,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+    offset: Annotated[int, Query(ge=0, le=100_000)] = 0,
+) -> TaskHistoryResponse:
+    try:
+        return await load_task_history(connection, current_user, task_id, offset=offset)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
 
 
 @router.patch("/tasks/{task_id}/status", response_model=TaskResponse)

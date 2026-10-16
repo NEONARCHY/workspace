@@ -1,3 +1,7 @@
+import { RichMessageEditor } from "./RichMessageEditor";
+import { RichMessageText, EMPTY_ENTITIES, editorSelection, setEditorSelection, trimRichDocument } from "./message-rich-text";
+import { decodeRichDraft, encodeRichDraft, useRichComposer } from "./useRichComposer";
+import "./message-rich-text.css";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { ReactionEmoji } from "./ReactionEmoji";
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
@@ -16,6 +20,8 @@ import type {
   PersonalPreferences,
   PersonalChatAction,
   MessageOptions,
+  MessageEntity,
+  MessageQuote,
   WorkspaceAttachment,
   WorkspacePerson,
   WorkspaceDepartment,
@@ -105,11 +111,14 @@ function useComposerState<T>(initial: T | (() => T), revisionRef: RefObject<numb
   return [value, update] as const;
 }
 
+type ReplyTarget = ChatMessage & { readonly selectedQuote?: MessageQuote };
+
 interface OutgoingDraft {
+  readonly entities: readonly MessageEntity[];
   readonly id: number;
   readonly text: string;
   readonly files: readonly File[];
-  readonly reply?: ChatMessage;
+  readonly reply?: ReplyTarget;
   readonly mentions: readonly string[];
   readonly error: string;
 }
@@ -148,8 +157,8 @@ export interface MessengerViewProps {
     options: MessageOptions,
   ) => Promise<ChatMessage | undefined>;
   readonly onReactMessage: (message: ChatMessage, emoji: MessageReactionEmoji) => Promise<void>;
-  readonly onPinMessage: (message: ChatMessage, pinned: boolean) => Promise<void>;
-  readonly onEditMessage: (message: ChatMessage, body: string, mentionUserIds: readonly string[]) => Promise<void>;
+  readonly onPinMessage: (message: ChatMessage, pinned: boolean, scope?: "all" | "self") => Promise<void>;
+  readonly onEditMessage: (message: ChatMessage, body: string, mentionUserIds: readonly string[], entities?: readonly MessageEntity[]) => Promise<void>;
   readonly onDeleteMessage: (message: ChatMessage) => Promise<void>;
   readonly onCreateTaskFromMessage: (
     message: ChatMessage,
@@ -257,11 +266,11 @@ function Conversation({
   readonly fileDropDisabledReason?: string;
 }) {
   const composerRevision = useRef(0);
-  const [draft, setDraft] = useComposerState(assistantDraft?.kind === "message" ? assistantDraft.fields.body ?? "" : "", composerRevision);
+  const [draft, setDraft, draftEntities, setDraftDocument] = useRichComposer(assistantDraft?.kind === "message" ? assistantDraft.fields.body ?? "" : "", composerRevision);
   const draftKey = `chat:${currentUserId}:${chat.id}`;
   const draftEdited = useRef(assistantDraft?.kind === "message");
   const draftReady = useRef(assistantDraft?.kind === "message");
-  const [reply, setReply] = useComposerState<ChatMessage | undefined>(undefined, composerRevision);
+  const [reply, setReply] = useComposerState<ReplyTarget | undefined>(undefined, composerRevision);
   const [mentions, setMentions] = useComposerState<readonly string[]>([], composerRevision);
   const [mentionPicker, setMentionPicker] = useState(false);
   const [mentionScope, setMentionScope] = useState<EmployeeScope>("central");
@@ -270,7 +279,7 @@ function Conversation({
   const [taskSource, setTaskSource] = useState<ChatMessage>();
   const [forwarding, setForwarding] = useState<ChatMessage>();
   const [editing, setEditing] = useComposerState<ChatMessage | undefined>(undefined, composerRevision);
-  const [editBody, setEditBody] = useState("");
+  const [editBody, setEditBody, editEntities, setEditDocument] = useRichComposer("", composerRevision);
   const [editMentions, setEditMentions] = useState<readonly string[]>([]);
   const [deleting, setDeleting] = useState<ChatMessage>();
   const deleteReturnFocus = useRef<HTMLElement | null>(null);
@@ -279,7 +288,7 @@ function Conversation({
   const removalTimer = useRef<number | undefined>(undefined);
   const previousRows = useRef(new Map<string, { message: ChatMessage; index: number; height: number }>());
   const locallyRemovedIds = useRef(new Set<string>());
-  const [contextMenu, setContextMenu] = useState<{ message: ChatMessage; x: number; y: number; portalContainer: HTMLElement; trigger?: HTMLButtonElement }>();
+  const [contextMenu, setContextMenu] = useState<{ message: ChatMessage; x: number; y: number; portalContainer: HTMLElement; trigger?: HTMLButtonElement; selectedQuote?: MessageQuote }>();
   const [reactionQuick, setReactionQuick] = useState<ReactionDetailsTarget & { message: ChatMessage }>();
   const [reactionDialog, setReactionDialog] = useState<ChatMessage>();
   const [reactionPreview, setReactionPreview] = useState(false);
@@ -300,13 +309,14 @@ function Conversation({
   const [deadlineBusy, setDeadlineBusy] = useState(false);
   const [deadlineDecisionId, setDeadlineDecisionId] = useState<string>();
   const [deadlineError, setDeadlineError] = useState("");
-  const [sendingText, setSendingText] = useState<{ id: number; text: string; scrollLeft: number }>();
+  const [sendingText, setSendingText] = useState<{ id: number; text: string; entities: readonly MessageEntity[]; scrollLeft: number; scrollTop: number; height: number }>();
   const sendingSequence = useRef(0);
   const sendQueue = useRef<Promise<void>>(Promise.resolve());
   const submittedRevision = useRef(-1);
   const [pendingSendCount, setPendingSendCount] = useState(0);
   const [failedSends, setFailedSends] = useState<readonly OutgoingDraft[]>([]);
   const [voiceOpen, setVoiceOpen] = useState(false);
+  const [voiceVisible, setVoiceVisible] = useState(false);
   const [rewriteOpen, setRewriteOpen] = useState(false);
   const [rewriteBusy, setRewriteBusy] = useState(false);
   const [rewriteError, setRewriteError] = useState("");
@@ -315,7 +325,7 @@ function Conversation({
   }>();
   const [pinnedOpen, setPinnedOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const composerInputRef = useRef<HTMLInputElement>(null);
+  const composerInputRef = useRef<HTMLDivElement>(null);
   const rewriteRef = useRef<HTMLDivElement>(null);
   const wasEditing = useRef(false);
   const focusAfterSend = useRef(false);
@@ -337,18 +347,19 @@ function Conversation({
     let active = true;
     void bridge.loadDraft(draftKey).then((saved) => {
       if (active && saved !== null && (assistantDraft?.kind === "message" || !draftEdited.current)) {
-        setDraft((current) => assistantDraft?.kind === "message" && saved.trim()
-          ? `${saved.trimEnd()}\n\n${current}` : assistantDraft?.kind === "message" ? current : saved);
+        const decoded = decodeRichDraft(saved);
+        if (assistantDraft?.kind === "message") setDraft(current => decoded.text.trim() ? `${decoded.text.trimEnd()}\n\n${current}` : current);
+        else setDraftDocument(decoded.text, decoded.entities);
         void bridge.clearDraft(draftKey).catch(() => undefined);
       }
     }).catch(() => undefined).finally(() => { draftReady.current = true; });
     return () => { active = false; };
-  }, [assistantDraft, draftKey, setDraft]);
+  }, [assistantDraft, draftKey, setDraft, setDraftDocument]);
   useEffect(() => {
     const bridge = workspacePlatform;
     if (!draftReady.current || !draftEdited.current) return;
     const save = () => {
-      void (draft ? bridge.saveDraft(draftKey, draft) : bridge.clearDraft(draftKey))
+      void (draft ? bridge.saveDraft(draftKey, encodeRichDraft(draft, draftEntities)) : bridge.clearDraft(draftKey))
         .catch(() => undefined);
     };
     const timer = window.setTimeout(() => {
@@ -359,7 +370,7 @@ function Conversation({
       window.clearTimeout(timer);
       window.removeEventListener("yuksalish:prepare-web-update", save);
     };
-  }, [draft, draftKey]);
+  }, [draft, draftKey, draftEntities]);
   const canSend = chat.permissions.sendMessages;
   const fileDropBlocked = fileDropDisabledReason || (!canSend ? "В этом чате нельзя отправлять сообщения"
     : !chat.permissions.uploadFiles ? "Вложения запрещены владельцем группы"
@@ -463,7 +474,7 @@ function Conversation({
     return (!departments || employeeScope(person?.departmentId, departments) === mentionScope)
       && (!mentionQuery || `${person?.name ?? ""} ${person?.username ?? ""}`.toLocaleLowerCase("ru").includes(mentionQuery));
   });
-  const pinnedMessages = activeMessages.filter((message) => message.isPinned && !message.deletedAt);
+  const pinnedMessages = activeMessages.filter((message) => message.isPinned && !message.pinHiddenForMe && !message.deletedAt);
   const latestPinned = pinnedMessages.at(-1);
   const revealMessage = (messageId: string) => {
     setQuery("");
@@ -480,7 +491,7 @@ function Conversation({
     if (editing) {
       const input = composerInputRef.current;
       input?.focus();
-      input?.setSelectionRange(input.value.length, input.value.length);
+      if (input) setEditorSelection(input, input.textContent?.length ?? 0);
     } else if (wasEditing.current) {
       composerInputRef.current?.focus();
     }
@@ -511,7 +522,7 @@ function Conversation({
     if (busy || !canSend || message.authorId !== currentUserId || !message.canEdit || message.deletedAt) return;
     setSendingText(undefined);
     setEditing(message);
-    setEditBody(message.body);
+    setEditDocument(message.body, message.entities ?? EMPTY_ENTITIES);
     setEditMentions(message.mentionUserIds ?? []);
     setMentionPicker(false);
     setError("");
@@ -540,16 +551,18 @@ function Conversation({
   };
   const send = () => {
     if (!canSend || busy || submittedRevision.current === composerRevision.current || (!draft.trim() && pendingFiles.length === 0)) return;
-    const sentText = draft.trim();
+    const sentDocument = trimRichDocument(draft, draftEntities);
+    const sentText = sentDocument.text;
     setAttachmentReviewOpen(false);
     const sentScrollLeft = composerInputRef.current?.scrollLeft ?? 0;
+    const sentScrollTop = composerInputRef.current?.scrollTop ?? 0;
     const sentFiles = pendingFiles;
     const sentReply = reply;
     const sentMentions = mentions.filter((id) => activeMemberIds.has(id));
     sendingSequence.current += 1;
     const sendId = sendingSequence.current;
     if (sentText) {
-      setSendingText({ id: sendingSequence.current, text: sentText, scrollLeft: sentScrollLeft });
+      setSendingText({ id: sendingSequence.current, text: sentText, entities: sentDocument.entities, scrollLeft: sentScrollLeft, scrollTop: sentScrollTop, height: composerInputRef.current?.getBoundingClientRect().height ?? 0 });
     }
     // Snapshot and release the composer before any network work. Acknowledgements
     // must never clear text/files/reply belonging to the next message.
@@ -566,6 +579,8 @@ function Conversation({
       try {
         const message = await onSendMessage(chat.id, sentText || "Файл", sentFiles, {
           replyToMessageId: sentReply?.id,
+          replyQuote: sentReply?.selectedQuote,
+          entities: sentDocument.entities,
           mentionUserIds: sentMentions,
         });
         if (!message)
@@ -576,11 +591,11 @@ function Conversation({
         const failure = cause instanceof Error ? cause.message : "Не удалось отправить сообщение";
         if (composerRevision.current === revision) {
           setSendingText(undefined);
-          setDraft(sentText);
+          setDraftDocument(sentText, sentDocument.entities);
           setPendingFiles(sentFiles); setReply(sentReply); setMentions(sentMentions);
           setError(failure);
         } else {
-          setFailedSends((items) => [...items, { id: sendId, text: sentText, files: sentFiles, reply: sentReply, mentions: sentMentions, error: failure }]);
+          setFailedSends((items) => [...items, { id: sendId, text: sentText, entities: sentDocument.entities, files: sentFiles, reply: sentReply, mentions: sentMentions, error: failure }]);
         }
       } finally {
         setPendingSendCount((count) => count - 1);
@@ -595,6 +610,7 @@ function Conversation({
         editing,
         editBody.trim(),
         editMentions.filter((id) => activeMemberIds.has(id)),
+        trimRichDocument(editBody, editEntities).entities,
       );
       setEditing(undefined);
       setEditBody("");
@@ -687,7 +703,10 @@ function Conversation({
           const documentOnly = !message.deletedAt && !message.forwarded && !message.zoomInvitation
             && messageAttachments.length > 0 && messageAttachments.every(attachment => attachment.mediaKind !== "voice"
               && !["image", "video", "audio"].includes(fileViewerKind(attachment)));
-          const documentFooter = documentOnly && (message.editedAt || (message.body.trim() && message.body.trim() !== "Файл"));
+          const voiceOnly = !message.deletedAt && !message.zoomInvitation && message.forwarded?.kind !== "feed"
+            && voiceAttachments.length > 0 && voiceAttachments.length === messageAttachments.length;
+          const mentionFooter = !message.deletedAt && !!message.mentionUserIds?.length
+            && !messageAttachments.length && !message.forwarded && !message.zoomInvitation;
           return (
             <div key={message.id} data-message-row-id={message.id} className={`message-row ${groupPosition}${removingMessage?.message.id === message.id ? ` is-removing is-${removingMessage.phase}` : ""}`} style={removingMessage?.message.id === message.id ? { height: removingMessage.phase === "exiting" ? 0 : removingMessage.height } : undefined}>
               {(index === 0 || date !== previousDate) && (
@@ -698,7 +717,9 @@ function Conversation({
                 className={`message ${own ? "own" : ""} ${message.isPinned ? "message-pinned" : ""} ${message.mentionUserIds?.includes(currentUserId) ? "message-mentioned" : ""}`}
                 onContextMenu={(event) => {
                   event.preventDefault();
-                  setContextMenu({ message, x: event.clientX, y: event.clientY, portalContainer: menuPortalContainerFor(event.currentTarget) });
+                  const textRoot = event.currentTarget.querySelector<HTMLElement>("[data-message-text]");
+                  const selectedQuote = textRoot ? editorSelection(textRoot) : undefined;
+                  setContextMenu({ message, selectedQuote, x: event.clientX, y: event.clientY, portalContainer: menuPortalContainerFor(event.currentTarget) });
                 }}
                 onKeyDown={(event) => {
                   if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
@@ -733,30 +754,31 @@ function Conversation({
                   </EmployeeProfileLink>
                 )}
                 <div className="message-content">
-                  <div className={`message-body${message.forwarded || message.zoomInvitation || messageAttachments.length ? " has-rich-content" : ""}${messageAttachments.length ? " has-attachments" : ""}${mediaOnly ? ` is-media-message${mediaCaption || parent || message.mentionUserIds?.length ? " has-media-caption" : ""}` : ""}${documentOnly ? ` is-document-message${documentFooter ? " has-document-footer" : ""}` : ""}${message.zoomInvitation && !message.deletedAt ? " is-conference-message" : ""}`}>
+                  <div className={`message-body${message.forwarded || message.zoomInvitation || messageAttachments.length ? " has-rich-content" : ""}${messageAttachments.length ? " has-attachments" : ""}${mediaOnly ? ` is-media-message${mediaCaption || parent || message.mentionUserIds?.length ? " has-media-caption" : ""}` : ""}${documentOnly ? " is-document-message" : ""}${voiceOnly ? " is-voice-message" : ""}${message.zoomInvitation && !message.deletedAt ? " is-conference-message" : ""}`}>
                     {!own && (groupedWithPrevious
                       ? <span className="sr-only">Сообщение от {personName(message.authorId)}</span>
                       : <EmployeeProfileLink userId={message.authorId} personName={personName(message.authorId)}><strong>{personName(message.authorId)}</strong></EmployeeProfileLink>)}
                     {parent && (
                       <blockquote className="message-quote">
                         <EmployeeProfileLink userId={parent.authorId} personName={personName(parent.authorId)}><strong>{personName(parent.authorId)}</strong></EmployeeProfileLink>
-                        <span>{parent.body}</span>
+                        <span>{message.replyQuote?.text ?? parent.body}</span>
                       </blockquote>
                     )}
                     {message.zoomInvitation && !message.deletedAt ? <ZoomInvitationCard messageId={message.id} invitation={message.zoomInvitation} people={people} token={token} />
-                      : message.forwarded ? <ForwardedMessage message={message} onOpenPost={onOpenFeedPost} animateText={arrivingIds.has(message.id)} motionDisabled={motionDisabled} />
-                      : voiceAttachments.length === 0 && !mediaOnly && !(messageAttachments.length && message.body.trim() === "Файл") ? <p className="message-text"><MessageTextAnimate key={`${message.id}:${arrivingIds.has(message.id)}`} enabled={arrivingIds.has(message.id)} disabled={motionDisabled}>{message.body}</MessageTextAnimate></p> : null}
+                      : message.forwarded ? <ForwardedMessage message={message} voice={voiceOnly} onOpenPost={onOpenFeedPost} animateText={arrivingIds.has(message.id)} motionDisabled={motionDisabled} />
+                      : voiceAttachments.length === 0 && !mediaOnly && !(messageAttachments.length && message.body.trim() === "Файл") ? <p className="message-text" data-message-text><MessageTextAnimate entities={message.entities} key={`${message.id}:${arrivingIds.has(message.id)}`} enabled={arrivingIds.has(message.id)} disabled={motionDisabled}>{message.body}</MessageTextAnimate></p> : null}
                     {!message.deletedAt && (
                       <>
-                        {!!message.mentionUserIds?.length && (
+                        {!!message.mentionUserIds?.length && !mentionFooter && (
                           <div className="message-mentions">
                             {message.mentionUserIds.map((id) => (
                               <EmployeeProfileLink key={id} userId={id} personName={personName(id)}>@{personName(id)}</EmployeeProfileLink>
                             ))}
                           </div>
                         )}
-                        {voiceAttachments.map((attachment) => (
-                          <VoiceMessagePlayer key={attachment.id} attachment={attachment} onLoad={onLoadAttachment} />
+                        {voiceAttachments.map((attachment, voiceIndex) => (
+                          <VoiceMessagePlayer key={attachment.id} attachment={attachment} onLoad={onLoadAttachment}
+                            metadata={voiceOnly && voiceIndex === voiceAttachments.length - 1 ? <MessageMetadata message={message} own={own} /> : undefined} />
                         ))}
                         {message.body && !message.zoomInvitation && message.forwarded?.kind !== "feed" ? <MessageLinkPreviews body={message.body} token={token} /> : null}
                         <AttachmentChips
@@ -764,11 +786,16 @@ function Conversation({
                           onDownload={onDownloadAttachment}
                           onLoad={onLoadAttachment}
                           presentation={mediaOnly ? "media" : undefined}
+                          documentMetadata={documentOnly ? <MessageMetadata message={message} own={own} /> : undefined}
                         />
-                        {mediaCaption ? <p className="message-text message-media-caption">{mediaCaption}</p> : null}
+                        {mediaCaption ? <p className="message-text message-media-caption" data-message-text><RichMessageText text={mediaCaption} entities={message.entities} /></p> : null}
                       </>
                     )}
-                    <MessageMetadata message={message} own={own} />
+                    {mentionFooter ? <div className="message-mentions-footer">
+                      <div className="message-mentions">{message.mentionUserIds?.map(id =>
+                        <EmployeeProfileLink key={id} userId={id} personName={personName(id)}>@{personName(id)}</EmployeeProfileLink>)}</div>
+                      <MessageMetadata message={message} own={own} />
+                    </div> : !voiceOnly && !documentOnly ? <MessageMetadata message={message} own={own} /> : null}
                     {!message.deletedAt && (
                       <div className={`message-actions message-reaction-trigger ${reactionTargetId === message.id ? "is-visible" : ""}`} role="group" aria-label="Реакция на сообщение">
                         <ReactionPicker userId={currentUserId} disabled={!canSend || busy} ownMessage={own}
@@ -923,11 +950,13 @@ function Conversation({
           </header>
           <div>
             {pinnedMessages.map((message) => (
-              <button key={message.id} type="button" onClick={() => revealMessage(message.id)}>
-                <EmployeeProfileLink userId={message.authorId} personName={personName(message.authorId)}>{personName(message.authorId)}</EmployeeProfileLink>
-                <strong>{message.body.slice(0, 140)}</strong>
-                <time>{message.time}</time>
-              </button>
+              <div key={message.id} className="pinned-message-item">
+                <button type="button" onClick={() => revealMessage(message.id)}><span>{personName(message.authorId)}</span><strong>{message.body.slice(0, 140)}</strong><time>{message.time}</time></button>
+                {message.pinProtected ? <small>Закреп председателя · нельзя снять</small> : <div className="pinned-message-actions">
+                  {message.canUnpinForSelf ? <Button size="small" appearance="subtle" disabled={busy} onClick={() => void run(() => onPinMessage(message, false, "self"))}>Снять для себя</Button> : null}
+                  {(message.canUnpinForAll ?? message.canPin) ? <Button size="small" appearance="subtle" disabled={busy} onClick={() => void run(() => onPinMessage(message, false, "all"))}>Снять для всех</Button> : null}
+                </div>}
+              </div>
             ))}
           </div>
         </div>
@@ -950,16 +979,19 @@ function Conversation({
         const hasVoice = attachments.some((attachment) => attachment.ownerType === "message" && attachment.ownerId === message.id && attachment.mediaKind === "voice");
         const mayDelete = message.canDelete ?? (own || message.canPin || ["admin", "superadmin"].includes(currentUserRole));
         return <MessageContextMenu x={contextMenu.x} y={contextMenu.y} portalContainer={contextMenu.portalContainer} autoFocus={Boolean(contextMenu.trigger)} onPointerDown={(event) => event.stopPropagation()}>
-          <Button appearance="subtle" icon={<Reply size={20} />} onClick={() => { setReply(message); setContextMenu(undefined); }}>Ответить</Button>
-          {message.canPin ? <Button appearance="subtle" icon={message.isPinned ? <PinOff size={20} /> : <Pin size={20} />} onClick={() => { void run(() => onPinMessage(message, !message.isPinned)); setContextMenu(undefined); }}>{message.isPinned ? "Открепить" : "Закрепить"}</Button> : null}
+          <Button disabled={!canSend || (contextMenu.selectedQuote?.text.length ?? 0) > 4096} title={(contextMenu.selectedQuote?.text.length ?? 0) > 4096 ? "Цитата — не более 4096 символов" : undefined} appearance="subtle" icon={<Reply size={20} />} onClick={() => { setReply({ ...message, selectedQuote: contextMenu.selectedQuote }); setContextMenu(undefined); composerInputRef.current?.focus(); }}>{contextMenu.selectedQuote ? "Ответить с цитатой" : "Ответить"}</Button>
+          {message.canPin && !message.isPinned ? <Button appearance="subtle" icon={<Pin size={20} />} onClick={() => { void run(() => onPinMessage(message, true)); setContextMenu(undefined); }}>Закрепить</Button> : null}
+          {message.isPinned && message.pinProtected ? <span className="message-context-note">Закреп председателя · нельзя снять</span> : null}
+          {message.isPinned && !message.pinProtected && message.canUnpinForSelf ? <Button appearance="subtle" icon={<PinOff size={20} />} onClick={() => { void run(() => onPinMessage(message, false, "self")); setContextMenu(undefined); }}>Снять закреп для себя</Button> : null}
+          {message.isPinned && !message.pinProtected && (message.canUnpinForAll ?? message.canPin) ? <Button appearance="subtle" icon={<PinOff size={20} />} onClick={() => { void run(() => onPinMessage(message, false, "all")); setContextMenu(undefined); }}>Снять закреп для всех</Button> : null}
           {message.body && !(message.forwarded?.kind === "feed" && !message.forwarded.available) ? <Button appearance="subtle" icon={<Copy size={20} />} onClick={() => {
             setContextMenu(undefined);
             void run(async () => {
               if (!navigator.clipboard?.writeText) throw new Error("Копирование недоступно. Выделите текст и нажмите Ctrl+C.");
-              try { await navigator.clipboard.writeText(message.body); }
+              try { await navigator.clipboard.writeText(contextMenu.selectedQuote?.text ?? message.body); }
               catch { throw new Error("Не удалось скопировать. Выделите текст и нажмите Ctrl+C."); }
             });
-          }}>Копировать</Button> : null}
+          }}>{contextMenu.selectedQuote ? "Копировать выделенное" : "Копировать"}</Button> : null}
           {onForwardContent && <Button appearance="subtle" icon={<Forward size={20} />} onClick={() => { setForwarding(message); setContextMenu(undefined); }}>Переслать</Button>}
           <Button appearance="subtle" icon={<ListTodo size={20} />} onClick={() => { setTaskSource(message); setContextMenu(undefined); }}>В задачу</Button>
           {own && message.canEdit && !hasVoice ? <Button appearance="subtle" icon={<Pencil size={20} />} onClick={() => { startEditing(message); setContextMenu(undefined); }}>Изменить</Button> : null}
@@ -1062,7 +1094,7 @@ function Conversation({
           {failedSends.length > 0 && <div className="composer-failed-sends">{failedSends.map((item) => <WorkspaceNotice key={item.id} tone="error" role="alert">
             <span>{item.error}<br />{item.text.slice(0, 160) || "Сообщение с вложениями"}{item.files.length ? ` · файлов: ${item.files.length}` : ""}</span>
             <Button size="small" disabled={busy || Boolean(editing) || Boolean(draft.trim()) || pendingFiles.length > 0 || Boolean(reply) || mentions.length > 0} onClick={() => {
-              setDraft(item.text); setPendingFiles(item.files); setReply(item.reply); setMentions(item.mentions); setSendingText(undefined);
+              setDraftDocument(item.text, item.entities); setPendingFiles(item.files); setReply(item.reply); setMentions(item.mentions); setSendingText(undefined);
               draftEdited.current = true; focusAfterSend.current = true;
               setFailedSends((items) => items.filter((entry) => entry.id !== item.id));
             }}>Вернуть в поле</Button>
@@ -1072,7 +1104,7 @@ function Conversation({
               <div>
                 <small>Ответ · <EmployeeProfileLink userId={reply.authorId} personName={personName(reply.authorId)}>{personName(reply.authorId)}</EmployeeProfileLink></small>
                 <p>
-                  {reply.body.slice(0, 200)}
+                  {(reply.selectedQuote?.text ?? reply.body).slice(0, 200)}
                 </p>
               </div>
               <Button
@@ -1148,10 +1180,12 @@ function Conversation({
             <VoiceRecorder
               allowMp4
               disabled={busy}
-              onClose={() => setVoiceOpen(false)}
+              onVisibilityChange={setVoiceVisible}
+              onClose={() => { setVoiceOpen(false); setVoiceVisible(false); }}
               onSend={async (file, durationMs) => {
                 const options: MessageOptions = {
                   replyToMessageId: reply?.id,
+                  replyQuote: reply?.selectedQuote,
                   mentionUserIds: mentions.filter((id) => activeMemberIds.has(id)),
                 };
                 // Older Safari records AAC/MP4. Send it as an ordinary playable
@@ -1166,7 +1200,13 @@ function Conversation({
                 return true;
               }}
             />
-          ) : <div className="composer">
+          ) : null}
+          {(!voiceOpen || !voiceVisible) && <div className="composer" onKeyDownCapture={event => {
+            if (voiceOpen && event.key === "Escape") {
+              event.preventDefault(); event.stopPropagation();
+              setVoiceOpen(false); setVoiceVisible(false);
+            }
+          }}>
             <input
               ref={fileInputRef}
               hidden
@@ -1188,6 +1228,7 @@ function Conversation({
                 appearance="subtle"
                 icon={<Attach24Regular />}
                 aria-label="Прикрепить файл"
+                className="composer-tool-button"
                 disabled={busy || Boolean(editing) || !chat.permissions.uploadFiles}
                 onClick={() => fileInputRef.current?.click()}
               />
@@ -1197,12 +1238,13 @@ function Conversation({
                 appearance="subtle"
                 icon={<CalendarLtr24Regular />}
                 aria-label="Создать мероприятие из чата"
+                className="composer-tool-button"
                 disabled={busy}
                 onClick={() => onCreateCalendarEventFromChat?.(chat)}
               />
             </Tooltip>
             <Button
-              className="composer-mention-button"
+              className="composer-tool-button composer-mention-button"
               appearance="subtle"
               aria-label="Упомянуть участника"
               aria-expanded={mentionPicker}
@@ -1212,19 +1254,19 @@ function Conversation({
               <span className="composer-mention-glyph" aria-hidden="true">@</span>
               {activeMentions.length ? <span className="composer-mention-count">{activeMentions.length}</span> : null}
             </Button>
-            <Tooltip content={busy ? "Дождитесь завершения действия" : editing ? "Завершите редактирование сообщения перед записью" : draft.trim() ? "Чтобы записать голосовое сообщение, отправьте или удалите набранный текст" : pendingFiles.length ? "Отправьте или удалите вложения перед записью" : "Записать голосовое сообщение"} relationship="description">
+            <Tooltip content={voiceOpen ? "Микрофон подключается. Escape — отменить" : busy ? "Дождитесь завершения действия" : editing ? "Завершите редактирование сообщения перед записью" : draft.trim() ? "Чтобы записать голосовое сообщение, отправьте или удалите набранный текст" : pendingFiles.length ? "Отправьте или удалите вложения перед записью" : "Записать голосовое сообщение"} relationship="description">
               <Button
-                className="composer-microphone"
+                className="composer-tool-button composer-microphone"
                 appearance="subtle"
                 icon={<><Mic24Regular className="composer-microphone-icon" /><Dismiss24Regular className="composer-microphone-blocked-icon" /></>}
                 aria-label="Записать голосовое сообщение"
-                aria-disabled={busy || Boolean(editing) || Boolean(draft.trim()) || pendingFiles.length > 0}
-                onClick={() => { if (!busy && !editing && !draft.trim() && !pendingFiles.length) setVoiceOpen(true); }}
+                aria-disabled={voiceOpen || busy || Boolean(editing) || Boolean(draft.trim()) || pendingFiles.length > 0}
+                onClick={() => { if (!voiceOpen && !busy && !editing && !draft.trim() && !pendingFiles.length) { setVoiceVisible(false); setVoiceOpen(true); } }}
               />
             </Tooltip>
             {canUseAssistant ? <div className="composer-rewrite-anchor" ref={rewriteRef}>
               <Tooltip content="Переформулировать черновик с ИИ" relationship="label">
-                <Button appearance="subtle" icon={<WandSparkles size={19} />}
+                <Button className="composer-tool-button" appearance="subtle" icon={<WandSparkles size={19} />}
                   aria-label="Переформулировать черновик с ИИ" aria-expanded={rewriteOpen}
                   disabled={busy || !canSend || !activeComposerBody.trim()}
                   onClick={() => { setRewriteOpen((value) => !value); setRewriteSuggestion(undefined); setRewriteError(""); }} />
@@ -1262,24 +1304,25 @@ function Conversation({
               {!attachmentReviewOpen && <PendingMessageFiles files={pendingFiles} disabled={busy}
                 onRemove={index => setPendingFiles(current => current.filter((_, fileIndex) => fileIndex !== index))} />}
               <div className={`composer-field-shell${sendingText && !motionDisabled ? " is-message-animating" : ""}`}>
-                <Input
-                input={{ ref: composerInputRef }}
+                <RichMessageEditor
+                  ref={composerInputRef}
+                  style={sendingText && !motionDisabled && sendingText.height > 0 ? { minHeight: sendingText.height } : undefined}
                   aria-label={editing ? "Редактирование сообщения" : "Новое сообщение"}
-                  aria-description="Стрелка вверх в пустом поле — изменить последнее своё сообщение"
                   placeholder={editing ? "Измените сообщение" : "Напишите сообщение · @ упомянуть"}
-                  maxLength={20000}
                   value={editing ? editBody : draft}
+                  entities={editing ? editEntities : draftEntities}
                   disabled={busy}
-                  onChange={(_, data) => {
+                  onChange={(value, entities) => {
+                    if (voiceOpen) { setVoiceOpen(false); setVoiceVisible(false); }
                     setSendingText(undefined);
                     if (editing) {
-                      setEditBody(data.value);
-                      setMentionPicker(/(?:^|\s)@[^\s@]*$/u.test(data.value));
+                      setEditDocument(value, entities);
+                      setMentionPicker(/(?:^|\s)@[^\s@]*$/u.test(value));
                       return;
                     }
                     draftEdited.current = true;
-                    setDraft(data.value);
-                    setMentionPicker(/(?:^|\s)@[^\s@]*$/u.test(data.value));
+                    setDraftDocument(value, entities);
+                    setMentionPicker(/(?:^|\s)@[^\s@]*$/u.test(value));
                   }}
                   onKeyDown={(event) => {
                   if (
@@ -1305,6 +1348,7 @@ function Conversation({
                   if (
                     event.key === "Enter" &&
                     !event.shiftKey &&
+                    !event.ctrlKey && !event.altKey && !event.metaKey &&
                     !event.nativeEvent.isComposing
                   ) {
                     event.preventDefault();
@@ -1321,7 +1365,8 @@ function Conversation({
                   }}
                 />
                 {sendingText ? <ComposerSendTransition key={sendingText.id} inputRef={composerInputRef}
-                  text={sendingText.text} scrollLeft={sendingText.scrollLeft} disabled={motionDisabled}
+                  text={sendingText.text} entities={sendingText.entities} scrollLeft={sendingText.scrollLeft} disabled={motionDisabled}
+                  scrollTop={sendingText.scrollTop}
                   onComplete={() => setSendingText(current => current?.id === sendingText.id ? undefined : current)} /> : null}
               </div>
             </div>

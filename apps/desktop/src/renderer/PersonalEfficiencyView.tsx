@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
-import { Button, Spinner } from "@fluentui/react-components";
+import { Button } from "@fluentui/react-components";
+import { LoadingSkeleton, SkeletonBlock } from "./LoadingSkeleton";
 import { ArrowLeft24Regular, ArrowSync24Regular } from "@fluentui/react-icons";
 import type { PersonalEfficiency, PersonalEfficiencyTask } from "@yuksalish/contracts";
 import { HistoryChart, ScoreGauge } from "./EfficiencyView";
+import { EfficiencyDeadlineExplanation } from "./EfficiencyDeadlineExplanation";
 import { WorkspaceSelect } from "./WorkspaceSelect";
 import { loadPersonalEfficiency } from "./workspace-api";
 import { useContextMotion } from "./useContextMotion";
+import { isTaskOverdue } from "./task-deadline";
 import "./personal-efficiency.css";
 
 export function personalPeriods(now = new Date()): string[] {
@@ -23,21 +26,31 @@ function monthLabel(period: string) {
 }
 
 export function taskImpact(task: PersonalEfficiencyTask): string {
-  if (task.excludedCount) return "Исключена из расчёта — процент не снижает";
+  if (task.excludedCount) return "Исключена из расчёта — процент не снижает. Причина — в маршруте задачи";
   if (task.onTimeCount) return "Сдана в срок — зачёт в показателе";
-  if (task.overdueCount) return "Нет действующей сдачи в срок — учтена как просроченная";
+  if (task.overdueCount) return "Просрочка учтена в эффективности за выбранный месяц";
   if (task.returnedForRevisionCount) return "Возврат отменил зачёт предыдущей сдачи";
-  return task.dueAt ? "Ещё не влияет на процент за этот месяц" : "Без срока — не влияет на процент";
+  return task.dueAt ? "Не вошла в расчёт за выбранный месяц" : "Без срока — не влияет на процент";
 }
 
-const statusLabels: Record<string, string> = { new: "Новая", in_progress: "В работе", awaiting_review: "На проверке", completed: "Завершена", cancelled: "Отменена" };
+const statusLabels: Record<string, string> = { new: "Новая", in_progress: "В работе", awaiting_review: "На проверке", completed: "Завершена", cancelled: "Отменена", overdue: "Истёк текущий срок" };
+
+export function currentTaskLabel(task: PersonalEfficiencyTask, now = Date.now()): string {
+  // The personal API's legacy status is a string; deadline rules distinguish
+  // only terminal, explicitly overdue and other ongoing states.
+  const status = task.status === "completed" || task.status === "cancelled" || task.status === "overdue" ? task.status : "in_progress";
+  const expired = isTaskOverdue({ status, dueAt: task.dueAt }, now);
+  if (task.status === "overdue") return expired ? "Истёк текущий срок" : "В работе";
+  return `${statusLabels[task.status] ?? task.status}${expired ? " · текущий срок истёк" : ""}`;
+}
 
 function TaskList({ tasks, impact = false, onOpenTask }: { readonly tasks: readonly PersonalEfficiencyTask[]; readonly impact?: boolean; readonly onOpenTask?: (id: string) => void }) {
-  return <ul className="personal-eff-task-list">{tasks.map((task) => <li key={task.id} data-tone={impact ? task.onTimeCount ? "success" : task.overdueCount ? "danger" : "neutral" : "neutral"}>
-    <div>{onOpenTask ? <button type="button" onClick={() => onOpenTask(task.id)}>{task.title}</button> : <strong>{task.title}</strong>}<span>{impact ? taskImpact(task) : statusLabels[task.status] ?? task.status}</span>
+  return <ul className="personal-eff-task-list">{tasks.map((task) => <li key={task.id} data-tone={impact && !task.excludedCount ? task.onTimeCount ? "success" : task.overdueCount ? "danger" : "neutral" : "neutral"}>
+    <div>{onOpenTask ? <button type="button" onClick={() => onOpenTask(task.id)}>{task.title}</button> : <strong>{task.title}</strong>}<span>{impact ? taskImpact(task) : currentTaskLabel(task)}</span>
+      {!impact ? <small>{taskImpact(task)}</small> : null}
       {impact && task.returnedForRevisionCount > 0 ? <small>Возвратов за месяц: {task.returnedForRevisionCount}. Повторная сдача до срока восстанавливает зачёт.</small> : null}
     </div>
-    <time dateTime={task.dueAt ?? undefined}>{task.dueAt ? new Date(task.dueAt).toLocaleDateString("ru", { timeZone: "Asia/Tashkent", day: "numeric", month: "short" }) : "Без срока"}</time>
+    <time dateTime={task.dueAt ?? undefined} title="Текущий срок задачи, не обязательно срок, учтённый в эффективности">{task.dueAt ? <>Текущий срок<br />{new Date(task.dueAt).toLocaleDateString("ru", { timeZone: "Asia/Tashkent", day: "numeric", month: "short" })}</> : "Без срока"}</time>
   </li>)}</ul>;
 }
 
@@ -56,7 +69,9 @@ export function PersonalEfficiencyView({ token, onBack, onOpenTask }: { readonly
     return () => { active = false; };
   }, [period, retry, token]);
   const current = resource?.token === token && resource.period === period && resource.retry === retry ? resource : undefined;
-  const data = current?.data;
+  // A retry of this same month keeps confirmed content until its result arrives.
+  // Never carry another credential/month into the newly selected period.
+  const data = current?.data ?? (!current && resource?.token === token && resource.period === period ? resource.data : undefined);
   const employee = data?.employee;
   const workload = data ? [
     { key: "new", label: "Новые", count: data.workload.new },
@@ -65,9 +80,13 @@ export function PersonalEfficiencyView({ token, onBack, onOpenTask }: { readonly
     { key: "completed", label: "Завершены", count: data.workload.completed },
   ] : [];
   const total = workload.reduce((sum, item) => sum + item.count, 0);
-  return <div className="personal-efficiency" ref={motionRef}>
+  return <div className="personal-efficiency" ref={motionRef} aria-busy={!current}>
     <header className="personal-eff-commandbar"><Button autoFocus icon={<ArrowLeft24Regular />} onClick={onBack}>К профилю</Button><label><span>Месяц расчёта</span><WorkspaceSelect aria-label="Месяц моей эффективности" value={period} onChange={(event) => setPeriod(event.target.value)}>{personalPeriods().map((value) => <option key={value} value={value}>{monthLabel(value)}</option>)}</WorkspaceSelect></label><Button icon={<ArrowSync24Regular />} aria-label="Обновить мою эффективность" onClick={() => setRetry((value) => value + 1)} /></header>
-    {!current ? <div className="personal-eff-loading"><Spinner label="Готовим вашу эффективность" /></div> : null}
+    {!current && !data ? <LoadingSkeleton layout="custom" label="Готовим вашу эффективность">
+      <section className="personal-eff-lead"><SkeletonBlock width="176px" height="176px" circle /><div className="ws-skeleton-copy"><SkeletonBlock width="160px" /><SkeletonBlock width="70%" height="28px" /><SkeletonBlock width="65%" /><SkeletonBlock width="80%" /></div></section>
+      <div className="personal-eff-metrics">{Array.from({ length: 4 }, (_, index) => <article key={index}><SkeletonBlock width="70%" /><SkeletonBlock width="40px" height="30px" /></article>)}</div>
+      <section className="personal-eff-panel"><header><h3>Динамика по месяцам</h3><span>Только подтверждённая история</span></header><SkeletonBlock height="220px" /></section>
+    </LoadingSkeleton> : null}
     {current?.error ? <div className="personal-eff-error" role="alert"><h3>Не удалось загрузить эффективность</h3><p>{current.error}</p><Button onClick={() => setRetry((value) => value + 1)}>Повторить загрузку</Button></div> : null}
     {data && employee ? <>
       <section className="personal-eff-lead" aria-label="Выполнение задач в срок"><ScoreGauge employee={employee} /><div><span className="eff-kicker">Мой результат · {monthLabel(period)}</span><h2>{employee.name}</h2><p>Выполнение задач в срок</p><strong>{employee.onTimeCount} из {employee.eligibleCount} задач в расчёте</strong><small>{employee.percentage == null ? "Пока нет учитываемых задач. Это не 0%: будущие задачи и задачи без срока не снижают результат." : "Каждая задача имеет одинаковый вес. Своевременная сдача на проверку засчитывается, не дожидаясь решения постановщика."}</small>
@@ -75,8 +94,9 @@ export function PersonalEfficiencyView({ token, onBack, onOpenTask }: { readonly
         {employee.historyCompleteness !== "complete" ? <p className="personal-eff-notice">{employee.historyCompleteness === "partial" ? "История этого месяца неполная." : "Достоверной истории за этот месяц пока нет."}</p> : null}
       </div></section>
       <div className="personal-eff-metrics" aria-label="Показатели за выбранный месяц">{[
-        ["Вовремя", employee.onTimeCount, "success"], ["Просрочено", employee.overdueCount, "danger"], ["Возвраты", employee.returnedForRevisionCount, "review"], ["Исключено", employee.excludedCount, "neutral"],
+        ["Вовремя", employee.onTimeCount, "success"], ["Просрочки в расчёте", employee.overdueCount, "danger"], ["Возвраты", employee.returnedForRevisionCount, "review"], ["Исключено из расчёта", employee.excludedCount, "neutral"],
       ].map(([label, count, tone]) => <article key={label} data-tone={tone}><span>{label}</span><strong>{count}</strong></article>)}</div>
+      <EfficiencyDeadlineExplanation />
       <section className="personal-eff-panel"><header><h3>Динамика по месяцам</h3><span>Только подтверждённая история</span></header><HistoryChart employee={employee} /></section>
       {data.taskDetailsVisible ? <>
         <section className="personal-eff-panel"><header><h3>Мои задачи сейчас</h3><span>Текущий список, независимо от месяца расчёта</span></header>

@@ -1,5 +1,6 @@
 import { useCallback, useLayoutEffect, useSyncExternalStore } from "react";
 import { flushSync } from "react-dom";
+import "./color-theme-motion.css";
 
 export type ColorThemePreference = "light" | "dark" | "system";
 export type ColorTheme = "light" | "dark";
@@ -64,42 +65,61 @@ export function applyColorTheme(theme: ColorTheme) {
 }
 export function initializeColorTheme() { applyColorTheme(resolveColorTheme(readPreference(undefined))); }
 
-// Fade the live document, not a replacement React tree. Dialogs, drafts, focus,
-// media and drag state retain their identity. Rapid changes retarget the fade.
-let transition: Animation | undefined;
+// Native document snapshots reveal the new theme without cloning/remounting UI.
+let transition: ViewTransition | undefined;
+let reveal: Animation | undefined;
 let revision = 0;
-export async function transitionColorTheme(update: () => void): Promise<void> {
+export async function transitionColorTheme(update: () => void, origin?: { readonly x: number; readonly y: number }): Promise<void> {
   const current = ++revision;
-  const opacity = getComputedStyle(document.body).opacity;
-  transition?.cancel();
+  reveal?.cancel(); reveal = undefined;
+  transition?.skipTransition();
   transition = undefined;
   const accessibility = typeof window.matchMedia === "function" ? window.matchMedia("(prefers-reduced-motion: reduce), (forced-colors: active)") : undefined;
-  if (accessibility?.matches || typeof document.body.animate !== "function" || document.hidden) { update(); return; }
   let updated = false;
-  const apply = () => { if (!updated) { updated = true; update(); } };
+  const apply = () => { if (!updated && revision === current) { updated = true; update(); } };
+  const root = document.documentElement;
+  if (accessibility?.matches || !document.startViewTransition || !root.animate || document.hidden) {
+    delete root.dataset.themeTransition;
+    apply(); return;
+  }
+  const width = window.innerWidth, height = window.innerHeight;
+  const x = Math.max(0, Math.min(width, origin?.x ?? width / 2));
+  const y = Math.max(0, Math.min(height, origin?.y ?? height / 2));
+  const radius = Math.ceil(Math.hypot(Math.max(x, width - x), Math.max(y, height - y))) + 2;
+  root.dataset.themeTransition = "true";
   const interrupt = () => {
     if (revision !== current || (!document.hidden && !accessibility?.matches)) return;
-    transition?.cancel(); transition = undefined;
-    apply(); // A hidden tab or newly enabled reduced-motion mode must not wait.
+    reveal?.cancel();
+    transition?.skipTransition();
+    apply();
   };
   document.addEventListener("visibilitychange", interrupt);
   accessibility?.addEventListener("change", interrupt);
   try {
-    const out = document.body.animate([{ opacity }, { opacity: 0 }],
-      { duration: 120, easing: "cubic-bezier(.2,0,0,1)", fill: "forwards" });
-    transition = out;
-    try { await out.finished; } catch { return; }
+    const view = document.startViewTransition(apply);
+    transition = view;
+    void view.finished.catch(() => undefined);
+    try { await view.ready; } catch { apply(); return; }
     if (revision !== current) return;
-    apply(); out.cancel();
     if (document.hidden || accessibility?.matches) return;
-    const inside = document.body.animate([{ opacity: 0 }, { opacity: 1 }],
-      { duration: 200, easing: "cubic-bezier(.2,0,0,1)" });
-    transition = inside;
-    try { await inside.finished; } catch { /* A later choice owns the fade. */ }
+    const animation = root.animate([
+      { clipPath: `circle(0px at ${x}px ${y}px)` },
+      { clipPath: `circle(${radius}px at ${x}px ${y}px)` },
+    ], { duration: 560, easing: "cubic-bezier(.4,0,.2,1)", fill: "forwards", pseudoElement: "::view-transition-new(root)" });
+    reveal = animation;
+    try { await animation.finished; } catch { /* A new choice owns the next wave. */ }
+    await view.finished;
+  } catch {
+    // Unsupported snapshots/animations must never prevent applying the choice.
+    apply();
   } finally {
     document.removeEventListener("visibilitychange", interrupt);
     accessibility?.removeEventListener("change", interrupt);
-    if (revision === current) { transition?.cancel(); transition = undefined; }
+    if (revision === current) {
+      reveal?.cancel(); reveal = undefined;
+      transition?.skipTransition(); transition = undefined;
+      delete root.dataset.themeTransition;
+    }
   }
 }
 

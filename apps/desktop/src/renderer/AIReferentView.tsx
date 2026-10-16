@@ -1,4 +1,5 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
+import { LoadingSkeleton, SkeletonBlock } from "./LoadingSkeleton";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { previewAIReferentLocalFile } from "./workspace-api";
 
@@ -635,22 +636,22 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
         registerKind === "incoming" ? (canIncoming ? <>
           {visibility?.incomingMode === "assigned" ? <WorkspaceNotice tone="info" className="ai-referent-readonly">Здесь только письма, назначенные вам роботом Exat. Общий журнал скрыт.</WorkspaceNotice> : null}
           <AIReferentIncomingRegister key={`${visibility?.incomingMode}:${visibility?.revision}:${focusRevision}`} token={token} focusLetterId={focusIncomingId} />
-        </> : <Spinner label="Проверяем доступ к входящим" />) : (
+        </> : <LoadingSkeleton layout="lines" rows={1} label="Проверяем доступ к входящим" />) : (
         <div className="ai-referent-page ai-referent-outgoing-page" key={registerKind}>
 
       <section className="ai-referent-summary" aria-label={registerKind === "sign_only" ? "Сводка заявок на подпись" : "Сводка исходящих писем"}>
         <button type="button" className="primary" aria-pressed={filter === "pending_review"} onClick={() => { setFilter("pending_review"); setPage(0); }}>
-          <span>Ожидают решения</span><strong>{registry?.pendingReviewCount ?? 0}</strong>
+          <span>Ожидают решения</span><strong>{registry ? registry.pendingReviewCount : <SkeletonBlock width="32px" height="1em" />}</strong>
           <small>Открыть очередь согласования</small>
         </button>
         <button type="button" aria-pressed={filter === "all"} onClick={() => { setFilter("all"); setPage(0); }}>
-          <strong>{registry?.totalCount ?? 0}</strong><span>{registerKind === "sign_only" ? "пакетов на подпись" : "всего писем"}</span>
+          <strong>{registry ? registry.totalCount : <SkeletonBlock width="32px" height="1em" />}</strong><span>{registerKind === "sign_only" ? "пакетов на подпись" : "всего писем"}</span>
         </button>
         <button type="button" aria-pressed={filter === (registerKind === "sign_only" ? "queued" : "approved")} onClick={() => { setFilter(registerKind === "sign_only" ? "queued" : "approved"); setPage(0); }}>
-          <strong>{registry?.readyCount ?? 0}</strong><span>{registerKind === "sign_only" ? "готовятся роботом" : "готовы к отправке"}</span>
+          <strong>{registry ? registry.readyCount : <SkeletonBlock width="32px" height="1em" />}</strong><span>{registerKind === "sign_only" ? "готовятся роботом" : "готовы к отправке"}</span>
         </button>
         <button type="button" aria-pressed={filter === (registerKind === "sign_only" ? "signed" : "sent")} onClick={() => { setFilter(registerKind === "sign_only" ? "signed" : "sent"); setPage(0); }}>
-          <strong>{registerKind === "sign_only" ? registry?.signedCount ?? 0 : registry?.sentCount ?? 0}</strong><span>{registerKind === "sign_only" ? "подписано" : "отправлено"}</span>
+          <strong>{registry ? (registerKind === "sign_only" ? registry.signedCount ?? 0 : registry.sentCount ?? 0) : <SkeletonBlock width="32px" height="1em" />}</strong><span>{registerKind === "sign_only" ? "подписано" : "отправлено"}</span>
         </button>
       </section>
 
@@ -699,16 +700,25 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
       </div>
       {registryError ? <WorkspaceNotice tone="error" className="ai-referent-feedback" role="alert">{registryError}</WorkspaceNotice> : null}
       {error ? <WorkspaceNotice tone="error" className="ai-referent-feedback" role="alert">{error}</WorkspaceNotice> : null}
-      {loading ? <div className="ai-referent-loading"><Spinner label="Загружаем письма" /></div> : null}
-      {!loading && !registryError && visibleLetters.length === 0 ? (
+      {loading && !registry ? <LoadingSkeleton layout="custom" label="Загружаем письма"><div className="ai-referent-list">
+        {Array.from({ length: 7 }, (_, index) => <div className="ai-referent-row" key={index}>
+          <SkeletonBlock width="90%" height="24px" />
+          <span className="ai-referent-row-main ws-skeleton-copy"><SkeletonBlock width="78%" /><SkeletonBlock width="60%" /></span>
+          <span className="ai-referent-row-person ws-skeleton-copy"><SkeletonBlock width="40%" /><SkeletonBlock width="80%" /></span>
+          <span className="ai-referent-row-person ws-skeleton-copy"><SkeletonBlock width="65%" /><SkeletonBlock width="80%" /></span>
+          <span className="ai-referent-row-number ws-skeleton-copy"><SkeletonBlock width="80%" /><SkeletonBlock width="65%" /></span>
+          <SkeletonBlock width="20px" height="20px" />
+        </div>)}
+      </div></LoadingSkeleton> : null}
+      {registry && !registryError && visibleLetters.length === 0 ? (
         <div className="ai-referent-empty">
           <Mail24Regular />
           <h2>{query || filter !== "all" ? "Письма не найдены" : "Исходящих писем пока нет"}</h2>
           <p>{query || filter !== "all" ? "Попробуйте другой запрос или фильтр." : "Создайте первое письмо, чтобы начать согласование."}</p>
         </div>
       ) : null}
-      {!loading && visibleLetters.length > 0 ? (
-        <div className="ai-referent-list" role="region" aria-label="Исходящие письма" tabIndex={0}>
+      {visibleLetters.length > 0 ? (
+        <div className="ai-referent-list" role="region" aria-label="Исходящие письма" tabIndex={0} aria-busy={loading}>
           {visibleLetters.map((letter) => (
             <button
               type="button"

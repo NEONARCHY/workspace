@@ -154,9 +154,12 @@ describe("standalone project hub", () => {
   it("keeps the chosen chat icon after a project creation error, then saves it on retry", async () => {
     vi.mocked(saveProjectHubProject).mockRejectedValueOnce(new Error("Сохранение не удалось")).mockResolvedValue(project);
     setup();
+    await screen.findByRole("heading", { name: project.title });
     fireEvent.click(await screen.findByRole("button", { name: /Новый проект/ }));
     const dialog = within(screen.getByRole("dialog"));
     expect(dialog.getByRole("button", { name: "Иконка: Проект" })).toHaveAttribute("aria-pressed", "true");
+    // JSDOM has no Tabster layout: model the real user's focus inside the dialog.
+    dialog.getByRole("textbox", { name: "Название проекта" }).focus();
     fireEvent.change(dialog.getByRole("textbox", { name: "Название проекта" }), { target: { value: "Иконка проекта" } });
     fireEvent.change(dialog.getByRole("textbox", { name: "Код проекта" }), { target: { value: "ICON-QA" } });
     fireEvent.click(dialog.getByRole("button", { name: "Иконка: Направление" }));
@@ -245,7 +248,7 @@ describe("standalone project hub", () => {
   it("groups requests into four approval lanes", async () => {
     setup("funding");
     const board = await screen.findByRole("region", { name: "Канбан проектных заявок" });
-    expect(within(board).getByRole("region", { name: "На согласовании" })).toHaveTextContent("Печать баннеров");
+    await waitFor(() => expect(within(board).getByRole("region", { name: "На согласовании" })).toHaveTextContent("Печать баннеров"));
     expect(within(board).getByRole("region", { name: "Согласовано" })).toHaveTextContent("Аренда зала");
   });
 
@@ -344,6 +347,7 @@ describe("standalone project hub", () => {
     setup("funding");
     fireEvent.click(await screen.findByRole("button", { name: "Новая проектная заявка" }));
     const dialog = screen.getByRole("dialog");
+    within(dialog).getByRole("textbox", { name: "Название" }).focus();
     fireEvent.change(within(dialog).getByLabelText("Направление"), { target: { value: "stream-1" } });
     fireEvent.change(within(dialog).getByLabelText("Задача или мероприятие"), { target: { value: item.id } });
     fireEvent.change(within(dialog).getByRole("textbox", { name: "Название" }), { target: { value: "Смета" } });

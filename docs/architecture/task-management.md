@@ -13,6 +13,14 @@ module access rules. Selecting a task in
 any view opens the same full card; changing a Kanban column uses the normal status
 API, so server-side access and dependency rules cannot be bypassed by the UI.
 
+The open task card uses recessed dark fills rather than visible section outlines
+in dark mode. Light section surfaces remain unchanged. The transparent dark border
+reserves the same geometry; controls, status labels and forced-colour boundaries
+remain visible. Participant avatars are 32 px (formerly 24 px), and the header assignee
+avatar is 48 px (formerly 36 px), shared by both palettes. Employee cards and avatars
+have a soft light edge or the existing satin dark edge; profile links and removal
+actions retain their previous behaviour.
+
 The project field is optional. New clients select an active project visible to the
 task author from the current project hub; the server validates its identity and
 access again when the task is saved. The task retains a nullable project ID and a
@@ -83,6 +91,20 @@ Each task card contains:
 - a direct action to its automatically managed task chat.
 
 ## Access and automatic chats
+
+### Traceable task route — 16 October 2026
+
+The task card's «Маршрут и история» opens an access-checked, paginated read-only
+timeline (`GET /api/v1/tasks/{id}/history`). It combines the existing append-only
+task ledger with persisted extension requests and decisions: creation, status,
+assignment, submission, acceptance, revision, closure/cancellation and deadline
+changes. Entries show the recorded actor/time, old/new deadlines and reasons.
+Rejected/pending proposals are not presented as applied deadlines. Linked approval
+and deadline events form one visible decision. The timeline exposes no arbitrary
+audit metadata or chat contents and does not grant task access through efficiency.
+Older tasks explicitly disclose incomplete early history; only their actual creation
+timestamp/author are projected from the task row, never a guessed original deadline.
+No schema migration or rewriting of stored history is required.
 
 - Managers, administrators and superadministrators can read and edit all tasks.
 - An employee sees a task only when they are its author, primary assignee,

@@ -1,4 +1,5 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
+import { LoadingSkeleton } from "./LoadingSkeleton";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type DragEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { createPortal } from "react-dom";
@@ -889,7 +890,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
                 </button>)}</div>
               <small>Я подготовлю форму. Проверка и окончательное создание — за вами.</small>
             </motion.div>}</AnimatePresence>
-            {!loaded && !error && <div className="assistant-loading"><ThinkingOrb state="searching" /> Загружаю историю…</div>}
+            {!loaded && !error && <LoadingSkeleton layout="rows" rows={4} label="Загружаю историю…" />}
             {messages.map((item) => <article key={item.id} className={`assistant-message is-${item.role}`}
               tabIndex={item.role === "assistant" ? 0 : undefined}
               onContextMenu={(event) => onMessageContextMenu(event, item)}

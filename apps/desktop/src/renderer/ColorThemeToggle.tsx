@@ -13,13 +13,14 @@ export function ColorThemeToggle({ userId }: { readonly userId: string }) {
   return <div className="color-theme-toggle-wrap">
     <Tooltip content={label} relationship="description"><Button className="color-theme-toggle" appearance="subtle"
       aria-label={label} icon={theme === "dark" ? <WeatherSunny20Regular /> : <DarkTheme20Regular />}
-      onClick={() => {
+      onClick={event => {
+        const bounds = event.currentTarget.getBoundingClientRect();
         const next = (target.current ?? theme) === "dark" ? "light" : "dark";
         target.current = next;
         void transitionColorTheme(() => flushSync(() => {
           target.current = undefined;
           setNotice(setPreference(next) ? "" : "Тема применена, но сохранить выбор не удалось. После перезапуска он может сброситься.");
-        }));
+        }), { x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 });
       }} /></Tooltip>
     {notice && <WorkspaceNotice tone="warning" className="color-theme-save-notice" role="status" actions={<><Button appearance="subtle" onClick={() => setNotice("")}>Закрыть</Button></>}>{notice}</WorkspaceNotice>}
   </div>;

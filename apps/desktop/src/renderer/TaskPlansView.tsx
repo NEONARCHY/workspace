@@ -1,4 +1,5 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
+import { LoadingSkeleton, SkeletonBlock } from "./LoadingSkeleton";
 import { useState } from "react";
 
 import type { TaskPlan, TaskPlanWrite, WorkspacePerson, WorkspaceTask } from "@yuksalish/contracts";
@@ -151,7 +152,11 @@ export function TaskPlansView({
       <label className="task-plan-completed-toggle"><input type="checkbox" checked={showCompleted} onChange={(event) => setShowCompleted(event.target.checked)} />Показать завершённые планы</label>
     </div>
     {statusError ? <WorkspaceNotice tone="error" className="task-plan-error" role="alert">{statusError}</WorkspaceNotice> : null}
-    {loading ? <p role="status">Загружаем планы…</p> : error ? <WorkspaceNotice tone="error" className="task-plan-error" role="alert" actions={<><Button appearance="secondary" onClick={onRetry}>Повторить</Button></>}>{error} </WorkspaceNotice> : visiblePlans.length === 0 ? <p className="task-plan-empty">{plans.length === 0 ? "Планов пока нет. Создайте первый план, затем привяжите задачи в их карточках." : "По выбранным условиям планов нет."}</p> : <div className="task-plan-grid">
+    {loading && !plans.length ? <LoadingSkeleton layout="custom" label="Загружаем планы…"><div className="task-plan-grid">{Array.from({ length: 4 }, (_, index) => <article className="task-plan-card" key={index}>
+      <div className="task-plan-card-meta"><SkeletonBlock width="100px" height="22px" /><SkeletonBlock width="80px" height="22px" /></div>
+      <h3><SkeletonBlock width="80%" height="20px" /></h3><p><SkeletonBlock width="70%" /></p><p><SkeletonBlock width="85%" /></p><SkeletonBlock width="110px" />
+      <div className="task-plan-card-actions"><SkeletonBlock width="140px" height="32px" /></div>
+    </article>)}</div></LoadingSkeleton> : error ? <WorkspaceNotice tone="error" className="task-plan-error" role="alert" actions={<><Button appearance="secondary" onClick={onRetry}>Повторить</Button></>}>{error} </WorkspaceNotice> : visiblePlans.length === 0 ? <p className="task-plan-empty">{plans.length === 0 ? "Планов пока нет. Создайте первый план, затем привяжите задачи в их карточках." : "По выбранным условиям планов нет."}</p> : <div className="task-plan-grid">
       {visiblePlans.map((plan) => <article className="task-plan-card" key={plan.id}>
         <div className="task-plan-card-meta"><span className="task-plan-kind">{kindLabels[plan.kind]}</span><span className="task-plan-status">{plan.status === "completed" ? "Завершённый" : "Активный"}</span></div>
         <h3>{plan.title}</h3>

@@ -3,7 +3,9 @@
 @media (forced-colors: none) {
   html body .app-provider .workspace-select.workspace-select:not(.workspace-priority-select) {
     --ws-select-hover-fill: #fff;
+    position: relative;
   }
+  html body .app-provider .workspace-select.workspace-select:not(.workspace-priority-select) > .fui-Dropdown__button { border-radius: inherit; }
   html[data-color-theme="dark"] body .app-provider .workspace-select.workspace-select:not(.workspace-priority-select) {
     --ws-select-hover-fill: var(--ws-button-hover, #33353f);
   }
@@ -11,7 +13,6 @@
     background-color: var(--ws-button-surface);
   }
   html[data-color-theme="dark"] body .app-provider .workspace-select.workspace-select:not(.workspace-priority-select):not([aria-disabled="true"]):not(:has(:disabled)) > .fui-Dropdown__button {
-    border-radius: inherit;
     background-color: transparent;
     background-image: linear-gradient(to top, var(--ws-select-hover-fill) 0%, var(--ws-select-hover-fill) calc(100% - 12px), transparent 100%);
     background-repeat: no-repeat;
@@ -24,7 +25,6 @@
   }
   html:not([data-color-theme="dark"]) body .app-provider .workspace-select.workspace-select:not(.workspace-priority-select):not([aria-disabled="true"]):not(:has(:disabled)):not([aria-invalid="true"]):not(:has([aria-invalid="true"])) {
     --ws-select-neutral-border: color-mix(in srgb, var(--ws-control-line) 72%, var(--ws-theme-line, white));
-    position: relative;
     border-color: var(--ws-select-neutral-border);
   }
   html:not([data-color-theme="dark"]) body .app-provider .workspace-select.workspace-select:not(.workspace-priority-select):not([aria-disabled="true"]):not(:has(:disabled)):not([aria-invalid="true"]):not(:has([aria-invalid="true"]))::before {

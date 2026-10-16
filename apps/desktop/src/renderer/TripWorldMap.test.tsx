@@ -34,6 +34,7 @@ describe("trip world map", () => {
       people={people} onOpenRequest={onOpenRequest} onClose={vi.fn()} />
     </FluentProvider>);
     const map = await screen.findByRole("group", { name: "Карта мира с отметками утверждённых поездок" });
+    expect(screen.getByRole("button", { name: "К поездкам" })).toHaveFocus();
     expect(map.querySelectorAll("[data-trip-pin]")).toHaveLength(1);
     const locationList = screen.getByLabelText("Поездки на карте");
     const pin = within(map).getByRole("button", { name: /Ташкент/ });
@@ -44,6 +45,11 @@ describe("trip world map", () => {
     expect(within(locationList).getByText("Нигора Шокирова")).toBeInTheDocument();
     fireEvent.click(within(locationList).getByRole("button", { name: "Открыть карточку" }));
     expect(onOpenRequest).toHaveBeenCalledWith("trip-1");
+    const clearSelection = screen.getByRole("button", { name: "Сбросить выбор места" });
+    expect(clearSelection).toHaveClass("trip-map-clear-selection");
+    fireEvent.click(clearSelection);
+    expect(screen.queryByRole("button", { name: "Сбросить выбор места" })).not.toBeInTheDocument();
+    expect(within(locationList).getByRole("button", { name: /Ташкент/ })).toBeInTheDocument();
     expect(screen.getByText("Поездки без точной отметки")).toBeInTheDocument();
     expect(screen.queryByText("TR-003")).not.toBeInTheDocument();
   });

@@ -1,12 +1,9 @@
 /* The hub has no page backing: only the actual rounded cards are surfaces. */
 .home-ready-content { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-.personal-home[data-loading="true"] { position: relative; overflow-y: hidden; }
-.personal-home[data-loading="true"] .home-ready-content { visibility: hidden; }
-.home-initial-loader { position: absolute; inset: 180px 16px auto; min-height: 220px; display: grid; place-items: center; }
-.personal-home[data-loading="false"] .home-ready-content { animation: home-content-ready 240ms ease-out both; }
+.home-ready-content { animation: home-content-ready 240ms ease-out both; }
 @keyframes home-content-ready { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce), (forced-colors: active) {
-  .personal-home[data-loading="false"] .home-ready-content { animation: none; }
+  .home-ready-content { animation: none; }
 }
 .workspace-view.personal-home {
   display: flex; flex-direction: column; gap: 16px; min-width: 0;
@@ -20,7 +17,7 @@
 .home-overview { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
 .home-overview article {
   display: flex; align-items: center; gap: 12px; min-width: 0; min-height: 78px;
-  padding: 16px 20px; border: 1px solid var(--ws-line); border-radius: 22px; background: var(--ws-surface, var(--ws-theme-surface, white));
+  padding: 16px 20px; border: 1px solid var(--ws-line); border-radius: 16px; background: var(--ws-surface, var(--ws-theme-surface, white));
 }
 .home-overview strong { font-size: 28px; line-height: 1; font-weight: 600; color: var(--ws-ink, var(--ws-theme-ink, #293a55)); }
 .home-overview span { font-size: 12px; line-height: 1.5; color: var(--ws-muted); overflow-wrap: anywhere; }
@@ -28,7 +25,7 @@
 .home-panel-slot { display: flex; min-width: 0; }
 .home-panel {
   display: flex; flex: 1; flex-direction: column; min-width: 0; gap: 16px;
-  border-radius: 22px; background: var(--ws-surface, var(--ws-theme-surface, white)); padding: 20px; border: 1px solid var(--ws-line);
+  border-radius: 18px; background: var(--ws-surface, var(--ws-theme-surface, white)); padding: 20px; border: 1px solid var(--ws-line);
 }
 .home-panel-heading { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .home-panel-heading > div { flex: 1; min-width: 0; }
@@ -97,9 +94,6 @@
 .personal-home .eff-history-chart { min-width: 0; }
 .personal-home .eff-history-chart svg { display: block; width: 100%; height: auto; }
 .personal-home .eff-history-text { max-height: 144px; overflow-y: auto; }
-.home-skeleton { display: grid; gap: 12px; min-height: 120px; align-content: start; }
-.home-skeleton i { display: block; height: 16px; border-radius: 8px; background: var(--ws-muted-surface); }
-.home-skeleton i:last-child { width: 65%; }
 .personal-home :is(button, summary, .employee-profile-link):focus-visible { outline: 2px solid var(--ws-link); outline-offset: 3px; }
 @container personal-home (max-width: 900px) {
   .home-overview { grid-template-columns: repeat(2, minmax(0, 1fr)); }

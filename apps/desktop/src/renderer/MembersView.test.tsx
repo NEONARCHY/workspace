@@ -1,11 +1,27 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import { FluentProvider } from "@fluentui/react-components";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { MembersView } from "./MembersView";
 import { workspaceTheme } from "./workspace-theme";
 
 describe("MembersView", () => {
+  afterEach(cleanup);
+  it("keeps the real ranking, filters and six-column table mounted while records load", () => {
+    const view = render(<FluentProvider theme={workspaceTheme}><MembersView loading onRefresh={vi.fn()} /></FluentProvider>);
+    const table = screen.getByRole("table", { name: "Члены организации" });
+    const header = screen.getByRole("heading", { name: "Работа с членами" });
+    expect(within(table).getAllByRole("columnheader")).toHaveLength(6);
+    expect(table.querySelectorAll("tbody tr:first-child td")).toHaveLength(6);
+    expect(screen.getByLabelText("Поиск членов")).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Рейтинг регионов" })).toBeVisible();
+    expect(screen.queryByText("За выбранный период новых участников пока нет.")).toBeNull();
+    view.rerender(<FluentProvider theme={workspaceTheme}><MembersView loading={false} onRefresh={vi.fn()} registry={{ configured: true, members: [], regions: [], spheres: [] }} /></FluentProvider>);
+    expect(screen.getByRole("table", { name: "Члены организации" })).toBe(table);
+    expect(screen.getByRole("heading", { name: "Работа с членами" })).toBe(header);
+    expect(table.querySelector(".ws-skeleton-table-body")).toBeNull();
+    expect(screen.getByText("Члены не найдены")).toBeVisible();
+  });
   it("shows real registry records and reference filters", async () => {
     render(<FluentProvider theme={workspaceTheme}><MembersView loading={false} onRefresh={vi.fn()} registry={{
       configured: true,

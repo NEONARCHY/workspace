@@ -19,6 +19,7 @@ interface AttachmentChipsProps {
   readonly onDelete?: (attachment: WorkspaceAttachment) => void;
   readonly deleting?: boolean;
   readonly presentation?: "media";
+  readonly documentMetadata?: ReactNode;
 }
 
 function ImageAttachmentCard({ attachment, onLoad, onOpen, presentation }: {
@@ -254,7 +255,7 @@ export function InlineAudioPlayer({ url, blob, fileName, onError }: { readonly u
   </div>;
 }
 
-export function AttachmentChips({ attachments, onDownload, onLoad, canDelete, onDelete, deleting, presentation }: AttachmentChipsProps) {
+export function AttachmentChips({ attachments, onDownload, onLoad, canDelete, onDelete, deleting, presentation, documentMetadata }: AttachmentChipsProps) {
   const deleteFocusTarget = useRestoreFocusTarget();
   if (attachments.length === 0) return null;
   const albums = new Map<number, readonly WorkspaceAttachment[]>(), skipped = new Set<number>();
@@ -285,7 +286,9 @@ export function AttachmentChips({ attachments, onDownload, onLoad, canDelete, on
           onClick={() => void onDownload(attachment)}
         >
           <span className="attachment-document-icon" aria-hidden="true"><Document24Filled /></span>
-          <span className="attachment-document-copy"><span>{attachment.fileName}</span><small>{fileSize(attachment.byteSize)}</small></span>
+          <span className="attachment-document-copy"><span>{attachment.fileName}</span><small className={documentMetadata && index === attachments.length - 1 ? "attachment-document-details" : undefined}>
+            <span>{fileSize(attachment.byteSize)}</span>{index === attachments.length - 1 ? documentMetadata : null}
+          </small></span>
         </button>
         );
         if (!onDelete) return content;

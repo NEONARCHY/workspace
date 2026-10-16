@@ -124,6 +124,7 @@ from .workspace_schemas import (
     TaskDependencyRequest,
     TaskDependencyResponse,
     TaskEfficiencyExclusionRequest,
+    TaskHistoryResponse,
     TaskParticipantRequest,
     TaskParticipantResponse,
     TaskProjectOption,
@@ -2725,6 +2726,9 @@ async def load_workspace(
     read_ids = await messenger_service.read_message_ids(
         connection, current_user, [row["id"] for row in message_rows]
     )
+    quote_map = await messenger_service.reply_quote_map(
+        connection, current_user, list(message_rows)
+    )
     message_responses = [
         messenger_service.message_response(
             row,
@@ -2735,6 +2739,7 @@ async def load_workspace(
             pin=pin_map.get(row["id"]),
             forwarded=forward_map.get(row["id"]),
             zoom_invitation=invitations.get(row["id"]),
+            reply_quote=quote_map.get(row["id"]),
             read_by_recipient=row["id"] in read_ids,
         )
         for row in message_rows
@@ -3181,6 +3186,7 @@ async def search_messages(
         connection, current_user, [row["id"] for row in rows]
     )
     forward_map = await messenger_service.forward_detail_map(connection, current_user, list(rows))
+    quote_map = await messenger_service.reply_quote_map(connection, current_user, list(rows))
     invitations = await messenger_service.invitation_detail_map(
         connection, current_user, list(rows)
     )
@@ -3192,6 +3198,7 @@ async def search_messages(
             row,
             current_user,
             can_send=messenger_service.member_permissions(row).send_messages,
+            reply_quote=quote_map.get(row["id"]),
             can_pin=messenger_service.can_manage_messages(row, row),
             reactions=reaction_map.get(row["id"]),
             pin=pin_map.get(row["id"]),
@@ -4695,6 +4702,33 @@ async def _resume_overdue_task_after_extension(
         due_at=new_due_at,
         old_value={"status": "overdue"}, new_value={"status": "in_progress"},
     )
+
+
+async def load_task_history(
+    connection: AsyncConnection, current_user: AuthenticatedUser, task_id: UUID,
+    *, offset: int = 0,
+) -> TaskHistoryResponse:
+    from .task_history import task_history_page
+
+    row = await _task_access_row(connection, current_user, task_id)
+    events = (await connection.execute(select(task_efficiency_events).where(
+        task_efficiency_events.c.task_id == task_id,
+    ))).mappings().all()
+    requests = (await connection.execute(select(task_deadline_requests).where(
+        task_deadline_requests.c.task_id == task_id,
+    ))).mappings().all()
+    actor_ids = {event["actor_user_id"] for event in events if event["actor_user_id"]}
+    actor_ids.add(row["author_user_id"])
+    for request in requests:
+        actor_ids.add(request["requester_user_id"])
+        if request["decided_by_user_id"]:
+            actor_ids.add(request["decided_by_user_id"])
+    people = (await connection.execute(select(users.c.id, users.c.full_name).where(
+        users.c.id.in_(actor_ids),
+    ))).mappings().all()
+    return task_history_page(row, events, requests, {
+        person["id"]: person["full_name"] for person in people
+    }, offset=offset)
 
 
 async def extend_task_deadline(

@@ -1,4 +1,5 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
+import { LoadingSkeleton } from "./LoadingSkeleton";
 import { useState, type FormEvent } from "react";
 
 import type {
@@ -213,7 +214,7 @@ export function CalendarEventComposer({
 
             {canLinkProjects ? <RecordSection title="Связь с проектом"
               description="При необходимости укажите проект, направление и работу. Это не создаёт новую проектную задачу.">
-              {projectTargetsLoading ? <p role="status">Загружаем проекты…</p> : null}
+              {projectTargetsLoading ? <LoadingSkeleton layout="form" rows={1} label="Загружаем проекты…" /> : null}
               {projectTargetsError ? <WorkspaceNotice tone="error" role="alert" actions={<><Button type="button" onClick={onRetryProjectTargets}>Повторить</Button></>}>{projectTargetsError} </WorkspaceNotice> : null}
               <CalendarProjectLinkFields value={draft} targets={projectTargets} onChange={onDraftChange} />
             </RecordSection> : null}

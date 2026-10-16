@@ -350,6 +350,8 @@ messages = sa.Table(
     sa.Column("revision", sa.Integer()),
     sa.Column("mention_user_ids", postgresql.JSONB()),
     sa.Column("body", sa.Text()),
+    sa.Column("entities", postgresql.JSONB(), server_default="[]"),
+    sa.Column("reply_quote", postgresql.JSONB()),
     sa.Column("forwarded", postgresql.JSONB()),
     sa.Column("zoom_meeting_id", uuid_type),
     sa.Column("created_at", sa.DateTime(timezone=True)),
@@ -384,6 +386,14 @@ pinned_messages = sa.Table(
     sa.Column("chat_id", uuid_type),
     sa.Column("pinned_by_user_id", uuid_type),
     sa.Column("pinned_at", sa.DateTime(timezone=True)),
+    sa.Column("protected", sa.Boolean(), server_default=sa.false()),
+)
+
+pin_dismissals = sa.Table(
+    "messenger_pin_dismissals", metadata,
+    sa.Column("message_id", uuid_type, primary_key=True),
+    sa.Column("user_id", uuid_type, primary_key=True),
+    sa.Column("pinned_at", sa.DateTime(timezone=True), nullable=False),
 )
 
 attachments = sa.Table(
@@ -413,6 +423,7 @@ message_versions = sa.Table(
     sa.Column("id", sa.BigInteger(), primary_key=True),
     sa.Column("message_id", uuid_type),
     sa.Column("body", sa.Text()),
+    sa.Column("entities", postgresql.JSONB(), server_default="[]"),
     sa.Column("mention_user_ids", postgresql.JSONB()),
     sa.Column("actor_user_id", uuid_type),
     sa.Column("change_reason", sa.Text()),

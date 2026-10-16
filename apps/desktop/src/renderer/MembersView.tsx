@@ -1,9 +1,10 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
+import { LoadingSkeleton, SkeletonBlock, SkeletonTableRows } from "./LoadingSkeleton";
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { MemberDirectoryItem, MembersRegistry } from "@yuksalish/contracts";
-import { Avatar, Badge, Button, Spinner } from "@fluentui/react-components";
+import { Avatar, Badge, Button } from "@fluentui/react-components";
 import { Input } from "./WorkspaceInput";
 import { ArrowClockwise20Regular, Search20Regular } from "@fluentui/react-icons";
 
@@ -29,7 +30,8 @@ function recentMembersStart(generatedAt?: string | null) {
   return reference.toISOString().slice(0, 10);
 }
 
-function MembersRecords({ members, filterKey, onOpen }: {
+function MembersRecords({ members, filterKey, onOpen, loading = false }: {
+  readonly loading?: boolean;
   readonly members: readonly MemberDirectoryItem[];
   readonly filterKey: string;
   readonly onOpen: (member: MemberDirectoryItem) => void;
@@ -50,24 +52,24 @@ function MembersRecords({ members, filterKey, onOpen }: {
   const pageMembers = sorted.slice(paging.start, paging.start + paging.size);
   const changeSort = (key: string) => setSort({ key, descending: sort.key === key && !sort.descending });
   return <div className="record-table-frame members-records">
-    <div className="record-table-scroll" role="region" aria-label="Реестр членов" tabIndex={0}>
+    <div className="record-table-scroll" role="region" aria-label="Реестр членов" tabIndex={0} aria-busy={loading}>
       <table role="table" className="record-table members-record-table" aria-label="Члены организации">
         <thead role="rowgroup"><tr role="row">
           {[['name', 'Член'], ['region', 'Регион'], ['sphere', 'Сфера'], ['gender', 'Пол'], ['createdAt', 'Регистрация'], ['status', 'Статус']].map(([column, label]) =>
             <SortHeading key={column} column={column!} sort={sort} onSort={changeSort}>{label}</SortHeading>)}
         </tr></thead>
-        <tbody role="rowgroup">{pageMembers.map((member) => <tr role="row" key={member.id} className="record-row member-row">
+        {loading ? <SkeletonTableRows columns={6} rows={7} rowClassName="record-row member-row" personColumn={0} label="Загружаем реестр членов…" /> : <tbody role="rowgroup">{pageMembers.map((member) => <tr role="row" key={member.id} className="record-row member-row">
           <td role="cell" className="record-title"><span className="record-person"><Avatar name={displayName(member)} size={36} color="colorful" aria-hidden="true" /><span><button type="button" className="record-open" onClick={() => onOpen(member)}><strong>{displayName(member)}</strong></button><small>{member.username ? `@${member.username}` : `ID ${member.id}`}</small></span></span></td>
           <td role="cell"><span className="record-mobile-label">Регион</span>{member.regionNameRu ?? "Не указан"}</td>
           <td role="cell"><span className="record-mobile-label">Сфера</span>{member.sphereNameRu ?? "Не указана"}</td>
           <td role="cell"><span className="record-mobile-label">Пол</span>{genderLabel[member.gender ?? ""] ?? "Не указан"}</td>
           <td role="cell" className="record-deadline"><span className="record-mobile-label">Регистрация</span>{dateText(member.createdAt)}</td>
           <td role="cell"><span className="record-mobile-label">Статус</span><Badge appearance="tint" color={member.status === "active" ? "success" : "subtle"}>{member.status === "active" ? "Активен" : member.status}</Badge></td>
-        </tr>)}</tbody>
+        </tr>)}</tbody>}
       </table>
-      {!members.length ? <div className="record-table-empty"><strong>Члены не найдены</strong><span>Измените условия поиска или фильтры.</span></div> : null}
+      {!loading && !members.length ? <div className="record-table-empty"><strong>Члены не найдены</strong><span>Измените условия поиска или фильтры.</span></div> : null}
     </div>
-    <RecordTablePager total={sorted.length} paging={paging} label="члены" />
+    {!loading && <RecordTablePager total={sorted.length} paging={paging} label="члены" />}
   </div>;
 }
 
@@ -118,30 +120,29 @@ export function MembersView({ registry, loading, error, onRefresh }: MembersView
   const filtersApplied = Boolean(query || regionId !== "all" || sphereId !== "all" || gender !== "all" || createdFrom || createdTo);
   const clearFilters = () => { setQuery(""); setRegionId("all"); setSphereId("all"); setGender("all"); setCreatedFrom(""); setCreatedTo(""); };
 
-  if (loading && !registry) return <section className="workspace-view members-view members-state"><Spinner label="Загружаем реестр членов…" /></section>;
   if (error && !registry) return <section className="workspace-view members-view members-state"><WorkspaceSectionHeader motif="members"><div><h1>Работа с членами</h1><p>Реестр и региональный состав</p></div></WorkspaceSectionHeader><WorkspaceNotice tone="error" role="alert">{error}</WorkspaceNotice><Button appearance="primary" icon={<ArrowClockwise20Regular />} onClick={onRefresh}>Повторить</Button></section>;
-  if (!registry?.configured) return <section className="workspace-view members-view members-state"><WorkspaceSectionHeader motif="members"><div><h1>Работа с членами</h1><p>Реестр и региональный состав</p></div></WorkspaceSectionHeader><p>Интеграция с реестром ещё не настроена. Администратор должен подключить защищённый read-only API на хостинге.</p></section>;
+  if (registry && !registry.configured) return <section className="workspace-view members-view members-state"><WorkspaceSectionHeader motif="members"><div><h1>Работа с членами</h1><p>Реестр и региональный состав</p></div></WorkspaceSectionHeader><p>Интеграция с реестром ещё не настроена. Администратор должен подключить защищённый read-only API на хостинге.</p></section>;
 
   return <section className="workspace-view members-view" aria-label="Работа с членами">
-    <WorkspaceSectionHeader motif="members" className="section-toolbar members-toolbar"><div><h1>Работа с членами</h1><p>{registry.members.length.toLocaleString("ru-RU")} членов в реестре · данные обновляются безопасно с хостинга</p></div><div className="toolbar-actions"><Button icon={<ArrowClockwise20Regular />} disabled={loading} onClick={onRefresh}>{loading ? "Обновляем…" : "Обновить"}</Button></div></WorkspaceSectionHeader>
-    <div className="members-summary" aria-label="Сводка текущей выборки"><div><strong>{visible.length.toLocaleString("ru-RU")}</strong><span>в текущей выборке</span></div><div><strong>{new Set(visible.map((member) => member.regionId).filter(Boolean)).size}</strong><span>регионов</span></div><div><strong>{visible.filter((member) => member.status === "active").length.toLocaleString("ru-RU")}</strong><span>активных</span></div></div>
+    <WorkspaceSectionHeader motif="members" className="section-toolbar members-toolbar"><div><h1>Работа с членами</h1>{registry ? <p>{registry.members.length.toLocaleString("ru-RU")} членов в реестре · данные обновляются безопасно с хостинга</p> : <LoadingSkeleton layout="lines" rows={1} />}</div><div className="toolbar-actions"><Button icon={<ArrowClockwise20Regular />} disabled={loading} onClick={onRefresh}>{loading ? "Обновляем…" : "Обновить"}</Button></div></WorkspaceSectionHeader>
+    <div className="members-summary" aria-label="Сводка текущей выборки"><div><strong>{registry ? visible.length.toLocaleString("ru-RU") : <SkeletonBlock width="48px" height="28px" />}</strong><span>в текущей выборке</span></div><div><strong>{registry ? new Set(visible.map((member) => member.regionId).filter(Boolean)).size : <SkeletonBlock width="48px" height="28px" />}</strong><span>регионов</span></div><div><strong>{registry ? visible.filter((member) => member.status === "active").length.toLocaleString("ru-RU") : <SkeletonBlock width="48px" height="28px" />}</strong><span>активных</span></div></div>
     <section className="members-regional-ranking" aria-labelledby="members-regional-ranking-title">
-      <div className="members-ranking-heading"><div><h2 id="members-regional-ranking-title">Рейтинг регионов</h2><p>Новые члены за последние 30 дней по текущим условиям отбора.</p></div><strong>{visible.length.toLocaleString("ru-RU")}</strong></div>
-      {regionalRanking.length ? <ol className="members-ranking-list">{regionalRanking.map((item, index) => <li key={item.region}>
+      <div className="members-ranking-heading"><div><h2 id="members-regional-ranking-title">Рейтинг регионов</h2><p>Новые члены за последние 30 дней по текущим условиям отбора.</p></div><strong>{registry ? visible.length.toLocaleString("ru-RU") : <SkeletonBlock width="48px" height="28px" />}</strong></div>
+      {!registry ? <LoadingSkeleton layout="custom" label="Загрузка рейтинга регионов"><ol className="members-ranking-list">{Array.from({ length: 3 }, (_, index) => <li key={index}><div className="members-ranking-label"><SkeletonBlock width="28px" height="28px" /><SkeletonBlock width="60%" /><SkeletonBlock width="32px" /></div><div className="members-ranking-track"><SkeletonBlock height="100%" /></div></li>)}</ol></LoadingSkeleton> : regionalRanking.length ? <ol className="members-ranking-list">{regionalRanking.map((item, index) => <li key={item.region}>
         <div className="members-ranking-label"><span className="members-ranking-place">{index + 1}</span><span>{item.region}</span><strong>{item.count.toLocaleString("ru-RU")}</strong></div>
         <div className="members-ranking-track" aria-hidden="true"><span style={{ width: `${(item.count / regionalRanking[0]!.count) * 100}%` }} /></div>
       </li>)}</ol> : <p className="members-ranking-empty">За выбранный период новых участников пока нет.</p>}
     </section>
     <div className="record-list-controls members-controls">
       <Input className="employee-search" contentBefore={<Search20Regular />} aria-label="Поиск членов" placeholder="Имя, логин, телефон или Telegram ID" value={query} onChange={(_, data) => setQuery(data.value)} />
-      <label>Регион<Select aria-label="Фильтр по региону" value={regionId} onChange={(event) => setRegionId(event.target.value)}><option value="all">Все регионы</option>{registry.regions.map((item) => <option key={item.id} value={item.id}>{item.nameRu}</option>)}</Select></label>
-      <label>Сфера<Select aria-label="Фильтр по сфере" value={sphereId} onChange={(event) => setSphereId(event.target.value)}><option value="all">Все сферы</option>{registry.spheres.map((item) => <option key={item.id} value={item.id}>{item.nameRu}</option>)}</Select></label>
+      <label>Регион<Select aria-label="Фильтр по региону" value={regionId} onChange={(event) => setRegionId(event.target.value)}><option value="all">Все регионы</option>{registry?.regions.map((item) => <option key={item.id} value={item.id}>{item.nameRu}</option>)}</Select></label>
+      <label>Сфера<Select aria-label="Фильтр по сфере" value={sphereId} onChange={(event) => setSphereId(event.target.value)}><option value="all">Все сферы</option>{registry?.spheres.map((item) => <option key={item.id} value={item.id}>{item.nameRu}</option>)}</Select></label>
       <label>Пол<Select aria-label="Фильтр по полу" value={gender} onChange={(event) => setGender(event.target.value)}><option value="all">Все</option><option value="male">Мужской</option><option value="female">Женский</option></Select></label>
       <label>С даты<WorkspaceDateTimePicker mode="date" ariaLabel="Дата регистрации с" value={createdFrom} onChange={setCreatedFrom} /></label>
       <label>По дату<WorkspaceDateTimePicker mode="date" ariaLabel="Дата регистрации по" value={createdTo} min={createdFrom} onChange={setCreatedTo} /></label>
       {filtersApplied ? <Button appearance="subtle" onClick={clearFilters}>Сбросить фильтры</Button> : null}
     </div>
-    <div className="members-content"><MembersRecords members={visible} filterKey={`${query}:${regionId}:${sphereId}:${gender}:${createdFrom}:${createdTo}`} onOpen={setSelected} />
+    <div className="members-content"><MembersRecords loading={!registry} members={visible} filterKey={`${query}:${regionId}:${sphereId}:${gender}:${createdFrom}:${createdTo}`} onOpen={setSelected} />
       {selected ? <aside className="member-inspector" aria-label={`Карточка: ${displayName(selected)}`}><div><Avatar name={displayName(selected)} size={48} color="colorful" /><span><h2>{displayName(selected)}</h2><p>{selected.username ? `@${selected.username}` : `ID ${selected.id}`}</p></span></div><dl><dt>Регион</dt><dd>{selected.regionNameRu ?? "Не указан"}</dd><dt>Сфера</dt><dd>{selected.sphereNameRu ?? "Не указана"}</dd><dt>Пол</dt><dd>{genderLabel[selected.gender ?? ""] ?? "Не указан"}</dd><dt>Дата регистрации</dt><dd>{dateText(selected.createdAt)}</dd><dt>Телефон</dt><dd>{selected.phone ?? "Не указан"}</dd><dt>Статус</dt><dd>{selected.status === "active" ? "Активен" : selected.status}</dd></dl><Button appearance="subtle" onClick={() => setSelected(undefined)}>Закрыть карточку</Button></aside> : null}
     </div>
   </section>;

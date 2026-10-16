@@ -46,11 +46,13 @@ function view(userId = "aziza", canView: (key: NavigationKey) => boolean = all, 
   </EmployeeProfileProvider></FluentProvider>;
 }
 describe("Personal Home", () => {
-  it("releases the page after three seconds even when one integration hangs", async () => {
+  it("keeps the page usable immediately even when one integration hangs", async () => {
     vi.useFakeTimers();
     vi.mocked(loadEdoIncomingLetters).mockImplementationOnce(() => new Promise(() => {}));
     render(view("aziza", onlyEdo));
-    expect(screen.getByRole("status")).toHaveTextContent("Собираем ваше рабочее пространство");
+    expect(screen.getByRole("region", { name: "Мои письма" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Обновить" })).toBeEnabled();
+    expect(document.querySelector("[inert], .home-initial-loader")).toBeNull();
     await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
     expect(screen.queryByText("Собираем ваше рабочее пространство…")).not.toBeInTheDocument();
     expect(within(screen.getByRole("region", { name: "Мои письма" })).getByRole("status")).toHaveAccessibleName("Загрузка данных");
@@ -78,8 +80,9 @@ describe("Personal Home", () => {
     let finish: ((value: EdoIncomingPage) => void) | undefined;
     vi.mocked(loadEdoIncomingLetters).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
     render(view("aziza", onlyEdo));
-    expect(screen.getByRole("status")).toHaveTextContent("Собираем ваше рабочее пространство");
-    expect(screen.queryByRole("region", { name: "Мои письма" })).not.toBeInTheDocument();
+    const pendingPanel = within(screen.getByRole("region", { name: "Мои письма" }));
+    expect(pendingPanel.getByRole("status", { name: "Загрузка данных" })).toBeInTheDocument();
+    expect(pendingPanel.queryByText("В последних доступных письмах нет назначенных вам.")).toBeNull();
     await waitFor(() => expect(loadEdoIncomingLetters).toHaveBeenCalled());
     await act(async () => finish?.({ ...edoPage(), data: [], meta: { page: 1, limit: 20, total: 0 } }));
     const panel = within(await screen.findByRole("region", { name: "Мои письма" }));

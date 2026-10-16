@@ -56,11 +56,14 @@ describe("Trip approvals interaction", async () => {
     expect(toggle).toHaveAttribute("aria-pressed", "false");
     fireEvent.click(toggle);
     expect(await screen.findByTestId("trip-map")).toHaveTextContent("Доступно поездок: 1");
-    expect(toggle).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByRole("heading", { name: "Согласование поездок" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Новая командировка" })).not.toBeInTheDocument();
+    expect(screen.getByTestId("trip-map").closest(".trips-view")).toHaveClass("trip-map-mode");
     fireEvent.click(screen.getByRole("button", { name: "К поездкам" }));
     expect(screen.queryByTestId("trip-map")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Интерактивная карта поездок" })).toHaveAttribute("aria-pressed", "false");
-    expect(toggle).toHaveFocus();
+    expect(screen.getByRole("heading", { name: "Согласование поездок" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Интерактивная карта поездок" })).toHaveFocus();
   });
 
   it("confirms soft deletion of an editable request before calling the API", async () => {

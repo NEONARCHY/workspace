@@ -1,8 +1,11 @@
-.app-provider .file-viewer-surface { width: min(1180px, calc(100vw - 40px)); max-width: none; height: min(880px, calc(100dvh - 40px)); padding: 22px; border-radius: 22px; background: var(--ws-surface, var(--ws-theme-surface, white)); }
+.app-provider .file-viewer-surface { width: min(1440px, calc(100vw - 32px)); max-width: none; height: calc(100dvh - 32px); max-height: calc(100dvh - 32px); padding: 16px; border-radius: 22px; background: var(--ws-surface, var(--ws-theme-surface, white)); }
 .file-viewer-surface .fui-DialogBody { display: flex; flex-direction: column; gap: 12px; height: 100%; min-height: 0; }
 .file-viewer-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex: none; }
 .file-viewer-header .fui-DialogTitle { min-width: 0; flex: 1; }
-.file-viewer-title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 20px; }
+.file-viewer-heading { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.file-viewer-title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 17px; line-height: 1.35; }
+.file-viewer-file-meta { color: var(--ws-muted); font-size: 12px; }
+.file-viewer-header .file-viewer-close { flex: none; width: 36px; min-width: 36px; height: 36px; padding: 0; }
 .file-viewer-toolbar, .file-viewer-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex: none; color: var(--ws-muted); font-size: 12px; }
 .file-viewer-toolbar { padding: 8px 12px; background: var(--ws-muted-surface); border-radius: 12px; }
 .file-viewer-tools, .file-viewer-footer > div { display: flex; align-items: center; gap: 4px; }
@@ -28,14 +31,27 @@ body .app-provider .file-viewer-surface .file-viewer-content { flex: 1; min-heig
 .file-viewer-grid thead th { position: sticky; top: 0; z-index: 2; }
 .file-viewer-grid thead th:first-child { min-width: 44px; width: 44px; left: 0; z-index: 3; }
 .file-viewer-grid tbody th { position: sticky; min-width: 44px; width: 44px; left: 0; z-index: 1; }
-.file-viewer-footer { min-height: 32px; font-variant-numeric: tabular-nums; }
-body .app-provider .file-viewer-surface .file-viewer-pdf { overflow: hidden; display: flex; flex-direction: column; }
-.file-viewer-pdf-reader { display: flex; flex-direction: column; min-height: 0; flex: 1; gap: 12px; }
-.file-viewer-pdf-tools { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; justify-content: center; flex: none; }
-.file-viewer-pdf-tools .fui-Input { width: 80px; }
-.file-viewer-pdf-page { flex: 1; min-height: 0; overflow: auto; padding: 16px; scrollbar-gutter: stable; position: relative; }
-.file-viewer-pdf-page canvas { display: block; margin-inline: auto; background: var(--ws-theme-surface, white); }
-.file-viewer-pdf-loading { position: sticky; top: 12px; z-index: 1; padding: 12px; background: var(--ws-surface); border-radius: 12px; }
+.file-viewer-footer { min-height: 20px; font-variant-numeric: tabular-nums; font-size: 11px; }
+body .app-provider .file-viewer-surface .file-viewer-pdf { overflow: hidden; display: flex; flex-direction: column; padding: 0; }
+.file-viewer-pdf-reader { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.file-viewer-pdf-tools { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; flex: none; padding: 8px 12px; border-bottom: 1px solid var(--ws-line); background: var(--ws-surface); }
+.file-viewer-pdf-pagination, .file-viewer-pdf-zoom { display: flex; align-items: center; gap: 4px; }
+.file-viewer-pdf-pagination { gap: 8px; font-size: 12px; color: var(--ws-muted); white-space: nowrap; }
+.file-viewer-pdf-tools .fui-Input { width: 62px; }
+.file-viewer-pdf-scale { min-width: 45px; text-align: center; font-size: 12px; font-variant-numeric: tabular-nums; }
+.file-viewer-pdf-tools button[aria-pressed="true"] { color: var(--ws-link); background: var(--ws-selected); }
+.file-viewer-pdf-page { flex: 1; min-height: 0; overflow: auto; padding: 12px; scrollbar-gutter: stable; position: relative; }
+.file-viewer-pdf-page:focus-visible { outline: 2px solid var(--ws-link); outline-offset: -3px; }
+.file-viewer-pdf-sheet { margin: 0 auto 16px; max-width: none; }
+.file-viewer-pdf-sheet:last-child { margin-bottom: 0; }
+.file-viewer-pdf-paper { position: relative; overflow: hidden; background: white; box-shadow: 0 2px 12px rgb(0 0 0 / 12%); }
+.file-viewer-pdf-paper canvas { display: block; width: 100%; height: 100%; background: white; }
+.file-viewer-pdf-page-placeholder, .file-viewer-pdf-page-error { position: absolute; inset: 0; }
+.file-viewer-pdf-page-error { display: flex; flex-direction: column; gap: 12px; align-items: center; justify-content: center; padding: 16px; color: var(--ws-theme-ink-danger); background: var(--ws-surface); }
+.file-viewer-pdf-page-number { display: block; margin-top: 4px; text-align: center; line-height: 16px; font-size: 11px; color: var(--ws-muted); font-variant-numeric: tabular-nums; }
+.file-viewer-pdf-initial { width: min(100%, 400px); height: 100%; margin-inline: auto; }
 .file-viewer-pdf-text { padding: 20px; margin-top: 16px; background: var(--ws-theme-surface, white); border-radius: 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
 @media (max-width: 640px) { .app-provider .file-viewer-surface { width: calc(100vw - 16px); height: calc(100dvh - 16px); padding: 14px; } .file-viewer-toolbar, .file-viewer-footer { flex-wrap: wrap; } body .app-provider .file-viewer-surface .file-viewer-content { padding: 12px; } }
+@media (max-width: 640px) { .file-viewer-header { gap: 8px; } .file-viewer-pdf-tools { gap: 6px; padding: 6px; } .file-viewer-pdf-zoom { flex-wrap: wrap; } body .app-provider .file-viewer-surface .file-viewer-pdf { padding: 0; } }
+@media (any-pointer: coarse) { .file-viewer-header .file-viewer-close { width: 48px; min-width: 48px; height: 48px; } .file-viewer-pdf-tools .fui-Button { min-height: 44px; } }
 @media (forced-colors: active) { body .app-provider .file-viewer-surface .file-viewer-content, .file-viewer-document, .file-viewer-grid { background: Canvas; color: CanvasText; } }

@@ -1,4 +1,5 @@
 import { lazy } from "react";
+export { PersonalHomeView } from "./PersonalHomeView";
 import type { NavigationKey } from "@yuksalish/contracts";
 import { isProfilePreloadSession, loadPreparedProfile, loadPreparedProfileEfficiency } from "./profile-preload";
 
@@ -6,7 +7,6 @@ import { isProfilePreloadSession, loadPreparedProfile, loadPreparedProfileEffici
    reused by React.lazy and the post-render idle warmer, so a click during
    warm-up never downloads a chunk twice. */
 const tasks = () => import("./TasksView");
-const home = () => import("./PersonalHomeView");
 const team = () => import("./TeamDashboardView");
 const approvals = () => import("./ApprovalsView");
 const referent = () => import("./AIReferentView");
@@ -29,7 +29,6 @@ const profile = () => import("./EmployeeProfileDialog");
 const support = () => import("./SupportDialog");
 
 export const TasksView = lazy(() => tasks().then((module) => ({ default: module.TasksView })));
-export const PersonalHomeView = lazy(() => home().then((module) => ({ default: module.PersonalHomeView })));
 export const TeamDashboardView = lazy(() => team().then((module) => ({ default: module.TeamDashboardView })));
 export const ApprovalsView = lazy(() => approvals().then((module) => ({ default: module.ApprovalsView })));
 export const AIReferentView = lazy(() => referent().then((module) => ({ default: module.AIReferentView })));
@@ -52,7 +51,6 @@ export const EmployeeProfileDialog = lazy(() => profile().then((module) => ({ de
 export const SupportDialog = lazy(() => support().then((module) => ({ default: module.SupportDialog })));
 
 const sectionLoaders: readonly [NavigationKey, () => Promise<unknown>][] = [
-  ["home", home],
   ["tasks", tasks], ["team_overview", team], ["payment_requests", approvals],
   ["ai_referent", referent], ["incoming_letters", incomingLetters], ["ai_hisobot", hisobot], ["telegram_access", telegram],
   ["feed", feed], ["projects", projects], ["project_hub", projectHub],

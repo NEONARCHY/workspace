@@ -1,5 +1,6 @@
 from datetime import date, datetime
 from typing import Any, Literal
+from urllib.parse import urlsplit
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -76,8 +77,18 @@ class ChatMemberResponse(ApiModel):
 
 
 ChatAvatarIconKey = Literal[
-    "team", "plane", "project", "briefcase", "building", "globe",
-    "calendar", "document", "target", "compass", "star", "sparkles",
+    "team",
+    "plane",
+    "project",
+    "briefcase",
+    "building",
+    "globe",
+    "calendar",
+    "document",
+    "target",
+    "compass",
+    "star",
+    "sparkles",
 ]
 
 
@@ -198,16 +209,54 @@ class ZoomInvitationReplyRequest(ApiModel):
     response: Literal["accepted", "declined"]
 
 
+class MessageEntity(ApiModel):
+    type: Literal["bold", "italic", "underline", "strikethrough", "code", "quote", "link"]
+    offset: int = Field(ge=0, strict=True)
+    length: int = Field(gt=0, strict=True)
+    url: str | None = Field(default=None, max_length=2048)
+
+    @model_validator(mode="after")
+    def safe_link(self) -> "MessageEntity":
+        if self.type == "link":
+            try:
+                parts = urlsplit(self.url or "")
+                valid = parts.scheme.lower() in {"https", "http"} and bool(parts.hostname)
+            except ValueError:
+                valid = False
+            if not valid or any(ord(c) <= 32 for c in (self.url or "")):
+                raise ValueError("Link must be an absolute HTTP(S) URL")
+        elif self.url is not None:
+            raise ValueError("Only link entities may contain a URL")
+        return self
+
+
+class MessageQuote(ApiModel):
+    offset: int = Field(ge=0, strict=True)
+    text: str = Field(min_length=1, max_length=4096)
+
+    @field_validator("text")
+    @classmethod
+    def valid_unicode(cls, value: str) -> str:
+        value.encode("utf-16-le")
+        return value
+
+
 class ChatMessageResponse(ApiModel):
+    entities: list[MessageEntity] = Field(default_factory=list)
+    reply_quote: MessageQuote | None = None
+    pin_protected: bool = False
+    pin_hidden_for_me: bool = False
+    can_unpin_for_self: bool = False
+    can_unpin_for_all: bool = False
     id: str
     chat_id: str
     author_id: str
     body: str
     forwarded: ForwardedContentResponse | None = None
     zoom_invitation: ZoomInvitationResponse | None = None
-    system_kind: Literal[
-        "member_left", "ownership_transferred", "task_deadline_request"
-    ] | None = None
+    system_kind: Literal["member_left", "ownership_transferred", "task_deadline_request"] | None = (
+        None
+    )
     time: str
     created_at: datetime
     own: bool
@@ -238,7 +287,11 @@ class LinkPreviewResponse(ApiModel):
 
 
 AttachmentOwnerType = Literal[
-    "message", "task", "approval_request", "absence", "ai_referent_letter",
+    "message",
+    "task",
+    "approval_request",
+    "absence",
+    "ai_referent_letter",
     "project_funding_request",
 ]
 
@@ -262,6 +315,8 @@ class AttachmentResponse(ApiModel):
 
 
 class SendMessageRequest(ApiModel):
+    entities: list[MessageEntity] = Field(default_factory=list, max_length=128)
+    reply_quote: MessageQuote | None = None
     body: str = Field(min_length=1, max_length=20_000)
     reply_to_message_id: UUID | None = None
     mention_user_ids: list[UUID] = Field(default_factory=list, max_length=100)
@@ -273,6 +328,23 @@ class SendMessageRequest(ApiModel):
         if not stripped:
             raise ValueError("Message must not be blank")
         return stripped
+
+    @model_validator(mode="after")
+    def valid_rich_text(self) -> "SendMessageRequest":
+        # JS selections use UTF-16, not Python code-point offsets. No split emoji.
+        boundaries = {0}
+        size = 0
+        for char in self.body:
+            size += len(char.encode("utf-16-le")) // 2
+            boundaries.add(size)
+        if size > 20_000:
+            raise ValueError("Message is too long")
+        for entity in self.entities:
+            if entity.offset not in boundaries or entity.offset + entity.length not in boundaries:
+                raise ValueError("Formatting range is outside the message or splits a character")
+        if self.reply_quote and self.reply_to_message_id is None:
+            raise ValueError("A quote requires a reply message")
+        return self
 
 
 class EditMessageRequest(SendMessageRequest):
@@ -289,6 +361,13 @@ class MessageReactionRequest(ApiModel):
 
 class PinMessageRequest(ApiModel):
     pinned: bool
+    scope: Literal["all", "self"] = "all"
+
+    @model_validator(mode="after")
+    def valid_scope(self) -> "PinMessageRequest":
+        if self.scope == "self" and self.pinned:
+            raise ValueError("Personal scope only hides an existing pin")
+        return self
 
 
 TaskStatus = Literal[
@@ -367,6 +446,26 @@ class TaskDeadlineRequestResponse(ApiModel):
     decided_by_user_id: str | None = None
     decided_at: datetime | None = None
     created_at: datetime
+
+
+class TaskHistoryEventResponse(ApiModel):
+    id: str
+    kind: str
+    occurred_at: datetime
+    actor_user_id: str | None = None
+    actor_name: str | None = None
+    old_due_at: datetime | None = None
+    due_at: datetime | None = None
+    old_status: str | None = None
+    status: str | None = None
+    reason_code: str | None = None
+    reason: str | None = None
+
+
+class TaskHistoryResponse(ApiModel):
+    events: list[TaskHistoryEventResponse]
+    history_complete: bool
+    next_offset: int | None = None
 
 
 class TaskResponse(ApiModel):
@@ -1033,11 +1132,23 @@ class ChangeProjectStageRequest(ApiModel):
 
 
 TripStage = Literal[
-    "launch", "deputy_approval", "manager_approval", "hr", "approved", "rejected",
+    "launch",
+    "deputy_approval",
+    "manager_approval",
+    "hr",
+    "approved",
+    "rejected",
 ]
 TripStatus = Literal["draft", "running", "needs_revision", "approved", "rejected", "annulled"]
 TripAction = Literal[
-    "submit", "approve", "return", "reject", "resubmit", "move", "withdraw", "annul",
+    "submit",
+    "approve",
+    "return",
+    "reject",
+    "resubmit",
+    "move",
+    "withdraw",
+    "annul",
 ]
 
 AbsenceKind = Literal["vacation", "personal_time", "late_arrival", "sick_leave", "business_event"]
@@ -1109,8 +1220,16 @@ class TripActionHistoryResponse(ApiModel):
     from_stage: TripStage | None
     to_stage: TripStage
     action: Literal[
-        "created", "deleted", "submit", "approve", "return", "reject", "resubmit",
-        "move", "withdraw", "annul",
+        "created",
+        "deleted",
+        "submit",
+        "approve",
+        "return",
+        "reject",
+        "resubmit",
+        "move",
+        "withdraw",
+        "annul",
     ]
     comment: str | None
     created_at: datetime
@@ -1266,8 +1385,19 @@ class CalendarEventAttendeeResponse(ApiModel):
 
 
 CalendarEventIcon = Literal[
-    "trees", "blood", "hearing", "assembly", "meeting", "trip", "project",
-    "teambuilding", "mountains", "contract", "memorandum", "training", "interview",
+    "trees",
+    "blood",
+    "hearing",
+    "assembly",
+    "meeting",
+    "trip",
+    "project",
+    "teambuilding",
+    "mountains",
+    "contract",
+    "memorandum",
+    "training",
+    "interview",
 ]
 
 
@@ -1350,8 +1480,17 @@ class RespondCalendarEventRequest(ApiModel):
 
 
 NotificationKind = Literal[
-    "message", "task", "approval", "trip", "calendar", "absence", "zoom", "hisobot",
-    "support", "birthday", "feed",
+    "message",
+    "task",
+    "approval",
+    "trip",
+    "calendar",
+    "absence",
+    "zoom",
+    "hisobot",
+    "support",
+    "birthday",
+    "feed",
 ]
 NotificationPriority = Literal["normal", "attention", "urgent"]
 NotificationSection = Literal[
@@ -1537,10 +1676,9 @@ class NavigationOrder(ApiModel):
     @classmethod
     def complete_order(cls, value: list[NavigationKey]) -> list[NavigationKey]:
         # A pre-Home client may save its complete former menu during rollout.
-        if (
-            len(value) == len(DEFAULT_NAVIGATION) - 1
-            and set(value) == set(DEFAULT_NAVIGATION) - {"home"}
-        ):
+        if len(value) == len(DEFAULT_NAVIGATION) - 1 and set(value) == set(DEFAULT_NAVIGATION) - {
+            "home"
+        }:
             return ["home", *value]
         if set(value) != set(DEFAULT_NAVIGATION):
             raise ValueError("Меню должно содержать все разделы без повторений")

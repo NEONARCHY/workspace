@@ -87,35 +87,18 @@ it("applies accessible reduced-motion changes immediately", async () => {
   const update = vi.fn(); await transitionColorTheme(update); expect(update).toHaveBeenCalledOnce();
 });
 
-it("finishes immediately when reduced motion becomes active during a fade and releases listeners", async () => {
-  const media = new EventTarget(); let reduced = false;
-  Object.defineProperty(media, "matches", { get: () => reduced });
-  vi.stubGlobal("matchMedia", () => media);
-  vi.spyOn(document, "hidden", "get").mockReturnValue(false);
-  let reject!: (reason: Error) => void;
-  const finished = new Promise<void>((_resolve, fail) => { reject = fail; });
-  const cancel = vi.fn(() => reject(new Error("Animation cancelled")));
-  Object.defineProperty(document.body, "animate", { configurable: true, value: vi.fn(() => ({ finished, cancel })) });
-  const add = vi.spyOn(media, "addEventListener"), remove = vi.spyOn(media, "removeEventListener");
-  const update = vi.fn(); const pending = transitionColorTheme(update);
-  expect(update).not.toHaveBeenCalled();
-  reduced = true; media.dispatchEvent(new Event("change")); await pending;
-  expect(update).toHaveBeenCalledOnce(); expect(cancel).toHaveBeenCalledOnce();
-  expect(add).toHaveBeenCalledOnce(); expect(remove).toHaveBeenCalledOnce();
+it("never fades the body when native theme snapshots are unavailable", async () => {
+  const animate = vi.fn();
+  Object.defineProperty(document.body, "animate", { configurable: true, value: animate });
+  const update = vi.fn();
+  await transitionColorTheme(update);
+  expect(update).toHaveBeenCalledOnce();
+  expect(animate).not.toHaveBeenCalled();
 });
 
-it("a newer choice cancels a pending fade without applying the older choice", async () => {
-  vi.spyOn(document, "hidden", "get").mockReturnValue(false);
-  let finish!: () => void;
-  const animate = vi.fn(() => {
-    let reject!: (reason: Error) => void;
-    const finished = new Promise<void>((resolve, fail) => { finish = resolve; reject = fail; });
-    return { finished, cancel: vi.fn(() => reject(new Error("Animation cancelled"))) };
-  });
-  Object.defineProperty(document.body, "animate", { configurable: true, value: animate });
+it("keeps the latest choice authoritative even without animation support", async () => {
   const older = vi.fn(), newer = vi.fn();
-  const first = transitionColorTheme(older), last = transitionColorTheme(newer);
-  finish(); await Promise.resolve(); finish(); await Promise.all([first, last]);
-  expect(older).not.toHaveBeenCalled(); expect(newer).toHaveBeenCalledOnce();
-  expect(animate).toHaveBeenCalledTimes(3);
+  await transitionColorTheme(older);
+  await transitionColorTheme(newer);
+  expect(older).toHaveBeenCalledOnce(); expect(newer).toHaveBeenCalledOnce();
 });

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Button } from "@fluentui/react-components";
 import {
   Delete24Regular,
@@ -67,9 +67,13 @@ interface VoicePlayerSurfaceProps {
   readonly onRequestUrl?: () => Promise<string | undefined>;
   readonly onDurationChange?: (durationMs: number) => void;
   readonly playbackRateControl?: boolean;
+  readonly byteSize?: number;
+  readonly metadata?: ReactNode;
+  readonly preview?: boolean;
+  readonly onPositionChange?: (positionMs: number) => void;
 }
 
-function VoicePlayerSurface({ ariaLabel, durationMs, waveform, url = "", loading = false, onRequestUrl, onDurationChange, playbackRateControl = false }: VoicePlayerSurfaceProps) {
+function VoicePlayerSurface({ ariaLabel, durationMs, waveform, url = "", loading = false, onRequestUrl, onDurationChange, playbackRateControl = false, byteSize, metadata, preview = false, onPositionChange }: VoicePlayerSurfaceProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [currentTimeMs, setCurrentTimeMs] = useState(0);
@@ -127,10 +131,14 @@ function VoicePlayerSurface({ ariaLabel, durationMs, waveform, url = "", loading
         const seconds = event.currentTarget.duration;
         if (Number.isFinite(seconds)) onDurationChange?.(seconds * 1_000);
       }}
-      onTimeUpdate={(event) => setCurrentTimeMs(event.currentTarget.currentTime * 1_000)}
+      onTimeUpdate={(event) => {
+        const position = event.currentTarget.currentTime * 1_000;
+        setCurrentTimeMs(position);
+        onPositionChange?.(position);
+      }}
       onPlay={() => setPlaying(true)}
       onPause={() => setPlaying(false)}
-      onEnded={() => { setPlaying(false); setCurrentTimeMs(0); }}
+      onEnded={() => { setPlaying(false); setCurrentTimeMs(0); onPositionChange?.(0); }}
     />
     <div className={`voice-player${loading ? " loading" : ""}${playbackRateControl ? " has-speed" : ""}`}>
       <Button className="voice-player-play media-player-play" appearance="subtle" icon={playing ? <Pause24Filled /> : <Play24Filled />} aria-label={loading ? "Загрузка голосового сообщения" : playing ? "Пауза" : "Воспроизвести"} disabled={loading} onClick={() => void togglePlayback()} />
@@ -151,9 +159,9 @@ function VoicePlayerSurface({ ariaLabel, durationMs, waveform, url = "", loading
             const nextMs = Number(event.currentTarget.value);
             if (audioRef.current) audioRef.current.currentTime = nextMs / 1_000;
             setCurrentTimeMs(nextMs);
+            onPositionChange?.(nextMs);
           }}
         />
-        <span className="voice-player-time">{formatDuration(currentTimeMs)} <i>/</i> {formatDuration(durationMs)}</span>
       </div>
       {playbackRateControl ? <Button
         className="voice-player-speed"
@@ -166,6 +174,12 @@ function VoicePlayerSurface({ ariaLabel, durationMs, waveform, url = "", loading
         }}
       >{playbackRate}×</Button> : null}
       <MediaVolumeControl mediaRef={audioRef} className="voice-player-volume" />
+      {!preview ? <div className="voice-player-details">
+        <span className="voice-player-time">{formatDuration(currentTimeMs > 0 || playing ? currentTimeMs : durationMs)}
+          {byteSize !== undefined ? <span className="voice-message-size">, {Math.max(1, Math.round(byteSize / 1024))} КБ</span> : null}
+        </span>
+        {metadata}
+      </div> : null}
     </div>
     {error ? <span className="voice-message-error" role="status">{error}</span> : null}
   </>;
@@ -205,12 +219,14 @@ interface VoiceRecorderProps {
   readonly disabled?: boolean;
   readonly maxDurationMs?: number;
   readonly onClose: () => void;
+  readonly onVisibilityChange?: (visible: boolean) => void;
   readonly onSend: (file: File, durationMs: number) => Promise<boolean>;
 }
 
-export function VoiceRecorder({ disabled, allowMp4 = false, maxDurationMs = VOICE_MAX_DURATION_MS, onClose, onSend }: VoiceRecorderProps) {
+export function VoiceRecorder({ disabled, allowMp4 = false, maxDurationMs = VOICE_MAX_DURATION_MS, onClose, onSend, onVisibilityChange }: VoiceRecorderProps) {
   const [state, setState] = useState<"requesting" | "recording" | "ready" | "error">("requesting");
   const [durationMs, setDurationMs] = useState(0);
+  const [previewPositionMs, setPreviewPositionMs] = useState(0);
   const [blob, setBlob] = useState<Blob>();
   const [previewUrl, setPreviewUrl] = useState("");
   const [error, setError] = useState("");
@@ -221,6 +237,7 @@ export function VoiceRecorder({ disabled, allowMp4 = false, maxDurationMs = VOIC
   const recorderRef = useRef<MediaRecorder | undefined>(undefined);
   const streamRef = useRef<MediaStream | undefined>(undefined);
   const indicatorRef = useRef<HTMLSpanElement>(null);
+  const liveWaveformRef = useRef<SVGPathElement>(null);
   const audioContextRef = useRef<AudioContext | undefined>(undefined);
   const analyserFrameRef = useRef(0);
   const amplitudeSamplesRef = useRef<number[]>([]);
@@ -229,6 +246,9 @@ export function VoiceRecorder({ disabled, allowMp4 = false, maxDurationMs = VOIC
   const timerRef = useRef<number | undefined>(undefined);
   const mountedRef = useRef(true);
   const requestIdRef = useRef(0);
+
+  // Let the composer stay mounted during negotiation, then swap before paint.
+  useLayoutEffect(() => { onVisibilityChange?.(state !== "requesting"); }, [state, onVisibilityChange]);
 
   const releaseStream = () => {
     cancelAnimationFrame(analyserFrameRef.current);
@@ -304,11 +324,11 @@ export function VoiceRecorder({ disabled, allowMp4 = false, maxDurationMs = VOIC
         const AudioContextConstructor = window.AudioContext;
         if (AudioContextConstructor) {
           const context = new AudioContextConstructor();
+          audioContextRef.current = context;
           const analyser = context.createAnalyser();
           analyser.fftSize = 256;
           analyser.smoothingTimeConstant = .72;
           context.createMediaStreamSource(stream).connect(analyser);
-          audioContextRef.current = context;
           const values = new Uint8Array(analyser.fftSize);
           let lastSampleAt = 0;
           const measure = (now: number) => {
@@ -322,6 +342,12 @@ export function VoiceRecorder({ disabled, allowMp4 = false, maxDurationMs = VOIC
             indicatorRef.current?.style.setProperty("--voice-level", level.toFixed(3));
             if (now - lastSampleAt >= 90) {
               amplitudeSamplesRef.current.push(Math.max(.08, level));
+              // Bound SVG work to the visible 10.8 seconds, independently of React.
+              const visibleSamples = amplitudeSamplesRef.current.slice(-120);
+              liveWaveformRef.current?.setAttribute("d", visibleSamples.map((sample, index) => {
+                const height = Math.max(3, Math.round(sample * 40));
+                return `M${index * 5 + 2} ${24 - height / 2}v${height}`;
+              }).join(" "));
               lastSampleAt = now;
             }
             analyserFrameRef.current = requestAnimationFrame(measure);
@@ -375,6 +401,8 @@ export function VoiceRecorder({ disabled, allowMp4 = false, maxDurationMs = VOIC
           }
         }, 200);
       } catch (cause) {
+        clearTimer();
+        releaseStream();
         if (!mountedRef.current) return;
         setState("error");
         setError(cause instanceof DOMException && cause.name === "NotAllowedError"
@@ -425,17 +453,23 @@ export function VoiceRecorder({ disabled, allowMp4 = false, maxDurationMs = VOIC
     }
   };
 
+  // Permission/device negotiation must not flash a temporary recorder banner.
+  if (state === "requesting") return null;
+
   return (
     <div className={`voice-recorder voice-recorder-${state}`} role="region" aria-label="Запись голосового сообщения">
       <div className="voice-recorder-state">
         <span ref={indicatorRef} className="voice-recorder-indicator"><Mic24Regular /></span>
         <div>
-          <strong>{state === "requesting" ? "Подключаем микрофон" : state === "recording" ? "Идёт запись" : state === "ready" ? "Запись готова" : "Не удалось записать"}</strong>
+          <strong>{state === "recording" ? "Идёт запись" : state === "ready" ? "Запись готова" : "Не удалось записать"}</strong>
           <small>{state === "recording" || state === "ready"
-            ? formatDuration(durationMs)
-            : error || "Используется микрофон из настроек Workspace"}</small>
+            ? formatDuration(state === "ready" ? Math.max(0, durationMs - previewPositionMs) : durationMs)
+            : error}</small>
         </div>
       </div>
+      {state === "recording" ? <svg className="voice-recorder-live-waveform" viewBox="0 0 600 48" preserveAspectRatio="none" aria-hidden="true">
+        <path ref={liveWaveformRef} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+      </svg> : null}
       {state === "ready" && previewUrl ? (
         <div className="voice-preview">
           <VoicePlayerSurface
@@ -444,16 +478,18 @@ export function VoiceRecorder({ disabled, allowMp4 = false, maxDurationMs = VOIC
             waveform={waveform}
             url={previewUrl}
             onDurationChange={setDurationMs}
+            preview
+            onPositionChange={setPreviewPositionMs}
           />
         </div>
       ) : null}
       <div className="voice-recorder-actions">
         {state === "recording" ? (
-          <Button icon={<Stop24Filled />} appearance="primary" disabled={disabled} onClick={stop}>Завершить</Button>
+          <Button icon={<Stop24Filled />} appearance="primary" disabled={disabled} onClick={stop} title="Завершить"><span className="voice-recorder-action-label">Завершить</span></Button>
         ) : null}
         {state === "ready" ? (
-          <Button icon={<Send24Filled />} appearance="primary" disabled={disabled || sending} onClick={() => void send()}>
-            {sending ? "Отправляем…" : "Отправить"}
+          <Button icon={<Send24Filled />} appearance="primary" disabled={disabled || sending} onClick={() => void send()} title={sending ? "Отправляем…" : "Отправить"}>
+            <span className="voice-recorder-action-label">{sending ? "Отправляем…" : "Отправить"}</span>
           </Button>
         ) : null}
         {state === "error" ? (
@@ -462,7 +498,7 @@ export function VoiceRecorder({ disabled, allowMp4 = false, maxDurationMs = VOIC
           </Button>
         ) : null}
         <Button icon={<Delete24Regular />} appearance="subtle" disabled={sending} onClick={onClose}>
-          {state === "ready" ? "Удалить запись" : "Отмена"}
+          <span className="voice-recorder-action-label" title={state === "ready" ? "Удалить запись" : "Отмена"}>{state === "ready" ? "Удалить запись" : "Отмена"}</span>
         </Button>
       </div>
       {error && state !== "error" ? <p className="voice-recorder-error" role="alert">{error}</p> : null}
@@ -473,9 +509,10 @@ export function VoiceRecorder({ disabled, allowMp4 = false, maxDurationMs = VOIC
 interface VoiceMessagePlayerProps {
   readonly attachment: WorkspaceAttachment;
   readonly onLoad: (attachment: WorkspaceAttachment) => Promise<Blob>;
+  readonly metadata?: ReactNode;
 }
 
-export function VoiceMessagePlayer({ attachment, onLoad }: VoiceMessagePlayerProps) {
+export function VoiceMessagePlayer({ attachment, onLoad, metadata }: VoiceMessagePlayerProps) {
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -505,8 +542,7 @@ export function VoiceMessagePlayer({ attachment, onLoad }: VoiceMessagePlayerPro
 
   return (
     <div className="voice-message">
-      <VoicePlayerSurface ariaLabel="Голосовое сообщение" durationMs={durationMs} waveform={waveform} url={url} loading={loading} onRequestUrl={load} onDurationChange={setDurationMs} playbackRateControl />
-      <small className="voice-message-size">{Math.max(1, Math.round(attachment.byteSize / 1024))} КБ</small>
+      <VoicePlayerSurface ariaLabel="Голосовое сообщение" durationMs={durationMs} waveform={waveform} url={url} loading={loading} onRequestUrl={load} onDurationChange={setDurationMs} playbackRateControl byteSize={attachment.byteSize} metadata={metadata} />
       {error ? <span className="voice-message-error" role="status">{error}</span> : null}
     </div>
   );

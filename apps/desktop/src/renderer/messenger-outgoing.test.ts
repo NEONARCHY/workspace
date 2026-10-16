@@ -10,6 +10,21 @@ it("uses separate Telegram-inspired dark and softened light outgoing palettes", 
   expect(css).toContain(".message-delivery.is-read");
   expect(css).toContain("@media (forced-colors: none)");
 });
+it("joins mirrored curved tails to the final rounded corner without dark satin edges", () => {
+  expect(css).toContain("height: 20px");
+  expect(css).toContain("left: -8px");
+  expect(css).toContain("right: -8px");
+  expect(css).toContain('path("M 12 0 C 12 10 9 16 0 19 C 4 20 9 20 12 18 Z")');
+  expect(css).toContain('path("M 0 0 C 0 10 3 16 12 19 C 8 20 3 20 0 18 Z")');
+  expect(css).toMatch(/html\[data-color-theme="dark"\] body \.messenger-view \.message \.message-body\s*\{\s*border-color: transparent;\s*box-shadow: none;/);
+});
+it("shares the file-size line with wrapping time and adds caption clearance", () => {
+  expect(css).not.toContain("has-document-footer");
+  expect(css).toContain(".message-text + .attachment-chips");
+  expect(css).toContain("margin-top: 8px");
+  expect(css).toContain(".attachment-document-copy > .attachment-document-details { display: flex; flex-wrap: wrap");
+  expect(css).toContain(".message-mentions-footer { display: flex; flex-wrap: wrap");
+});
 it("keeps ordinary bubble sizing/focus intact and explicitly sizes standalone media", () => {
   expect(css).toContain(":not(.is-group-first):not(.is-group-middle)");
   expect(css).toContain("pointer-events: none");

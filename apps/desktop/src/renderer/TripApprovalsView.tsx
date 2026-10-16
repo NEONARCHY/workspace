@@ -1,6 +1,7 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
+import { LoadingSkeleton } from "./LoadingSkeleton";
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
-import { lazy, Suspense, useCallback, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { SpatialBoard, SpatialCard, SpatialLane } from "./SpatialBoard";
 import { useMiddleMousePan } from "./useMiddleMousePan";
 import { ProcessWorkflowDesigner } from "./ProcessWorkflowDesigner";
@@ -104,6 +105,13 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
   const [view, setView] = useState<"kanban" | "list">("kanban");
   const [mapOpen, setMapOpen] = useState(false);
   const mapToggleRef = useRef<HTMLButtonElement>(null);
+  const restoreMapFocus = useRef(false);
+  useLayoutEffect(() => {
+    if (!mapOpen && restoreMapFocus.current) {
+      restoreMapFocus.current = false;
+      mapToggleRef.current?.focus({ preventScroll: true });
+    }
+  }, [mapOpen]);
   const [section, setSection] = useState<"requests" | "designer">("requests");
   const [filter, setFilter] = useState<"running" | "approved" | "all" | "finished">("running");
   const [query, setQuery] = useState("");
@@ -249,17 +257,17 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
   const feedback = error ? <WorkspaceNotice tone="error" className="trip-feedback error" role="alert"><span>{error}</span></WorkspaceNotice> : null;
 
   return (
-    <section className="workspace-view bp7-view trips-view trip-view workflow-process-view" aria-label="Согласование поездок">
-      <WorkspaceSectionHeader motif="trips" className="bp7-header workflow-hero-header">
+    <section className={`workspace-view bp7-view trips-view trip-view workflow-process-view${mapOpen ? " trip-map-mode" : ""}`} aria-label="Согласование поездок">
+      {!mapOpen && <WorkspaceSectionHeader motif="trips" className="bp7-header workflow-hero-header">
         <div><span className="view-kicker">Согласования · Командировки</span><h1>Согласование поездок</h1><p>Перетащите карточку на доступную стадию или откройте её для решения.</p>{canManageWorkflow && workflow ? <SlidingSegmented className="process-view-tabs" role="group" aria-label="Разделы поездок"><button type="button" className={section === "requests" ? "active" : ""} aria-pressed={section === "requests"} onClick={() => setSection("requests")}>Текущие поездки</button><button type="button" className={section === "designer" ? "active" : ""} aria-pressed={section === "designer"} onClick={() => setSection("designer")}>Конструктор маршрутов</button></SlidingSegmented> : null}</div>
         <div className="trip-header-actions">
           <Button ref={mapToggleRef} appearance="secondary" icon={<Globe24Regular />} aria-pressed={mapOpen}
             onClick={() => { setSection("requests"); setMapOpen((open) => !open); }}>Интерактивная карта поездок</Button>
           <Button {...restoreFocusTarget} className="ws-section-header-primary" appearance="primary" icon={<Add24Regular />} onClick={create}>Новая командировка</Button>
         </div>
-      </WorkspaceSectionHeader>
+      </WorkspaceSectionHeader>}
 
-      {mapOpen ? <Suspense fallback={<p className="trip-board-help" role="status">Загружаем карту поездок…</p>}><TripWorldMap requests={requests} people={people} onOpenRequest={openRequest} onClose={() => { setMapOpen(false); mapToggleRef.current?.focus(); }} /></Suspense>
+      {mapOpen ? <Suspense fallback={<LoadingSkeleton layout="map" label="Загружаем карту поездок…" />}><TripWorldMap requests={requests} people={people} onOpenRequest={openRequest} onClose={() => { restoreMapFocus.current = true; setMapOpen(false); }} /></Suspense>
         : section === "designer" && workflow && onSaveWorkflow && onPublishWorkflow ? <><WorkspaceNotice tone="warning" className="trip-document-reminder">Для этапа «Согласование первого заместителя» выберите должность или конкретного сотрудника, затем сохраните и опубликуйте маршрут. Новые отправки закрепляют выбранного согласующего; уже отправленные заявки сохраняют прежнее назначение. Председатель и подпись приказа по-прежнему определяются настройками HR.</WorkspaceNotice><ProcessWorkflowDesigner workflow={currentTripWorkflow(workflow, positions)} processName="Маршрут поездок" accent="trip" people={people} departments={departments} positions={positions} onSave={onSaveWorkflow} onPublish={onPublishWorkflow} /></> : <>
       <section className="ws2-process-overview trip-overview" aria-label="Сводка по командировкам">
         <button type="button" className="ws2-process-focus" onClick={() => setFilter("running")}>

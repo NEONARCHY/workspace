@@ -1,4 +1,5 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
+import { LoadingSkeleton } from "./LoadingSkeleton";
 import { useEffect, useState } from "react";
 
 import type { WorkdayTeam, WorkdayTeamMember } from "@yuksalish/contracts";
@@ -141,7 +142,7 @@ export function TeamPresencePanel({ token }: { readonly token: string }) {
         <div className="team-presence-actions">{person.canEditSchedule ? <Button appearance="subtle" size="small" onClick={() => openSchedule(person)}>График</Button> : null}</div>
         {person.session?.isWeekend ? <small className="team-presence-weekend">Работа в выходной</small> : null}
       </div>)}
-      {!data && !error ? <p className="team-presence-empty">Загружаем отметки команды…</p> : null}
+      {!data && !error ? <LoadingSkeleton layout="rows" rows={3} label="Загружаем отметки команды…" /> : null}
       {data && !members.length ? <p className="team-presence-empty">{onlyWorking ? "Сейчас никто не начал рабочий день." : "Сотрудников пока нет."}</p> : null}
     </div>
     </div>

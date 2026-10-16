@@ -29,25 +29,30 @@
   html body .messenger-view .message:not(.own) .message-body {
     background: var(--chat-incoming-fill);
   }
-  /* The tail overlaps a square lower corner: no subpixel slit at the join. */
-  html body .messenger-view .message-row:not(.is-group-first):not(.is-group-middle) .message.own .message-body { border-bottom-right-radius: 0; }
-  html body .messenger-view .message-row:not(.is-group-first):not(.is-group-middle) .message:not(.own) .message-body { border-bottom-left-radius: 0; }
+  /* Flat dark bubbles; keep keyboard outlines and semantic selection separate. */
+  html[data-color-theme="dark"] body .messenger-view .message .message-body {
+    border-color: transparent;
+    box-shadow: none;
+  }
+  /* A taller curved tail overlaps the rounded corner, never a detached triangle. */
+  html body .messenger-view .message-row:not(.is-group-first):not(.is-group-middle) .message.own .message-body { border-bottom-right-radius: 5px; }
+  html body .messenger-view .message-row:not(.is-group-first):not(.is-group-middle) .message:not(.own) .message-body { border-bottom-left-radius: 5px; }
   html body .messenger-view .message-row:not(.is-group-first):not(.is-group-middle) .message-body::before {
     content: "";
     position: absolute;
     bottom: -1px;
-    width: 10px;
-    height: 10px;
+    width: 12px;
+    height: 20px;
     background: var(--chat-incoming-fill);
-    left: -7px;
-    clip-path: path("M 10 0 C 9 5 7 8 0 10 L 10 10 Z");
+    left: -8px;
+    clip-path: path("M 12 0 C 12 10 9 16 0 19 C 4 20 9 20 12 18 Z");
     pointer-events: none;
   }
   html body .messenger-view .message-row:not(.is-group-first):not(.is-group-middle) .message.own .message-body::before {
     left: auto;
-    right: -7px;
+    right: -8px;
     background: var(--chat-outgoing-fill);
-    clip-path: path("M 0 0 C 1 5 3 8 10 10 L 0 10 Z");
+    clip-path: path("M 0 0 C 0 10 3 16 12 19 C 8 20 3 20 0 18 Z");
   }
   html body .messenger-view .message.own .message-meta { color: var(--chat-outgoing-meta); }
   html body .messenger-view .message.own .message-delivery,
@@ -93,8 +98,13 @@ html[data-color-theme] body .messenger-view .message.own .is-media-message.has-m
 /* A file's size line also holds the time: no empty metadata footer. */
 .messenger-view .message-body.is-document-message { padding-block: 8px; }
 .messenger-view .is-document-message > .attachment-chips { margin-top: 0; }
+.messenger-view .is-document-message > .message-text + .attachment-chips,
+.messenger-view .is-document-message > .message-mentions + .attachment-chips { margin-top: 8px; }
 .messenger-view .is-document-message .attachment-chips button.attachment-document { min-height: 44px; padding-block: 0; }
-.messenger-view .is-document-message:not(.has-document-footer) .attachment-document:last-child .attachment-document-copy > small { padding-inline-end: 82px; }
-html body .messenger-view .message .message-body.is-document-message:not(.has-document-footer) > .message-meta {
-  position: absolute; right: 11px; bottom: 11px; margin: 0;
-}
+.messenger-view .is-document-message .attachment-document-copy > .attachment-document-details { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px; }
+.messenger-view .attachment-document-details > .message-meta { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; color: var(--ws-muted); white-space: nowrap; }
+
+/* Mentions and time share the final row, wrapping naturally in narrow bubbles. */
+.messenger-view .message-mentions-footer { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 4px 10px; margin-top: 5px; }
+.messenger-view .message-mentions-footer > .message-mentions { flex: 1 1 auto; min-width: 0; margin: 0; }
+.messenger-view .message-mentions-footer > .message-meta { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; color: var(--ws-muted); white-space: nowrap; }

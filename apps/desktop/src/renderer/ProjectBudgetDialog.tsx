@@ -1,4 +1,5 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
+import { LoadingSkeleton, SkeletonBlock, SkeletonTableRows } from "./LoadingSkeleton";
 import { useEffect, useRef, useState } from "react";
 import { Button, DialogSurface, Input } from "@fluentui/react-components";
 import type { ProjectBudgetArticleInput, ProjectBudgetSummary, ProjectHubProject } from "@yuksalish/contracts";
@@ -66,7 +67,11 @@ export function ProjectBudgetDialog({ token, project, onClose }: Props) {
       <div className="project-budget-scroll" aria-busy={busy}>
         <p>Расход фиксируется один раз после «Выполнено» заявки на оплату. Согласование и завершение задачи не списывают бюджет.</p>
         <p>План проекта: {exactBudgetMoney(String(project.budget), project.currency)}. План сохраняется неизменным при учёте оплат.</p>
-        {busy ? <p role="status">Загружаем бюджет…</p> : null}
+        {busy && !summary ? <>
+          <p>Остаток плана проекта в {project.currency}: <SkeletonBlock width="150px" height="20px" /></p>
+          <h3>Фактические расходы по валютам</h3><LoadingSkeleton layout="lines" rows={1} />
+          <h3>Бюджетные статьи</h3><div className="project-budget-table"><table><thead><tr><th>Статья</th><th>План</th><th>Факт по валютам</th><th>Остаток в валюте плана</th></tr></thead><SkeletonTableRows columns={4} label="Загружаем бюджет…" /></table></div>
+        </> : null}
         {summary ? <>
           <p>Остаток плана проекта в {project.currency}: <strong>{exactBudgetMoney(summary.remainingProjectAmount, project.currency)}</strong></p>
           <h3>Фактические расходы по валютам</h3>
