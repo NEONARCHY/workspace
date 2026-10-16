@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { Button, Input, Popover, PopoverSurface, PopoverTrigger } from "@fluentui/react-components";
 import { EmojiAdd24Regular } from "@fluentui/react-icons";
-import { Cat, Clock3, Grid2X2, Hand, Heart, PartyPopper, Search, Smile, X } from "lucide-react";
+import { Cat, ChevronDown, Clock3, Grid2X2, Hand, Heart, PartyPopper, Search, Smile, X } from "lucide-react";
 import { reactionCatalog, reactionCategories } from "./reaction-catalog";
 import { ReactionEmoji } from "./ReactionEmoji";
 import "./reaction-picker.css";
@@ -52,9 +52,9 @@ export function orderedReactionsForUser(userId: string): readonly string[] {
   return orderedReactions(readUsage(userId));
 }
 
-export function ReactionPicker({ userId, disabled = false, active = [], onSelect, className = "", ownMessage = false }: {
+export function ReactionPicker({ userId, disabled = false, active = [], onSelect, className = "", ownMessage = false, variant = "button" }: {
   readonly userId: string; readonly disabled?: boolean; readonly active?: readonly string[];
-  readonly onSelect: (emoji: string) => void; readonly className?: string; readonly ownMessage?: boolean;
+  readonly onSelect: (emoji: string) => void; readonly className?: string; readonly ownMessage?: boolean; readonly variant?: "button" | "context";
 }) {
   const [usageOwner, setUsageOwner] = useState(userId);
   const [usage, setUsage] = useState<ReactionUsageMap>(() => readUsage(userId));
@@ -63,6 +63,7 @@ export function ReactionPicker({ userId, disabled = false, active = [], onSelect
   const [category, setCategory] = useState("all");
   const [query, setQuery] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const emojis = useMemo(() => orderedReactions(usage), [usage]);
   const search = query.trim().toLocaleLowerCase("ru");
   const sections = search
@@ -72,12 +73,25 @@ export function ReactionPicker({ userId, disabled = false, active = [], onSelect
       : reactionCategories.filter((item) => category === "all" || item.id === category)
         .map((item) => ({ ...item, items: reactionCatalog.filter((emoji) => emoji.category === item.id) }));
   const icons = { smile: Smile, hand: Hand, cat: Cat, party: PartyPopper, heart: Heart };
-  return <Popover open={open} onOpenChange={(_, data) => {
+  const select = (emoji: string) => { setUsage(rememberReaction(userId, emoji)); setOpen(false); onSelect(emoji); };
+  const expand = <PopoverTrigger disableButtonEnhancement><Button ref={triggerRef} className={`reaction-picker-trigger ${className}`} size="small" appearance="subtle" icon={variant === "context" ? <ChevronDown size={18} /> : <EmojiAdd24Regular />} aria-label={variant === "context" ? "Все реакции" : "Добавить реакцию"} disabled={disabled} /></PopoverTrigger>;
+  return <Popover open={open} onOpenChange={(event, data) => {
     setOpen(data.open);
+    if (!data.open && "key" in event && event.key === "Escape") triggerRef.current?.focus();
     if (data.open) { setQuery(""); setCategory("all"); setUsage(readUsage(userId)); }
-  }} trapFocus positioning={{ position: ownMessage ? "before" : "after", align: "top", offset: 12, overflowBoundaryPadding: 12, shiftToCoverTarget: true, fallbackPositions: ["above", "below"] }}>
-    <PopoverTrigger disableButtonEnhancement><Button className={`reaction-picker-trigger ${className}`} size="small" appearance="subtle" icon={<EmojiAdd24Regular />} aria-label="Добавить реакцию" disabled={disabled} /></PopoverTrigger>
-    <PopoverSurface className="reaction-picker-popover" aria-label="Выберите реакцию">
+  }} trapFocus positioning={{ position: variant === "context" ? "below" : ownMessage ? "before" : "after", align: variant === "context" ? "end" : "top", offset: 12, overflowBoundaryPadding: 12, shiftToCoverTarget: true, fallbackPositions: ["above", "below"] }}>
+    {variant === "context" ? <div className="reaction-context-strip" role="group" aria-label="Быстрые реакции" onKeyDown={(event) => {
+      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+      const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled)"));
+      const index = buttons.indexOf(event.target as HTMLButtonElement);
+      if (index < 0) return;
+      event.preventDefault();
+      buttons[event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : Math.max(0, Math.min(buttons.length - 1, index + (event.key === "ArrowRight" ? 1 : -1)))]?.focus();
+    }}>
+      {emojis.slice(0, 7).map((emoji) => <button type="button" key={emoji} disabled={disabled} aria-label={emoji} title={reactionCatalog.find((item) => item.emoji === emoji)?.label} aria-pressed={active.includes(emoji)} onClick={() => select(emoji)}><ReactionEmoji emoji={emoji} size={26} eager /></button>)}
+      {expand}
+    </div> : expand}
+    <PopoverSurface className={`reaction-picker-popover ${variant === "context" ? "reaction-picker-context-popover" : ""}`} onPointerDown={variant === "context" ? (event) => event.stopPropagation() : undefined} aria-label="Выберите реакцию">
       <div className="reaction-picker-header">
         <Input className="reaction-picker-search" aria-label="Поиск эмодзи" placeholder="Поиск эмодзи" contentBefore={<Search size={16} />} value={query} onChange={(_, data) => { setQuery(data.value); scrollRef.current?.scrollTo?.(0, 0); }} />
         <Button className="reaction-picker-close" appearance="subtle" size="small" icon={<X size={16} />} aria-label="Закрыть реакции" onClick={() => setOpen(false)} />
@@ -95,7 +109,7 @@ export function ReactionPicker({ userId, disabled = false, active = [], onSelect
             buttons[event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : Math.max(0, Math.min(buttons.length - 1, index + step!))]?.focus();
           }}>
             {section.items.map((item) => <button type="button" key={item.emoji} aria-label={item.emoji} title={item.label} aria-pressed={active.includes(item.emoji)} onClick={() => {
-              setUsage(rememberReaction(userId, item.emoji)); onSelect(item.emoji); setOpen(false);
+              select(item.emoji);
             }}><ReactionEmoji emoji={item.emoji} size={28} eager /></button>)}
           </div>
         </section>)}

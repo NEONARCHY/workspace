@@ -6,7 +6,7 @@ export function menuPortalContainerFor(target: Element): HTMLElement {
   return target.closest<HTMLElement>(".fui-DialogSurface")?.parentElement ?? document.body;
 }
 
-export function MessageContextMenu({ x, y, children, onPointerDown, portalContainer, label, autoFocus = false }: {
+export function MessageContextMenu({ x, y, children, onPointerDown, portalContainer, label, autoFocus = false, accessory }: {
   readonly x: number;
   readonly y: number;
   readonly children: ReactNode;
@@ -14,6 +14,7 @@ export function MessageContextMenu({ x, y, children, onPointerDown, portalContai
   readonly portalContainer: HTMLElement;
   readonly label?: string;
   readonly autoFocus?: boolean;
+  readonly accessory?: ReactNode;
 }) {
   const menuRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState({ x, y });
@@ -41,9 +42,10 @@ export function MessageContextMenu({ x, y, children, onPointerDown, portalContai
     return () => { observer.disconnect(); window.removeEventListener("resize", update); };
   }, [x, y, label, autoFocus]);
 
-  return <PortalMountNodeProvider value={portalContainer}><Portal><div ref={menuRef} className="message-context-menu"
-    role={label ? "dialog" : "menu"} aria-label={label} tabIndex={label ? -1 : undefined}
+  return <PortalMountNodeProvider value={portalContainer}><Portal><div ref={menuRef} className={accessory ? "message-context-stack" : "message-context-menu"}
+    role={accessory ? undefined : label ? "dialog" : "menu"} aria-label={label} tabIndex={label ? -1 : undefined}
     style={{ left: position.x, top: position.y }} onPointerDown={onPointerDown}>
-    {children}
+    {accessory}
+    {accessory ? <div className="message-context-menu" role="menu">{children}</div> : children}
   </div></Portal></PortalMountNodeProvider>;
 }

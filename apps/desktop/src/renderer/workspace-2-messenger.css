@@ -469,8 +469,8 @@ html body .messenger-view .message-actions .reaction-picker-trigger:focus-visibl
 .message-context-menu { position: fixed; z-index: 10000; display: grid; width: 190px; padding: 7px; border: 1px solid rgb(var(--ws-theme-line-rgb, 41 58 85) / 0.09); border-radius: 17px; background: rgb(var(--ws-theme-surface-rgb, 255 255 255) / 0.97); box-shadow: 0 18px 44px rgb(41 58 85 / 18%); backdrop-filter: blur(16px); }
 .message-context-menu[role="dialog"] { overflow-y: auto; }
 .message-context-menu { gap: 0; width: 210px; padding: 0; border: 0; overflow: hidden; }
-html body .message-context-menu .fui-Button { justify-content: flex-start; width: 100%; min-height: 34px; padding: 6px 16px; border: 0; border-radius: 0; line-height: 20px; font-size: 13px; font-weight: 400; background: transparent; box-shadow: none; gap: 14px; }
-html body .message-context-menu .fui-Button__icon { width: 20px; height: 20px; margin: 0; }
+html body .message-context-menu .fui-Button { justify-content: flex-start; width: 100%; min-height: 34px; padding: 6px 16px; border: 0; border-radius: 0; line-height: 20px; font-size: 13px; font-weight: 400; text-align: left; background: transparent; box-shadow: none; gap: 14px; }
+html body .message-context-menu .fui-Button__icon { flex: 0 0 20px; width: 20px; height: 20px; margin: 0; }
 html body .message-context-menu .fui-Button__icon svg { width: 20px; height: 20px; stroke-width: 1.6; }
 html[data-popup-input="pointer"] body .message-context-menu .fui-Button:hover,
 html:not([data-popup-input="pointer"]) body .message-context-menu .fui-Button:focus-visible { background: var(--ws-selected); }
