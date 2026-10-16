@@ -1,6 +1,7 @@
 """Synthetic trip documents only; no personnel records or real signatures."""
 
 import asyncio
+import re
 from datetime import UTC, date, datetime
 from io import BytesIO
 from unittest.mock import AsyncMock, MagicMock
@@ -65,14 +66,31 @@ def test_employee_cover_and_chair_order_keep_separate_signatures() -> None:
     assert len(PdfReader(BytesIO(cover)).pages) == 1
     assert len(PdfReader(BytesIO(issued)).pages) == 1
     assert "original.pdf" in text_of(cover)
-    assert "001-WS-сон а/ф" in text_of(issued)  # noqa: RUF001
-    assert "Нукус" in text_of(issued) and "лойиҳа маблағлари" in text_of(issued)
-    assert "Б У Ю Р А М А Н" in text_of(issued)  # noqa: RUF001
-    assert "Асос: Testova Zeboнинг билдиргиси." in text_of(issued)  # noqa: RUF001
-    assert "Раис" in text_of(issued) and "Testov Rais" in text_of(issued)
+    assert "001-WS-son a/f" in text_of(issued)
+    assert "Nukus" in text_of(issued) and "loyiha mablagʻlari" in text_of(issued)  # noqa: RUF001
+    assert "B U Y U R A M A N" in text_of(issued)
+    assert "Asos: Testova Zeboning bildirgisi." in text_of(issued)
+    assert "Rais" in text_of(issued) and "Testov Rais" in text_of(issued)
+    assert "БУЙРУҚ" not in text_of(issued)
+    assert re.search(r"[\u0400-\u04FF]", text_of(issued)) is None
     assert len(PdfReader(BytesIO(cover)).pages[0].images) == 2  # logo + employee mark
     assert len(PdfReader(BytesIO(preview)).pages[0].images) == 1  # logo, no chair mark
     assert len(PdfReader(BytesIO(issued)).pages[0].images) == 2  # logo + chair mark
+
+
+def test_written_brief_needs_no_employee_signature_and_keeps_resolution_space() -> None:
+    content = brief_pdf(
+        requester="Testova Zebo", chair="Testov Rais", purpose="", destination="Nukus",
+        start=date(2026, 10, 15), end=date(2026, 10, 16),
+        employees=["Testova Zebo"], expense_source="",
+        brief_text="Safarga ruxsat berishingizni soʻraymiz.",  # noqa: RUF001
+        attachment_name=None, signature=None, signed_on=date(2026, 10, 14),
+    )
+    text = text_of(content)
+    assert "BILDIRGI" in text and "Testov Raisga" in text
+    assert "Safarga ruxsat" in text
+    assert "Manzil" not in text
+    assert len(PdfReader(BytesIO(content)).pages[0].images) == 1  # logo only
 
 
 def test_new_trip_needs_deputy_then_chair_without_hr_access() -> None:
@@ -271,8 +289,8 @@ def test_generated_text_is_not_interpreted_as_markup() -> None:
         expense_source="лойиҳа", requester="Testova Zebo",
         chair="Testov Rais", signature=signature(),
     )
-    assert "<b>Чиқиш</b> & учрашув" in text_of(content)
-    assert "Тест <i>Али</i>" in text_of(content)
+    assert "<b>Chiqish</b> & uchrashuv" in text_of(content)
+    assert "Test <i>Ali</i>" in text_of(content)
 
 
 def test_trip_without_purpose_or_expense_source_keeps_documents_factual() -> None:
@@ -298,10 +316,10 @@ def test_trip_without_purpose_or_expense_source_keeps_documents_factual() -> Non
         expense_source=payload.expense_source, requester="Testova Zebo",
         chair="Testov Rais", signature=signature(),
     )
-    assert "Нукус" in text_of(cover) and "Нукус" in text_of(order)
-    assert "Мақсад:" not in text_of(cover)
-    assert "Харажатлар манбаи:" not in text_of(cover)
-    assert "Хизмат сафари билан боғлиқ харажатлар" not in text_of(order)
+    assert "Nukus" in text_of(order)
+    assert "Safar maqsadi:" not in text_of(cover)
+    assert "Xarajatlar manbai:" not in text_of(cover)
+    assert "Xizmat safari bilan bogʻliq xarajatlar" not in text_of(order)  # noqa: RUF001
 
 
 def test_source_upload_rejects_invalid_type_and_mismatched_extension() -> None:
@@ -479,7 +497,86 @@ def test_signed_brief_is_prepared_without_expense_source(
         connection, user, storage, uuid4(),
     ))
     storage.put.assert_awaited_once()
-    assert "Харажатлар манбаи:" not in text_of(storage.put.await_args.args[1])
+    assert "Xarajatlar manbai:" not in text_of(storage.put.await_args.args[1])
+
+
+@pytest.mark.parametrize("version", [2, 3])
+def test_written_brief_submits_without_employee_signature(
+    monkeypatch: pytest.MonkeyPatch, version: int,
+) -> None:
+    user_id, chair_id, deputy_id = uuid4(), uuid4(), uuid4()
+    user = AuthenticatedUser(user_id, "requester", "Requester", None, None, "employee")
+    monkeypatch.setattr(trip_document_service, "_row", AsyncMock(return_value={
+        "requester_user_id": user_id, "workflow_version": version,
+        "stage": "launch", "status": "draft", "brief_text": "Safarga ruxsat soʻrayman.",  # noqa: RUF001
+        "brief_attachment_key": None, "brief_attachment_name": None,
+        "employee_signature_key": None, "employee_signature_sha256": None,
+        "purpose": "", "destination": "Nukus", "start_date": date(2026, 10, 15),
+        "end_date": date(2026, 10, 16), "expense_source": "",
+    }))
+    verified = AsyncMock()
+    monkeypatch.setattr(trip_document_service, "_verified", verified)
+    monkeypatch.setattr(trip_document_service, "_appointed_chair", AsyncMock(
+        return_value=chair_id,
+    ))
+    monkeypatch.setattr(trip_document_service, "_trip_deputy_user_id", AsyncMock(
+        return_value=deputy_id,
+    ))
+    monkeypatch.setattr(trip_document_service, "_people", AsyncMock(return_value=[
+        ("Testova Zebo", "mutaxassis"),
+    ]))
+    connection, storage = AsyncMock(), AsyncMock()
+    connection.scalar.side_effect = ["Testova Zebo", "Testov Rais"]
+    asyncio.run(trip_document_service.prepare_signed_brief(
+        connection, user, storage, uuid4(),
+    ))
+    verified.assert_not_awaited()
+    storage.put.assert_awaited_once()
+    saved = storage.put.await_args.args[1]
+    assert "BILDIRGI" in text_of(saved)
+    assert len(PdfReader(BytesIO(saved)).pages[0].images) == 1
+    values = connection.execute.await_args.args[0].compile().params
+    assert values["signed_brief_key"]
+
+
+def test_written_brief_preview_is_private_and_only_available_before_submission(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user_id = uuid4()
+    row = {
+        "requester_user_id": user_id, "workflow_version": 3, "stage": "launch",
+        "status": "draft", "brief_text": "Safarga ruxsat soʻrayman.",  # noqa: RUF001
+        "purpose": "", "destination": "Nukus", "start_date": date(2026, 10, 15),
+        "end_date": date(2026, 10, 16), "expense_source": "",
+    }
+    monkeypatch.setattr(trip_document_service, "_row", AsyncMock(return_value=row))
+    monkeypatch.setattr(trip_document_service, "_people", AsyncMock(return_value=[]))
+    connection, storage = AsyncMock(), AsyncMock()
+    connection.scalar.side_effect = [uuid4(), "Testova Zebo", "Testov Rais"]
+    result = MagicMock()
+    result.scalars.return_value.all.return_value = []
+    connection.execute.return_value = result
+    requester = AuthenticatedUser(user_id, "requester", "Requester", None, None, "employee")
+    content, media_type, name = asyncio.run(trip_document_service.read_document(
+        connection, requester, storage, uuid4(), "brief-preview",
+    ))
+    assert media_type == "application/pdf" and name == "bildirgi-preview.pdf"
+    assert "BILDIRGI" in text_of(content)
+    connection.scalar.side_effect = [uuid4()]
+    stranger = AuthenticatedUser(uuid4(), "other", "Other", None, None, "employee")
+    with pytest.raises(WorkspaceRepositoryError) as denied:
+        asyncio.run(trip_document_service.read_document(
+            connection, stranger, storage, uuid4(), "brief-preview",
+        ))
+    assert denied.value.status_code == 404
+    row["stage"] = "deputy_approval"
+    row["deputy_approver_user_id"] = uuid4()
+    connection.scalar.side_effect = [uuid4()]
+    with pytest.raises(WorkspaceRepositoryError) as wrong_stage:
+        asyncio.run(trip_document_service.read_document(
+            connection, requester, storage, uuid4(), "brief-preview",
+        ))
+    assert wrong_stage.value.status_code == 404
 
 
 def test_only_appointed_chair_can_decide_new_trip_and_legacy_route_remains() -> None:

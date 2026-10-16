@@ -37,7 +37,7 @@ MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
 MAX_SIGNATURE_BYTES = 1024 * 1024
 _LOCAL = ZoneInfo("Asia/Tashkent")
 _EDITABLE = {"draft", "needs_revision"}
-DocumentKind = Literal["attachment", "brief", "order", "order-preview"]
+DocumentKind = Literal["attachment", "brief", "brief-preview", "order", "order-preview"]
 
 
 def _hash(content: bytes) -> str:
@@ -240,7 +240,8 @@ async def prepare_signed_brief(
 ) -> None:
     row = await _row(connection, request_id, lock=True)
     _require_editable(row, user)
-    if not row["brief_text"] and not row["brief_attachment_key"]:
+    brief_text = (row["brief_text"] or "").strip()
+    if not brief_text and not row["brief_attachment_key"]:
         raise Error(422, "Напишите билдирги или прикрепите исходный документ")
     if row["brief_attachment_key"]:
         await _verified(
@@ -250,10 +251,17 @@ async def prepare_signed_brief(
         if not row["brief_attachment_key"] or not row["brief_attachment_sha256"]:
             raise Error(409, "Подписанный оригинал билдирги недоступен")
         signature = None
+        use_original = True
+    elif row["workflow_version"] >= 2 and brief_text:
+        # A written brief needs no employee signature, including an editable
+        # version-2 request. Already attached signed originals stay unchanged.
+        signature = None
+        use_original = False
     else:
         signature = await _verified(
             storage, row["employee_signature_key"], row["employee_signature_sha256"],
         )
+        use_original = False
     chair_id = await _appointed_chair(connection)
     if row["workflow_version"] == 3:
         deputy_id = await _trip_deputy_user_id(connection)
@@ -267,13 +275,13 @@ async def prepare_signed_brief(
     if not requester or not chair:
         raise Error(409, "Инициатор или председатель не найден")
     cover = None
-    if signature is not None:
+    if not use_original:
         cover = await run_in_threadpool(
             brief_pdf,
             requester=str(requester), chair=str(chair), purpose=row["purpose"],
             destination=row["destination"], start=row["start_date"], end=row["end_date"],
             employees=[name for name, _ in names], expense_source=row["expense_source"],
-            brief_text=row["brief_text"] or "", attachment_name=row["brief_attachment_name"],
+            brief_text=brief_text, attachment_name=row["brief_attachment_name"],
             signature=signature, signed_on=datetime.now(_LOCAL).date(),
         )
     # Reject layouts that cannot become a usable order before entering the chair's queue.
@@ -404,6 +412,32 @@ async def read_document(
             chair=str(chair), signature=None,
         )
         return content, "application/pdf", "trip-order-preview.pdf"
+    if kind == "brief-preview":
+        if (
+            row["stage"] != "launch" or row["workflow_version"] < 2
+            or not (row["brief_text"] or "").strip()
+        ):
+            raise Error(404, "Предпросмотр билдирги недоступен")
+        if chair_id is None:
+            raise Error(409, "Назначьте председателя в настройках HR")
+        requester = await connection.scalar(select(users.c.full_name).where(
+            users.c.id == row["requester_user_id"],
+        ))
+        chair = await connection.scalar(select(users.c.full_name).where(
+            users.c.id == chair_id, users.c.status == "active",
+        ))
+        if not requester or not chair:
+            raise Error(409, "Инициатор или председатель не найден")
+        people = await _people(connection, request_id)
+        content = await run_in_threadpool(
+            brief_pdf,
+            requester=str(requester), chair=str(chair), purpose=row["purpose"],
+            destination=row["destination"], start=row["start_date"], end=row["end_date"],
+            employees=[name for name, _ in people], expense_source=row["expense_source"],
+            brief_text=row["brief_text"], attachment_name=None,
+            signature=None, signed_on=datetime.now(_LOCAL).date(),
+        )
+        return content, "application/pdf", "bildirgi-preview.pdf"
     keys = {
         "attachment": (
             row["brief_attachment_key"], row["brief_attachment_sha256"],
