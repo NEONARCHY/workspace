@@ -4,6 +4,7 @@ import { Avatar, Button, DialogActions, DialogBody, DialogContent, DialogSurface
 import { Dismiss24Regular, PeopleTeam24Regular } from "@fluentui/react-icons";
 import { WorkspaceDialog } from "./WorkspaceDialog";
 import { ProfileAvatar } from "./ProfileAvatar";
+import { employeeInitials } from "./employee-display-name";
 
 export const presenceStatusLabels: Record<PresenceSummaryItem["status"], string> = {
   working: "На работе", trip: "В поездке", vacation: "В отпуске", personal_time: "Отсутствует",
@@ -41,7 +42,7 @@ export function PresenceSummaryDialog({ open = true, status, summary, requests, 
   const members = summary.filter(item => item.status === status);
   const avatar = (person: WorkspacePerson | undefined, size: 28 | 40) => person && token
     ? <ProfileAvatar person={person} token={token} size={size} />
-    : <Avatar name={person?.name ?? "Сотрудник"} initials={person?.initials} size={size} color="colorful" />;
+    : <Avatar name={person?.name ?? "Сотрудник"} initials={person ? employeeInitials(person.name) : undefined} size={size} color="colorful" />;
 
   return <WorkspaceDialog open={open} onOpenChange={(_, data) => { if (!data.open) onClose(); }}>
     <DialogSurface className="presence-summary-dialog" data-presence-status={status} aria-describedby={descriptionId}>

@@ -10,6 +10,7 @@ import type {
   ApprovalRequestSummary,
   CalendarEvent,
   CalendarEventInput,
+  ChatMessage,
   FeedPost,
   NotificationPreferences,
   PaymentRequestDetails,
@@ -193,6 +194,7 @@ function mockServer(
 ) {
   let failApprovalActionOnce = serverOptions.failApprovalActionOnce ?? false;
   let currentUser = people[0]!;
+  const messages: ChatMessage[] = [...initialMessages];
   let tasks: WorkspaceTask[] = initialTasks.map((task) => ({ ...task }));
   let requests: ApprovalRequestSummary[] = serverOptions.withSubsidyRequest
     ? [{
@@ -415,7 +417,7 @@ function mockServer(
         departments: [],
         positions: directory.positions.map(({ id, name }) => ({ id, name })),
         chats: initialChats,
-        messages: initialMessages,
+        messages: [...messages],
         tasks,
         requests,
         requestWorkflows: [activeWorkflow],
@@ -522,14 +524,16 @@ function mockServer(
     }
     if (url.includes("/messages") && options?.method === "POST") {
       const payload = JSON.parse(String(options.body)) as { body: string };
-      return response({
+      const message: ChatMessage = {
         id: "server-message",
         chatId: initialChats[0]!.id,
         authorId: people[0]!.id,
         body: payload.body,
         time: "12:00",
         own: true,
-      });
+      };
+      messages.push(message);
+      return response(message);
     }
     if (url.includes("/chats/") && url.endsWith("/read") && options?.method === "POST") {
       return { ...response(undefined), status: 204, json: async () => undefined } as Response;
@@ -537,11 +541,15 @@ function mockServer(
     if (url.includes("/chats/") && url.endsWith("/forwards") && options?.method === "POST") {
       const payload = JSON.parse(String(options.body)) as { requestId: string; kind: "feed"; sourceId: string };
       const post = feedPosts.find(item => item.id === payload.sourceId)!;
-      return response({ id: payload.requestId, chatId: url.match(/\/chats\/([^/]+)/)![1], authorId: currentUser.id, own: true,
+      const chatId = url.match(/\/chats\/([^/]+)/)?.[1];
+      if (!chatId) throw new Error("Invalid test forwarding route");
+      const message: ChatMessage = { id: payload.requestId, chatId, authorId: currentUser.id, own: true,
         body: post.body.slice(0, 240), time: "14:09", canEdit: false, forwarded: {
           kind: payload.kind, authorId: post.authorUserId, authorName: currentUser.name,
           postId: post.id, title: post.title, available: true,
-        } });
+        } };
+      messages.push(message);
+      return response(message);
     }
     if (url.endsWith("/feed/posts") && options?.method === "POST") {
       const payload = JSON.parse(String(options.body)) as { title: string; body: string };
@@ -1271,6 +1279,56 @@ describe("corporate workspace authentication alpha", () => {
     changeField(composer, { target: { value: "Заявку подготовила" } });
     fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
     expect(await screen.findByText("Заявку подготовила")).toBeInTheDocument();
+  });
+
+  it("keeps an acknowledged send visible when an older background response arrives later", async () => {
+    const fetchMock = mockServer();
+    const server = fetchMock.getMockImplementation()!;
+    render(<App />);
+    await loginToWorkspace();
+    let releaseOld!: (response: Response) => void;
+    let releaseFresh!: (response: Response) => void;
+    let stale: Response | undefined;
+    let fresh: Response | undefined;
+    let requests = 0;
+    fetchMock.mockImplementation(async (input, options) => {
+      if (String(input).endsWith("/workspace/bootstrap")) {
+        const captured = await server(input, options);
+        requests++;
+        if (requests === 1) { stale = captured; return new Promise<Response>((done) => { releaseOld = done; }); }
+        if (requests === 2) { fresh = captured; return new Promise<Response>((done) => { releaseFresh = done; }); }
+        return captured;
+      }
+      return server(input, options);
+    });
+    fireEvent(window, new Event("focus"));
+    await waitFor(() => expect(stale).toBeDefined());
+    changeField(screen.getByRole("textbox", { name: "Новое сообщение" }), { target: { value: "Не пропадаю после подтверждения" } });
+    fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
+    await waitFor(() => expect(document.querySelector('[data-message-id="server-message"]')).toHaveTextContent("Не пропадаю после подтверждения"));
+    await act(async () => releaseOld(stale!));
+    await waitFor(() => expect(fresh).toBeDefined());
+    expect(document.querySelector('[data-message-id="server-message"]')).toHaveTextContent("Не пропадаю после подтверждения");
+    await act(async () => releaseFresh(fresh!));
+    expect(document.querySelectorAll('[data-message-id="server-message"]')).toHaveLength(1);
+    expect(document.querySelector('[data-message-id="server-message"]')).toHaveTextContent("Не пропадаю после подтверждения");
+  });
+
+  it.each(["online", "focus"])("refreshes incoming messages after %s without a websocket event", async (eventName) => {
+    const fetchMock = mockServer();
+    const server = fetchMock.getMockImplementation()!;
+    render(<App />);
+    await loginToWorkspace();
+    fetchMock.mockImplementation(async (input, options) => {
+      const result = await server(input, options);
+      if (!String(input).endsWith("/workspace/bootstrap")) return result;
+      const snapshot = await result.json();
+      return response({ ...snapshot, messages: [...snapshot.messages, {
+        id: "recovered-incoming", chatId: initialChats[0]!.id, authorId: "dilshod", body: "Догрузилось без перезахода", time: "12:01",
+      }] });
+    });
+    fireEvent(window, new Event(eventName));
+    expect(await screen.findByText("Догрузилось без перезахода")).toBeInTheDocument();
   });
 
   it("keeps branding in the rail and a live status without a duplicate header logo", async () => {

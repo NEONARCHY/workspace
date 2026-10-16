@@ -9,7 +9,8 @@ import type {
   WorkspacePerson,
   WorkspaceTask,
 } from "@yuksalish/contracts";
-import { Avatar, Button, Checkbox, DialogSurface, Textarea } from "@fluentui/react-components";
+import { Button, Checkbox, DialogSurface, Textarea } from "@fluentui/react-components";
+import { EmployeeAvatar as Avatar } from "./EmployeeAvatar";
 import { Input } from "./WorkspaceInput";
 import { Add20Regular } from "@fluentui/react-icons";
 

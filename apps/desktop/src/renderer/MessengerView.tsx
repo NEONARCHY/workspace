@@ -1,3 +1,4 @@
+import { EmployeeAvatar as Avatar } from "./EmployeeAvatar";
 import { RichMessageEditor } from "./RichMessageEditor";
 import { RichMessageText, EMPTY_ENTITIES, editorSelection, setEditorSelection, trimRichDocument } from "./message-rich-text";
 import { decodeRichDraft, encodeRichDraft, useRichComposer } from "./useRichComposer";
@@ -29,7 +30,6 @@ import type {
   WorkspaceTaskCreateInput,
 } from "@yuksalish/contracts";
 import {
-  Avatar,
   Button,
   Dialog,
   DialogActions,

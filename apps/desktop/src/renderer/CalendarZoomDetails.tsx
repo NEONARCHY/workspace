@@ -2,6 +2,7 @@ import { Button } from "@fluentui/react-components";
 import type { WorkspacePerson, ZoomMeeting } from "@yuksalish/contracts";
 import { CalendarIcon } from "./CalendarAppearance";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
+import { employeeDisplayName } from "./employee-display-name";
 
 export function CalendarZoomDetails({ meeting, people, onOpen }: {
   readonly meeting: ZoomMeeting;
@@ -18,7 +19,7 @@ export function CalendarZoomDetails({ meeting, people, onOpen }: {
     </div>
     <dl className="calendar-detail-list">
       <div><dt>Дата</dt><dd>{start.toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" })}{sameDay ? "" : ` — ${end.toLocaleDateString("ru-RU")}`}</dd></div>
-      <div><dt>Организатор</dt><dd>{meeting.organizerName}</dd></div>
+      <div><dt>Организатор</dt><dd>{employeeDisplayName(meeting.organizerName)}</dd></div>
       <div className="calendar-detail-attendees"><dt>Участники</dt><dd className="calendar-attendee-list">
         {meeting.participantIds.map(id => <EmployeeProfileLink key={id} userId={id} personName={people.find(person => person.id === id)?.name ?? "Сотрудник"}>
           {people.find(person => person.id === id)?.name ?? "Сотрудник"}

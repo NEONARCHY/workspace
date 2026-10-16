@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Avatar } from "@fluentui/react-components";
+import { EmployeeAvatar as Avatar } from "./EmployeeAvatar";
 import type { WorkspaceDepartment, WorkspacePerson } from "@yuksalish/contracts";
 import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
 import { employeeScope, type EmployeeScope } from "./employee-scope";

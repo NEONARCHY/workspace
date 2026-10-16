@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Avatar, Popover, PopoverSurface, PopoverTrigger } from "@fluentui/react-components";
+import { Popover, PopoverSurface, PopoverTrigger } from "@fluentui/react-components";
+import { EmployeeAvatar as Avatar } from "./EmployeeAvatar";
 import { Input } from "./WorkspaceInput";
 import { Checkmark20Regular, ChevronDown16Regular, Dismiss16Regular, Person20Regular, Search20Regular } from "@fluentui/react-icons";
 import type { WorkspaceDepartment, WorkspacePerson } from "@yuksalish/contracts";

@@ -34,6 +34,7 @@ import { DesktopUpdateSettings } from "./DesktopUpdateSettings";
 import { WorkspaceSelect as Select } from "./WorkspaceSelect";
 import { BirthdayDayPicker, birthdayMonthLength, birthdayMonthName } from "./BirthdayDayPicker";
 import { notifyProfileAvatarChanged, ProfileAvatar } from "./ProfileAvatar";
+import { employeeDisplayName } from "./employee-display-name";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
 import { employeeScope, type EmployeeScope } from "./employee-scope";
@@ -617,7 +618,7 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
                   <Select value={managedUserId} disabled={passwordBusy} onChange={(event) => setManagedUserId(event.target.value)}>
                     <option value="">Выберите сотрудника</option>
                     {manageableEmployees.map((employee) => (
-                      <option key={employee.id} value={employee.id}>{employee.name} (@{employee.username})</option>
+                      <option key={employee.id} value={employee.id}>{employeeDisplayName(employee.name)} (@{employee.username})</option>
                     ))}
                   </Select>
                 </Field>

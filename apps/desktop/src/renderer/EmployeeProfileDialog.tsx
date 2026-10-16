@@ -40,6 +40,7 @@ import type {
 } from "@yuksalish/contracts";
 import { SlidingSegmented } from "./SlidingSegmented";
 import { ProfileAvatar } from "./ProfileAvatar";
+import { employeeDisplayName } from "./employee-display-name";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import { RecognitionBadgeArtwork, prewarmRecognitionArtwork } from "./RecognitionBadgeArtwork";
 import { getPreparedProfile, invalidatePreparedProfile, loadPreparedProfile, loadPreparedProfileEfficiency } from "./profile-preload";
@@ -377,6 +378,7 @@ export function EmployeeProfileDialog({
   open,
   onOpenChange,
   people = [],
+  showFullName = false,
   onOpenPersonProfile,
   onOpenChat,
   onOpenTask,
@@ -387,6 +389,7 @@ export function EmployeeProfileDialog({
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
   readonly people?: readonly WorkspacePerson[];
+  readonly showFullName?: boolean;
   readonly onOpenPersonProfile?: (userId: string) => void;
   readonly onOpenChat?: (userId: string) => Promise<void>;
   readonly onOpenTask?: (taskId: string) => void;
@@ -655,7 +658,7 @@ export function EmployeeProfileDialog({
                   <ProfileAvatar person={profile.person} token={token} size={128} />
                   <div className="employee-profile-identity">
                     <span className="employee-profile-eyebrow">Рабочий профиль</span>
-                    <h2>{profile.person.name}</h2>
+                    <h2>{showFullName ? profile.person.name : employeeDisplayName(profile.person.name)}</h2>
                     <p>{profile.person.jobTitle ?? "Должность не указана"}</p>
                     {profile.departmentName ? <small className="employee-profile-department">{profile.departmentName}</small> : null}
                     {profile.person.id === currentUserId ? <Button ref={personalTriggerRef} className="employee-profile-chat-action" size="small" icon={<DataTrending24Regular />} onClick={() => {

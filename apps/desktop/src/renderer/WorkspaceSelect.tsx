@@ -11,7 +11,8 @@ import {
   type ReactNode,
 } from "react";
 
-import { Avatar, Dropdown, Option } from "@fluentui/react-components";
+import { Dropdown, Option } from "@fluentui/react-components";
+import { EmployeeAvatar as Avatar } from "./EmployeeAvatar";
 import type { WorkspacePerson } from "@yuksalish/contracts";
 
 const WorkspacePeopleContext = createContext<readonly WorkspacePerson[]>([]);

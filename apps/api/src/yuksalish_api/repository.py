@@ -2646,105 +2646,6 @@ async def load_workspace(
     )
     published_payment_template = await _published_payment_template(connection)
 
-    member_chat_ids = select(chat_members.c.chat_id).where(
-        chat_members.c.user_id == current_user.id
-    )
-    accessible_chat_ids = member_chat_ids
-    if current_user.role in {"admin", "superadmin"} or is_executive_leader(
-        current_user.job_title
-    ):
-        leadership_contexts = ["project", "project_hub", "trip", "task"]
-        accessible_chat_ids = select(chats.c.id).where(
-            chats.c.id.in_(member_chat_ids)
-            | chats.c.context_type.in_(leadership_contexts)
-        )
-    accessible_chat_ids = select(chats.c.id).where(
-        chats.c.id.in_(accessible_chat_ids),
-        chats.c.id.not_in(select(chat_dismissals.c.chat_id).where(
-            chat_dismissals.c.user_id == current_user.id,
-        )),
-    )
-    chat_rows = (
-        (
-            await connection.execute(
-                select(chats)
-                .where(chats.c.id.in_(accessible_chat_ids), chats.c.deleted_at.is_(None))
-                .order_by(chats.c.updated_at.desc())
-            )
-        )
-        .mappings()
-        .all()
-    )
-    message_rows = (
-        (
-            await connection.execute(
-                select(messages)
-                .outerjoin(
-                    chat_members,
-                    and_(
-                        chat_members.c.chat_id == messages.c.chat_id,
-                        chat_members.c.user_id == current_user.id,
-                    ),
-                )
-                .where(
-                    messages.c.chat_id.in_(accessible_chat_ids),
-                    messages.c.deleted_at.is_(None),
-                    or_(
-                        chat_members.c.history_visible_from.is_(None),
-                        messages.c.created_at >= chat_members.c.history_visible_from,
-                    ),
-                    or_(
-                        messages.c.system_target_user_id.is_(None),
-                        messages.c.system_target_user_id == current_user.id,
-                    ),
-                )
-                .order_by(messages.c.created_at)
-            )
-        )
-        .mappings()
-        .all()
-    )
-    chat_responses = [
-        await messenger_service.chat_summary(connection, current_user, row["id"])
-        for row in chat_rows
-    ]
-    send_permissions = {chat.id: chat.permissions.send_messages for chat in chat_responses}
-    pin_permissions = {
-        chat.id: bool(chat.permissions.manage_messages)
-        or (chat.kind == "direct" and chat.permissions.send_messages)
-        for chat in chat_responses
-    }
-    reaction_map, pin_map = await messenger_service.message_detail_maps(
-        connection, current_user, [row["id"] for row in message_rows]
-    )
-    forward_map = await messenger_service.forward_detail_map(
-        connection, current_user, list(message_rows)
-    )
-    invitations = await messenger_service.invitation_detail_map(
-        connection, current_user, list(message_rows)
-    )
-    read_ids = await messenger_service.read_message_ids(
-        connection, current_user, [row["id"] for row in message_rows]
-    )
-    quote_map = await messenger_service.reply_quote_map(
-        connection, current_user, list(message_rows)
-    )
-    message_responses = [
-        messenger_service.message_response(
-            row,
-            current_user,
-            can_send=send_permissions.get(str(row["chat_id"]), False),
-            can_pin=pin_permissions.get(str(row["chat_id"]), False),
-            reactions=reaction_map.get(row["id"]),
-            pin=pin_map.get(row["id"]),
-            forwarded=forward_map.get(row["id"]),
-            zoom_invitation=invitations.get(row["id"]),
-            reply_quote=quote_map.get(row["id"]),
-            read_by_recipient=row["id"] in read_ids,
-        )
-        for row in message_rows
-    ]
-
     task_statement = select(tasks).order_by(tasks.c.updated_at.desc())
     if current_user.role == "employee":
         participant_task_ids = select(task_participants.c.task_id).where(
@@ -2905,6 +2806,108 @@ async def load_workspace(
         trip_rows=trip_rows,
     )
     notification_preferences = await get_notification_preferences(connection, current_user)
+
+    # Read chat history after notification materialization. Under READ COMMITTED,
+    # reading it earlier can return a notification for a message missing from
+    # the same bootstrap when a send commits during this request.
+    member_chat_ids = select(chat_members.c.chat_id).where(
+        chat_members.c.user_id == current_user.id
+    )
+    accessible_chat_ids = member_chat_ids
+    if current_user.role in {"admin", "superadmin"} or is_executive_leader(
+        current_user.job_title
+    ):
+        leadership_contexts = ["project", "project_hub", "trip", "task"]
+        accessible_chat_ids = select(chats.c.id).where(
+            chats.c.id.in_(member_chat_ids)
+            | chats.c.context_type.in_(leadership_contexts)
+        )
+    accessible_chat_ids = select(chats.c.id).where(
+        chats.c.id.in_(accessible_chat_ids),
+        chats.c.id.not_in(select(chat_dismissals.c.chat_id).where(
+            chat_dismissals.c.user_id == current_user.id,
+        )),
+    )
+    chat_rows = (
+        (
+            await connection.execute(
+                select(chats)
+                .where(chats.c.id.in_(accessible_chat_ids), chats.c.deleted_at.is_(None))
+                .order_by(chats.c.updated_at.desc())
+            )
+        )
+        .mappings()
+        .all()
+    )
+    message_rows = (
+        (
+            await connection.execute(
+                select(messages)
+                .outerjoin(
+                    chat_members,
+                    and_(
+                        chat_members.c.chat_id == messages.c.chat_id,
+                        chat_members.c.user_id == current_user.id,
+                    ),
+                )
+                .where(
+                    messages.c.chat_id.in_(accessible_chat_ids),
+                    messages.c.deleted_at.is_(None),
+                    or_(
+                        chat_members.c.history_visible_from.is_(None),
+                        messages.c.created_at >= chat_members.c.history_visible_from,
+                    ),
+                    or_(
+                        messages.c.system_target_user_id.is_(None),
+                        messages.c.system_target_user_id == current_user.id,
+                    ),
+                )
+                .order_by(messages.c.created_at)
+            )
+        )
+        .mappings()
+        .all()
+    )
+    chat_responses = [
+        await messenger_service.chat_summary(connection, current_user, row["id"])
+        for row in chat_rows
+    ]
+    send_permissions = {chat.id: chat.permissions.send_messages for chat in chat_responses}
+    pin_permissions = {
+        chat.id: bool(chat.permissions.manage_messages)
+        or (chat.kind == "direct" and chat.permissions.send_messages)
+        for chat in chat_responses
+    }
+    reaction_map, pin_map = await messenger_service.message_detail_maps(
+        connection, current_user, [row["id"] for row in message_rows]
+    )
+    forward_map = await messenger_service.forward_detail_map(
+        connection, current_user, list(message_rows)
+    )
+    invitations = await messenger_service.invitation_detail_map(
+        connection, current_user, list(message_rows)
+    )
+    read_ids = await messenger_service.read_message_ids(
+        connection, current_user, [row["id"] for row in message_rows]
+    )
+    quote_map = await messenger_service.reply_quote_map(
+        connection, current_user, list(message_rows)
+    )
+    message_responses = [
+        messenger_service.message_response(
+            row,
+            current_user,
+            can_send=send_permissions.get(str(row["chat_id"]), False),
+            can_pin=pin_permissions.get(str(row["chat_id"]), False),
+            reactions=reaction_map.get(row["id"]),
+            pin=pin_map.get(row["id"]),
+            forwarded=forward_map.get(row["id"]),
+            zoom_invitation=invitations.get(row["id"]),
+            reply_quote=quote_map.get(row["id"]),
+            read_by_recipient=row["id"] in read_ids,
+        )
+        for row in message_rows
+    ]
 
     attachment_filters = []
     message_ids = [
