@@ -22,3 +22,12 @@ Next: run full checks with a fresh isolated QA database, review PR and green CI,
 merge normally, rebuild from exact main. Back up TEST before migration, update API,
 workers/scheduler if affected, web; verify HTTPS/version, API readiness and schema.
 Never reset TEST volumes or print environment credentials. Deployment evidence pending.
+
+Integration verification: full isolated Python/PostgreSQL suite passed (1078 passed,
+5 skipped, coverage83.68%, threshold80%). Local renderer run: 1585 passed, one static
+CSS contract expected a formerly separate summary selector. It now explicitly
+requires the payment/trip shared rule and retains every original contrast/focus
+assertion. Browser equality checks for the actual computed surfaces passed.
+Typecheck, ESLint, Ruff, strict mypy, production web build and 15 workflow tests passed.
+TEST dump restored to an isolated database and migrated to0102 with unchanged
+3 users/1 task/133 messages; TEST itself has not yet been migrated.
