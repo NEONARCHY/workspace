@@ -12,6 +12,7 @@ from pypdf import PdfReader
 
 from yuksalish_api import repository
 from yuksalish_api.auth import AuthenticatedUser
+from yuksalish_api.errors import WorkspaceRepositoryError
 from yuksalish_api.trip_brief_generator import generate_trip_brief
 from yuksalish_api.trip_order_pdf import brief_pdf
 from yuksalish_api.workspace_schemas import CreateTripRequest, UpdateTripRequest
@@ -138,3 +139,10 @@ def test_edit_regenerates_brief_and_invalidates_prepared_pdf(
     assert values["brief_text"] == generate_trip_brief(**facts)
     assert values["signed_brief_key"] is None
     assert values["signed_brief_sha256"] is None
+    calls_before_rejection = connection.execute.await_count
+    with pytest.raises(WorkspaceRepositoryError, match="нельзя заменить"):
+        asyncio.run(repository.update_trip_request(
+            connection, user, request_id,
+            payload.model_copy(update={"brief_format": "manual"}),
+        ))
+    assert connection.execute.await_count == calls_before_rejection + 1  # row lookup only
