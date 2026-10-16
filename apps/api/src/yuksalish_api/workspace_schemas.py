@@ -1340,6 +1340,7 @@ class TripRequestResponse(ApiModel):
     end_date: date
     employee_ids: list[str]
     brief_text: str = ""
+    brief_format: Literal["manual", "generated"] = "manual"
     expense_source: str = ""
     brief_attachment_name: str | None = None
     brief_attachment_type: str | None = None
@@ -1371,6 +1372,7 @@ class TripWriteRequest(ApiModel):
     end_date: date
     employee_ids: list[str] = Field(min_length=1, max_length=100)
     brief_text: str = Field(default="", max_length=6000)
+    brief_format: Literal["manual", "generated"] = "manual"
     expense_source: str = Field(default="", max_length=300)
 
     @field_validator("destination")

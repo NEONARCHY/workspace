@@ -115,7 +115,7 @@ def brief_pdf(
     *, requester: str, chair: str, purpose: str, destination: str,
     start: date, end: date, employees: list[str], expense_source: str,
     brief_text: str, attachment_name: str | None, signature: bytes | None,
-    signed_on: date,
+    signed_on: date, include_fact_lines: bool = True,
 ) -> bytes:
     """Create a Latin-script brief for the chair's resolution and optional legacy signature."""
     _fonts()
@@ -138,7 +138,7 @@ def brief_pdf(
         Paragraph("BILDIRGI", centered),
         Spacer(1, 14),
     ]
-    if purpose.strip():
+    if include_fact_lines and purpose.strip():
         story.append(Paragraph(f"Safar maqsadi: {_text(purpose)}", regular))
     if brief_text.strip():
         for paragraph in brief_text.strip().splitlines():
@@ -153,7 +153,7 @@ def brief_pdf(
         story.append(Paragraph(
             "Safar ishtirokchilari: " + "; ".join(_text(name) for name in employees), regular,
         ))
-    if expense_source.strip():
+    if include_fact_lines and expense_source.strip():
         story.append(Paragraph(f"Xarajatlar manbai: {_text(expense_source)}", regular))
     if attachment_name:
         story.append(Paragraph(
