@@ -3,6 +3,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 describe("web API addresses and session restore", () => {
   const defaultBridge = window.yuksalish;
   const cookieDescriptor = Object.getOwnPropertyDescriptor(Document.prototype, "cookie");
+  it("rejects a malformed proposal list instead of crashing the tasks screen", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ tasks: [] })));
+    const api = await import("./workspace-api");
+    await expect(api.loadTaskProposals("test-token")).rejects.toThrow("некорректный список заявок");
+  });
   it("loads Word PDF previews as binary while keeping spreadsheet JSON previews", async () => {
     window.yuksalish = undefined;
     const fetchMock = vi.fn().mockResolvedValueOnce(new Response("%PDF-1.7", { headers: { "Content-Type": "application/pdf" } }))

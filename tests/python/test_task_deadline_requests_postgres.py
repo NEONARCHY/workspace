@@ -17,7 +17,11 @@ from yuksalish_api.efficiency_service import (
 )
 from yuksalish_api.main import create_app
 from yuksalish_api.settings import Settings
-from yuksalish_api.tables import task_deadline_requests, task_efficiency_events
+from yuksalish_api.tables import (
+    task_deadline_requests,
+    task_efficiency_events,
+    workspace_notifications,
+)
 
 
 @pytest.mark.anyio
@@ -98,11 +102,36 @@ async def test_task_deadline_extension_requires_setter_decision() -> None:
         record = requested.json()["deadlineRequests"][-1]
         assert record["status"] == "pending"
         assert requested.json()["dueAt"] == task["dueAt"]
+        # The dedicated system notification exists in the same committed
+        # transaction as the request, before the author opens bootstrap.
+        engine = create_async_engine(database_url)
+        async with engine.connect() as connection:
+            notice = (await connection.execute(select(workspace_notifications).where(
+                workspace_notifications.c.event_key == f"task:deadline:request:{record['id']}",
+            ))).mappings().one()
+            notice_id = str(notice["id"])
+            assert str(notice["user_id"]) == sessions["malika"]["user"]["id"]
+            assert notice["entity_id"] == UUID(task_id)
+            assert notice["kind"] == "task" and notice["requires_action"]
+            assert notice["priority"] == "attention"
+            assert sessions["baxtiyor"]["user"]["name"] in notice["body"]
+            assert task["title"] in notice["body"]
+            assert payload["reason"] in notice["body"]
+        await engine.dispose()
         duplicate = await client.post(request_url, headers=headers("dilshod"), json=payload)
         assert duplicate.status_code == 409
 
         bootstrap = await client.get("/api/v1/workspace/bootstrap", headers=headers("malika"))
         assert bootstrap.status_code == 200
+        notices = [item for item in bootstrap.json()["notifications"] if item["id"] == notice_id]
+        assert len(notices) == 1
+        assert notices[0]["section"] == "tasks" and notices[0]["entityId"] == task_id
+        assert notices[0]["requiresAction"] and notices[0]["resolvedAt"] is None
+        repeated_bootstrap = await client.get(
+            "/api/v1/workspace/bootstrap", headers=headers("malika"),
+        )
+        assert sum(item["id"] == notice_id
+                   for item in repeated_bootstrap.json()["notifications"]) == 1
         assert any(
             item["id"] == record["messageId"] and item["systemKind"] == "task_deadline_request"
             for item in bootstrap.json()["messages"]
@@ -118,6 +147,11 @@ async def test_task_deadline_extension_requires_setter_decision() -> None:
         assert approved.status_code == 200
         assert approved.json()["deadlineRequests"][-1]["status"] == "approved"
         assert datetime.fromisoformat(approved.json()["dueAt"]) == proposed
+        resolved = await client.get("/api/v1/workspace/bootstrap", headers=headers("malika"))
+        resolved_notice = next(item for item in resolved.json()["notifications"]
+                               if item["id"] == notice_id)
+        assert resolved_notice["resolvedAt"] is not None
+        assert not resolved_notice["requiresAction"]
         history = await client.get(history_url, headers=headers("aziza"))
         assert history.status_code == 200, history.text
         trail = history.json()
@@ -168,6 +202,13 @@ async def test_task_deadline_extension_requires_setter_decision() -> None:
         assert rejected.status_code == 200
         assert rejected.json()["deadlineRequests"][-1]["status"] == "rejected"
         assert datetime.fromisoformat(rejected.json()["dueAt"]) == proposed
+        after_rejection = await client.get(
+            "/api/v1/workspace/bootstrap", headers=headers("malika"),
+        )
+        assert not any(item["title"] == "Запрос на перенос срока задачи"
+                       and item["entityId"] == task_id and item["requiresAction"]
+                       and item["resolvedAt"] is None
+                       for item in after_rejection.json()["notifications"])
 
         third = await client.post(request_url, headers=headers("dilshod"), json={
             "proposedDueAt": (proposed + timedelta(days=2)).isoformat(),
@@ -180,5 +221,11 @@ async def test_task_deadline_extension_requires_setter_decision() -> None:
         )
         assert direct.status_code == 200
         assert direct.json()["deadlineRequests"][-1]["status"] == "superseded"
+        after_direct = await client.get(
+            "/api/v1/workspace/bootstrap", headers=headers("malika"),
+        )
+        assert not any(item["title"] == "Запрос на перенос срока задачи"
+                       and item["entityId"] == task_id and item["resolvedAt"] is None
+                       for item in after_direct.json()["notifications"])
         deleted = await client.delete(f"/api/v1/tasks/{task_id}", headers=headers("malika"))
         assert deleted.status_code == 204

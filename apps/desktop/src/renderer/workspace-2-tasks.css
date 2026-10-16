@@ -394,7 +394,8 @@
 /* Separate sections by recessed colour, not outlines. Keep the same border
    box in both palettes so switching the theme never moves the content. */
 @media (forced-colors: none) {
-  html[data-color-theme="dark"] .task-record-dialog .task-detail > :is(.detail-section, .attachment-panel-dropzone, .task-lifecycle-summary, .task-card-editor) {
+  html[data-color-theme="dark"] .task-record-dialog .task-detail > :is(.detail-section, .attachment-panel-dropzone, .task-lifecycle-summary, .task-card-editor),
+  html[data-color-theme="dark"] .task-record-dialog .task-secondary-settings-content > .detail-section {
     border-color: transparent;
     background: var(--ws-surface-recessed, #14151a);
     box-shadow: none;
