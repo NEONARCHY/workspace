@@ -1,4 +1,5 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
+import { LoadingSkeleton, SkeletonBlock } from "./LoadingSkeleton";
 import { useCallback, useEffect, useState } from "react";
 import { Button, DialogSurface, Input, Textarea } from "@fluentui/react-components";
 import { Add24Regular, ArrowClockwise24Regular, Attach20Regular, Dismiss20Regular } from "@fluentui/react-icons";
@@ -98,6 +99,7 @@ export function ProjectHubView({ mode, token, people, departments, currentUserId
   const [importArchiveProjectId, setImportArchiveProjectId] = useState<string>();
   const [requests, setRequests] = useState<readonly ProjectHubRequest[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadedToken, setLoadedToken] = useState<string>();
   const [asOf, setAsOf] = useState(0);
   const [loadError, setLoadError] = useState("");
   const [actionError, setActionError] = useState("");
@@ -151,6 +153,7 @@ export function ProjectHubView({ mode, token, people, departments, currentUserId
         mode === "funding" ? loadProjectHubRequests(token) : Promise.resolve([]),
       ]);
       setHub(freshHub); setRequests(freshRequests);
+      setLoadedToken(`${token}:${mode}`);
       setAsOf(Date.now());
       setSelectedProjectId((current) => current || freshHub.projects[0]?.id || "");
       setSelectedRequestId((current) => current || freshRequests[0]?.id || "");
@@ -283,14 +286,14 @@ export function ProjectHubView({ mode, token, people, departments, currentUserId
     } catch (error) { setActionError(errorText(error)); }
   };
 
-  if (loading && !hub.projects.length && !requests.length) return <section className="project-hub-view" aria-busy="true"><p>Загружаем проектное пространство…</p></section>;
+  const initialLoading = loading && loadedToken !== `${token}:${mode}`;
   if (loadError && !hub.projects.length && !requests.length) return <section className="project-hub-view"><h1>{mode === "projects" ? "Проекты" : "Проектные заявки"}</h1><WorkspaceNotice tone="error" role="alert">{loadError}</WorkspaceNotice><Button onClick={() => void reload()}>Повторить</Button></section>;
 
   return <section className={`project-hub-view workspace-view is-${mode}`} aria-label={mode === "projects" ? "Проекты" : "Проектные заявки"}>
     <header className="project-hub-header">
       <div><h1>{mode === "projects" ? "Проекты" : "Проектные заявки"}</h1>
         <p>{mode === "projects" ? "Планируйте работу, бюджет и решения в одной карточке проекта." : "Отдельный маршрут денежных решений по проектам."}</p></div>
-      <div className="project-hub-header-side"><div className="project-hub-hero-summary" aria-label={mode === "projects" ? `Всего проектов: ${hub.projects.length}` : `Всего проектных заявок: ${requests.length}`}><strong>{mode === "projects" ? hub.projects.length : requests.length}</strong><span>{mode === "projects" ? "проектов в пространстве" : "заявок в пространстве"}</span></div><div className="project-hub-header-actions"><Button icon={<ArrowClockwise24Regular />} onClick={() => void reload()} disabled={loading}>Обновить</Button>
+      <div className="project-hub-header-side"><div className="project-hub-hero-summary" aria-label={initialLoading ? "Загрузка количества" : mode === "projects" ? `Всего проектов: ${hub.projects.length}` : `Всего проектных заявок: ${requests.length}`}><strong>{initialLoading ? <SkeletonBlock width="48px" height="30px" /> : mode === "projects" ? hub.projects.length : requests.length}</strong><span>{mode === "projects" ? "проектов в пространстве" : "заявок в пространстве"}</span></div><div className="project-hub-header-actions"><Button icon={<ArrowClockwise24Regular />} onClick={() => void reload()} disabled={loading}>Обновить</Button>
         {mode === "projects" && canCreateProject ? <Button className="project-hub-primary-action" appearance="primary" icon={<Add24Regular />} onClick={() => startProject()}>Новый проект</Button> : null}
         {mode === "projects" && canCreateProject ? <Button onClick={() => { setImportArchiveProjectId(undefined); setImportOpen(true); }}>Из документов с ИИ</Button> : null}
         {mode === "projects" && selectedProject ? <Button onClick={() => { setImportArchiveProjectId(selectedProject.id); setImportOpen(true); }}>Документы проекта</Button> : null}
@@ -300,15 +303,20 @@ export function ProjectHubView({ mode, token, people, departments, currentUserId
     {loadError ? <WorkspaceNotice tone="error" className="project-hub-error" role="alert">{loadError}</WorkspaceNotice> : null}
     {mode === "projects" ? <div className="project-hub-layout">
       <aside className="project-hub-index" aria-label="Список новых проектов">
-        <div className="project-hub-index-top"><div><span className="view-kicker">ПОРТФЕЛЬ</span><strong>Ваши проекты</strong><small>{visibleProjects.length} в выбранном срезе</small></div><WorkspaceSelect aria-label="Фильтр проектов" value={filter} onChange={(event) => setFilter(event.target.value)}><option value="active">Активные</option><option value="completed">Завершённые</option><option value="all">Все</option></WorkspaceSelect></div>
+        <div className="project-hub-index-top"><div><span className="view-kicker">ПОРТФЕЛЬ</span><strong>Ваши проекты</strong><small>{initialLoading ? <SkeletonBlock width="120px" height="12px" /> : `${visibleProjects.length} в выбранном срезе`}</small></div><WorkspaceSelect aria-label="Фильтр проектов" value={filter} onChange={(event) => setFilter(event.target.value)}><option value="active">Активные</option><option value="completed">Завершённые</option><option value="all">Все</option></WorkspaceSelect></div>
         <div className="project-hub-index-list">{visibleProjects.map((project) => <button type="button" key={project.id} className={`project-hub-project ${project.id === selectedProjectId ? "selected" : ""}`} aria-current={project.id === selectedProjectId ? "true" : undefined} onClick={() => { setSelectedProjectId(project.id); setSelectedWorkstreamId(""); setSelectedItemId(""); }}>
           <span>{project.code} · {project.accessStatus === "closed" ? "Закрытый" : "Открытый"}</span><strong>{project.title}</strong><small>{personName(project.managerUserId)}</small>
           <span className="project-hub-mini-budget">{formatMoney(project.approvedAmount, project.currency)} согласовано из {formatMoney(project.budget, project.currency)}</span>
         </button>)}
-        {!visibleProjects.length ? <p className="project-hub-empty">Пока нет проектов с таким статусом.</p> : null}</div>
+        {initialLoading ? <LoadingSkeleton layout="custom" label="Загружаем проекты…">{Array.from({ length: 4 }, (_, index) => <div className="project-hub-project ws-skeleton-copy" key={index}><SkeletonBlock width="50%" height="12px" /><SkeletonBlock width="85%" height="20px" /><SkeletonBlock width="65%" height="12px" /><SkeletonBlock width="90%" /></div>)}</LoadingSkeleton> : !visibleProjects.length ? <p className="project-hub-empty">Пока нет проектов с таким статусом.</p> : null}</div>
       </aside>
-      <main className={`project-hub-canvas${selectedProject ? "" : " is-empty"}`}>
-        {selectedProject ? <>
+      <main className={`project-hub-canvas${selectedProject || initialLoading ? "" : " is-empty"}`}>
+        {initialLoading ? <LoadingSkeleton layout="custom" label="Загружаем проектное пространство…">
+          <div className="project-hub-title"><div className="ws-skeleton-copy"><SkeletonBlock width="120px" height="12px" /><SkeletonBlock width="70%" height="30px" /><SkeletonBlock width="85%" /></div></div>
+          <div className="project-hub-metrics">{Array.from({ length: 4 }, (_, index) => <div className="ws-skeleton-copy" key={index}><SkeletonBlock width="65%" /><SkeletonBlock width="55%" height="24px" /><SkeletonBlock width="80%" height="12px" /></div>)}</div>
+          <div className="project-hub-context"><SkeletonBlock width="75%" height="20px" /></div>
+          <section className="project-hub-work"><div className="project-hub-section-head"><SkeletonBlock width="40%" height="26px" /></div><div className="project-hub-workstream-grid">{Array.from({ length: 3 }, (_, index) => <div className="project-hub-workstream-card ws-skeleton-copy" key={index}><SkeletonBlock width="60%" /><SkeletonBlock width="85%" height="20px" /><SkeletonBlock width="90%" /><SkeletonBlock width="70%" /></div>)}</div></section>
+        </LoadingSkeleton> : selectedProject ? <>
           <div className="project-hub-title"><div><span className="view-kicker">{selectedProject.code} · {selectedProject.lifecycleStatus === "active" ? "В РАБОТЕ" : "ЗАВЕРШЁН"}</span><h2>{selectedProject.title}</h2><p>{selectedProject.description || "Описание проекта ещё не добавлено."}</p></div>
             {selectedProject.chatId && onOpenChat ? <Button onClick={() => onOpenChat(selectedProject.chatId!)}>Открыть чат проекта</Button> : null}
             {selectedProject.canEdit ? <Button onClick={() => startProject(selectedProject)}>Настроить проект</Button> : null}</div>
@@ -355,16 +363,16 @@ export function ProjectHubView({ mode, token, people, departments, currentUserId
         </div>}
       </main>
     </div> : <div className={`project-hub-funding-layout ${selectedRequest ? "has-selection" : ""}`}>
-      <div className="project-hub-funding-overview" aria-label="Сводка проектных заявок">{(["draft", "pending", "approved", "rejected"] as const).map((status) => <div className={`project-hub-funding-stat ${status}`} key={status}><span>{requestStatus[status]}</span><strong>{requests.filter((request) => request.status === status).length}</strong><small>{status === "draft" ? "Личные черновики" : status === "pending" ? "Ожидают решения" : status === "approved" ? "Маршрут завершён" : "Сохранены в истории"}</small></div>)}</div>
+      <div className="project-hub-funding-overview" aria-label="Сводка проектных заявок">{(["draft", "pending", "approved", "rejected"] as const).map((status) => <div className={`project-hub-funding-stat ${status}`} key={status}><span>{requestStatus[status]}</span><strong>{initialLoading ? <SkeletonBlock width="40px" height="24px" /> : requests.filter((request) => request.status === status).length}</strong><small>{status === "draft" ? "Личные черновики" : status === "pending" ? "Ожидают решения" : status === "approved" ? "Маршрут завершён" : "Сохранены в истории"}</small></div>)}</div>
       <div className="project-hub-funding-board project-request-kanban" role="region" aria-label="Канбан проектных заявок" tabIndex={0}>
         {(["draft", "pending", "approved", "rejected"] as const).map((status) => {
           const columnRequests = requests.filter((request) => request.status === status);
           return <section className={`project-hub-funding-lane approval-column ${status}`} key={status} aria-label={requestStatus[status]}>
-            <header><strong>{requestStatus[status]}</strong><span className="approval-column-count">{columnRequests.length}</span></header>
+            <header><strong>{requestStatus[status]}</strong><span className="approval-column-count">{initialLoading ? <SkeletonBlock width="20px" /> : columnRequests.length}</span></header>
             <div className="approval-column-total"><span>Сумма в колонке</span>{approvalColumnTotals(columnRequests).map((total) => <strong key={total.currency}>{total.formatted}</strong>)}</div>
             <div className="approval-column-stack">
               {columnRequests.map((request) => <button type="button" key={request.id} aria-current={selectedRequestId === request.id ? "true" : undefined} className={`project-hub-funding-card ${selectedRequestId === request.id ? "selected" : ""}`} onClick={() => { setSelectedRequestId(request.id); setDecisionComment(""); }}><span>{request.projectTitle} · {request.itemTitle}</span><strong>{request.title}</strong><b>{formatMoney(request.amount, request.currency)}</b><small>{status === "pending" && request.approverUserIds[request.currentStep] ? `Сейчас: ${personName(request.approverUserIds[request.currentStep]!)}` : requestStatus[status]}</small>{request.approvalDueAt ? <small className={status === "pending" && new Date(request.approvalDueAt).getTime() < asOf ? "overdue" : ""}>Срок: {formatDate(request.approvalDueAt)}</small> : null}</button>)}
-              {!columnRequests.length ? <p className="approval-column-empty">Пока пусто</p> : null}
+              {initialLoading ? <LoadingSkeleton layout="custom" label="Загружаем проектные заявки…">{Array.from({ length: 2 }, (_, index) => <div className="project-hub-funding-card ws-skeleton-copy" key={index}><SkeletonBlock width="75%" height="12px" /><SkeletonBlock width="90%" height="20px" /><SkeletonBlock width="50%" height="20px" /><SkeletonBlock width="65%" height="12px" /></div>)}</LoadingSkeleton> : !columnRequests.length ? <p className="approval-column-empty">Пока пусто</p> : null}
             </div>
           </section>;
         })}

@@ -1,0 +1,29 @@
+html body .app-provider .messenger-view .composer-textarea.composer-rich-editor {
+  border: 1px solid var(--ws-border); border-radius: 12px; padding-block: 7px;
+  white-space: pre-wrap; overflow-wrap: anywhere; cursor: text;
+}
+.composer-rich-editor[data-empty]::before { content: attr(data-placeholder); color: var(--ws-muted); pointer-events: none; }
+.composer-rich-editor[aria-disabled="true"] { opacity: .6; cursor: default; }
+.composer-rich-editor blockquote, .message-inline-quote {
+  margin: 0; padding-inline-start: 8px; border-inline-start: 3px solid var(--ws-link);
+  color: inherit; background-color: color-mix(in srgb, var(--ws-link) 8%, transparent);
+}
+.composer-rich-editor code, .message-text code { font-family: ui-monospace, Consolas, monospace; font-size: .95em; }
+.message-text a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.message-context-menu kbd { margin-inline-start: auto; padding-inline-start: 20px; color: var(--ws-muted); font: inherit; font-size: 11px; }
+.message-context-note { padding: 8px 12px; color: var(--ws-muted); font-size: 12px; }
+.composer-link-dialog { max-width: 440px; }
+.composer-link-dialog .fui-Input { width: 100%; }
+.pinned-message-item { display: grid; gap: 4px; }
+.pinned-message-item > small { padding-inline: 12px; color: var(--ws-muted); }
+.pinned-message-actions { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+@media (forced-colors: none) {
+  html[data-color-theme="dark"] body .app-provider .messenger-view .composer-textarea.composer-rich-editor {
+    border-color: transparent;
+    background: linear-gradient(var(--ws-surface), var(--ws-surface)) padding-box,
+      var(--ws-satin-sheen) top center / 80% 1px no-repeat border-box, var(--ws-satin-edge) border-box;
+  }
+}
+@media (forced-colors: active) {
+  html body .app-provider .messenger-view .composer-textarea.composer-rich-editor { border-color: CanvasText; }
+}

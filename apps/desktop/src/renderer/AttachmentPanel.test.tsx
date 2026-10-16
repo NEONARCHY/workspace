@@ -4,8 +4,22 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AttachmentChips, embeddedMp3Artwork, isAudioAttachment } from "./AttachmentPanel";
 import type { WorkspaceAttachment } from "@yuksalish/contracts";
+import { MessageMetadata } from "./MessageMetadata";
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+it("places edited metadata only in the last document's wrapping size line and preserves opening", () => {
+  const open = vi.fn();
+  const attachments = ["first", "last"].map(id => ({ id, ownerType: "message", ownerId: "m", fileName: `${id}.pdf`, contentType: "application/pdf", byteSize: 1024 } as WorkspaceAttachment));
+  const { container } = render(<AttachmentChips attachments={attachments} onDownload={open} documentMetadata={<MessageMetadata
+    message={{ id: "m", chatId: "c", authorId: "u", body: "Текст", time: "19:55", editedAt: "2026-10-16T09:00:00Z" }} own />} />);
+  const rows = container.querySelectorAll(".attachment-document");
+  expect(rows[0]!.querySelector(".message-meta")).toBeNull();
+  expect(rows[1]!.querySelector(".attachment-document-details > .message-meta")).toHaveTextContent("изменено · 19:55");
+  expect(container.querySelectorAll(".message-meta")).toHaveLength(1);
+  expect(screen.getByRole("img", { name: "Сообщение отправлено" })).toBeInTheDocument();
+  fireEvent.click(rows[1]!);
+  expect(open).toHaveBeenCalledWith(attachments[1]);
+});
 it("reserves portrait geometry before loading and never changes it after decoding", async () => {
   vi.stubGlobal("IntersectionObserver", class {
     constructor(private readonly callback: (entries: { isIntersecting: boolean }[]) => void) {}

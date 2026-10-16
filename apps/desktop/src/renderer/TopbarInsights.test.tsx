@@ -15,6 +15,25 @@ afterEach(() => { cleanup(); vi.resetAllMocks(); });
 const mount = () => render(<FluentProvider theme={workspaceTheme}><TopbarInsights token="test" /></FluentProvider>);
 
 describe("topbar insights", () => {
+  it.each(["rates", "weather"])("keeps focus and close/reopen lifecycle without Fluent fade: %s", async kind => {
+    mount();
+    const trigger = await screen.findByRole("button", { name: kind === "rates" ? /Курсы валют: 1 USD — 12.*000 UZS/ : /Погода в Ташкенте: 13,3/ });
+    const title = kind === "rates" ? "Курсы валют" : "Погода Узбекистана";
+    fireEvent.click(trigger);
+    const panel = await screen.findByRole("dialog", { name: title });
+    expect(panel).toHaveAttribute("data-surface-resize-motion", "off");
+    expect(panel.style.height).toBe("");
+    expect(panel.querySelector(".context-panel-head")?.parentElement).toBe(panel);
+    expect(panel.querySelector<HTMLElement>(".context-panel-body")?.style.height).toBe("");
+    fireEvent.click(within(panel).getByRole("button", { name: kind === "rates" ? "Закрыть курсы валют" : "Закрыть погоду" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: title })).not.toBeInTheDocument());
+    expect(trigger).toHaveFocus();
+    fireEvent.click(trigger);
+    const reopened = await screen.findByRole("dialog", { name: title });
+    fireEvent.keyDown(reopened, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: title })).not.toBeInTheDocument());
+    expect(trigger).toHaveFocus();
+  });
   it("defaults to USD/UZS and Tashkent, with real keyboard triggers", async () => {
     mount();
     expect(await screen.findByRole("button", { name: /Курсы валют: 1 USD — 12.*000 UZS/ })).toHaveAttribute("aria-expanded", "false");
@@ -70,6 +89,7 @@ describe("topbar insights", () => {
     mount();
     fireEvent.click(await screen.findByRole("button", { name: /Курсы валют: 1 USD — 12.*000/ }));
     vi.mocked(loadExchangeRates).mockRejectedValueOnce(new Error("Источник недоступен"));
+    screen.getByRole("button", { name: "Обновить" }).focus();
     fireEvent.click(screen.getByRole("button", { name: "Обновить" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Источник недоступен");
     let finish!: (value: typeof contextRates) => void;

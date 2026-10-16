@@ -62,6 +62,7 @@ async def test_personal_summary_preserves_credit_without_leaking_inaccessible_ta
     connection.execute.side_effect = [
         methodology_result,
         event_result,
+        tasks_result,  # no approved deadline requests
         tasks_result,
         participant_result,
     ]
@@ -92,9 +93,9 @@ async def test_personal_summary_preserves_credit_without_leaking_inaccessible_ta
     assert validated.impact_tasks == []
     assert validated.recent_tasks == []
     assert str(task_id) not in str(data)
-    assert connection.execute.await_count == (4 if can_view_tasks else 2)
+    assert connection.execute.await_count == (5 if can_view_tasks else 3)
     if can_view_tasks:
-        statement = str(connection.execute.call_args_list[2].args[0])
+        statement = str(connection.execute.call_args_list[3].args[0])
         assert "tasks.author_user_id" in statement
         assert "tasks.primary_assignee_user_id" in statement
         assert "tasks_participants.user_id" in statement

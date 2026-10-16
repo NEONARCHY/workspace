@@ -1,4 +1,5 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
+import { LoadingSkeleton, SkeletonBlock, SkeletonTableRows } from "./LoadingSkeleton";
 import { useEffect, useMemo, useState } from "react";
 
 import type { EfficiencyOverview, EmployeeEfficiency } from "@yuksalish/contracts";
@@ -8,6 +9,7 @@ import { Dismiss24Regular, Search20Regular } from "@fluentui/react-icons";
 import { WorkspaceSelect } from "./WorkspaceSelect";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { ProfileAvatar } from "./ProfileAvatar";
+import { EfficiencyDeadlineExplanation } from "./EfficiencyDeadlineExplanation";
 
 interface EfficiencyViewProps {
   readonly token?: string;
@@ -110,7 +112,7 @@ export function HistoryChart({ employee }: { readonly employee: EmployeeEfficien
 function EmployeeSummary({ employee, title, token }: { readonly employee: EmployeeEfficiency; readonly title: string; readonly token?: string }) {
   const metrics = [
     { label: "Выполнено вовремя", value: employee.onTimeCount, tone: "success" as const },
-    { label: "Просрочено", value: employee.overdueCount, tone: "danger" as const },
+    { label: "Просрочки в расчёте", value: employee.overdueCount, note: "учтены за выбранный месяц", tone: "danger" as const },
     { label: "Ожидает проверки", value: employee.awaitingReviewCount, tone: "review" as const },
     { label: "Возвращено на доработку", value: employee.returnedForRevisionCount, note: "отменяет зачёт предыдущей сдачи", tone: "revision" as const },
     { label: "Без срока", value: employee.noDueDateCount, note: "не входит в расчёт", tone: "neutral" as const },
@@ -125,7 +127,7 @@ function EmployeeSummary({ employee, title, token }: { readonly employee: Employ
       <div className="eff-summary-copy">
         <EmployeeProfileLink userId={employee.userId} personName={employee.name} className="eff-person"><ProfileAvatar person={{ id: employee.userId, name: employee.name, avatarVersion: employee.avatarVersion }} token={token} size={40} /><div><h2>{employee.name}</h2><p>{employee.jobTitle}</p></div></EmployeeProfileLink>
         <h3>{employee.percentage == null ? "Пока нет задач, по которым можно рассчитать процент" : "Доля задач, переданных или выполненных в установленный срок"}</h3>
-        <p>{employee.eligibleCount ? `В расчёт вошло: ${countLabel(employee.eligibleCount, ["задача", "задачи", "задач"])}. Вовремя выполнено: ${countLabel(employee.onTimeCount, ["задача", "задачи", "задач"])}.` : "Будущие задачи и задачи без срока не ухудшают результат. Показатель появится, когда наступит срок хотя бы одной учитываемой задачи."}</p>
+        <p>{employee.eligibleCount ? `В расчёт вошло: ${countLabel(employee.eligibleCount, ["задача", "задачи", "задач"])}. Вовремя выполнено: ${countLabel(employee.onTimeCount, ["задача", "задачи", "задач"])}.` : "Будущие задачи и задачи без срока не ухудшают результат. Показатель появится, когда будет учтена своевременная сдача или наступивший срок."}</p>
         {employee.smallSample ? <div className="eff-sample-note">Выборка пока небольшая — интерпретируйте процент осторожно.</div> : null}
         {employee.historyCompleteness === "partial" ? <div className="eff-history-note">История месяца неполная: достоверный учёт начался в течение периода.</div> : null}
         {employee.historyCompleteness === "unavailable" ? <div className="eff-history-note">Для этого периода достоверной истории ещё нет.</div> : null}
@@ -179,7 +181,22 @@ export function EfficiencyView({ token, overview, loading, error, onPeriodChange
   const mine = overview?.employees.find((employee) => employee.userId === overview.currentUserId);
   const selected = overview?.employees.find((employee) => employee.userId === selectedUserId) ?? mine;
 
-  if (loading && overview === undefined) return <div className="eff-loading" aria-live="polite"><span /><strong>Считаем показатель по журналу задач…</strong></div>;
+  if (loading && overview === undefined) return <div className="efficiency-view">
+    <div className="eff-commandbar compact"><SkeletonBlock width="220px" height="56px" /></div>
+    <EfficiencyDeadlineExplanation />
+    <LoadingSkeleton layout="custom" label="Считаем показатель по журналу задач…"><div className="eff-overview-grid">
+      <article className="eff-summary"><div className="eff-summary-heading"><SkeletonBlock width="140px" /><SkeletonBlock width="100px" /></div>
+        <div className="eff-summary-lead"><SkeletonBlock width="176px" height="176px" circle /><div className="eff-summary-copy ws-skeleton-copy"><SkeletonBlock width="75%" height="28px" /><SkeletonBlock width="55%" /><SkeletonBlock width="90%" /><SkeletonBlock width="85%" /></div></div>
+        <section className="eff-composition"><div className="eff-section-heading"><h3>Состав задач за период</h3></div><SkeletonBlock height="20px" /></section>
+        <div className="eff-metrics">{Array.from({ length: 6 }, (_, index) => <div className="eff-metric" key={index}><div><SkeletonBlock width="65%" /><SkeletonBlock width="25px" height="20px" /></div><SkeletonBlock width="70%" height="12px" /><div className="eff-metric-scale"><SkeletonBlock height="100%" /></div></div>)}</div>
+        <SkeletonBlock height="220px" />
+      </article>
+      <div className="eff-context-stack">{Array.from({ length: 2 }, (_, index) => <aside className="eff-method-card ws-skeleton-copy" key={index}><SkeletonBlock width="65%" /><SkeletonBlock width="85%" height="24px" /><SkeletonBlock height="100px" /><SkeletonBlock width="75%" /></aside>)}</div>
+    </div></LoadingSkeleton>
+    <section className="eff-people"><div className="eff-people-heading"><div><h2>Сотрудники</h2><p>Нейтральная сортировка по имени. Это не рейтинг.</p></div><Input disabled aria-label="Поиск сотрудников в эффективности" contentBefore={<Search20Regular />} placeholder="Имя или должность" /></div>
+      <div className="eff-table-scroll"><table className="eff-table"><thead><tr><th>Сотрудник</th><th>Выполнение в срок</th><th>Вовремя / всего</th><th>Просрочки в расчёте</th><th>Ожидает проверки</th><th>Возвраты</th><th>Без срока</th><th>Объём данных</th></tr></thead><SkeletonTableRows columns={8} personColumn={0} /></table></div>
+    </section>
+  </div>;
   if (error && overview === undefined) return <div className="eff-error" role="alert"><strong>Не удалось загрузить эффективность</strong><span>{error}</span><Button onClick={() => void onPeriodChange(monthOptions()[0]!)}>Повторить</Button></div>;
   if (!overview || !mine) return <div className="eff-error"><strong>Данные пока недоступны</strong><span>Сервер не вернул агрегированную сводку.</span></div>;
   const activeEmployee = selected ?? mine;
@@ -191,6 +208,7 @@ export function EfficiencyView({ token, overview, loading, error, onPeriodChange
       <Button className="eff-help-button" appearance="secondary" aria-haspopup="dialog" aria-expanded={helpOpen} onClick={() => setHelpOpen(true)}>?</Button>
     </div>
     {error ? <WorkspaceNotice tone="warning" className="eff-inline-error" role="status">Показаны последние загруженные данные. {error}</WorkspaceNotice> : null}
+    <EfficiencyDeadlineExplanation />
     <div className="eff-overview-grid">
       <EmployeeSummary employee={activeEmployee} title={activeTitle} token={token} />
       <div className="eff-context-stack">
@@ -203,7 +221,8 @@ export function EfficiencyView({ token, overview, loading, error, onPeriodChange
     <section className="eff-people" aria-label="Эффективность сотрудников">
       <div className="eff-people-heading"><div><h2>Сотрудники</h2><p>Нейтральная сортировка по имени. Это не рейтинг.</p></div><Input aria-label="Поиск сотрудников в эффективности" contentBefore={<Search20Regular />} placeholder="Имя или должность" value={query} onChange={(_, data) => setQuery(data.value)} /></div>
       <div className="eff-table-scroll" tabIndex={0} aria-label="Таблица прокручивается горизонтально">
-        <table className="eff-table"><thead><tr><th>Сотрудник</th><th>Выполнение в срок</th><th>Вовремя / всего</th><th>Просрочено</th><th>Ожидает проверки</th><th>Возвраты</th><th>Без срока</th><th>Объём данных</th></tr></thead><tbody>{visibleEmployees.map((employee) => <tr key={employee.userId} className={activeEmployee.userId === employee.userId ? "selected" : ""} tabIndex={0} aria-label={`Открыть сводку: ${employee.name}`} onClick={() => setSelectedUserId(employee.userId)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedUserId(employee.userId); } }}><td><EmployeeProfileLink userId={employee.userId} personName={employee.name} className="eff-table-person"><ProfileAvatar person={{ id: employee.userId, name: employee.name, avatarVersion: employee.avatarVersion }} token={token} size={32} /><span><strong>{employee.name}</strong><small>{employee.jobTitle}</small></span></EmployeeProfileLink></td><td><div className="eff-table-score"><strong>{percentageLabel(employee)}</strong>{employee.percentage != null ? <span aria-hidden="true"><i style={{ width: `${employee.percentage}%` }} /></span> : null}{employee.smallSample ? <small>мало данных</small> : null}</div></td><td>{employee.onTimeCount} / {employee.eligibleCount}</td><td>{employee.overdueCount}</td><td>{employee.awaitingReviewCount}</td><td>{employee.returnedForRevisionCount}</td><td>{employee.noDueDateCount}</td><td>{employee.sampleSize} задач</td></tr>)}</tbody></table>
+        <table className="eff-table"><thead><tr><th>Сотрудник</th><th>Выполнение в срок</th><th>Вовремя / всего</th><th>Просрочки в расчёте</th><th>Ожидает проверки</th><th>Возвраты</th><th>Без срока</th><th>Объём данных</th></tr></thead>
+          <tbody>{visibleEmployees.map((employee) => <tr key={employee.userId} className={activeEmployee.userId === employee.userId ? "selected" : ""} tabIndex={0} aria-label={`Открыть сводку: ${employee.name}`} onClick={() => setSelectedUserId(employee.userId)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedUserId(employee.userId); } }}><td><EmployeeProfileLink userId={employee.userId} personName={employee.name} className="eff-table-person"><ProfileAvatar person={{ id: employee.userId, name: employee.name, avatarVersion: employee.avatarVersion }} token={token} size={32} /><span><strong>{employee.name}</strong><small>{employee.jobTitle}</small></span></EmployeeProfileLink></td><td><div className="eff-table-score"><strong>{percentageLabel(employee)}</strong>{employee.percentage != null ? <span aria-hidden="true"><i style={{ width: `${employee.percentage}%` }} /></span> : null}{employee.smallSample ? <small>мало данных</small> : null}</div></td><td>{employee.onTimeCount} / {employee.eligibleCount}</td><td>{employee.overdueCount}</td><td>{employee.awaitingReviewCount}</td><td>{employee.returnedForRevisionCount}</td><td>{employee.noDueDateCount}</td><td>{employee.sampleSize} задач</td></tr>)}</tbody></table>
       </div>
       {!visibleEmployees.length ? <div className="eff-table-empty">По вашему запросу сотрудники не найдены.</div> : null}
     </section>

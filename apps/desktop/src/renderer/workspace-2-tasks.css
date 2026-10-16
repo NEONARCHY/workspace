@@ -251,6 +251,7 @@
 .task-record-dialog .task-meta-copy { display: grid; min-width: 0; gap: 3px; line-height: 1.3; }
 .task-record-dialog .task-meta-copy small { color: var(--ws-theme-muted, #667b89); font-size: 12px; }
 .task-record-dialog .task-meta-copy strong { min-width: 0; color: var(--ws-theme-ink, #293a55); font-size: 14px; overflow-wrap: anywhere; }
+.task-record-dialog .task-meta-copy .task-deadline-trigger { justify-self: start; margin-top: 4px; }
 .task-record-dialog .task-lifecycle-summary { flex-wrap: wrap; margin-top: 18px; border: 1px solid var(--ws-theme-line, #dbe8e7); border-radius: 14px; background: var(--ws-theme-surface, #fff); }
 .task-record-dialog .task-lifecycle-summary > span:first-child { display: inline-flex; align-items: center; gap: 7px; color: var(--ws-theme-ink, #293a55); font-size: 13px; font-weight: 700; }
 
@@ -302,11 +303,12 @@
 .task-record-dialog .attachment-panel-dropzone .attachment-chips { display: grid !important; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 8px !important; margin-top: 12px; }
 .task-record-dialog .attachment-panel-dropzone .attachment-chips > button { min-height: 50px; padding: 9px 11px; border-color: var(--ws-theme-line, #d5e5e6); border-radius: 11px; background: var(--ws-theme-surface, #fff); }
 .task-record-dialog .participant-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 205px), 1fr)); gap: 8px; margin-top: 12px; }
-.task-record-dialog .participant-chip { min-width: 0; min-height: 52px; padding: 8px 10px; border-color: var(--ws-theme-line, #dce8ec); border-radius: 12px; background: var(--ws-theme-surface, #fff); }
+.task-record-dialog .participant-chip { min-width: 0; min-height: 52px; padding: 8px 10px; border-color: color-mix(in srgb, var(--ws-theme-line, #dce8ec) 65%, transparent); border-radius: 12px; background: var(--ws-theme-surface, #fff); }
 .task-record-dialog .participant-chip > .employee-profile-link { display: inline-flex; min-width: 0; align-items: center; gap: 9px; }
 .task-record-dialog .participant-chip > .employee-profile-link > span:last-child { display: grid; min-width: 0; gap: 3px; color: var(--ws-theme-ink, #293a55); font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
 .task-record-dialog .participant-chip > .employee-profile-link small { color: var(--ws-theme-muted, #607587); font-size: 11px; font-weight: 500; }
 .task-record-dialog .participant-chip > button { flex: none; margin-left: auto; }
+.task-record-dialog .task-person-avatar { display: inline-flex; flex: none; border: 1px solid color-mix(in srgb, var(--ws-theme-line-teal, #81b6bd) 45%, transparent); border-radius: 50%; box-shadow: 0 0 0 2px rgb(41 58 85 / 4%); }
 .task-record-dialog .task-checklist-progress { display: flex; align-items: center; gap: 12px; margin-top: 15px; }
 .task-record-dialog .task-checklist-progress [role="progressbar"] { flex: 1; margin: 0; }
 .task-record-dialog .task-checklist-progress small { color: var(--ws-theme-ink-teal, #006779); font-size: 12px; font-weight: 700; white-space: nowrap; }
@@ -373,6 +375,26 @@
   .task-record-dialog .task-lifecycle-summary > :last-child { margin-left: 0; }
 }
 
+/* Separate sections by recessed colour, not outlines. Keep the same border
+   box in both palettes so switching the theme never moves the content. */
+@media (forced-colors: none) {
+  html[data-color-theme="dark"] .task-record-dialog .task-detail > :is(.detail-section, .attachment-panel-dropzone, .task-lifecycle-summary, .task-card-editor) {
+    border-color: transparent;
+    background: var(--ws-surface-recessed, #14151a);
+    box-shadow: none;
+  }
+  html[data-color-theme="dark"] .task-record-dialog :is(.task-person-avatar, .participant-chip) {
+    border-color: transparent;
+    background-image: linear-gradient(var(--ws-surface), var(--ws-surface)), var(--ws-satin-sheen), var(--ws-satin-edge);
+    background-origin: border-box;
+    background-clip: padding-box, border-box, border-box;
+    background-size: auto, 80% 1px, auto;
+    background-position: center, top center, center;
+    background-repeat: no-repeat;
+    box-shadow: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .task-focus-object,
   .tasks-view .task-filter-tabs > button,
@@ -385,6 +407,7 @@
 }
 
 @media (forced-colors: active) {
+  .task-record-dialog :is(.task-person-avatar, .participant-chip) { border-color: CanvasText; box-shadow: none; }
   .task-focus-object,
   .tasks-view .task-filters,
   .tasks-view .record-table-frame.task-records,

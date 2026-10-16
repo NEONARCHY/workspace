@@ -1,4 +1,5 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
+import { LoadingSkeleton } from "./LoadingSkeleton";
 import {
   Button,
   DialogBody,
@@ -7,7 +8,6 @@ import {
   DialogTitle,
   DialogTrigger,
   Input,
-  Spinner,
   Textarea,
 } from "@fluentui/react-components";
 import {
@@ -194,7 +194,7 @@ export function SupportDialog({
             </header>
 
             {error ? <WorkspaceNotice tone="error" className="support-error" role="alert">{error}</WorkspaceNotice> : null}
-            {!registry ? <div className="support-loading"><Spinner label="Загружаем обращения" /></div> : (
+            {!registry ? (!error ? <LoadingSkeleton layout="rows" label="Загружаем обращения" /> : null) : (
               <div className={`support-workspace ${isInbox ? "is-inbox" : "is-personal"}`}>
                 <aside className="support-request-list" aria-label={isInbox ? "Все обращения" : "Мои обращения"}>
                   <div className="support-list-title">

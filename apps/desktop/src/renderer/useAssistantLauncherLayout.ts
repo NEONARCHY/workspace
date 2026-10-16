@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, type RefObject } from "react";
 
-const targets = ".workspace-workday-status, .color-theme-toggle-wrap, .workspace-workday-person, .workspace-identity, .section-jump, .browser-menu-trigger";
+const targets = ".workspace-workday-status, .connection-indicator, .context-trigger, .notification-bell-wrap, .color-theme-toggle-wrap, .workspace-workday-person, .workday-control, .workspace-identity, .workspace-identity-menu, .section-jump, .section-jump-trigger, .browser-menu-trigger";
 
 /** Reflow the header once, then animate only its translated controls (never their text size). */
 export function useAssistantLauncherLayout(launcher: RefObject<HTMLElement | null>, vacated: boolean, disabled: boolean, zoom: number, geometry: string) {
@@ -14,8 +14,11 @@ export function useAssistantLauncherLayout(launcher: RefObject<HTMLElement | nul
     if (!button || !space || !bar) return;
     const context = button.closest(".workspace-top-context");
     space.style.setProperty("--assistant-launcher-gap", context ? getComputedStyle(context).columnGap : "12px");
-    const controls = Array.from(bar.querySelectorAll<HTMLElement>(targets))
-      .filter(control => !control.matches(".workspace-identity") || !control.closest(".workspace-workday-person"));
+    // Compact headers flatten wrappers with display:contents. Animate their real
+    // controls, but never both a painted parent and its child (double movement).
+    const painted = Array.from(bar.querySelectorAll<HTMLElement>(targets))
+      .filter(control => getComputedStyle(control).display !== "contents");
+    const controls = painted.filter(control => !painted.some(parent => parent !== control && parent.contains(control)));
     // An interrupted reversal starts from the currently visible positions.
     animations.current.forEach((animation, control) => {
       const visible = control.getBoundingClientRect();

@@ -1,7 +1,8 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
+import { LoadingSkeleton } from "./LoadingSkeleton";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AIReferentConfiguration, AIReferentConfigurationUpdate, WorkspacePerson } from "@yuksalish/contracts";
-import { Button, Checkbox, Input, Spinner } from "@fluentui/react-components";
+import { Button, Checkbox, Input } from "@fluentui/react-components";
 import { WorkspaceSelect } from "./WorkspaceSelect";
 import { loadAIReferentConfiguration, saveAIReferentConfiguration } from "./workspace-api";
 
@@ -86,7 +87,7 @@ export function AIReferentSettings({ token, people, readOnly = false }: Props) {
     <p className="ai-referent-settings-explain">Изменения общие для Workspace и робота. Открытые письма маршрута получит новый согласующий; прежние решения останутся в истории.</p>
     {error ? <WorkspaceNotice tone="error" role="alert" className="ai-referent-feedback">{error}</WorkspaceNotice> : null}
     {notice ? <p role="status">{notice}</p> : null}
-    {!draft ? <><Spinner label="Загружаем настройки" /><Button onClick={() => void refresh()}>Повторить</Button></> : null}
+    {!draft ? <>{!error ? <LoadingSkeleton layout="form" label="Загружаем настройки" /> : null}<Button onClick={() => void refresh()}>Повторить</Button></> : null}
     {draft && config ? <>
       {draft.expectedRevision !== config.revision ? <WorkspaceNotice tone="warning" role="status" className="ai-referent-feedback">
         Настройки изменены на другом устройстве. Ваш ввод сохранён; сравните его с актуальной версией перед повторным сохранением.

@@ -1,8 +1,9 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
+import { LoadingSkeleton } from "./LoadingSkeleton";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { AdministrativeChat, AdministrativeChatInspection } from "@yuksalish/contracts";
-import { Button, Field, Spinner, Textarea } from "@fluentui/react-components";
+import { Button, Field, Textarea } from "@fluentui/react-components";
 import { Input } from "./WorkspaceInput";
 import { Dismiss20Regular, LockClosed20Regular, Search20Regular } from "@fluentui/react-icons";
 import { WorkspaceSelect as Select } from "./WorkspaceSelect";
@@ -151,7 +152,7 @@ export function AdministrativeChatInspectionView({ token, onClose }: {
     <div className="admin-chat-feedback-slot">
       {error ? <WorkspaceNotice tone="error" className="admin-chat-error" role="alert">{error}</WorkspaceNotice> : null}
     </div>
-    {chats === undefined && !error ? <Spinner label="Загружаем доступные для контроля чаты" /> : null}
+    {chats === undefined && !error ? <LoadingSkeleton layout="rows" label="Загружаем доступные для контроля чаты" /> : null}
     {chats !== undefined ? <div className="admin-chat-layout">
       <aside className="admin-chat-list" aria-label="Чаты Workspace">
         <Input contentBefore={<Search20Regular />} aria-label="Поиск чатов для контроля" placeholder="Название или участник" value={query} onChange={(_, data) => setQuery(data.value)} />

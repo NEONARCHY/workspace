@@ -1,5 +1,5 @@
 import type { ComponentProps } from "react";
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { FluentProvider } from "@fluentui/react-components";
 import type { WorkspaceTask } from "@yuksalish/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -74,6 +74,38 @@ describe("My tasks participation filter", () => {
 });
 
 describe("Task list deadline colours and overdue filter", () => {
+  it("enlarges card avatars without losing employee profile access or participant removal", () => {
+    const original = task("larger-avatars", 90, { authorId: people[0]!.id, assigneeId: people[0]!.id,
+      participants: [{ userId: people[1]!.id, role: "co_assignee" }] });
+    const p = props([original]);
+    render(wrap(<TasksView {...p} focusTaskId={original.id} />));
+    const avatars = document.querySelectorAll(".task-person-avatar > .fui-Avatar");
+    expect(avatars).toHaveLength(3);
+    expect(document.querySelectorAll(".task-detail-sticky-header .task-person-avatar")).toHaveLength(1);
+    expect(document.querySelectorAll(".participant-chip .task-person-avatar")).toHaveLength(2);
+    expect(avatars[2]!.closest(".employee-profile-link")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: `Убрать участника ${people[1]!.name}` }));
+    expect(p.onRemoveParticipant).toHaveBeenCalledWith(original, people[1]!.id);
+  });
+
+  it("places deadline extension beside the date and preserves explicit save/cancel", async () => {
+    const original = task("extend-from-date", 90, { authorId: people[0]!.id, status: "awaiting_review" });
+    const p = { ...props([original]), onExtendDeadline: vi.fn().mockResolvedValue({ ...original }) };
+    render(wrap(<TasksView {...p} focusTaskId={original.id} />));
+    const button = screen.getByRole("button", { name: "Продлить срок" });
+    expect(button.closest(".task-deadline-meta")).toHaveTextContent(taskDeadlineLabel(original));
+    expect(screen.queryByRole("region", { name: "Продление срока" })).toBeNull();
+    fireEvent.click(button);
+    expect(button).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("region", { name: "Продление срока" })).toBeInTheDocument();
+    fireEvent.click(within(screen.getByRole("region", { name: "Продление срока" })).getByRole("button", { name: "Отмена" }));
+    expect(p.onExtendDeadline).not.toHaveBeenCalled();
+    fireEvent.click(button);
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить срок" }));
+    expect(p.onExtendDeadline).toHaveBeenCalledWith(original, expect.any(String));
+    await waitFor(() => expect(screen.queryByRole("region", { name: "Продление срока" })).toBeNull());
+  });
+
   it("removes a formerly overdue task after rescheduling and places it in the working Kanban lane", () => {
     freeze();
     const original = task("rescheduled", -1, { status: "overdue" });

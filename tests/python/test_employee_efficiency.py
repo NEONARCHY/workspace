@@ -9,6 +9,7 @@ from yuksalish_api.efficiency_service import (
     period_bounds,
     period_for,
     previous_periods,
+    reconcile_deadline_decisions,
     replay_task_events,
 )
 from yuksalish_api.workspace_schemas import (
@@ -250,6 +251,81 @@ def test_deadline_changed_after_overdue_does_not_erase_missed_deadline() -> None
     assert result["eligible_count"] == 1
     assert result["on_time_count"] == 0
     assert result["overdue_count"] == 1
+
+
+@pytest.mark.parametrize("approval_delta,expected", [(-1, 0), (0, 0), (1, 1)])
+def test_persisted_approval_without_ledger_event_uses_decision_not_request_time(
+    approval_delta: int, expected: int,
+) -> None:
+    task_id = uuid4()
+    old_due = datetime(2026, 9, 10, 12, tzinfo=UTC)
+    new_due = datetime(2026, 9, 20, 12, tzinfo=UTC)
+    decision = {
+        "id": uuid4(), "task_id": task_id, "status": "approved",
+        "created_at": old_due - timedelta(days=2),
+        "decided_at": old_due + timedelta(seconds=approval_delta),
+        "decided_by_user_id": ANNA, "old_due_at": old_due, "proposed_due_at": new_due,
+    }
+    events = reconcile_deadline_decisions([created(task_id, old_due)], [decision])
+    result = aggregate(events, as_of=old_due + timedelta(days=1))
+    assert result["overdue_count"] == expected
+    assert result["eligible_count"] == expected
+
+
+def test_timely_extension_replaces_every_duplicate_old_obligation() -> None:
+    task_id = uuid4()
+    old_due = datetime(2026, 9, 10, 12, tzinfo=UTC)
+    new_due = datetime(2026, 9, 20, 12, tzinfo=UTC)
+    result = aggregate([
+        created(task_id, old_due), created(task_id, old_due),
+        event(task_id, "deadline_changed", old_due - timedelta(hours=1), due_at=new_due,
+              old={"dueAt": old_due.isoformat()}, new={"dueAt": new_due.isoformat()}),
+    ], as_of=old_due + timedelta(days=1))
+    assert result["overdue_count"] == 0
+    assert result["eligible_count"] == 0
+
+
+@pytest.mark.parametrize("status", ["pending", "rejected", "superseded"])
+def test_unapproved_request_does_not_rescue_deadline(status: str) -> None:
+    task_id = uuid4()
+    due = datetime(2026, 9, 10, 12, tzinfo=UTC)
+    events = [created(task_id, due)]
+    assert reconcile_deadline_decisions(events, [{
+        "id": uuid4(), "status": status, "decided_at": due - timedelta(hours=1),
+    }]) == events
+
+
+def test_approved_new_deadline_can_become_overdue_but_not_before_it_expires() -> None:
+    task_id = uuid4()
+    old_due = datetime(2026, 9, 10, 12, tzinfo=UTC)
+    new_due = datetime(2026, 9, 20, 12, tzinfo=UTC)
+    events = reconcile_deadline_decisions([created(task_id, old_due)], [{
+        "id": uuid4(), "task_id": task_id, "status": "approved",
+        "decided_at": old_due - timedelta(days=1), "decided_by_user_id": ANNA,
+        "old_due_at": old_due, "proposed_due_at": new_due,
+    }])
+    assert aggregate(events, as_of=new_due - timedelta(seconds=1))["overdue_count"] == 0
+    assert aggregate(events, as_of=new_due + timedelta(seconds=1))["overdue_count"] == 1
+
+
+def test_reconciliation_uses_recorded_decision_time_and_is_idempotent() -> None:
+    task_id, request_id = uuid4(), uuid4()
+    old_due = datetime(2026, 9, 10, 12, tzinfo=UTC)
+    new_due = datetime(2026, 9, 20, 12, tzinfo=UTC)
+    source = [created(task_id, old_due), event(
+        task_id, "deadline_changed", old_due + timedelta(hours=1), due_at=new_due,
+        old={"dueAt": old_due.isoformat()}, new={"dueAt": new_due.isoformat()},
+        metadata={"requestId": str(request_id)},
+    )]
+    decisions = [{
+        "id": request_id, "task_id": task_id, "status": "approved",
+        "decided_at": old_due - timedelta(hours=1), "decided_by_user_id": ANNA,
+        "old_due_at": old_due, "proposed_due_at": new_due,
+    }]
+    reconciled = reconcile_deadline_decisions(source, decisions)
+    assert len(reconciled) == 2
+    assert reconcile_deadline_decisions(reconciled, decisions) == reconciled
+    assert aggregate(reconciled, as_of=old_due + timedelta(days=1))["overdue_count"] == 0
 
 
 def test_multiple_pre_deadline_changes_replay_to_the_last_agreed_deadline() -> None:

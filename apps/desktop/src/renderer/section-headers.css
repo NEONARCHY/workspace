@@ -1,4 +1,5 @@
-/* Page headers only. Keep record cards, dialog headings and portal controls untouched. */
+/* Shared dark-reference geometry in both palettes. Theme rules paint surfaces,
+   never resize banners; this also keeps the theme-wave snapshots aligned. */
 body .app-provider :is(.workspace-view, .team-dashboard, .telegram-access-view) .ws-section-header {
   --ws-header-ink: #fff;
   --ws-header-muted: #deeff0;
@@ -11,16 +12,23 @@ body .app-provider :is(.workspace-view, .team-dashboard, .telegram-access-view) 
   justify-content: space-between;
   gap: 18px 24px;
   min-width: 0;
-  min-height: 148px;
+  min-height: 116px;
   margin: 0 0 14px;
-  padding: 24px clamp(20px, 3vw, 36px);
+  padding: 22px clamp(20px, 3vw, 36px);
   overflow: hidden;
   border: 1px solid rgb(var(--ws-theme-line-rgb, 255 255 255) / 0.82);
-  border-radius: 24px 24px 30px 16px;
+  border-radius: 20px;
   color: var(--ws-header-ink);
   background: radial-gradient(circle at 76% 10%, rgb(116 221 211 / 8%), transparent 19rem),
     linear-gradient(112deg, #183c59, #12667b 65%, #10687d);
   box-shadow: 0 14px 30px -12px rgb(34 76 96 / 22%);
+}
+/* Match the former dark override's priority for these three properties only.
+   Local margins, gaps and responsive inline padding retain their own cascade. */
+html:root body .app-provider :is(.workspace-view, .team-dashboard, .telegram-access-view) .ws-section-header {
+  min-height: 116px;
+  padding-block: 22px;
+  border-radius: 20px;
 }
 .workspace-view .ws-section-header::before, .workspace-view .ws-section-header::after { content: none; }
 .ws-section-header > :not(.ws-section-header-art, .ws-illustrated-header-art) {
@@ -193,14 +201,14 @@ html body .app-provider .ws-section-header .calendar-month-navigation .fui-Butto
 }
 .employees-header-tools .fui-Switch { margin-right: auto; }
 .workspace-view.employees-view > .ws-section-header {
-  min-height: 148px;
-  padding: 24px clamp(20px, 3vw, 36px);
+  min-height: 116px;
+  padding: 22px clamp(20px, 3vw, 36px);
 }
 .calendar-view:not(.task-calendar-embedded) > .ws-section-header {
   grid-column: 1 / -1;
   margin: 12px 0 0 4px;
-  min-height: 148px;
-  padding: 24px clamp(20px, 3vw, 36px);
+  min-height: 116px;
+  padding: 22px clamp(20px, 3vw, 36px);
 }
 .calendar-view:not(.task-calendar-embedded) { grid-template-rows: auto minmax(0, 1fr); row-gap: 14px; }
 .calendar-view:not(.task-calendar-embedded) .calendar-main { grid-template-rows: minmax(0, 1fr); padding-top: 0; }
@@ -218,9 +226,9 @@ html body .app-provider .ws-section-header .calendar-month-navigation .fui-Butto
 .messenger-view .ws-section-header.ws-section-header-compact {
   min-height: 116px;
   margin: 0 0 12px;
-  padding: 16px;
+  padding: 22px 16px;
   gap: 10px;
-  border-radius: 18px 18px 24px 12px;
+  border-radius: 20px;
 }
 .messenger-view .ws-section-header-compact > div:first-of-type { flex: 1 1 170px; }
 .messenger-view .ws-section-header-compact h1 { font-size: 24px; }
@@ -271,9 +279,9 @@ html body .app-provider .ws-section-header .calendar-month-navigation .fui-Butto
 
 @container workspace (max-width: 950px) {
   body .app-provider :is(.workspace-view, .team-dashboard, .telegram-access-view) .ws-section-header {
-    min-height: 138px;
+    min-height: 116px;
     gap: 16px;
-    padding: 20px 24px;
+    padding: 22px 24px;
   }
   .ws-section-header :is(.task-toolbar-actions, .calendar-toolbar-actions, .toolbar-actions) { justify-content: flex-start; }
   .tasks-view .ws-section-header .task-toolbar-actions { flex-basis: 100%; justify-content: flex-start; }
@@ -286,8 +294,8 @@ html body .app-provider .ws-section-header .calendar-month-navigation .fui-Butto
 }
 @container workspace (max-width: 600px) {
   body .app-provider :is(.workspace-view, .team-dashboard, .telegram-access-view) .ws-section-header {
-    padding: 18px 16px;
-    border-radius: 20px 20px 24px 12px;
+    padding: 22px 16px;
+    border-radius: 20px;
   }
   :is(.workspace-view, .team-dashboard, .telegram-access-view) .ws-section-header :is(h1, h2) { font-size: 26px; }
   .ws-section-header > .ws-section-header-art { width: 80%; opacity: .45; }

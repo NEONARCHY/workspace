@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { AIReferentRecipient, AIReferentRecipientRegistry } from "@yuksalish/contracts";
-import { Input, Spinner } from "@fluentui/react-components";
+import { Input } from "@fluentui/react-components";
+import { LoadingSkeleton } from "./LoadingSkeleton";
 import { Briefcase20Regular, Building20Regular, Document20Regular, Globe20Regular, PeopleTeam20Regular } from "@fluentui/react-icons";
 
 import { AIReferentGooeySearch } from "./AIReferentGooeySearch";
@@ -136,7 +137,7 @@ export function AIReferentRecipientPicker({
                 <em>{entry.route === "exat" ? "E-XAT" : "Webmail"}</em>
               </button>
             ))}
-            {loading ? <div className="ai-referent-picker-message"><Spinner size="tiny" label="Загружаем адресатов…" /></div> : null}
+            {loading ? <LoadingSkeleton layout="rows" rows={3} label="Загружаем адресатов…" /> : null}
           </div>
           <div className="ai-referent-picker-bottom">
             <span>{result?.updatedAt ? `${result.totalCount} адресатов${result.entries.length < result.totalCount ? ` · показано ${result.entries.length}` : ""}` : ""}</span>

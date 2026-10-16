@@ -1,4 +1,5 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
+import { LoadingSkeleton, SkeletonBlock } from "./LoadingSkeleton";
 import { Input } from "./WorkspaceInput";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { WorkspaceSelect } from "./WorkspaceSelect";
@@ -195,7 +196,20 @@ export function AIHisobotView({ token }: { readonly token: string }) {
       </div>
     </header>
 
-    {loading ? <p className="hisobot-loading" role="status">Загружаем отчёты…</p> : null}
+    {loading && !profile ? <LoadingSkeleton layout="custom" label="Загружаем отчёты…">
+      <div className="hisobot-tabs"><SkeletonBlock width="210px" height="40px" /></div>
+      <div className="hisobot-today-layout">
+        <div className="hisobot-panel hisobot-compose"><div className="hisobot-panel-heading"><SkeletonBlock width="45%" /><SkeletonBlock width="90px" /></div>
+          <p className="hisobot-panel-description"><SkeletonBlock width="65%" /></p>
+          <div className="ws-skeleton-copy"><SkeletonBlock width="80%" /><SkeletonBlock height="180px" /></div>
+          <div className="hisobot-compose-footer"><SkeletonBlock width="85px" /><SkeletonBlock width="155px" height="34px" /></div>
+        </div>
+        <aside className="hisobot-panel hisobot-status"><SkeletonBlock width="48px" height="48px" circle /><h2><SkeletonBlock width="80%" height="24px" /></h2>
+          <p><SkeletonBlock /><SkeletonBlock width="85%" /></p>
+          {Array.from({ length: 3 }, (_, index) => <div className="hisobot-window" key={index}><SkeletonBlock width="42%" /><SkeletonBlock width="30%" /></div>)}
+        </aside>
+      </div>
+    </LoadingSkeleton> : null}
     {error ? <WorkspaceNotice tone="error" className="hisobot-error" role="alert">{error}</WorkspaceNotice> : null}
     {profile ? <>
       <SlidingSegmented as="nav" className="hisobot-tabs" aria-label="Разделы AI Hisobot">

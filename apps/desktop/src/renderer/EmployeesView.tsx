@@ -1,4 +1,5 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
+import { LoadingSkeleton } from "./LoadingSkeleton";
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -16,7 +17,7 @@ import type {
   WorkspaceRole,
   RecognitionSettings,
 } from "@yuksalish/contracts";
-import { Avatar, Button, Checkbox, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Spinner, Switch, Textarea, useRestoreFocusTarget } from "@fluentui/react-components";
+import { Avatar, Button, Checkbox, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Switch, Textarea, useRestoreFocusTarget } from "@fluentui/react-components";
 import { Input } from "./WorkspaceInput";
 import { Add24Regular, Chat24Regular, Delete24Regular, Dismiss20Regular, MoreHorizontal20Regular, PeopleTeam24Regular, PersonEdit24Regular, Search20Regular } from "@fluentui/react-icons";
 import { EmployeeRecords, employeeRoleLabels, employeeStatusLabel } from "./EmployeeRecords";
@@ -425,8 +426,26 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
 
   if (directory === undefined) {
     return (
-      <section className="workspace-view directory-loading" aria-label="Сотрудники">
-        {!feedback && <Spinner label="Загружаем сотрудников и должности" />}
+      <section className="workspace-view employees-view" aria-label="Сотрудники">
+        <WorkspaceSectionHeader motif="employees" className="section-toolbar"><div><h1>Сотрудники</h1><LoadingSkeleton layout="lines" rows={1} /></div>
+          {canManage && onInvite && <Button className="ws-section-header-primary" appearance="primary" icon={<Add24Regular />} onClick={onInvite}>Пригласить сотрудника</Button>}
+        </WorkspaceSectionHeader>
+        <div className="employees-header-tools" role="group" aria-label="Управление сотрудниками">
+          {canManage && recognitionSettings ? <Switch checked={recognitionSettings.activeTaskCountVisible} disabled label="Активные задачи в профилях" title="Управляет видимостью количества активных задач для всех сотрудников" /> : null}
+          {canManageDepartments && <Button disabled>Отделы и подразделения</Button>}
+          {canManage && <Button disabled>Права модулей</Button>}
+          {canManageSidebar && <Button disabled>Меню сотрудника</Button>}
+          {allowChatAdministration && <Button disabled>Контроль чатов</Button>}
+          <Button icon={<PeopleTeam24Regular />} disabled>Должности</Button>
+        </div>
+        <div className="record-list-controls">
+          {canTerminate && <Button disabled>Уволенные</Button>}
+          <EmployeeScopeSwitch value={employeeScopeFilter} onChange={setEmployeeScopeFilter} label="Показывать сотрудников" />
+          <Input className="employee-search" contentBefore={<Search20Regular />} aria-label="Поиск сотрудников" placeholder="Имя, логин, должность или подразделение" value={employeeQuery} onChange={(_, data) => setEmployeeQuery(data.value)} />
+          <label>Роль<Select aria-label="Фильтр по роли сотрудника" disabled><option>Все роли</option></Select></label>
+          <label>Состояние<Select aria-label="Фильтр состояния сотрудников" disabled><option>Все сотрудники</option></Select></label>
+        </div>
+        {!feedback && <EmployeeRecords loading token={token} employees={[]} departments={[]} filterKey="loading" selectedIds={selectedEmployeeIds} onOpen={selectEmployee} onToggle={toggleEmployee} onTogglePage={toggleEmployees} />}
         {feedback ? <WorkspaceNotice tone="error" className="directory-feedback" role="alert">{feedback}</WorkspaceNotice> : null}
         {feedback && <Button onClick={() => { setFeedback(""); setLoadAttempt(value => value + 1); }}>Повторить загрузку</Button>}
       </section>

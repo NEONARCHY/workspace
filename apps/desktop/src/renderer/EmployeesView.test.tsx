@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { FluentProvider } from "@fluentui/react-components";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChatSummary, DirectoryBootstrap, WorkspacePerson } from "@yuksalish/contracts";
@@ -38,6 +38,10 @@ const data: DirectoryBootstrap = {
 };
 const createdChat: ChatSummary = { id: "chat-one", title: "Азиза Каримова", kind: "direct", preview: "", time: "", unread: 0, description: "", members: [], permissions: { sendMessages: true, uploadFiles: true, inviteMembers: false, manageMembers: false, editInfo: false } };
 const mount = (currentUser = user, props: Partial<React.ComponentProps<typeof EmployeesView>> = {}) => render(<FluentProvider theme={workspaceTheme}><EmployeeProfileProvider onOpenProfile={vi.fn()}><EmployeesView token="test-token" currentUser={currentUser} onInvite={vi.fn()} {...props} /></EmployeeProfileProvider></FluentProvider>);
+async function loadedTable() {
+  await waitFor(() => expect(screen.getByRole("region", { name: "Список сотрудников" })).toHaveAttribute("aria-busy", "false"));
+  return screen.getByRole("table");
+}
 beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(loadDirectory).mockResolvedValue(data);
@@ -46,10 +50,25 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("Employee list and retained access controls", () => {
+  it("uses the actual filters and seven-column employee table before records arrive", async () => {
+    let finish!: (directory: DirectoryBootstrap) => void;
+    vi.mocked(loadDirectory).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    mount();
+    const table = screen.getByRole("table", { name: "Сотрудники" });
+    expect(within(table).getAllByRole("columnheader")).toHaveLength(7);
+    expect(table.querySelectorAll("tbody tr:first-child td")).toHaveLength(7);
+    expect(table.querySelectorAll("tbody .is-circle")).toHaveLength(7);
+    expect(screen.getByLabelText("Поиск сотрудников")).toBeVisible();
+    expect(screen.queryByText("Сотрудники не найдены")).toBeNull();
+    await act(async () => finish(data));
+    expect(screen.getByRole("table", { name: "Сотрудники" })).toBe(table);
+    expect(await screen.findByLabelText("Выбрать сотрудника: Азиза Каримова")).toBeEnabled();
+    expect(table.querySelector(".ws-skeleton-table-body")).toBeNull();
+  });
   it("separates dismissed employees from every ordinary list filter", async () => {
     const former = { ...data.employees[1]!, status: "archived" };
     vi.mocked(loadDirectory).mockResolvedValue({ ...data, canTerminateEmployees: true, employees: [data.employees[0]!, former] });
-    mount(); await screen.findByRole("table");
+    mount(); await loadedTable();
     const table = screen.getByRole("table");
     expect(table).not.toHaveTextContent(former.name);
     fireEvent.click(screen.getByRole("button", { name: "Уволенные" }));
@@ -63,7 +82,7 @@ describe("Employee list and retained access controls", () => {
   it("lets an authorized manager terminate but not block or restore, and removes the saved row", async () => {
     vi.mocked(loadDirectory).mockResolvedValue({ ...data, canTerminateEmployees: true });
     vi.mocked(updateEmployeeStatus).mockResolvedValue({ ...data.employees[0]!, status: "archived" });
-    mount({ ...user, role: "manager" }); await screen.findByRole("table");
+    mount({ ...user, role: "manager" }); await loadedTable();
     fireEvent.click(screen.getByRole("button", { name: "Управление сотрудником: Азиза Каримова" }));
     expect(screen.queryByRole("button", { name: "Заблокировать" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Уволить" }));
@@ -80,7 +99,7 @@ describe("Employee list and retained access controls", () => {
 
   it("hides dismissal controls without the server capability", async () => {
     vi.mocked(loadDirectory).mockResolvedValue({ ...data, canTerminateEmployees: false });
-    mount({ ...user, role: "employee" }); await screen.findByRole("table");
+    mount({ ...user, role: "employee" }); await loadedTable();
     expect(screen.queryByRole("button", { name: "Уволенные" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Управление сотрудником: Азиза Каримова" }));
     expect(screen.queryByRole("button", { name: "Уволить" })).not.toBeInTheDocument();
@@ -91,7 +110,7 @@ describe("Employee list and retained access controls", () => {
     vi.mocked(loadDirectory).mockResolvedValue({ ...data, employees: [self] });
     vi.mocked(updateOwnSuperadminOrganization).mockResolvedValue({ ...self, positionId: null, jobTitle: null });
     mount({ ...user, role: "superadmin" }, { onEmployeeChanged });
-    await screen.findByRole("table");
+    await loadedTable();
     fireEvent.click(screen.getByRole("button", { name: "Управление сотрудником: Администратор" }));
     expect(screen.getByLabelText("Роль доступа")).toBeDisabled();
     expect(screen.getByLabelText("Должность")).toBeEnabled();
@@ -108,7 +127,7 @@ describe("Employee list and retained access controls", () => {
     const other = { ...data.employees[0]!, id: "other", role: "superadmin" as const };
     vi.mocked(loadDirectory).mockResolvedValue({ ...data, employees: [other] });
     mount({ ...user, role: "superadmin" });
-    await screen.findByRole("table");
+    await loadedTable();
     fireEvent.click(screen.getByRole("button", { name: "Управление сотрудником: Азиза Каримова" }));
     expect(screen.getByLabelText("Должность")).toBeDisabled();
     expect(screen.getByLabelText("Подразделение")).toBeDisabled();
@@ -120,7 +139,7 @@ describe("Employee list and retained access controls", () => {
     vi.mocked(loadDirectory).mockResolvedValue({ ...data, employees: [self] });
     vi.mocked(updateOwnSuperadminOrganization).mockRejectedValueOnce(new Error("Нет связи"));
     mount({ ...user, role: "superadmin" });
-    await screen.findByRole("table");
+    await loadedTable();
     fireEvent.click(screen.getByRole("button", { name: "Управление сотрудником: Администратор" }));
     fireEvent.change(screen.getByLabelText("Должность"), { target: { value: "" } });
     fireEvent.click(screen.getByRole("button", { name: "Сохранить должность и подразделение" }));
@@ -133,6 +152,7 @@ describe("Employee list and retained access controls", () => {
     vi.mocked(updateRecognitionSettings).mockImplementation(async (_, visible) => ({ activeTaskCountVisible: visible }));
     mount();
     const toggle = await screen.findByRole("switch", { name: "Активные задачи в профилях" });
+    await waitFor(() => expect(toggle).toBeEnabled());
     expect(toggle).toBeChecked();
     fireEvent.click(toggle);
     await waitFor(() => expect(toggle).not.toBeChecked());
@@ -146,6 +166,7 @@ describe("Employee list and retained access controls", () => {
       .mockResolvedValueOnce({ activeTaskCountVisible: false });
     mount();
     const toggle = await screen.findByRole("switch", { name: "Активные задачи в профилях" });
+    await waitFor(() => expect(toggle).toBeEnabled());
     fireEvent.click(toggle);
     expect(await screen.findByText("Не удалось сохранить")).toBeInTheDocument();
     expect(toggle).toBeChecked();
@@ -163,7 +184,7 @@ describe("Employee list and retained access controls", () => {
       employees: [data.employees[0]!, { ...data.employees[1]!, departmentId: "d2" }],
     });
     mount();
-    const table = await screen.findByRole("table");
+    const table = await loadedTable();
     expect(within(table).getByRole("button", { name: "Открыть профиль: Азиза Каримова" })).toBeInTheDocument();
     expect(within(table).queryByRole("button", { name: "Открыть профиль: Бахтиёр Самугов" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Регионы" }));
@@ -171,7 +192,7 @@ describe("Employee list and retained access controls", () => {
     expect(within(table).getByRole("button", { name: "Открыть профиль: Бахтиёр Самугов" })).toBeInTheDocument();
   });
   it("filters by role and pending activation without changing server data", async () => {
-    mount(); await screen.findByRole("table");
+    mount(); await loadedTable();
     const table = screen.getByRole("table");
     // Exercise Fluent's actual option selection, not its legacy native-change bridge.
     const roleFilter = screen.getByRole("combobox", { name: "Фильтр по роли сотрудника" });
@@ -201,7 +222,7 @@ describe("Employee list and retained access controls", () => {
     await waitFor(() => expect(within(table).getAllByRole("button", { name: /^Открыть профиль:/ })).toHaveLength(2));
   });
   it("does not expose invitations or editable permissions to a regular employee", async () => {
-    mount({ ...user, role: "employee" }); await screen.findByRole("table");
+    mount({ ...user, role: "employee" }); await loadedTable();
     expect(screen.queryByRole("button", { name: "Пригласить сотрудника" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Меню сотрудника" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Управление сотрудником: Азиза Каримова" }));
@@ -214,7 +235,7 @@ describe("Employee list and retained access controls", () => {
   });
   it("keeps the selected access draft visible after a server error", async () => {
     vi.mocked(updateEmployeeAccess).mockRejectedValueOnce(new Error("Нет связи"));
-    mount(); await screen.findByRole("table");
+    mount(); await loadedTable();
     const opener = screen.getByRole("button", { name: "Управление сотрудником: Азиза Каримова" });
     opener.focus(); fireEvent.click(opener);
     fireEvent.change(screen.getByLabelText("Роль доступа"), { target: { value: "manager" } });
@@ -226,7 +247,7 @@ describe("Employee list and retained access controls", () => {
   });
   it("requires an audited reason before blocking an employee", async () => {
     vi.mocked(updateEmployeeStatus).mockResolvedValue({ ...data.employees[0]!, status: "blocked" });
-    mount(); await screen.findByRole("table");
+    mount(); await loadedTable();
     fireEvent.click(screen.getByRole("button", { name: "Управление сотрудником: Азиза Каримова" }));
     fireEvent.click(screen.getByRole("button", { name: "Заблокировать" }));
     const confirm = screen.getByRole("button", { name: "Подтвердить" });
@@ -239,15 +260,15 @@ describe("Employee list and retained access controls", () => {
     expect(await screen.findByText(/статус «Заблокирован» сохранён/)).toBeInTheDocument();
   });
   it("shows chat control only when the caller has administrative messenger access", async () => {
-    mount(user, { allowChatAdministration: true }); await screen.findByRole("table");
+    mount(user, { allowChatAdministration: true }); await loadedTable();
     expect(screen.getByRole("button", { name: "Контроль чатов" })).toBeInTheDocument();
     cleanup();
-    mount({ ...user, role: "employee" }, { allowChatAdministration: false }); await screen.findByRole("table");
+    mount({ ...user, role: "employee" }, { allowChatAdministration: false }); await loadedTable();
     expect(screen.queryByRole("button", { name: "Контроль чатов" })).not.toBeInTheDocument();
   });
   it("selects a row and reveals a persistent action bar with an accurate count", async () => {
-    mount(); await screen.findByRole("table");
-    fireEvent.click(screen.getByLabelText("Выбрать сотрудника: Азиза Каримова"));
+    mount();
+    fireEvent.click(await screen.findByLabelText("Выбрать сотрудника: Азиза Каримова"));
     const bar = screen.getByRole("complementary", { name: "Действия с выбранными сотрудниками" });
     expect(bar).toBeInTheDocument();
     expect(within(bar).getByText("1")).toBeInTheDocument();
@@ -258,7 +279,7 @@ describe("Employee list and retained access controls", () => {
   it("opens a direct chat for one selected colleague and hands it to messenger", async () => {
     const onCreateChat = vi.fn().mockResolvedValue(createdChat);
     const onChatCreated = vi.fn();
-    mount(user, { onCreateChat, onChatCreated }); await screen.findByRole("table");
+    mount(user, { onCreateChat, onChatCreated }); await loadedTable();
     fireEvent.click(screen.getByLabelText("Выбрать сотрудника: Азиза Каримова"));
     fireEvent.click(screen.getByRole("button", { name: "Открыть чат" }));
     await waitFor(() => expect(onCreateChat).toHaveBeenCalledWith({ kind: "direct", title: "", description: "", memberIds: ["one"] }));
@@ -270,7 +291,7 @@ describe("Employee list and retained access controls", () => {
   it("asks for a group name when several active colleagues are selected", async () => {
     vi.mocked(loadDirectory).mockResolvedValueOnce({ ...data, employees: data.employees.map((employee) => ({ ...employee, status: "active" })) });
     const onCreateChat = vi.fn().mockResolvedValue({ ...createdChat, id: "group-one", title: "Команда", kind: "group" });
-    mount(user, { onCreateChat }); await screen.findByRole("table");
+    mount(user, { onCreateChat }); await loadedTable();
     fireEvent.click(screen.getByLabelText("Выбрать сотрудников на странице"));
     fireEvent.click(screen.getByRole("button", { name: "Создать чат" }));
     const dialog = await screen.findByRole(
@@ -289,7 +310,7 @@ describe("Employee list and retained access controls", () => {
   });
   it("changes the position for every selected editable employee", async () => {
     vi.mocked(updateEmployeeAccess).mockImplementation(async (_, id, role, positionId) => ({ ...data.employees.find((employee) => employee.id === id)!, role, positionId, jobTitle: "Mutaxassis" }));
-    mount(); await screen.findByRole("table");
+    mount(); await loadedTable();
     fireEvent.click(screen.getByLabelText("Выбрать сотрудников на странице"));
     fireEvent.click(screen.getByRole("button", { name: "Изменить должность" }));
     expect(screen.getByRole("button", { name: "Применить" })).toBeDisabled();
@@ -302,7 +323,7 @@ describe("Employee list and retained access controls", () => {
   });
   it("renames a position and updates its visible name on employee rows", async () => {
     vi.mocked(updatePosition).mockResolvedValue({ ...data.positions[0]!, name: "Yetakchi mutaxassis" });
-    mount(); await screen.findByRole("table"); fireEvent.click(screen.getByRole("button", { name: "Должности" }));
+    mount(); await loadedTable(); fireEvent.click(screen.getByRole("button", { name: "Должности" }));
     screen.getByRole("button", { name: "Закрыть справочник должностей" }).focus();
     fireEvent.change(screen.getByLabelText("Название должности"), { target: { value: "Yetakchi mutaxassis" } });
     fireEvent.click(screen.getByRole("button", { name: "Сохранить должность" }));
@@ -314,7 +335,7 @@ describe("Employee list and retained access controls", () => {
     vi.mocked(loadDirectory).mockRejectedValueOnce(new Error("Сервер недоступен")).mockResolvedValueOnce(data);
     mount(); await screen.findByRole("alert");
     fireEvent.click(screen.getByRole("button", { name: "Повторить загрузку" }));
-    expect(await screen.findByRole("table")).toBeInTheDocument(); expect(loadDirectory).toHaveBeenCalledTimes(2);
+    expect(await loadedTable()).toBeInTheDocument(); expect(loadDirectory).toHaveBeenCalledTimes(2);
   });
   it("edits module permissions at role level", async () => {
     vi.mocked(setModuleAccessRule).mockResolvedValue({
@@ -325,7 +346,7 @@ describe("Employee list and retained access controls", () => {
       permissions: { view: false, create: false, edit: false, approve: false, admin: false },
     });
     mount();
-    await screen.findByRole("table");
+    await loadedTable();
     fireEvent.click(screen.getByRole("button", { name: "Права модулей" }));
     fireEvent.click(screen.getByLabelText("Задачи: Просмотр"));
     await waitFor(() => expect(setModuleAccessRule).toHaveBeenCalledWith(
@@ -346,7 +367,7 @@ describe("Employee list and retained access controls", () => {
       permissions: { view: true, create: false, edit: false, approve: false, admin: false },
     });
     mount();
-    await screen.findByRole("table");
+    await loadedTable();
     fireEvent.click(screen.getByRole("button", { name: "Права модулей" }));
     fireEvent.change(screen.getByLabelText("Уровень правила доступа"), { target: { value: "position" } });
     fireEvent.click(screen.getByLabelText("Обзор команды: Просмотр"));

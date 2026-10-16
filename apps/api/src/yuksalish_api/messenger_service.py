@@ -23,6 +23,7 @@ from .tables import (
     message_receipts,
     message_versions,
     messages,
+    pin_dismissals,
     pinned_messages,
     project_hub_projects,
     trip_requests,
@@ -845,13 +846,41 @@ async def message_detail_maps(
     pin_rows = (
         (
             await connection.execute(
-                select(pinned_messages).where(pinned_messages.c.message_id.in_(message_ids))
+                select(pinned_messages, pin_dismissals.c.pinned_at.label("dismissed_pin_at"),
+                       users.c.job_title.label("pinner_title"))
+                .join(users, users.c.id == pinned_messages.c.pinned_by_user_id)
+                .outerjoin(pin_dismissals, and_(
+                    pin_dismissals.c.message_id == pinned_messages.c.message_id,
+                    pin_dismissals.c.user_id == user.id,
+                )).where(pinned_messages.c.message_id.in_(message_ids))
             )
         )
         .mappings()
         .all()
     )
-    return reactions, {row["message_id"]: row for row in pin_rows}
+    return reactions, {row["message_id"]: {
+        **row, "protected": bool(row["protected"]) or is_executive_leader(row["pinner_title"]),
+    } for row in pin_rows}
+
+
+async def reply_quote_map(
+    connection: AsyncConnection, user: AuthenticatedUser, rows: list[Record],
+) -> dict[UUID, Any]:
+    """Do not leak an older message through a reply after restricted-history join."""
+    parent_ids = {row["reply_to_message_id"] for row in rows if row.get("reply_quote")}
+    if not parent_ids:
+        return {}
+    visible = set((await connection.execute(
+        select(messages.c.id).join(chat_members, and_(
+            chat_members.c.chat_id == messages.c.chat_id, chat_members.c.user_id == user.id,
+        )).where(messages.c.id.in_(parent_ids), messages.c.deleted_at.is_(None),
+                 or_(chat_members.c.history_visible_from.is_(None),
+                     messages.c.created_at >= chat_members.c.history_visible_from),
+                 or_(messages.c.system_target_user_id.is_(None),
+                     messages.c.system_target_user_id == user.id))
+    )).scalars())
+    return {row["id"]: row["reply_quote"] for row in rows
+            if row.get("reply_quote") and row["reply_to_message_id"] in visible}
 
 
 async def forward_detail_map(
@@ -913,10 +942,21 @@ def message_response(
     forwarded: ForwardedContentResponse | None = None,
     read_by_recipient: bool = False,
     zoom_invitation: ZoomInvitationResponse | None = None,
+    reply_quote: Any = None,
 ) -> ChatMessageResponse:
     own = row["author_user_id"] == user.id
     deleted = row["deleted_at"] is not None
+    protected = bool(pin and pin.get("protected"))
+    redacted = deleted or bool(forwarded and not forwarded.available)
     return ChatMessageResponse(
+        entities=[] if redacted else (row.get("entities") or []),
+        reply_quote=None if deleted else reply_quote,
+        pin_protected=protected,
+        pin_hidden_for_me=bool(
+            pin and not protected and pin.get("dismissed_pin_at") == pin["pinned_at"]
+        ),
+        can_unpin_for_self=bool(pin) and not deleted and not protected,
+        can_unpin_for_all=bool(pin) and not deleted and not protected and can_pin,
         id=str(row["id"]),
         chat_id=str(row["chat_id"]),
         author_id=str(row["author_user_id"]),
@@ -944,7 +984,7 @@ def message_response(
         and not row.get("zoom_meeting_id")
         and can_send
         and datetime.now(UTC) < row["created_at"] + timedelta(hours=24),
-        can_delete=not deleted and row["system_kind"] is None and (
+        can_delete=not protected and not deleted and row["system_kind"] is None and (
             own or user.role in {"admin", "superadmin"} or can_pin
         ),
         reactions=[] if deleted else (reactions or []),
@@ -970,6 +1010,7 @@ async def message_with_details(
     forwards = await forward_detail_map(connection, user, [row])
     read_ids = await read_message_ids(connection, user, [row["id"]])
     invitations = await invitation_detail_map(connection, user, [row])
+    quotes = await reply_quote_map(connection, user, [row])
     return message_response(
         row,
         user,
@@ -980,6 +1021,7 @@ async def message_with_details(
         forwarded=forwards.get(row["id"]),
         read_by_recipient=row["id"] in read_ids,
         zoom_invitation=invitations.get(row["id"]),
+        reply_quote=quotes.get(row["id"]),
     )
 
 
@@ -1080,17 +1122,26 @@ async def send_chat_message(
         raise WorkspaceRepositoryError(403, "Доступно только чтение сообщений")
     mentions = await validate_mentions(connection, chat_id, payload.mention_user_ids)
     if payload.reply_to_message_id is not None:
-        parent = await connection.scalar(
-            select(messages.c.id).where(
+        parent = (await connection.execute(
+            select(messages.c.id, messages.c.body, messages.c.forwarded).where(
                 messages.c.id == payload.reply_to_message_id,
                 messages.c.chat_id == chat_id,
                 messages.c.deleted_at.is_(None),
                 messages.c.system_kind.is_(None),
                 message_access_filter(member, user.id),
             )
-        )
+        )).mappings().first()
         if parent is None:
             raise WorkspaceRepositoryError(422, "Сообщение для ответа недоступно в этом чате")
+        if payload.reply_quote:
+            quote = payload.reply_quote
+            encoded = parent["body"].encode("utf-16-le")
+            start = quote.offset * 2
+            end = start + len(quote.text.encode("utf-16-le"))
+            if (parent["forwarded"] and parent["forwarded"].get("kind") == "feed") or (
+                encoded[start:end] != quote.text.encode("utf-16-le")
+            ):
+                raise WorkspaceRepositoryError(422, "Выделенная цитата не соответствует сообщению")
     now = datetime.now(UTC)
     row = (
         (
@@ -1101,6 +1152,8 @@ async def send_chat_message(
                     chat_id=chat_id,
                     author_user_id=user.id,
                     body=payload.body,
+                    entities=[item.model_dump(exclude_none=True) for item in payload.entities],
+                    reply_quote=payload.reply_quote.model_dump() if payload.reply_quote else None,
                     forwarded=forwarded,
                     zoom_meeting_id=zoom_meeting_id,
                     reply_to_message_id=payload.reply_to_message_id,
@@ -1120,6 +1173,7 @@ async def send_chat_message(
         insert(message_versions).values(
             message_id=row["id"],
             body=payload.body,
+            entities=[item.model_dump(exclude_none=True) for item in payload.entities],
             mention_user_ids=mentions,
             actor_user_id=user.id,
             change_reason="initial",
@@ -1224,49 +1278,63 @@ async def set_message_pin(
     chat, member = await chat_access(connection, user, row["chat_id"], lock=True)
     if not message_visible_to_member(row, member):
         raise WorkspaceRepositoryError(404, "Сообщение не найдено")
-    if not can_manage_messages(chat, member):
-        raise WorkspaceRepositoryError(403, "Нет права закреплять сообщения")
-    if payload.pinned:
-        count = await connection.scalar(
-            select(func.count())
-            .select_from(pinned_messages)
-            .where(pinned_messages.c.chat_id == row["chat_id"])
-        )
-        existing = await connection.scalar(
-            select(pinned_messages.c.message_id).where(
-                pinned_messages.c.message_id == message_id
-            )
-        )
-        if existing is None and int(count or 0) >= 50:
-            raise WorkspaceRepositoryError(
-                409, "В чате можно закрепить не более 50 сообщений"  # noqa: RUF001
-            )
+    _, pins = await message_detail_maps(connection, user, [message_id])
+    existing = pins.get(message_id)
+    if existing and existing["protected"] and not payload.pinned:
+        raise WorkspaceRepositoryError(403, "Закреп председателя нельзя снять или скрыть")
+    if payload.scope == "self":
+        if existing is None:
+            raise WorkspaceRepositoryError(409, "Закреп уже снят")
         await connection.execute(
-            pg_insert(pinned_messages)
+            pg_insert(pin_dismissals)
             .values(
                 message_id=message_id,
-                chat_id=row["chat_id"],
-                pinned_by_user_id=user.id,
-                pinned_at=datetime.now(UTC),
+                user_id=user.id,
+                pinned_at=existing["pinned_at"],
             )
             .on_conflict_do_update(
-                index_elements=[pinned_messages.c.message_id],
-                set_={
-                    "pinned_by_user_id": user.id,
-                    "pinned_at": datetime.now(UTC),
-                },
+                index_elements=[pin_dismissals.c.message_id, pin_dismissals.c.user_id],
+                set_={"pinned_at": existing["pinned_at"]},
             )
         )
     else:
-        await connection.execute(
-            delete(pinned_messages).where(pinned_messages.c.message_id == message_id)
-        )
+        if not can_manage_messages(chat, member):
+            raise WorkspaceRepositoryError(403, "Нет права управлять закрепами для всех")
+        if payload.pinned:
+            if existing is None:
+                count = await connection.scalar(
+                    select(func.count())
+                    .select_from(pinned_messages)
+                    .where(pinned_messages.c.chat_id == row["chat_id"])
+                )
+                if int(count or 0) >= 50:
+                    raise WorkspaceRepositoryError(
+                        409, "Лимит закрепов: 50 сообщений"
+                    )
+                await connection.execute(
+                    insert(pinned_messages).values(
+                        message_id=message_id,
+                        chat_id=row["chat_id"],
+                        pinned_by_user_id=user.id,
+                        pinned_at=datetime.now(UTC),
+                        protected=is_executive_leader(user.job_title),
+                    )
+                )
+            # Idempotent pin never replaces its creator or removes chairman protection.
+        else:
+            await connection.execute(
+                delete(pinned_messages).where(pinned_messages.c.message_id == message_id)
+            )
     await audit(
         connection,
         user,
-        "message.pinned" if payload.pinned else "message.unpinned",
+        "message.pin_hidden"
+        if payload.scope == "self"
+        else "message.pinned"
+        if payload.pinned
+        else "message.unpinned",
         message_id,
-        {"chat_id": str(row["chat_id"])},
+        {"chat_id": str(row["chat_id"]), "scope": payload.scope},
         target_type="message",
     )
     return await message_with_details(connection, user, row, chat, member)
@@ -1300,10 +1368,11 @@ async def change_message(
     if row["system_kind"] is not None:
         raise WorkspaceRepositoryError(403, "Системную запись нельзя изменить или удалить")
     deleting = isinstance(payload, DeleteMessageRequest)
+    _, pins = await message_detail_maps(connection, user, [message_id])
+    if deleting and pins.get(message_id, {}).get("protected"):
+        raise WorkspaceRepositoryError(403, "Закреплённое председателем сообщение нельзя удалить")
     may_moderate = user.role in {"admin", "superadmin"} or can_manage_messages(chat, member)
-    response = message_response(
-        row, user, can_send=member_permissions(member).send_messages
-    )
+    response = message_response(row, user, can_send=member_permissions(member).send_messages)
     if (deleting and not (response.own or may_moderate)) or (
         not deleting and not response.can_edit
     ):
@@ -1314,9 +1383,11 @@ async def change_message(
     if isinstance(payload, EditMessageRequest):
         mentions = await validate_mentions(connection, chat_id, payload.mention_user_ids)
         body = payload.body
+        entities = [item.model_dump(exclude_none=True) for item in payload.entities]
     else:
         mentions = []
         body = ""
+        entities = []
     now = datetime.now(UTC)
     changed = (
         (
@@ -1325,6 +1396,7 @@ async def change_message(
                 .where(messages.c.id == message_id)
                 .values(
                     body=body,
+                    entities=entities,
                     mention_user_ids=mentions,
                     revision=row["revision"] + 1,
                     edited_at=row["edited_at"] if deleted else now,
@@ -1340,6 +1412,7 @@ async def change_message(
         insert(message_versions).values(
             message_id=message_id,
             body=body,
+            entities=entities,
             mention_user_ids=mentions,
             actor_user_id=user.id,
             change_reason="deleted" if deleted else "edited",

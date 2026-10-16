@@ -39,3 +39,17 @@ it("does not expose HR editing to an unassigned employee", async () => {
   expect(screen.queryByRole("button", { name: "Добавить сотрудника" })).not.toBeInTheDocument();
   expect(createHrProfile).not.toHaveBeenCalled();
 });
+it("keeps the header through loading and retry without presenting missing data as an unconfigured route", async () => {
+  vi.mocked(loadHrOverview).mockRejectedValueOnce(new Error("Сервер временно недоступен"));
+  render(<FluentProvider theme={workspaceTheme}><HrView token="qa-token" currentUser={admin} people={[]} /></FluentProvider>);
+  const heading = screen.getByRole("heading", { name: "HR · Кадровое пространство" });
+  expect(screen.getByLabelText("Загружаем HR…")).toHaveAttribute("aria-busy", "true");
+  expect(screen.getByRole("tab", { name: "Сотрудники" })).toBeInTheDocument();
+  expect(screen.getAllByRole("columnheader")).toHaveLength(7);
+  expect(await screen.findByRole("alert")).toHaveTextContent("Сервер временно недоступен");
+  expect(screen.queryByLabelText("Загружаем HR…")).toBeNull();
+  expect(screen.queryByText("Назначьте участников маршрута")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Повторить" }));
+  await screen.findByRole("tab", { name: "Сотрудники" });
+  expect(screen.getByRole("heading", { name: "HR · Кадровое пространство" })).toHaveTextContent(heading.textContent!);
+});

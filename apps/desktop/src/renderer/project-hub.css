@@ -189,7 +189,7 @@
   margin-bottom: 14px;
   overflow: hidden;
   border: 1px solid rgb(var(--ws-theme-line-rgb, 255 255 255) / 0.82);
-  border-radius: 24px 24px 30px 16px;
+  border-radius: 20px;
   color: #fff;
   background: radial-gradient(circle at 76% 10%, rgb(116 221 211 / 20%), transparent 19rem),
     linear-gradient(112deg, #183c59, #12667b 65%, #148f9e);

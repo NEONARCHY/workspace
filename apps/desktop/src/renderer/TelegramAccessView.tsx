@@ -1,4 +1,5 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
+import { LoadingSkeleton, SkeletonBlock } from "./LoadingSkeleton";
 import { Input } from "./WorkspaceInput";
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
 import { WorkspaceSelect } from "./WorkspaceSelect";
@@ -239,7 +240,14 @@ export function TelegramAccessView({ token, departments }: { readonly token: str
     </label>
     {departments ? <EmployeeScopeSwitch value={scope} onChange={setScope} label="Сотрудники с доступом к Telegram-ботам" /> : null}
     {error ? <WorkspaceNotice tone="error" className="telegram-access-page-error" role="alert" actions={<><button type="button" onClick={() => void refresh()}>Повторить</button></>}>{error} </WorkspaceNotice> : null}
-    {loading && !registry ? <p className="telegram-access-loading" role="status">Загружаем сотрудников…</p> : null}
+    {loading && !registry ? <LoadingSkeleton layout="custom" label="Загружаем сотрудников…"><div className="telegram-access-list">
+      {Array.from({ length: 4 }, (_, index) => <article className="telegram-access-row" key={index}>
+        <div className="telegram-access-person"><SkeletonBlock width="42px" height="42px" circle /><div className="telegram-access-person-copy ws-skeleton-copy"><SkeletonBlock width="85%" /><SkeletonBlock width="65%" height="12px" /></div></div>
+        <div className="telegram-access-editor ws-skeleton-copy"><SkeletonBlock width="90px" /><SkeletonBlock height="38px" /><SkeletonBlock width="80px" height="20px" /></div>
+        <div className="telegram-access-bots"><SkeletonBlock width="110px" /><div className="telegram-access-bot-grid">{Array.from({ length: 2 }, (_, bot) => <div className="telegram-access-bot" key={bot}><SkeletonBlock width="24px" height="24px" /><div className="ws-skeleton-copy"><SkeletonBlock width="90%" /><SkeletonBlock width="60%" height="12px" /></div></div>)}</div></div>
+        <div className="telegram-access-row-footer"><span /><SkeletonBlock width="110px" height="34px" /></div>
+      </article>)}
+    </div></LoadingSkeleton> : null}
     {registry ? <div className="telegram-access-list" aria-label="Сотрудники и доступ к ботам">
       {people.length ? people.map((person) => <PersonAccessRow
         key={`${person.userId}:${refreshEpoch}`}

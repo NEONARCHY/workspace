@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { AIReferentPacketFile, AIReferentPacketKind } from "@yuksalish/contracts";
-import { Button, DialogBody, DialogContent, DialogSurface, DialogTitle, DialogTrigger, Spinner } from "@fluentui/react-components";
+import { Button, DialogBody, DialogContent, DialogSurface, DialogTitle, DialogTrigger } from "@fluentui/react-components";
+import { LoadingSkeleton } from "./LoadingSkeleton";
 import { ArrowDownload20Regular, Dismiss20Regular, Document20Regular, FolderOpen20Regular } from "@fluentui/react-icons";
 import { WorkspaceDialog } from "./WorkspaceDialog";
 import { downloadAIReferentPacket, loadAIReferentPacket } from "./workspace-api";
@@ -66,7 +67,7 @@ export function AIReferentFiles({ token, kind, ownerId, letterLabel, details, tr
             <p className="ai-referent-packet-context">{letterLabel || (kind === "journal" ? "Excel-журналы" : "Письмо и вложения")}</p>
             {details?.length ? <dl className="ai-referent-packet-details">{details.map(({ label, value }) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl> : null}
             <p className="ai-referent-packet-help">Актуальное письмо и приложения. Исходные рабочие файлы остаются в защищённом хранилище.</p>
-            {loading ? <Spinner label="Загружаем файлы" /> : null}
+            {loading && !files.length ? <LoadingSkeleton layout="rows" rows={3} label="Загружаем файлы" /> : null}
             {error ? <p role="alert">{error}</p> : null}
             {!loading && !error && files.length === 0 ? <p>Робот ещё не передал файлы этого письма.</p> : null}
             {files.map((file) => <button type="button" className="ai-referent-file" key={file.id} disabled={busy} onClick={() => void download(file)}>

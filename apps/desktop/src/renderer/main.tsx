@@ -77,6 +77,7 @@ import "./chat-delete-dialog.css";
 import "./workspace-field-borders.css";
 import "./task-composer-sections.css";
 import "./messenger-outgoing.css";
+import "./messenger-voice.css";
 import "./workspace-select-motion.css";
 import "./workspace-modal-backdrops.css";
 import "./notification-bell.css";

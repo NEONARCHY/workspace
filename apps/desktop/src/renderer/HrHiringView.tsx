@@ -1,4 +1,5 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
+import { LoadingSkeleton, SkeletonBlock } from "./LoadingSkeleton";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { HiringActionName, HiringDetail, HiringDocumentKind, HiringFields, HiringRegistry, HiringSignatureBox } from "@yuksalish/contracts";
 import { Button, Checkbox, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input, Select, Spinner, Textarea } from "@fluentui/react-components";
@@ -86,7 +87,9 @@ export function HrHiringView({ token }: { readonly token: string }) {
     <div className="hr-hiring-toolbar"><div><h2>Приём на работу</h2><p>Договор, приказ и ариза в одном пакете. Сотрудник подписывает договор после распечатки.</p></div>
       <div><span className="hr-hiring-count">{registry ? `${registry.total} оформлений` : "Загрузка"}</span><Button disabled={busy} onClick={() => void run(refresh)}>Обновить</Button>{registry?.canCreate ? <Button appearance="primary" disabled={busy} onClick={start}>Новый приём</Button> : null}</div></div>
     {error ? <WorkspaceNotice tone="error" role="alert" className="hr-alert hr-error">{error}</WorkspaceNotice> : null}
-    {!registry && !error ? <Spinner label="Загружаем оформления…" /> : null}
+    {!registry && !error ? <><LoadingSkeleton layout="custom"><div className="hr-hiring-signature"><SkeletonBlock width="65%" height="18px" /></div></LoadingSkeleton><div className="hr-hiring-layout"><aside aria-label="Оформления сотрудников"><LoadingSkeleton layout="custom" label="Загружаем оформления…">
+      {Array.from({ length: 6 }, (_, index) => <div className="ws-skeleton-copy hr-hiring-record-skeleton" key={index}><SkeletonBlock width="80%" /><SkeletonBlock width="65%" /><SkeletonBlock width="55%" height="12px" /></div>)}
+    </LoadingSkeleton></aside><div className="hr-hiring-detail"><p>Выберите оформление или начните новый приём.</p></div></div></> : null}
     {registry ? <><div className="hr-hiring-signature"><span>Руководитель: {registry.signerName}. {registry.signatureReady ? "Личная подпись настроена." : "Личная подпись ещё не настроена."}</span>
       {registry.canConfigureSignature ? <><input type="file" ref={signatureInput} hidden accept="image/png" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = "";
         if (file) void run(async () => { await saveHiringSignature(token, file); await refresh(); }); }} /><Button disabled={busy} onClick={() => signatureInput.current?.click()}>Настроить мою подпись</Button></> : null}</div>

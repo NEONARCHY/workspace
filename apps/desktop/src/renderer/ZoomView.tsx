@@ -1,4 +1,5 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
+import { LoadingSkeleton, SkeletonBlock } from "./LoadingSkeleton";
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
 import { workspacePlatform } from "./platform-adapter";
 import { validatedZoomLink } from "../shared/zoom-link";
@@ -12,7 +13,7 @@ import type {
   ZoomMeetingInput,
   ZoomMeetingsRegistry,
 } from "@yuksalish/contracts";
-import { Avatar, Button, Checkbox, Input, Spinner, Textarea } from "@fluentui/react-components";
+import { Avatar, Button, Checkbox, Input, Textarea } from "@fluentui/react-components";
 import {
   Add24Regular,
   ArrowClockwise20Regular,
@@ -361,14 +362,6 @@ export function ZoomView({
 
   const personName = (id: string) => people.find((person) => person.id === id)?.name ?? "Сотрудник";
 
-  if (loading && !registry) {
-    return (
-      <section className="workspace-view zoom-view" aria-label="Zoom-конференции">
-        <div className="zoom-placeholder"><Spinner label="Загружаем расписание конференций" /></div>
-      </section>
-    );
-  }
-
   if (registry && !registry.configured) {
     return (
       <section className="workspace-view zoom-view" aria-label="Zoom-конференции">
@@ -408,6 +401,7 @@ export function ZoomView({
             className="ws-section-header-primary"
             appearance="primary"
             icon={<Add24Regular />}
+            disabled={loading && !registry}
             onClick={() => openComposer(emptyDraft(timeZone))}
           >
             Новая конференция
@@ -440,7 +434,13 @@ export function ZoomView({
               Прошедшие
             </button>
           </SlidingSegmented>
-          {visible.length === 0 ? (
+          {loading && !registry ? <LoadingSkeleton layout="custom" label="Загружаем расписание конференций"><ul className="zoom-rows">
+            {Array.from({ length: 5 }, (_, index) => <li key={index}><div className="zoom-row">
+              <span className="zoom-row-time ws-skeleton-copy"><SkeletonBlock width="55px" /><SkeletonBlock width="75px" height="12px" /></span>
+              <span className="zoom-row-body ws-skeleton-copy"><SkeletonBlock width="70%" /><SkeletonBlock width="50%" height="12px" /></span>
+              <SkeletonBlock width="75px" height="24px" />
+            </div></li>)}
+          </ul></LoadingSkeleton> : visible.length === 0 ? (
             <p className="zoom-empty">
               {bucket === "upcoming"
                 ? "Запланированных конференций нет. Создайте первую."

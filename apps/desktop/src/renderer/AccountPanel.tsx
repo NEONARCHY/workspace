@@ -1,4 +1,5 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
+import { LoadingSkeleton } from "./LoadingSkeleton";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { SlidingSegmented } from "./SlidingSegmented";
 
@@ -536,7 +537,7 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
               </div>
             ))}
           </div>
-          {securityLoading && <p role="status">Загружаем активные устройства…</p>}
+          {securityLoading && !sessions.length && <LoadingSkeleton layout="rows" rows={3} label="Загружаем активные устройства…" />}
           {!securityLoading && !securityError && sessions.length === 0 && <p className="account-empty-state">Нет доступных сведений об активных устройствах.</p>}
           {securityError && <WorkspaceNotice tone="error" className="account-retry" role="alert" actions={<><Button disabled={securityLoading} onClick={() => void refreshSecurity()}>Повторить загрузку</Button></>}><p>{securityError}</p></WorkspaceNotice>}
           {sessionToRevoke && <div className="account-session-confirm" role="group" aria-label="Подтверждение завершения сеанса">

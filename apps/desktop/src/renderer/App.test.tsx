@@ -1100,10 +1100,10 @@ function clickWithFocus(control: HTMLElement) {
 
 async function loginToWorkspace(username = "aziza", targetSection: "home" | "messenger" | "payment_requests" | "projects" = "messenger") {
   await screen.findByRole("button", { name: "Войти" });
-  fireEvent.change(screen.getByLabelText(/^Логин/), {
+  changeField(screen.getByLabelText(/^Логин/), {
     target: { value: username },
   });
-  fireEvent.change(screen.getByLabelText(/^Пароль/), {
+  changeField(screen.getByLabelText(/^Пароль/), {
     target: { value: "Yuksalish-Local-2026!" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Войти" }));
@@ -1147,12 +1147,12 @@ describe("corporate workspace authentication alpha", () => {
     await screen.findByRole("textbox", { name: "Новое сообщение" });
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Меню разделов" })).not.toBeInTheDocument());
     const draft = screen.getByRole("textbox", { name: "Новое сообщение" });
-    fireEvent.change(draft, { target: { value: "Мобильный черновик" } });
+    changeField(draft, { target: { value: "Мобильный черновик" } });
     fireEvent.click(trigger);
     fireEvent.click(screen.getByRole("button", { name: "Закрыть меню" }));
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Меню разделов" })).not.toBeInTheDocument());
     expect(screen.getByRole("textbox", { name: "Новое сообщение" })).toBe(draft);
-    expect(draft).toHaveValue("Мобильный черновик");
+    expect(draft).toHaveTextValue("Мобильный черновик");
     act(() => { mobileMedia.matches = false; mobileMedia.dispatchEvent(new Event("change")); });
     fireEvent.click(screen.getByRole("button", { name: "Свернуть меню" }));
     expect(document.querySelector(".app-shell")).toHaveClass("rail-collapsed");
@@ -1160,7 +1160,7 @@ describe("corporate workspace authentication alpha", () => {
     expect(document.querySelector(".app-shell")).not.toHaveClass("rail-collapsed");
     act(() => { mobileMedia.matches = false; mobileMedia.dispatchEvent(new Event("change")); });
     expect(document.querySelector(".app-shell")).toHaveClass("rail-collapsed");
-    expect(draft).toHaveValue("Мобильный черновик");
+    expect(draft).toHaveTextValue("Мобильный черновик");
   });
   it("opens survey analytics only on demand and retains its draft across section changes", async () => {
     const survey: SurveyAnalysisDetail = {
@@ -1184,13 +1184,13 @@ describe("corporate workspace authentication alpha", () => {
     await screen.findByRole("heading", { name: "Аналитика опросов" });
     fireEvent.click(await screen.findByRole("button", { name: /Сохранённый опрос/ }));
     const title = await screen.findByRole("textbox", { name: "Название анализа" });
-    fireEvent.change(title, { target: { value: "Несохранённый черновик" } });
+    changeField(title, { target: { value: "Несохранённый черновик" } });
     fireEvent.click(screen.getByRole("button", { name: "Главная" }));
     await screen.findByLabelText("Персональная Главная");
     expect(title).not.toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Аналитика опросов" }));
     expect(screen.getByRole("textbox", { name: "Название анализа" })).toBe(title);
-    expect(title).toHaveValue("Несохранённый черновик");
+    expect(title).toHaveTextValue("Несохранённый черновик");
     expect(server.mock.calls.filter(([input]) => String(input).endsWith("/survey-analyses/survey-test"))).toHaveLength(1);
   });
   it("starts on personal Home after login, ignoring the previous web or desktop section", async () => {
@@ -1268,7 +1268,7 @@ describe("corporate workspace authentication alpha", () => {
     await loginToWorkspace();
 
     const composer = screen.getByRole("textbox", { name: "Новое сообщение" });
-    fireEvent.change(composer, { target: { value: "Заявку подготовила" } });
+    changeField(composer, { target: { value: "Заявку подготовила" } });
     fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
     expect(await screen.findByText("Заявку подготовила")).toBeInTheDocument();
   });
@@ -1287,7 +1287,7 @@ describe("corporate workspace authentication alpha", () => {
       if (String(input).includes("/messages") && options?.method === "POST") return Promise.reject(new Error("Test connection failure"));
       return server(input, options);
     });
-    fireEvent.change(screen.getByRole("textbox", { name: "Новое сообщение" }), { target: { value: "Не отправлено" } });
+    changeField(screen.getByRole("textbox", { name: "Новое сообщение" }), { target: { value: "Не отправлено" } });
     fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
     const failedStatus = await screen.findByText("Не удалось выполнить операцию");
     expect(failedStatus.closest("button")).toHaveClass("connection-indicator", "has-error");
@@ -1419,10 +1419,10 @@ describe("corporate workspace authentication alpha", () => {
     await loginToWorkspace();
 
     const file = new File(["invoice"], "invoice.txt", { type: "text/plain" });
-    fireEvent.change(screen.getByLabelText("Файлы сообщения"), {
+    changeField(screen.getByLabelText("Файлы сообщения"), {
       target: { files: [file] },
     });
-    fireEvent.change(screen.getByRole("textbox", { name: "Новое сообщение" }), {
+    changeField(screen.getByRole("textbox", { name: "Новое сообщение" }), {
       target: { value: "Счёт приложен" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
@@ -1444,7 +1444,7 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.contextMenu(document.querySelector(".message")!);
     fireEvent.click(screen.getByRole("button", { name: "В задачу" }));
     expect(screen.getByRole("dialog", { name: "Новая задача" })).toBeInTheDocument();
-    fireEvent.change(screen.getByRole("textbox", { name: "Название задачи" }), {
+    changeField(screen.getByRole("textbox", { name: "Название задачи" }), {
       target: { value: "Проверить счёт из переписки" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Добавить задачу" }));
@@ -1469,10 +1469,10 @@ describe("corporate workspace authentication alpha", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Задачи" }));
     fireEvent.click(await screen.findByRole("button", { name: "Новая задача" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "Название задачи" }), {
+    changeField(screen.getByRole("textbox", { name: "Название задачи" }), {
       target: { value: "Проверить новый маршрут оплаты" },
     });
-    fireEvent.change(screen.getByRole("textbox", { name: "Описание новой задачи" }), {
+    changeField(screen.getByRole("textbox", { name: "Описание новой задачи" }), {
       target: { value: "Сверить роли и вернуть проверяемый результат" },
     });
     const projectSelect = await screen.findByRole("combobox", { name: "Проект новой задачи" });
@@ -1481,14 +1481,14 @@ describe("corporate workspace authentication alpha", () => {
     await waitFor(() => expect(projectSelect).not.toBeDisabled());
     fireEvent.click(projectSelect);
     fireEvent.click(await screen.findByRole("option", { name: "MR · Маршруты" }));
-    fireEvent.change(screen.getByRole("combobox", { name: "Приоритет новой задачи" }), {
+    changeField(screen.getByRole("combobox", { name: "Приоритет новой задачи" }), {
       target: { value: "high" },
     });
     const plan = screen.getByText("План выполнения").closest("details")!;
     expect(plan).not.toHaveAttribute("open");
     fireEvent.click(plan.querySelector("summary")!);
     expect(plan).toHaveAttribute("open");
-    fireEvent.change(screen.getByRole("textbox", { name: "Новый пункт чек-листа при создании" }), {
+    changeField(screen.getByRole("textbox", { name: "Новый пункт чек-листа при создании" }), {
       target: { value: "Проверить роли" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Добавить пункт" }));
@@ -1525,7 +1525,7 @@ describe("corporate workspace authentication alpha", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Задачи" }));
     fireEvent.click(screen.getByRole("button", { name: "Новая задача" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "Название задачи" }), {
+    changeField(screen.getByRole("textbox", { name: "Название задачи" }), {
       target: { value: "Черновик без подтверждения" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Отмена" }));
@@ -1541,11 +1541,11 @@ describe("corporate workspace authentication alpha", () => {
     render(<App />);
     await loginToWorkspace();
     fireEvent.click(screen.getByRole("button", { name: "Задачи" }));
-    fireEvent.change(await screen.findByRole("textbox", { name: "Поиск задач" }), { target: { value: "__no_task_matches__" } });
+    changeField(await screen.findByRole("textbox", { name: "Поиск задач" }), { target: { value: "__no_task_matches__" } });
     expect(document.querySelectorAll(".task-row")).toHaveLength(0);
     fireEvent.click(screen.getByRole("button", { name: "Kanban" }));
     expect(document.querySelectorAll(".kanban-card")).toHaveLength(0);
-    fireEvent.change(screen.getByRole("textbox", { name: "Поиск задач" }), { target: { value: "" } });
+    changeField(screen.getByRole("textbox", { name: "Поиск задач" }), { target: { value: "" } });
     expect(document.querySelectorAll(".kanban-card").length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Просроченные" }));
     const cards = [...document.querySelectorAll(".kanban-card")];
@@ -1630,13 +1630,14 @@ describe("corporate workspace authentication alpha", () => {
     await loginToWorkspace("malika");
     fireEvent.click(screen.getByRole("button", { name: "Сотрудники" }));
     const search = await screen.findByRole("textbox", { name: "Поиск сотрудников" });
+    await waitFor(() => expect(document.querySelectorAll(".employee-row").length).toBeGreaterThan(0));
     const selectedName = document.querySelector(".directory-heading h2")?.textContent;
-    fireEvent.change(search, { target: { value: "__no_employee_matches__" } });
-    expect(screen.getByText("Сотрудники не найдены")).toBeInTheDocument();
+    changeField(search, { target: { value: "__no_employee_matches__" } });
+    expect(await screen.findByText("Сотрудники не найдены")).toBeInTheDocument();
     expect(document.querySelectorAll(".employee-row")).toHaveLength(0);
     expect(document.querySelector(".directory-heading h2")?.textContent).toBe(selectedName);
-    fireEvent.change(search, { target: { value: "" } });
-    expect(document.querySelectorAll(".employee-row").length).toBeGreaterThan(0);
+    changeField(search, { target: { value: "" } });
+    await waitFor(() => expect(document.querySelectorAll(".employee-row").length).toBeGreaterThan(0));
   });
 
   it("opens the existing invitation form directly from the employee list", async () => {
@@ -1667,19 +1668,19 @@ describe("corporate workspace authentication alpha", () => {
     screen.getByRole("button", { name: "Закрыть задачу" }).focus();
     expect(screen.queryByRole("button", { name: "К списку задач" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Редактировать карточку" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "Название в карточке" }), {
+    changeField(screen.getByRole("textbox", { name: "Название в карточке" }), {
       target: { value: "Полная карточка BP-5" },
     });
-    fireEvent.change(screen.getByRole("textbox", { name: "Описание задачи" }), {
+    changeField(screen.getByRole("textbox", { name: "Описание задачи" }), {
       target: { value: "Описание, участники и контроль исполнения" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Сохранить карточку" }));
     expect(await screen.findByRole("heading", { name: "Полная карточка BP-5" })).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("Новый участник"), {
+    changeField(screen.getByLabelText("Новый участник"), {
       target: { value: people[0]!.id },
     });
-    fireEvent.change(screen.getByLabelText("Роль участника"), {
+    changeField(screen.getByLabelText("Роль участника"), {
       target: { value: "observer" },
     });
     fireEvent.click(screen.getAllByRole("button", { name: "Добавить" })[0]!);
@@ -1690,7 +1691,7 @@ describe("corporate workspace authentication alpha", () => {
       ),
     );
 
-    fireEvent.change(screen.getByLabelText("Новый пункт чек-листа"), {
+    changeField(screen.getByLabelText("Новый пункт чек-листа"), {
       target: { value: "Проверить результат" },
     });
     const checklistForm = screen.getByLabelText("Новый пункт чек-листа").closest(".inline-task-form")!;
@@ -1700,14 +1701,14 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.click(checklistItem);
     await waitFor(() => expect(screen.getByText("1/1")).toBeInTheDocument());
 
-    fireEvent.change(screen.getByLabelText("Зависимая задача"), {
+    changeField(screen.getByLabelText("Зависимая задача"), {
       target: { value: initialTasks[1]!.id },
     });
     fireEvent.click(screen.getByRole("button", { name: "Связать" }));
     expect((await screen.findAllByText(initialTasks[1]!.title)).length).toBeGreaterThan(1);
 
     fireEvent.click(screen.getByRole("button", { name: "Добавить цикл" }));
-    fireEvent.change(screen.getByLabelText("Период повторения"), {
+    changeField(screen.getByLabelText("Период повторения"), {
       target: { value: "calendar" },
     });
     expect(screen.getByRole("checkbox", { name: "Пн" })).toBeChecked();
@@ -1724,7 +1725,7 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.click(screen.getByRole("button", { name: "Отключить" }));
     expect(await screen.findByText(/Отключено · По дням недели: пн, ср/)).toBeInTheDocument();
 
-    fireEvent.change(screen.getByRole("textbox", { name: "Новый комментарий" }), {
+    changeField(screen.getByRole("textbox", { name: "Новый комментарий" }), {
       target: { value: "Карточка готова к проверке" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Отправить" }));
@@ -1783,7 +1784,7 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.click(screen.getByRole("button", { name: "Задачи" }));
     fireEvent.click(screen.getAllByRole("button", { name: /^Открыть задачу:/ })[0]!);
     fireEvent.click(screen.getByRole("button", { name: "Добавить подзадачу" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "Название подзадачи" }), {
+    changeField(screen.getByRole("textbox", { name: "Название подзадачи" }), {
       target: { value: "Сверить итоговые цифры" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Создать подзадачу" }));
@@ -1804,14 +1805,14 @@ describe("corporate workspace authentication alpha", () => {
     expect(screen.getByText("Результат отправлен. Ожидает решения постановщика.")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Вернуть на доработку" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "Пояснение причины" }), {
+    changeField(screen.getByRole("textbox", { name: "Пояснение причины" }), {
       target: { value: "Добавьте номер договора" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Вернуть исполнителям" }));
     await waitFor(() => expect(screen.getByText("Добавьте номер договора", { selector: "p" })).toBeInTheDocument());
     expect(screen.getByText("Нужны исправления")).toBeInTheDocument();
 
-    fireEvent.change(await screen.findByRole("textbox", { name: "Результат задачи" }), {
+    changeField(await screen.findByRole("textbox", { name: "Результат задачи" }), {
       target: { value: "Номер договора добавлен" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Завершить и отправить на проверку" }));
@@ -1837,7 +1838,7 @@ describe("corporate workspace authentication alpha", () => {
     screen.getByRole("button", { name: "Закрыть задачу" }).focus();
     expect(screen.queryByRole("button", { name: "Создать заявку на оплату" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Завершить и отправить на проверку" })).toBeDisabled();
-    fireEvent.change(screen.getByLabelText("Файлы результата"), {
+    changeField(screen.getByLabelText("Файлы результата"), {
       target: { files: [new File(["report"], "result.txt", { type: "text/plain" })] },
     });
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
@@ -1850,7 +1851,7 @@ describe("corporate workspace authentication alpha", () => {
     expect(resultInput).toBeVisible();
     expect(resultInput.closest('[aria-hidden="true"]')).toBeNull();
     expect(resultInput).toHaveAccessibleName("Результат задачи");
-    fireEvent.change(resultInput, {
+    changeField(resultInput, {
       target: { value: "Работа завершена, файл приложен" },
     });
     await waitFor(() => expect(screen.getByRole("button", { name: "Завершить и отправить на проверку" })).toBeEnabled(), { timeout: 10_000 });
@@ -1870,13 +1871,13 @@ describe("corporate workspace authentication alpha", () => {
     expect(projectSection.compareDocumentPosition(paymentSection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(projectSection.querySelector("header span")).toHaveTextContent("00");
     expect(paymentSection.querySelector("header span")).toHaveTextContent("01");
-    fireEvent.change(screen.getByRole("textbox", { name: "Название заявки" }), {
+    changeField(screen.getByRole("textbox", { name: "Название заявки" }), {
       target: { value: "Полная заявка BP-6" },
     });
-    fireEvent.change(screen.getByRole("textbox", { name: "Сумма заявки" }), {
+    changeField(screen.getByRole("textbox", { name: "Сумма заявки" }), {
       target: { value: "12500000" },
     });
-    fireEvent.change(screen.getByRole("textbox", { name: "Назначение платежа" }), {
+    changeField(screen.getByRole("textbox", { name: "Назначение платежа" }), {
       target: { value: "Оплата подрядчику" },
     });
     expect(screen.queryByLabelText("тип перевода")).not.toBeInTheDocument();
@@ -1892,16 +1893,16 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.click(await screen.findByRole("option", { name: "Мероприятие · Форум" }));
     expect(screen.queryByLabelText("название проекта")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("код проекта")).not.toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("категория платежа"), {
+    changeField(screen.getByLabelText("категория платежа"), {
       target: { value: "Мероприятия" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Отправить по маршруту" }));
     expect(screen.getByText("Для категории «Мероприятия» выберите встречу или мероприятие, которое ещё не завершилось.")).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("фильтр событий по проекту"), { target: { value: "all" } });
-    fireEvent.change(screen.getByLabelText("поиск события"), { target: { value: "Планирование" } });
+    changeField(screen.getByLabelText("фильтр событий по проекту"), { target: { value: "all" } });
+    changeField(screen.getByLabelText("поиск события"), { target: { value: "Планирование" } });
     fireEvent.click(screen.getByLabelText("событие календаря"));
     fireEvent.click(await screen.findByRole("option", { name: /Планирование недели/ }));
-    await waitFor(() => expect(screen.getByLabelText("событие календаря")).toHaveValue("calendar-1"));
+    await waitFor(() => expect(screen.getByLabelText("событие календаря")).toHaveTextValue("calendar-1"));
     fireEvent.click(screen.getByRole("button", { name: "Отправить по маршруту" }));
 
     expect(await screen.findByRole(
@@ -1941,10 +1942,10 @@ describe("corporate workspace authentication alpha", () => {
     expect(screen.getByText("Что оплачиваем")).toBeInTheDocument();
     expect(screen.getByText("Реквизиты платежа")).toBeInTheDocument();
     expect(screen.getByText("Документы", { selector: "strong" })).toBeInTheDocument();
-    fireEvent.change(screen.getByRole("textbox", { name: "Название заявки" }), {
+    changeField(screen.getByRole("textbox", { name: "Название заявки" }), {
       target: { value: "Заявка для доски" },
     });
-    fireEvent.change(screen.getByRole("textbox", { name: "Сумма заявки" }), {
+    changeField(screen.getByRole("textbox", { name: "Сумма заявки" }), {
       target: { value: "7350000" },
     });
     await selectPaymentDirection();
@@ -1992,9 +1993,9 @@ describe("corporate workspace authentication alpha", () => {
     await waitFor(() => expect(targetColumn.querySelector(".approval-board-card")).not.toBeNull());
     expect(screen.getByLabelText("Сумма в колонке «Согласование»")).toHaveTextContent("0 UZS");
     expect(screen.getByLabelText("Сумма в колонке «Согласовано»")).toHaveTextContent("7 350 000 UZS");
-    fireEvent.change(screen.getByLabelText("Поиск заявок"), { target: { value: "Нет такого названия" } });
+    changeField(screen.getByLabelText("Поиск заявок"), { target: { value: "Нет такого названия" } });
     expect(screen.getByLabelText("Сумма в колонке «Согласовано»")).toHaveTextContent("0 UZS");
-    fireEvent.change(screen.getByLabelText("Поиск заявок"), { target: { value: "" } });
+    changeField(screen.getByLabelText("Поиск заявок"), { target: { value: "" } });
     expect(screen.getByLabelText("Сумма в колонке «Согласовано»")).toHaveTextContent("7 350 000 UZS");
   }, 30_000);
 
@@ -2021,10 +2022,10 @@ describe("corporate workspace authentication alpha", () => {
     render(<App />);
     await loginToWorkspace("aziza", "payment_requests");
     clickWithFocus(await screen.findByRole("button", { name: "Новая заявка" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "Название заявки" }), {
+    changeField(screen.getByRole("textbox", { name: "Название заявки" }), {
       target: { value: "Заявка с повтором" },
     });
-    fireEvent.change(screen.getByRole("textbox", { name: "Сумма заявки" }), {
+    changeField(screen.getByRole("textbox", { name: "Сумма заявки" }), {
       target: { value: "7350000" },
     });
     await selectPaymentDirection();
@@ -2066,7 +2067,7 @@ describe("corporate workspace authentication alpha", () => {
     await loginToWorkspace("aziza", "payment_requests");
     expect(screen.getByText("Исправьте сумму и приложите новый счёт")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Исправить заявку" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "Исправленная сумма заявки" }), {
+    changeField(screen.getByRole("textbox", { name: "Исправленная сумма заявки" }), {
       target: { value: "4800000" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Сохранить и отправить повторно" }));
@@ -2080,10 +2081,10 @@ describe("corporate workspace authentication alpha", () => {
     render(<App />);
     await loginToWorkspace("aziza", "payment_requests");
     fireEvent.click(screen.getByRole("button", { name: "Исправить заявку" }));
-    fireEvent.change(screen.getByLabelText("Исправленные валюта оплаты"), {
+    changeField(screen.getByLabelText("Исправленные валюта оплаты"), {
       target: { value: "USD" },
     });
-    fireEvent.change(screen.getByRole("textbox", { name: "Причина изменения заявки" }), {
+    changeField(screen.getByRole("textbox", { name: "Причина изменения заявки" }), {
       target: { value: "Уточнили валюту счёта" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Сохранить изменения" }));
@@ -2138,13 +2139,13 @@ describe("corporate workspace authentication alpha", () => {
     );
     expect(approvalNode).toBeDefined();
     fireEvent.click(approvalNode!);
-    fireEvent.change(screen.getByLabelText("Первое напоминание, ч."), {
+    changeField(screen.getByLabelText("Первое напоминание, ч."), {
       target: { value: "12" },
     });
-    fireEvent.change(screen.getByLabelText("Повторное, ч."), {
+    changeField(screen.getByLabelText("Повторное, ч."), {
       target: { value: "1" },
     });
-    fireEvent.change(screen.getByLabelText("Эскалировать после просрочки, ч."), {
+    changeField(screen.getByLabelText("Эскалировать после просрочки, ч."), {
       target: { value: "3" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Получатель эскалации" }));
@@ -2185,22 +2186,22 @@ describe("corporate workspace authentication alpha", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Условие" }));
     const nameInput = screen.getByLabelText("Название");
-    fireEvent.change(nameInput, { target: { value: "Порог суммы" } });
-    expect(nameInput).toHaveValue("Порог суммы");
+    changeField(nameInput, { target: { value: "Порог суммы" } });
+    expect(nameInput).toHaveTextValue("Порог суммы");
     expect(undoButton).toBeEnabled();
     expect(cancelButton).toBeEnabled();
 
     fireEvent.keyDown(nameInput, { key: "z", ctrlKey: true });
-    expect(nameInput).toHaveValue("Условие");
+    expect(nameInput).toHaveTextValue("Условие");
     expect(redoButton).toBeEnabled();
 
     fireEvent.keyDown(nameInput, { key: "z", ctrlKey: true, shiftKey: true });
-    expect(nameInput).toHaveValue("Порог суммы");
+    expect(nameInput).toHaveTextValue("Порог суммы");
 
     fireEvent.click(undoButton);
-    expect(nameInput).toHaveValue("Условие");
+    expect(nameInput).toHaveTextValue("Условие");
     fireEvent.click(redoButton);
-    expect(nameInput).toHaveValue("Порог суммы");
+    expect(nameInput).toHaveTextValue("Порог суммы");
 
     fireEvent.click(cancelButton);
     expect(screen.queryByDisplayValue("Порог суммы")).not.toBeInTheDocument();
@@ -2273,9 +2274,9 @@ describe("corporate workspace authentication alpha", () => {
     expect(await screen.findByLabelText("Стадии проектов")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Новый проект" }));
     const form = within(await screen.findByRole("dialog", { name: "Создать проект" }));
-    fireEvent.change(form.getByLabelText("Код проекта"), { target: { value: "BP7-TEST" } });
-    fireEvent.change(form.getByLabelText("Название проекта"), { target: { value: "Тестовый проект BP-7" } });
-    fireEvent.change(form.getByLabelText("Бюджет проекта"), { target: { value: "50000000" } });
+    changeField(form.getByLabelText("Код проекта"), { target: { value: "BP7-TEST" } });
+    changeField(form.getByLabelText("Название проекта"), { target: { value: "Тестовый проект BP-7" } });
+    changeField(form.getByLabelText("Бюджет проекта"), { target: { value: "50000000" } });
     fireEvent.click(form.getByRole("button", { name: "Сохранить" }));
     expect(await screen.findByRole("heading", { name: "Тестовый проект BP-7" })).toBeInTheDocument();
 
@@ -2305,7 +2306,7 @@ describe("corporate workspace authentication alpha", () => {
     const destination = form.getByLabelText("Куда едем");
     act(() => destination.focus());
     await waitFor(() => expect(destination).toHaveFocus());
-    fireEvent.change(destination, { target: { value: "Бухара" } });
+    changeField(destination, { target: { value: "Бухара" } });
     fireEvent.click(await form.findByRole("button", { name: "Сохранить" }));
     expect(await screen.findByRole("heading", { name: "Бухара" })).toBeInTheDocument();
 
@@ -2329,16 +2330,16 @@ describe("corporate workspace authentication alpha", () => {
     const form = within(dialog);
     act(() => form.getByLabelText("Заголовок публикации").focus());
     await waitFor(() => expect(dialog).not.toHaveAttribute("aria-hidden", "true"));
-    fireEvent.change(form.getByRole("textbox", { name: "Заголовок публикации" }), {
+    changeField(form.getByRole("textbox", { name: "Заголовок публикации" }), {
       target: { value: "Итоги рабочего дня" },
     });
-    fireEvent.change(form.getByRole("textbox", { name: "Текст публикации" }), {
+    changeField(form.getByRole("textbox", { name: "Текст публикации" }), {
       target: { value: "Ключевые задачи выполнены." },
     });
     fireEvent.click(form.getByRole("button", { name: "Опубликовать" }));
     expect(await screen.findByRole("heading", { name: "Итоги рабочего дня" })).toBeInTheDocument();
 
-    fireEvent.change(screen.getByRole("textbox", {
+    changeField(screen.getByRole("textbox", {
       name: "Комментарий к публикации Итоги рабочего дня",
     }), { target: { value: "Принято" } });
     const commentButtons = screen.getAllByRole("button", { name: "Отправить комментарий" });
@@ -2379,7 +2380,8 @@ describe("corporate workspace authentication alpha", () => {
     clickWithFocus(within(document.querySelector(".app-rail")!).getByRole("button", {
       name: "Календарь",
     }));
-    const calendar = await screen.findByRole("region", { name: "Календарь" });
+    await screen.findByRole("button", { name: "Новое событие" });
+    const calendar = screen.getByRole("region", { name: "Календарь" });
     expect(within(calendar).getByRole("heading", { name: "Календарь" })).toBeInTheDocument();
     expect(screen.queryByRole("button", {
       name: `Открыть задачу: ${initialTasks[0]!.title}`,
@@ -2390,7 +2392,7 @@ describe("corporate workspace authentication alpha", () => {
     const form = within(dialog);
     act(() => form.getByLabelText("Название события").focus());
     await waitFor(() => expect(dialog).not.toHaveAttribute("aria-hidden", "true"));
-    fireEvent.change(form.getByRole("textbox", { name: "Название события" }), {
+    changeField(form.getByRole("textbox", { name: "Название события" }), {
       target: { value: "Встреча BP-8" },
     });
     fireEvent.click(await form.findByLabelText("Проект события"));
@@ -2400,19 +2402,19 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.click(form.getByLabelText("Работа направления события"));
     fireEvent.click(await screen.findByRole("option", { name: "Мероприятие · Форум" }));
     fireEvent.click(form.getByRole("button", { name: "Добавить задачу" }));
-    fireEvent.change(form.getByRole("textbox", { name: "Название внутренней задачи 1" }), {
+    changeField(form.getByRole("textbox", { name: "Название внутренней задачи 1" }), {
       target: { value: "Подготовить материалы" },
     });
     const dueDate = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
     const taskDueAt = new Date(dueDate.getTime() - dueDate.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
-    fireEvent.change(form.getByLabelText("Срок внутренней задачи 1"), { target: { value: taskDueAt } });
-    fireEvent.change(form.getByRole("combobox", { name: "Приоритет внутренней задачи 1" }), { target: { value: "high" } });
-    fireEvent.change(form.getByRole("textbox", { name: "Описание внутренней задачи 1" }), { target: { value: "Собрать презентацию" } });
+    changeField(form.getByLabelText("Срок внутренней задачи 1"), { target: { value: taskDueAt } });
+    changeField(form.getByRole("combobox", { name: "Приоритет внутренней задачи 1" }), { target: { value: "high" } });
+    changeField(form.getByRole("textbox", { name: "Описание внутренней задачи 1" }), { target: { value: "Собрать презентацию" } });
     fireEvent.click(form.getByRole("button", { name: "Добавить заявку" }));
-    fireEvent.change(form.getByRole("textbox", { name: "Название подготовленной заявки" }), {
+    changeField(form.getByRole("textbox", { name: "Название подготовленной заявки" }), {
       target: { value: "Оплата площадки" },
     });
-    fireEvent.change(form.getByRole("textbox", { name: "Сумма подготовленной заявки в сумах" }), {
+    changeField(form.getByRole("textbox", { name: "Сумма подготовленной заявки в сумах" }), {
       target: { value: "250000" },
     });
     fireEvent.click(form.getByRole("button", { name: "Создать мероприятие" }));
@@ -2460,9 +2462,11 @@ describe("corporate workspace authentication alpha", () => {
     await loginToWorkspace("malika", "home");
 
     fireEvent.click(screen.getByRole("button", { name: "Сотрудники" }));
-    expect(await screen.findByRole("heading", { name: "Сотрудники" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Должности" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "Название новой должности" }), {
+    const positions = await screen.findByRole("button", { name: "Должности" });
+    await waitFor(() => expect(positions).toBeEnabled());
+    expect(screen.getByRole("heading", { name: "Сотрудники" })).toBeInTheDocument();
+    fireEvent.click(positions);
+    changeField(screen.getByRole("textbox", { name: "Название новой должности" }), {
       target: { value: "Yangi lavozim" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Добавить" }));
@@ -2487,3 +2491,4 @@ describe("corporate workspace authentication alpha", () => {
     expect(screen.getByLabelText(/^Код сброса доступа/)).toBeInTheDocument();
   });
 });
+import { changeField } from "./test-fixtures/rich-editor";

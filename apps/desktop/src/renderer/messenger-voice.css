@@ -1,0 +1,36 @@
+/* The bubble is the voice player's surface, including forwarded recordings. */
+.messenger-view .message-body.is-voice-message { padding-block: 8px; }
+.messenger-view .message-body .voice-message { width: 390px; max-width: 100%; min-width: 0; padding: 0; margin-top: 4px; }
+.messenger-view .voice-message .voice-player,
+.messenger-view .voice-message .voice-player.has-speed {
+  grid-template-columns: 44px minmax(0, 1fr) 32px 32px;
+  gap: 0 7px; min-height: 44px; padding: 0; border: 0;
+  background: transparent; box-shadow: none;
+}
+.messenger-view .voice-message .voice-player-play {
+  --media-play-size: 44px;
+  --voice-play-fill: var(--ws-attachment-icon-fill, #348fc9);
+  background: var(--voice-play-fill) !important; box-shadow: none;
+}
+.messenger-view .voice-message .voice-player-play:is(:hover, :focus-visible) { background: var(--voice-play-fill) !important; }
+.messenger-view .voice-message .voice-player-details { min-height: 17px; }
+.messenger-view .voice-message .voice-player-time { color: var(--ws-muted); font-size: 12px; line-height: 16px; }
+.messenger-view .voice-message .voice-message-size { color: inherit; font: inherit; }
+.messenger-view .voice-message .message-meta { display: inline-flex; align-items: center; gap: 4px; color: var(--ws-muted); font-size: 11px; line-height: 16px; white-space: nowrap; }
+.messenger-view .voice-message .voice-waveform > i { background: var(--ws-theme-line-blue, #a9bdc2); }
+.messenger-view .voice-message .voice-waveform > i.played { background: var(--ws-link); }
+.messenger-view .message.own .voice-message .voice-player-time { color: var(--chat-outgoing-meta, var(--ws-muted)); }
+.messenger-view .message-forwarded-voice { margin-top: 2px; color: var(--ws-link); font-size: 12px; line-height: 18px; }
+.messenger-view .message.own .message-forwarded-voice { color: var(--chat-outgoing-link, var(--ws-link)); }
+@media (pointer: coarse) {
+  .messenger-view .voice-message .voice-player,
+  .messenger-view .voice-message .voice-player.has-speed { --ws-media-control-size: 48px; grid-template-columns: 48px minmax(0, 1fr) 48px 48px; grid-template-rows: 48px auto; }
+  .messenger-view .voice-message .voice-player-play { --media-play-size: 48px; }
+  .messenger-view .voice-message .voice-player-track { min-height: 48px; display: grid; align-items: center; }
+  .messenger-view .voice-message .voice-player-progress { height: 48px; }
+}
+@media (forced-colors: active) {
+  .messenger-view .voice-message .voice-player-play { --voice-play-fill: ButtonFace; color: ButtonText !important; border: 1px solid ButtonText; }
+  .messenger-view .voice-message .voice-waveform > i { background: GrayText; }
+  .messenger-view .voice-message .voice-waveform > i.played { background: Highlight; }
+}

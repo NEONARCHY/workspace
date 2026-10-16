@@ -39,6 +39,7 @@
     .totp-setup, .invite-result, .account-session-confirm, .desktop-update-step,
     .notification-metrics > button, .notification-stream-shell, .notification-context,
     .notification-kind-filters, .notification-head-actions,
+    .context-trigger, .ai-incoming-register .ai-referent-summary > button,
     .survey-panel, .survey-settings, .survey-file-drop, .survey-group-grid article, .task-team-picker, .task-composer .record-section,
     .fui-Input:not(.composer-input .fui-Input), .fui-Textarea, .fui-Select, .fui-Combobox, .fui-Dropdown,
     input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]):not(.fui-Input__input):not(.fui-Combobox__input):not(.ai-gooey-search-input),
@@ -78,6 +79,28 @@
     --ws-satin-fill: linear-gradient(var(--ws-surface), var(--ws-surface));
   }
   html[data-color-theme="dark"] body .edo-incoming-error { --ws-satin-tone: var(--ws-danger); }
+  html[data-color-theme="dark"] body .context-trigger {
+    --ws-satin-fill: linear-gradient(var(--ws-theme-surface-soft), var(--ws-theme-surface-soft));
+  }
+  html[data-color-theme="dark"] body .context-trigger:is(:hover, [aria-expanded="true"]) {
+    --ws-satin-fill: linear-gradient(var(--ws-theme-wash-teal), var(--ws-theme-wash-teal));
+  }
+  html[data-color-theme="dark"] body .ai-incoming-register .ai-referent-summary > .primary {
+    --ws-satin-fill: linear-gradient(116deg, var(--ws-theme-wash-teal), var(--ws-theme-surface));
+  }
+  /* Selection is the same satin edge with stronger teal stops, not a second
+     solid border/inset ring. Real border width, focus and pressed state stay put. */
+  html[data-color-theme="dark"] body :is(.context-trigger[aria-expanded="true"], .ai-incoming-register .ai-referent-summary > button[aria-pressed="true"]) {
+    --ws-satin-sheen: linear-gradient(90deg, transparent, rgb(var(--ws-theme-ink-teal-rgb) / 85%) 22%, rgb(var(--ws-theme-ink-teal-rgb) / 40%) 78%, transparent);
+    --ws-satin-edge: conic-gradient(from 0deg,
+      rgb(var(--ws-theme-ink-teal-rgb) / 85%) 0%, rgb(var(--ws-theme-ink-teal-rgb) / 65%) 13%,
+      rgb(var(--ws-theme-ink-teal-rgb) / 24%) 27%, rgb(var(--ws-theme-ink-teal-rgb) / 12%) 50%,
+      rgb(var(--ws-theme-ink-teal-rgb) / 24%) 73%, rgb(var(--ws-theme-ink-teal-rgb) / 65%) 87%,
+      rgb(var(--ws-theme-ink-teal-rgb) / 85%) 100%);
+  }
+  html[data-color-theme="dark"] body .ai-incoming-register .ai-referent-summary > button[aria-pressed="true"] {
+    box-shadow: 0 10px 27px -19px rgb(0 103 121 / 34%);
+  }
   html[data-color-theme="dark"] body .edo-incoming-caution {
     --ws-satin-tone: var(--ws-theme-ink-warning);
     --ws-satin-fill: linear-gradient(var(--ws-theme-wash-warning), var(--ws-theme-wash-warning));

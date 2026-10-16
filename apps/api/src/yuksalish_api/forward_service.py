@@ -15,7 +15,12 @@ from .messenger_service import (
     send_chat_message,
 )
 from .tables import chats, feed_posts, messages, users
-from .workspace_schemas import ChatMessageResponse, ForwardMessageRequest, SendMessageRequest
+from .workspace_schemas import (
+    ChatMessageResponse,
+    ForwardMessageRequest,
+    MessageEntity,
+    SendMessageRequest,
+)
 from .zoom_invitations import invitation_detail_map
 
 
@@ -29,6 +34,7 @@ async def forward_message(
     await ensure_module_action(connection, user, "messenger", "edit")
     await connection.execute(select(func.pg_advisory_xact_lock(payload.request_id.int % (2**63))))
     source_chat_id = None
+    entities: list[MessageEntity] = []
     if payload.kind == "message":
         source_chat_id = await connection.scalar(
             select(messages.c.chat_id).where(
@@ -132,6 +138,7 @@ async def forward_message(
             if invitation is None or not invitation.available:
                 raise WorkspaceRepositoryError(404, "Приглашение для пересылки недоступно")
         body = source["body"]
+        entities = [MessageEntity.model_validate(item) for item in (source.get("entities") or [])]
         if source["forwarded"]:
             forwarded = dict(source["forwarded"])
             if forwarded["kind"] == "feed":
@@ -162,7 +169,7 @@ async def forward_message(
         connection,
         user,
         chat_id,
-        SendMessageRequest(body=body),
+        SendMessageRequest(body=body, entities=entities),
         message_id=payload.request_id,
         forwarded=forwarded,
     )

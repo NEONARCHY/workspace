@@ -8,6 +8,8 @@ import {
   within,
 } from "@testing-library/react";
 import { useState } from "react";
+import { changeField, editorCaret } from "./test-fixtures/rich-editor";
+import { readRichEditor, setEditorSelection } from "./message-rich-text";
 import { Dialog, DialogSurface, FluentProvider, webLightTheme } from "@fluentui/react-components";
 import type { ChatMessage, ChatSummary } from "@yuksalish/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -74,30 +76,148 @@ function openMessageMenu(text: string) {
   fireEvent.contextMenu(message);
 }
 
+describe("rich messenger integration", () => {
+  afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); window.getSelection()?.removeAllRanges(); });
+  const quoted: ChatMessage = { id: "quote-source", chatId: "finance", authorId: "baxtiyor", body: "Альфа 😀 бета гамма", time: "12:00", canPin: true };
+  it("replies with the selected fragment and sends whole-message pin actions", async () => {
+    const onSendMessage = vi.fn().mockResolvedValue({ id: "sent" }), onPinMessage = vi.fn().mockResolvedValue(undefined);
+    renderMessenger({ messages: [quoted], onSendMessage, onPinMessage });
+    const body = document.querySelector<HTMLElement>("[data-message-id='quote-source'] [data-message-text]")!;
+    setEditorSelection(body, 9, 13); fireEvent.contextMenu(body);
+    fireEvent.click(screen.getByRole("button", { name: "Ответить с цитатой" }));
+    expect(document.querySelector(".composer-context p")).toHaveTextContent("бета");
+    const input = screen.getByLabelText("Новое сообщение"); changeField(input, { target: { value: "Ответ" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(onSendMessage).toHaveBeenCalledWith("finance", "Ответ", [], {
+      replyToMessageId: quoted.id, replyQuote: { offset: 9, text: "бета" }, entities: [], mentionUserIds: [],
+    }));
+    setEditorSelection(body, 9, 13); fireEvent.contextMenu(body); fireEvent.click(screen.getByRole("button", { name: "Закрепить" }));
+    await waitFor(() => expect(onPinMessage).toHaveBeenCalledWith(quoted, true));
+  });
+  it("copies only the selection and ignores a selection outside that message", async () => {
+    const copy = vi.fn().mockResolvedValue(undefined); Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: copy } });
+    renderMessenger({ messages: [quoted] });
+    const body = document.querySelector<HTMLElement>("[data-message-text]")!;
+    setEditorSelection(body, 9, 13); fireEvent.contextMenu(body); fireEvent.click(screen.getByRole("button", { name: "Копировать выделенное" }));
+    await waitFor(() => expect(copy).toHaveBeenCalledWith("бета"));
+    const input = screen.getByLabelText("Новое сообщение"); changeField(input, { target: { value: "Чужое выделение" } });
+    setEditorSelection(input, 0, 5); fireEvent.contextMenu(body);
+    expect(screen.queryByRole("button", { name: "Ответить с цитатой" })).not.toBeInTheDocument();
+  });
+  it("restores formatting with the draft after a rejected send", async () => {
+    const onSendMessage = vi.fn().mockRejectedValue(new Error("Нет связи")); renderMessenger({ onSendMessage });
+    const input = screen.getByLabelText("Новое сообщение"); changeField(input, { target: { value: "Жирный текст" } });
+    setEditorSelection(input, 0, 6); fireEvent.keyDown(input, { code: "KeyB", key: "b", ctrlKey: true }); fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Нет связи"));
+    expect(readRichEditor(input).text).toBe("Жирный текст");
+    expect(readRichEditor(input).entities).toEqual([{ type: "bold", offset: 0, length: 6 }]);
+    expect(onSendMessage).toHaveBeenCalledWith("finance", "Жирный текст", [], expect.objectContaining({ entities: [{ type: "bold", offset: 0, length: 6 }] }));
+  });
+  it("offers separate personal/global unpin actions at the top and protects chairman pins", async () => {
+    const onPinMessage = vi.fn().mockResolvedValue(undefined);
+    const ordinary = { ...quoted, isPinned: true, canUnpinForSelf: true, canUnpinForAll: true };
+    renderMessenger({ messages: [ordinary], onPinMessage });
+    fireEvent.click(screen.getByRole("button", { name: "Закреплено: 1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Снять для себя" }));
+    await waitFor(() => expect(onPinMessage).toHaveBeenCalledWith(ordinary, false, "self"));
+    fireEvent.click(screen.getByRole("button", { name: "Снять для всех" }));
+    await waitFor(() => expect(onPinMessage).toHaveBeenCalledWith(ordinary, false, "all"));
+    cleanup(); renderMessenger({ messages: [{ ...ordinary, pinProtected: true, canUnpinForSelf: false, canUnpinForAll: false }] });
+    fireEvent.click(screen.getByRole("button", { name: "Закреплено: 1" }));
+    expect(screen.getByText("Закреп председателя · нельзя снять")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Снять для/ })).not.toBeInTheDocument();
+  });
+  it("does not count personally hidden pins in the top banner", () => {
+    renderMessenger({ messages: [{ ...quoted, isPinned: true, pinHiddenForMe: true }] });
+    expect(screen.queryByRole("button", { name: /Закреплено/ })).not.toBeInTheDocument();
+  });
+});
+
 describe("composer performance and microphone", () => {
   afterEach(() => { cleanup(); vi.restoreAllMocks(); });
   it("keeps the microphone focusable with an explained recording guard while typing", async () => {
     renderMessenger();
     const mic = screen.getByRole("button", { name: "Записать голосовое сообщение" });
     const input = screen.getByRole("textbox", { name: "Новое сообщение" });
-    fireEvent.change(input, { target: { value: "Черновик" } });
+    changeField(input, { target: { value: "Черновик" } });
     expect(mic).not.toBeDisabled();
     expect(mic).toHaveAttribute("aria-disabled", "true");
     expect(mic).toHaveClass("composer-microphone");
+    for (const name of ["Прикрепить файл", "Создать мероприятие из чата", "Упомянуть участника", "Записать голосовое сообщение"]) {
+      expect(screen.getByRole("button", { name })).toHaveClass("composer-tool-button");
+    }
     fireEvent.click(mic);
-    expect(input).toHaveValue("Черновик");
+    expect(input).toHaveTextValue("Черновик");
     fireEvent.focus(mic);
     await waitFor(() => expect(mic).toHaveAccessibleDescription("Чтобы записать голосовое сообщение, отправьте или удалите набранный текст"));
-    fireEvent.change(input, { target: { value: "" } });
+    changeField(input, { target: { value: "" } });
     expect(mic).toHaveAttribute("aria-disabled", "false");
   });
   it("does not rebuild message history on draft keystrokes", () => {
     renderMessenger();
     const dateFormatting = vi.spyOn(Date.prototype, "toLocaleDateString");
     const input = screen.getByRole("textbox", { name: "Новое сообщение" });
-    for (const value of ["Т", "Те", "Тес", "Тест"]) fireEvent.change(input, { target: { value } });
-    expect(input).toHaveValue("Тест");
+    for (const value of ["Т", "Те", "Тес", "Тест"]) changeField(input, { target: { value } });
+    expect(input).toHaveTextValue("Тест");
     expect(dateFormatting).not.toHaveBeenCalled();
+  });
+});
+
+describe("microphone startup without a composer gap", () => {
+  const originalDevices = Object.getOwnPropertyDescriptor(navigator, "mediaDevices");
+  afterEach(() => {
+    cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals();
+    if (originalDevices) Object.defineProperty(navigator, "mediaDevices", originalDevices);
+    else delete (navigator as { mediaDevices?: MediaDevices }).mediaDevices;
+  });
+  function delayedMicrophone() {
+    vi.stubGlobal("isSecureContext", true);
+    vi.stubGlobal("AudioContext", undefined);
+    const stop = vi.fn();
+    const stream = { getTracks: () => [{ stop }] } as unknown as MediaStream;
+    let grant!: (value: MediaStream) => void;
+    const request = vi.fn(() => new Promise<MediaStream>(resolve => { grant = resolve; }));
+    Object.defineProperty(navigator, "mediaDevices", { configurable: true, value: { getUserMedia: request } });
+    vi.stubGlobal("MediaRecorder", class {
+      static isTypeSupported() { return true; }
+      state = "inactive";
+      start() { this.state = "recording"; }
+      stop() { this.state = "inactive"; }
+    });
+    return { request, stop, grant: () => grant(stream) };
+  }
+  it("keeps the same composer until capture starts and restores it on cancel", async () => {
+    const mic = delayedMicrophone();
+    renderMessenger();
+    const input = screen.getByRole("textbox", { name: "Новое сообщение" });
+    const button = screen.getByRole("button", { name: "Записать голосовое сообщение" });
+    fireEvent.click(button);
+    expect(screen.getByRole("textbox", { name: "Новое сообщение" })).toBe(input);
+    expect(input).toBeEnabled();
+    expect(screen.queryByText("Подключаем микрофон")).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Запись голосового сообщения" })).not.toBeInTheDocument();
+    expect(button).toHaveAttribute("aria-disabled", "true");
+    fireEvent.click(button);
+    expect(mic.request).toHaveBeenCalledOnce();
+    await act(async () => mic.grant());
+    expect(screen.getByText("Идёт запись")).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "Новое сообщение" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Отмена" }));
+    expect(screen.getByRole("textbox", { name: "Новое сообщение" })).toBeInTheDocument();
+    expect(mic.stop).toHaveBeenCalledOnce();
+  });
+  it.each(["typing", "escape"])("cancels pending capture on %s and releases a late permission grant", async action => {
+    const mic = delayedMicrophone();
+    renderMessenger();
+    const input = screen.getByRole("textbox", { name: "Новое сообщение" });
+    fireEvent.click(screen.getByRole("button", { name: "Записать голосовое сообщение" }));
+    if (action === "typing") changeField(input, { target: { value: "Продолжаю писать" } });
+    else fireEvent.keyDown(screen.getByRole("button", { name: "Записать голосовое сообщение" }), { key: "Escape" });
+    await act(async () => mic.grant());
+    expect(screen.getByRole("textbox", { name: "Новое сообщение" })).toBe(input);
+    expect(input).toHaveTextValue(action === "typing" ? "Продолжаю писать" : "");
+    expect(screen.queryByText("Идёт запись")).not.toBeInTheDocument();
+    expect(mic.stop).toHaveBeenCalledOnce();
   });
 });
 
@@ -108,10 +228,34 @@ it.each(["Файл", "Комментарий к документу"])("keeps doc
     attachments: [{ id: "document", ownerType: "message", ownerId: "document-layout", fileName: "report.doc", contentType: "application/msword", byteSize: 251904, documentRole: "general", sha256: "a".repeat(64), uploadedByUserId: "aziza", createdAt: "2026-10-15T09:00:00Z" }] });
   const bubble = document.querySelector('[data-message-id="document-layout"] .message-body')!;
   expect(bubble).toHaveClass("is-document-message");
-  expect(bubble.classList.contains("has-document-footer")).toBe(body !== "Файл");
+  expect(bubble).not.toHaveClass("has-document-footer");
   expect(bubble.querySelector(".message-text")?.textContent ?? "").toBe(body === "Файл" ? "" : body);
   expect(bubble.querySelector(".message-meta")).toHaveTextContent("17:36");
+  expect(bubble.querySelector(".attachment-document-details > .message-meta")).not.toBeNull();
+  expect(bubble.querySelector(":scope > .message-meta")).toBeNull();
   expect(bubble.querySelector(".attachment-document-copy > small")).toHaveTextContent("246 КБ");
+});
+it("keeps mention chips and time together without duplicating metadata", () => {
+  renderMessenger({ messages: [{ id: "mention-layout", chatId: "finance", authorId: "aziza", body: "!", time: "15:39", mentionUserIds: ["baxtiyor", "dilshod"] }] });
+  const bubble = document.querySelector('[data-message-id="mention-layout"] .message-body')!;
+  const footer = bubble.querySelector(".message-mentions-footer")!;
+  expect(footer.querySelectorAll(".message-mentions .employee-profile-link")).toHaveLength(2);
+  expect(footer.querySelector(".message-meta")).toHaveTextContent("15:39");
+  expect(bubble.querySelectorAll(".message-meta")).toHaveLength(1);
+  expect(bubble.querySelector(":scope > .message-meta")).toBeNull();
+});
+it.each([false, true])("renders a compact received voice with its original author when forwarded=%s", forwarded => {
+  renderMessenger({ messages: [{ id: "voice-layout", chatId: "finance", authorId: "baxtiyor", body: "Голосовое сообщение", time: "12:10",
+    forwarded: forwarded ? { kind: "message", authorId: "dilshod", authorName: "Дилшод Рахимов", available: true } : undefined }],
+    attachments: [{ id: "voice-file", ownerType: "message", ownerId: "voice-layout", fileName: "voice.webm", contentType: "audio/webm", byteSize: 29000,
+      documentRole: "general", sha256: "a".repeat(64), uploadedByUserId: "baxtiyor", mediaKind: "voice", mediaDurationMs: 22000, createdAt: "2026-10-15T09:00:00Z" }] });
+  const bubble = document.querySelector('[data-message-id="voice-layout"] .message-body')!;
+  expect(bubble).toHaveClass("is-voice-message");
+  expect(bubble.querySelector(".voice-player-details")).toHaveTextContent("0:22, 28 КБ12:10");
+  expect(bubble.querySelectorAll(".message-meta")).toHaveLength(1);
+  expect(bubble.querySelector(".message-forwarded")).toBeNull();
+  expect(bubble.querySelector(".message-text")).toBeNull();
+  if (forwarded) expect(bubble.querySelector(".message-forwarded-voice")).toHaveTextContent("Переслано от Дилшод Рахимов");
 });
 it.each(["Файл", "Подпись к фото"])("renders image media without a nested file card: %s", body => {
   renderMessenger({ messages: [{ id: "media-layout", chatId: "finance", authorId: "aziza", body, time: "14:15" }],
@@ -135,7 +279,7 @@ describe("Private messenger", () => {
     const onPersonalChat = vi.fn().mockResolvedValue(undefined);
     const { props } = renderMessenger({ onPersonalChat });
     const input = screen.getByLabelText("Новое сообщение");
-    fireEvent.change(input, { target: { value: "Сохранить мой черновик" } });
+    changeField(input, { target: { value: "Сохранить мой черновик" } });
     const message = screen.getByText(initialMessages[0]!.body).closest(".message") as HTMLElement;
     fireEvent.click(within(message).getByRole("button", { name: "Действия сообщения" }));
     expect(screen.getByRole("button", { name: "Ответить" })).toBeInTheDocument();
@@ -143,12 +287,12 @@ describe("Private messenger", () => {
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("button", { name: "Ответить" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "К списку чатов" }));
-    expect(input).toHaveValue("Сохранить мой черновик");
+    expect(input).toHaveTextValue("Сохранить мой черновик");
     const chat = initialChats[0]!;
     fireEvent.click(screen.getByRole("button", { name: `Действия чата: ${chat.title}` }));
     fireEvent.click(await screen.findByRole("menuitem", { name: "В архив" }));
     await waitFor(() => expect(onPersonalChat).toHaveBeenCalledWith(chat.id, "archive"));
-    expect(input).toHaveValue("Сохранить мой черновик");
+    expect(input).toHaveTextValue("Сохранить мой черновик");
   });
   it("copies the whole message and leaves native field shortcuts unhandled", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
@@ -173,11 +317,11 @@ describe("Private messenger", () => {
   it("reports clipboard denial without modifying the message or composer", async () => {
     vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText: vi.fn().mockRejectedValue(new Error("denied")) } });
     renderMessenger();
-    fireEvent.change(screen.getByLabelText("Новое сообщение"), { target: { value: "Черновик" } });
+    changeField(screen.getByLabelText("Новое сообщение"), { target: { value: "Черновик" } });
     openMessageMenu(initialMessages[0]!.body);
     fireEvent.click(screen.getByRole("button", { name: "Копировать" }));
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Не удалось скопировать"));
-    expect(screen.getByLabelText("Новое сообщение")).toHaveValue("Черновик");
+    expect(screen.getByLabelText("Новое сообщение")).toHaveTextValue("Черновик");
     expect(screen.getByText(initialMessages[0]!.body)).toBeInTheDocument();
   });
 
@@ -188,20 +332,20 @@ describe("Private messenger", () => {
     const first = new File(["one"], "keep.txt");
     const files = [new File(["doc"], "letter.docx"), new File(["sheet"], "table.xlsx"),
       new File(["pdf"], "letter.pdf"), new File(["zip"], "archive.zip")];
-    fireEvent.change(screen.getByLabelText("Файлы сообщения"), { target: { files: [first] } });
+    changeField(screen.getByLabelText("Файлы сообщения"), { target: { files: [first] } });
     const input = screen.getByLabelText("Новое сообщение");
-    fireEvent.change(input, { target: { value: "Сохранить подпись" } });
+    changeField(input, { target: { value: "Сохранить подпись" } });
     expect(fireEvent.paste(input, { clipboardData: fileTransfer(files) })).toBe(false);
     for (const file of [first, ...files]) expect(screen.getByRole("button", { name: `Убрать файл ${file.name}` })).toBeInTheDocument();
-    expect(input).toHaveValue("Сохранить подпись");
+    expect(input).toHaveTextValue("Сохранить подпись");
     expect(onSendMessage).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
     await waitFor(() => expect(onSendMessage).toHaveBeenCalledWith(initialChats[0]!.id, "Сохранить подпись", [first, ...files], expect.any(Object)));
   });
-  it("preserves native text paste and does not attach files from search fields or the chat list", () => {
+  it("pastes plain text safely and does not attach files from search fields or the chat list", () => {
     renderMessenger();
     const input = screen.getByLabelText("Новое сообщение");
-    expect(fireEvent.paste(input, { clipboardData: { types: ["text/plain"], files: [], items: [] } })).toBe(true);
+    expect(fireEvent.paste(input, { clipboardData: { types: ["text/plain"], files: [], items: [], getData: () => "Вставленный текст" } })).toBe(false);
     const transfer = fileTransfer([new File(["no"], "outside.txt")]);
     expect(fireEvent.paste(screen.getByPlaceholderText("Найти сообщение в этом чате"), { clipboardData: transfer })).toBe(true);
     expect(fireEvent.paste(document.querySelector(".list-pane")!, { clipboardData: transfer })).toBe(true);
@@ -231,12 +375,12 @@ describe("Private messenger", () => {
   it("rejects an oversized paste atomically without changing the existing draft", () => {
     renderMessenger();
     const input = screen.getByLabelText("Новое сообщение");
-    fireEvent.change(input, { target: { value: "Сохранить" } });
+    changeField(input, { target: { value: "Сохранить" } });
     const huge = new File(["test"], "huge.pdf");
     Object.defineProperty(huge, "size", { value: 26 * 1024 * 1024 });
     fireEvent.paste(input, { clipboardData: fileTransfer([new File(["ok"], "small.txt"), huge]) });
     expect(screen.getByRole("alert")).toHaveTextContent("25 МБ");
-    expect(input).toHaveValue("Сохранить");
+    expect(input).toHaveTextValue("Сохранить");
     expect(screen.queryByRole("button", { name: "Убрать файл small.txt" })).not.toBeInTheDocument();
   });
   it("targets only the conversation without flickering across nested elements and cancels cleanly", () => {
@@ -270,13 +414,13 @@ describe("Private messenger", () => {
     renderMessenger({ onSendMessage });
     const first = new File(["one"], "one.txt", { type: "text/plain", lastModified: 1 });
     const second = new File(["two"], "two.txt", { type: "text/plain", lastModified: 2 });
-    fireEvent.change(screen.getByLabelText("Файлы сообщения"), { target: { files: [first] } });
-    fireEvent.change(screen.getByRole("textbox", { name: "Новое сообщение" }), { target: { value: "Мой черновик" } });
+    changeField(screen.getByLabelText("Файлы сообщения"), { target: { files: [first] } });
+    changeField(screen.getByRole("textbox", { name: "Новое сообщение" }), { target: { value: "Мой черновик" } });
     const root = screen.getByRole("region", { name: /^Чат:/ });
     fireEvent.drop(root, { dataTransfer: fileTransfer([first, second]) });
     expect(screen.getAllByRole("button", { name: "Убрать файл one.txt" })).toHaveLength(1);
     expect(screen.getByRole("button", { name: "Убрать файл two.txt" })).toBeInTheDocument();
-    expect(screen.getByRole("textbox", { name: "Новое сообщение" })).toHaveValue("Мой черновик");
+    expect(screen.getByRole("textbox", { name: "Новое сообщение" })).toHaveTextValue("Мой черновик");
     expect(onSendMessage).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
     await waitFor(() => expect(onSendMessage).toHaveBeenCalledWith(initialChats[0]!.id, "Мой черновик", [first, second], expect.any(Object)));
@@ -305,8 +449,8 @@ describe("Private messenger", () => {
   it("keeps existing files and text when a drop batch is too large or contains a folder", () => {
     renderMessenger();
     const keep = new File(["keep"], "keep.txt");
-    fireEvent.change(screen.getByLabelText("Файлы сообщения"), { target: { files: [keep] } });
-    fireEvent.change(screen.getByRole("textbox", { name: "Новое сообщение" }), { target: { value: "Оставить текст" } });
+    changeField(screen.getByLabelText("Файлы сообщения"), { target: { files: [keep] } });
+    changeField(screen.getByRole("textbox", { name: "Новое сообщение" }), { target: { value: "Оставить текст" } });
     const root = screen.getByRole("region", { name: /^Чат:/ });
     const huge = new File(["test"], "huge.pdf");
     Object.defineProperty(huge, "size", { value: 26 * 1024 * 1024 });
@@ -316,7 +460,7 @@ describe("Private messenger", () => {
     fireEvent.drop(root, { dataTransfer: { ...fileTransfer(), items: [{ webkitGetAsEntry: () => ({ isDirectory: true }) }] } });
     expect(screen.getByRole("alert")).toHaveTextContent("загрузка папок не поддерживается");
     expect(screen.getByRole("button", { name: "Убрать файл keep.txt" })).toBeInTheDocument();
-    expect(screen.getByRole("textbox", { name: "Новое сообщение" })).toHaveValue("Оставить текст");
+    expect(screen.getByRole("textbox", { name: "Новое сообщение" })).toHaveTextValue("Оставить текст");
   });
   it("blocks file receipt while chat management is open without creating a group", () => {
     const { props } = renderMessenger();
@@ -342,11 +486,11 @@ describe("Private messenger", () => {
     fireEvent.dragEnter(root, { dataTransfer: transfer });
     expect(root).toHaveAttribute("data-file-drop", "blocked");
     fireEvent.drop(root, { dataTransfer: transfer });
-    expect(screen.getByLabelText("Редактирование сообщения")).toHaveValue(own.body);
+    expect(screen.getByLabelText("Редактирование сообщения")).toHaveTextValue(own.body);
     fireEvent.paste(screen.getByLabelText("Редактирование сообщения"), { clipboardData: transfer });
-    expect(screen.getByLabelText("Редактирование сообщения")).toHaveValue(own.body);
+    expect(screen.getByLabelText("Редактирование сообщения")).toHaveTextValue(own.body);
     fireEvent.keyDown(screen.getByLabelText("Редактирование сообщения"), { key: "Escape" });
-    fireEvent.change(screen.getByRole("textbox", { name: "Новое сообщение" }), { target: { value: "Отправляем" } });
+    changeField(screen.getByRole("textbox", { name: "Новое сообщение" }), { target: { value: "Отправляем" } });
     fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
     await waitFor(() => expect(onSendMessage).toHaveBeenCalledTimes(1));
     fireEvent.dragEnter(root, { dataTransfer: transfer });
@@ -354,7 +498,7 @@ describe("Private messenger", () => {
     fireEvent.drop(root, { dataTransfer: transfer });
     fireEvent.paste(root, { clipboardData: transfer });
     expect(screen.getByRole("button", { name: "Убрать файл blocked.txt" })).toBeInTheDocument();
-    expect(onSendMessage.mock.calls[0]).toEqual([initialChats[0]!.id, "Отправляем", [], { replyToMessageId: undefined, mentionUserIds: [] }]);
+    expect(onSendMessage.mock.calls[0]).toEqual([initialChats[0]!.id, "Отправляем", [], { replyToMessageId: undefined, replyQuote: undefined, entities: [], mentionUserIds: [] }]);
     await act(async () => finish({ ...own, id: "sent", body: "Отправляем" }));
   });
 
@@ -383,7 +527,7 @@ describe("Private messenger", () => {
     </FluentProvider>);
     const wrapper = screen.getByRole("region", { name: `Чат ${contextLabel}: ${chat.title}` });
     const target = within(wrapper).getByRole("region", { name: /^Чат:/ });
-    fireEvent.change(screen.getByRole("textbox", { name: "Новое сообщение" }), { target: { value: "Сохранить черновик" } });
+    changeField(screen.getByRole("textbox", { name: "Новое сообщение" }), { target: { value: "Сохранить черновик" } });
     const transfer = fileTransfer([new File(["test"], "embedded.txt")]);
     fireEvent.dragEnter(target, { dataTransfer: transfer });
     expect(target).toHaveAttribute("data-file-drop", "ready");
@@ -391,7 +535,7 @@ describe("Private messenger", () => {
     fireEvent.drop(target, { dataTransfer: transfer });
     expect(target).not.toHaveAttribute("data-file-drop");
     expect(screen.getByRole("button", { name: "Убрать файл embedded.txt" })).toBeInTheDocument();
-    expect(screen.getByRole("textbox", { name: "Новое сообщение" })).toHaveValue("Сохранить черновик");
+    expect(screen.getByRole("textbox", { name: "Новое сообщение" })).toHaveTextValue("Сохранить черновик");
     expect(props.onSendMessage).not.toHaveBeenCalled();
   });
 
@@ -507,7 +651,7 @@ describe("Private messenger", () => {
     expect(onSendMessage).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Открыть диалог с черновиком" }));
     expect(await screen.findByRole("textbox", { name: "Новое сообщение" }))
-      .toHaveValue("Пожалуйста, проверьте документ.");
+      .toHaveTextValue("Пожалуйста, проверьте документ.");
     expect(chatActions.create).toHaveBeenCalledOnce();
     expect(onSendMessage).not.toHaveBeenCalled();
   });
@@ -523,7 +667,7 @@ describe("Private messenger", () => {
       } },
     });
     expect(await screen.findByRole("textbox", { name: "Новое сообщение" }))
-      .toHaveValue("Проверьте письмо, пожалуйста.");
+      .toHaveTextValue("Проверьте письмо, пожалуйста.");
     expect(onSendMessage).not.toHaveBeenCalled();
   });
   afterEach(() => {
@@ -537,19 +681,19 @@ describe("Private messenger", () => {
     const onSendMessage = vi.fn();
     renderMessenger({ onSendMessage, canUseAssistant: true });
     const composer = screen.getByLabelText<HTMLInputElement>("Новое сообщение");
-    fireEvent.change(composer, { target: { value: "Глянь документ" } });
+    changeField(composer, { target: { value: "Глянь документ" } });
     fireEvent.click(screen.getByRole("button", { name: "Переформулировать черновик с ИИ" }));
     fireEvent.click(screen.getByRole("button", { name: "Профессиональный" }));
     await screen.findByText("Будьте добры, проверьте документ.");
-    expect(composer).toHaveValue("Глянь документ");
+    expect(composer).toHaveTextValue("Глянь документ");
     expect(onSendMessage).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Заменить мой текст" }));
-    expect(composer).toHaveValue("Будьте добры, проверьте документ.");
+    expect(composer).toHaveTextValue("Будьте добры, проверьте документ.");
   });
   it("does not show or call AI rewrite without assistant access", () => {
     vi.mocked(rewriteMessengerDraft).mockClear();
     renderMessenger({ canUseAssistant: false });
-    fireEvent.change(screen.getByLabelText("Новое сообщение"), { target: { value: "Текст" } });
+    changeField(screen.getByLabelText("Новое сообщение"), { target: { value: "Текст" } });
     expect(screen.queryByRole("button", { name: "Переформулировать черновик с ИИ" })).not.toBeInTheDocument();
     expect(rewriteMessengerDraft).not.toHaveBeenCalled();
   });
@@ -632,7 +776,7 @@ describe("Private messenger", () => {
     </FluentProvider>);
     fireEvent.click(screen.getByRole("button", { name: "Попросить перенос срока" }));
     const reasonBox = screen.getByRole("textbox", { name: "Причина переноса срока" });
-    fireEvent.change(reasonBox, {
+    changeField(reasonBox, {
       target: { value: "Ожидаем материалы" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Отправить запрос в чат" }));
@@ -705,7 +849,7 @@ describe("Private messenger", () => {
     const saveDraft = vi.fn().mockResolvedValue(true);
     vi.stubGlobal("yuksalish", { loadDraft, clearDraft, saveDraft });
     renderMessenger();
-    await waitFor(() => expect(screen.getByLabelText("Новое сообщение")).toHaveValue("Текст до обновления"));
+    await waitFor(() => expect(screen.getByLabelText("Новое сообщение")).toHaveTextValue("Текст до обновления"));
     expect(loadDraft).toHaveBeenCalledWith("chat:aziza:finance");
     await waitFor(() => expect(clearDraft).toHaveBeenCalledWith("chat:aziza:finance"));
     expect(saveDraft).not.toHaveBeenCalled();
@@ -720,7 +864,7 @@ describe("Private messenger", () => {
     });
     renderMessenger();
     await waitFor(() => expect(loadDraft).toHaveBeenCalledWith("chat:aziza:finance"));
-    fireEvent.change(screen.getByLabelText("Новое сообщение"), {
+    changeField(screen.getByLabelText("Новое сообщение"), {
       target: { value: "Сохранить перед обновлением" },
     });
     window.dispatchEvent(new Event("yuksalish:prepare-web-update"));
@@ -743,7 +887,7 @@ describe("Private messenger", () => {
     );
     expect(screen.queryByRole("switch", { name: /предыдущую историю/ })).not.toBeInTheDocument();
     expect(screen.queryByText(/Внешние гости/)).not.toBeInTheDocument();
-    fireEvent.change(screen.getByRole("textbox", { name: /Название группы/ }), {
+    changeField(screen.getByRole("textbox", { name: /Название группы/ }), {
       target: { value: "Проектная команда" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Бахтиёр Самугов" }));
@@ -773,7 +917,7 @@ describe("Private messenger", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Права: Бахтиёр Самугов" }),
     );
-    fireEvent.change(screen.getByLabelText("Роль в группе"), {
+    changeField(screen.getByLabelText("Роль в группе"), {
       target: { value: "moderator" },
     });
     fireEvent.click(
@@ -930,6 +1074,25 @@ describe("Private messenger", () => {
     expect(row("late")?.className).not.toMatch(/is-group-/);
   });
 
+  it("inserts Ctrl+Enter at the selection without sending, then sends preserved newlines with Enter", async () => {
+    const onSendMessage = vi.fn().mockResolvedValue({ id: "multiline" });
+    renderMessenger({ onSendMessage });
+    const input = screen.getByLabelText<HTMLDivElement>("Новое сообщение");
+    expect(input).toHaveAttribute("contenteditable", "true");
+    changeField(input, { target: { value: "Первая удалитьВторая" } });
+    setEditorSelection(input, 6, 14);
+    fireEvent.keyDown(input, { key: "Enter", ctrlKey: true });
+    expect(input).toHaveTextValue("Первая\nВторая");
+    expect(onSendMessage).not.toHaveBeenCalled();
+    await waitFor(() => expect(editorCaret(input)).toBe(7));
+    fireEvent.keyDown(input, { key: "Enter", shiftKey: true });
+    expect(onSendMessage).not.toHaveBeenCalled();
+    fireEvent.keyDown(input, { key: "Enter", isComposing: true });
+    expect(onSendMessage).not.toHaveBeenCalled();
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(onSendMessage).toHaveBeenCalledWith("finance", "Первая\n\nВторая", [], expect.any(Object)));
+  });
+
   it("sends a reply and mentions, then resets the composer when changing chats", async () => {
     const onSendMessage = vi.fn().mockResolvedValue({ id: "sent" });
     renderMessenger({ onSendMessage });
@@ -939,7 +1102,7 @@ describe("Private messenger", () => {
       screen.getByRole("button", { name: "Упомянуть участника" }),
     );
     fireEvent.click(screen.getByRole("button", { name: "@Бахтиёр Самугов" }));
-    fireEvent.change(screen.getByLabelText("Новое сообщение"), {
+    changeField(screen.getByLabelText("Новое сообщение"), {
       target: { value: "Посмотри, пожалуйста" },
     });
     fireEvent.click(
@@ -950,14 +1113,14 @@ describe("Private messenger", () => {
         "finance",
         "Посмотри, пожалуйста",
         [],
-        { replyToMessageId: "m1", mentionUserIds: ["baxtiyor"] },
+        { replyToMessageId: "m1", replyQuote: undefined, entities: [], mentionUserIds: ["baxtiyor"] },
       ),
     );
     await waitFor(() =>
-      expect(screen.getByLabelText("Новое сообщение")).toHaveValue(""),
+      expect(screen.getByLabelText("Новое сообщение")).toHaveTextValue(""),
     );
     await waitFor(() => expect(screen.getByLabelText("Новое сообщение")).toHaveFocus(), { timeout: 3000 });
-    fireEvent.change(screen.getByLabelText("Новое сообщение"), {
+    changeField(screen.getByLabelText("Новое сообщение"), {
       target: { value: "Не отправлять другому" },
     });
     openMessageMenu("Получил обновлённый счёт на ноутбуки. Сумма 84 600 000 сум, срок оплаты до пятницы.");
@@ -965,7 +1128,7 @@ describe("Private messenger", () => {
     fireEvent.click(
       screen.getByRole("button", { name: /Бахтиёр Самугов.*Возьму задачу/ }),
     );
-    expect(screen.getByLabelText("Новое сообщение")).toHaveValue("");
+    expect(screen.getByLabelText("Новое сообщение")).toHaveTextValue("");
     expect(screen.queryByLabelText("Отменить ответ")).not.toBeInTheDocument();
   });
 
@@ -973,7 +1136,7 @@ describe("Private messenger", () => {
     const onSendMessage = vi.fn().mockResolvedValue({ id: "sent-file" });
     renderMessenger({ onSendMessage });
     const file = new File(["report"], "report.pdf", { type: "application/pdf" });
-    fireEvent.change(screen.getByLabelText("Файлы сообщения"), {
+    changeField(screen.getByLabelText("Файлы сообщения"), {
       target: { files: [file] },
     });
     const send = screen.getByRole("button", { name: "Отправить сообщение" });
@@ -983,7 +1146,7 @@ describe("Private messenger", () => {
       "finance",
       "Файл",
       [file],
-      { replyToMessageId: undefined, mentionUserIds: [] },
+      { replyToMessageId: undefined, replyQuote: undefined, entities: [], mentionUserIds: [] },
     ));
   });
 
@@ -1001,7 +1164,7 @@ describe("Private messenger", () => {
         }} /></FluentProvider>;
     }
     render(<Harness />);
-    fireEvent.change(screen.getByLabelText("Новое сообщение"), { target: { value: "Плавное появление" } });
+    changeField(screen.getByLabelText("Новое сообщение"), { target: { value: "Плавное появление" } });
     fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
     await waitFor(() => expect(document.querySelector('[data-message-id="blur-message"]')).not.toBeNull());
     const message = document.querySelector('[data-message-id="blur-message"]')!;
@@ -1031,11 +1194,11 @@ describe("Private messenger", () => {
     const onSendMessage = vi.fn().mockRejectedValue(new Error("Сервер временно недоступен"));
     renderMessenger({ onSendMessage });
     const composer = screen.getByLabelText("Новое сообщение");
-    fireEvent.change(composer, { target: { value: "Не потерять этот текст" } });
+    changeField(composer, { target: { value: "Не потерять этот текст" } });
     fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
 
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Сервер временно недоступен"));
-    expect(composer).toHaveValue("Не потерять этот текст");
+    expect(composer).toHaveTextValue("Не потерять этот текст");
   });
 
   it("keeps typing and controls available while sends wait, preserves order and never clears the next draft on acknowledgement", async () => {
@@ -1046,24 +1209,24 @@ describe("Private messenger", () => {
       .mockImplementationOnce(() => new Promise<ChatMessage>((resolve) => { finishSecond = resolve; }));
     renderMessenger({ onSendMessage });
     const input = screen.getByRole("textbox", { name: "Новое сообщение" });
-    fireEvent.change(input, { target: { value: "Первое" } });
+    changeField(input, { target: { value: "Первое" } });
     fireEvent.keyDown(input, { key: "Enter" });
     await waitFor(() => expect(onSendMessage).toHaveBeenCalledTimes(1));
-    expect(input).toBeEnabled(); expect(input).toHaveValue(""); expect(input).toHaveFocus();
+    expect(input).toBeEnabled(); expect(input).toHaveTextValue(""); expect(input).toHaveFocus();
     expect(screen.getByRole("button", { name: "Прикрепить файл" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Упомянуть участника" })).toBeEnabled();
-    fireEvent.change(input, { target: { value: "Второе" } });
+    changeField(input, { target: { value: "Второе" } });
     expect(screen.getByRole("button", { name: "Отправить сообщение" })).toBeEnabled();
     fireEvent.keyDown(input, { key: "Enter" });
     fireEvent.keyDown(input, { key: "Enter" }); // Empty composer cannot duplicate a queued send.
     expect(onSendMessage).toHaveBeenCalledTimes(1);
-    fireEvent.change(input, { target: { value: "Третий черновик" } });
+    changeField(input, { target: { value: "Третий черновик" } });
     await act(async () => { finishFirst?.({ ...initialMessages[0]!, id: "first-ack" }); });
     await waitFor(() => expect(onSendMessage).toHaveBeenCalledTimes(2));
     expect(onSendMessage.mock.calls.map((call) => call[1])).toEqual(["Первое", "Второе"]);
-    expect(input).toHaveValue("Третий черновик");
+    expect(input).toHaveTextValue("Третий черновик");
     await act(async () => { finishSecond?.({ ...initialMessages[0]!, id: "second-ack" }); });
-    expect(input).toHaveValue("Третий черновик"); expect(input).toBeEnabled();
+    expect(input).toHaveTextValue("Третий черновик"); expect(input).toBeEnabled();
   });
 
   it("keeps a failed send separately when new text/files exist, then restores it only into an empty composer", async () => {
@@ -1074,14 +1237,14 @@ describe("Private messenger", () => {
     const input = screen.getByRole("textbox", { name: "Новое сообщение" });
     const oldFile = new File(["old"], "old.pdf", { type: "application/pdf" });
     const newFile = new File(["new"], "new.pdf", { type: "application/pdf" });
-    fireEvent.change(input, { target: { value: "Первый с файлом" } });
-    fireEvent.change(screen.getByLabelText("Файлы сообщения"), { target: { files: [oldFile] } });
+    changeField(input, { target: { value: "Первый с файлом" } });
+    changeField(screen.getByLabelText("Файлы сообщения"), { target: { files: [oldFile] } });
     fireEvent.keyDown(input, { key: "Enter" });
     await waitFor(() => expect(onSendMessage).toHaveBeenCalledTimes(1));
-    fireEvent.change(input, { target: { value: "Новый черновик" } });
-    fireEvent.change(screen.getByLabelText("Файлы сообщения"), { target: { files: [newFile] } });
+    changeField(input, { target: { value: "Новый черновик" } });
+    changeField(screen.getByLabelText("Файлы сообщения"), { target: { files: [newFile] } });
     await act(async () => { fail?.(new Error("Сеть недоступна")); });
-    expect(input).toHaveValue("Новый черновик");
+    expect(input).toHaveTextValue("Новый черновик");
     expect(screen.getByRole("alert")).toHaveTextContent("Первый с файлом");
     expect(screen.getByRole("button", { name: "Вернуть в поле" })).toBeDisabled();
     fireEvent.keyDown(input, { key: "Enter" });
@@ -1089,7 +1252,7 @@ describe("Private messenger", () => {
     expect(onSendMessage.mock.calls[0]?.[2]).toEqual([oldFile]);
     expect(onSendMessage.mock.calls[1]?.[2]).toEqual([newFile]);
     fireEvent.click(screen.getByRole("button", { name: "Вернуть в поле" }));
-    expect(input).toHaveValue("Первый с файлом");
+    expect(input).toHaveTextValue("Первый с файлом");
     expect(screen.getByRole("button", { name: "Убрать файл old.pdf" })).toBeInTheDocument();
   });
 
@@ -1115,7 +1278,7 @@ describe("Private messenger", () => {
     expect(bubble.querySelector("time")).toHaveTextContent("12:00");
     openMessageMenu("Мой текст");
     fireEvent.click(screen.getByRole("button", { name: "Изменить" }));
-    fireEvent.change(screen.getByLabelText("Редактирование сообщения"), {
+    changeField(screen.getByLabelText("Редактирование сообщения"), {
       target: { value: "Обновлённый текст" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Сохранить изменения" }));
@@ -1124,8 +1287,8 @@ describe("Private messenger", () => {
         "Сообщение уже изменилось",
       ),
     );
-    expect(onEditMessage).toHaveBeenCalledWith(message, "Обновлённый текст", []);
-    expect(screen.getByLabelText("Редактирование сообщения")).toHaveValue(
+    expect(onEditMessage).toHaveBeenCalledWith(message, "Обновлённый текст", [], []);
+    expect(screen.getByLabelText("Редактирование сообщения")).toHaveTextValue(
       "Обновлённый текст",
     );
     fireEvent.click(screen.getByRole("button", { name: "Отменить редактирование" }));
@@ -1147,7 +1310,7 @@ describe("Private messenger", () => {
     const pane = screen.getByRole("region", { name: /^Чат:/ });
     const composer = screen.getByRole("textbox", { name: "Новое сообщение" });
     const restoreFocus = vi.spyOn(composer, "focus");
-    fireEvent.change(composer, { target: { value: "Мой черновик" } });
+    changeField(composer, { target: { value: "Мой черновик" } });
     openMessageMenu(message.body);
     fireEvent.click(screen.getByRole("button", { name: "Удалить" }));
     const dialog = await screen.findByRole("dialog", { name: "Удалить это сообщение?" });
@@ -1157,7 +1320,7 @@ describe("Private messenger", () => {
     expect(within(dialog).getByText(/История изменений сохранится для аудита/)).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole("button", { name: "Отмена" }));
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Удалить это сообщение?" })).not.toBeInTheDocument());
-    expect(composer).toHaveValue("Мой черновик");
+    expect(composer).toHaveTextValue("Мой черновик");
     expect(onDeleteMessage).not.toHaveBeenCalled();
     await waitFor(() => expect(restoreFocus).toHaveBeenCalledWith({ preventScroll: true }));
     openMessageMenu(message.body);
@@ -1165,7 +1328,7 @@ describe("Private messenger", () => {
     fireEvent.keyDown(await screen.findByRole("dialog", { name: "Удалить это сообщение?" }), { key: "Escape" });
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Удалить это сообщение?" })).not.toBeInTheDocument());
     expect(onDeleteMessage).not.toHaveBeenCalled();
-    expect(composer).toHaveValue("Мой черновик");
+    expect(composer).toHaveTextValue("Мой черновик");
   });
   it("restores a message when confirmed deletion fails", async () => {
     const message: ChatMessage = { id: "failed-delete", chatId: "finance", authorId: "aziza", body: "Останется в чате", time: "12:00", canDelete: true };
@@ -1318,10 +1481,10 @@ describe("Private messenger", () => {
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Реакции на сообщение" })).not.toBeInTheDocument());
     expect(screen.queryByText(/0 реакций · список сотрудников недоступен/)).not.toBeInTheDocument();
     openMessageMenu("Важное решение по бюджету");
-    const unpin = screen.getByRole("button", { name: "Открепить" });
+    const unpin = screen.getByRole("button", { name: "Снять закреп для всех" });
     await waitFor(() => expect(unpin).toBeEnabled());
     fireEvent.click(unpin);
-    await waitFor(() => expect(onPinMessage).toHaveBeenCalledWith(message, false));
+    await waitFor(() => expect(onPinMessage).toHaveBeenCalledWith(message, false, "all"));
 
     fireEvent.click(screen.getByRole("button", { name: /Закреплено: 1/ }));
     const panel = screen.getByRole("region", { name: "Закреплённые сообщения" });
@@ -1394,7 +1557,7 @@ describe("Private messenger", () => {
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Переслать сообщение" })).not.toBeInTheDocument());
   });
 
-  it.each(["voice", "forwarded", "text"])("keeps the %s message timestamp in a separate footer", kind => {
+  it.each(["voice", "forwarded", "text"])("keeps the %s timestamp separate from content and compact for voice", kind => {
     renderMessenger({
       messages: [{ id: "timestamp-example", chatId: "finance", authorId: "aziza", body: "Проверочное сообщение", time: "14:15",
         editedAt: "2026-10-08T09:15:00Z",
@@ -1404,11 +1567,12 @@ describe("Private messenger", () => {
         documentRole: "general", mediaKind: "voice", mediaDurationMs: 7000, createdAt: "2026-10-08T09:15:00Z" }] : [],
     });
     const body = document.querySelector('[data-message-id="timestamp-example"] .message-body')!;
-    const footer = body.querySelector(":scope > .message-meta")!;
+    const footer = body.querySelector(kind === "voice" ? ".voice-player-details > .message-meta" : ":scope > .message-meta")!;
     const timestamp = footer.querySelector("time.message-timestamp");
     expect(timestamp).toHaveTextContent("изменено · 14:15");
-    expect(footer.previousElementSibling).toHaveClass(kind === "voice" ? "voice-message" : kind === "forwarded" ? "message-forwarded" : "message-text");
-    expect(body.querySelector(".message-text time, .voice-message time, .message-forwarded time")).toBeNull();
+    expect(footer.previousElementSibling).toHaveClass(kind === "voice" ? "voice-player-time" : kind === "forwarded" ? "message-forwarded" : "message-text");
+    expect(body.querySelectorAll(".message-meta")).toHaveLength(1);
+    expect(body.querySelector(".message-text time, .message-forwarded time")).toBeNull();
   });
 
   it("loads compressed voice data only when playback is requested", async () => {
@@ -1467,7 +1631,7 @@ describe("Private messenger", () => {
       </FluentProvider>,
     );
     const dialog = within(screen.getByRole("dialog"));
-    fireEvent.change(dialog.getByRole("textbox", { name: /Название группы/ }), {
+    changeField(dialog.getByRole("textbox", { name: /Название группы/ }), {
       target: { value: "Команда запуска" },
     });
     fireEvent.click(dialog.getByRole("button", { name: "Иконка: Звезда" }));
@@ -1490,7 +1654,7 @@ describe("Private messenger", () => {
     expect(
       dialog.getByRole("button", { name: "Малика Нурова" }),
     ).toHaveAttribute("aria-pressed", "true");
-    expect(dialog.getByRole("textbox", { name: /Название группы/ })).toHaveValue("Команда запуска");
+    expect(dialog.getByRole("textbox", { name: /Название группы/ })).toHaveTextValue("Команда запуска");
   });
 
   it("lists registered colleagues without existing chats and opens a direct dialog on selection", async () => {

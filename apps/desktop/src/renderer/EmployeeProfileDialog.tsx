@@ -1,4 +1,5 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
+import { LoadingSkeleton } from "./LoadingSkeleton";
 import {
   Button,
   DialogBody,
@@ -10,7 +11,6 @@ import {
   Popover,
   PopoverSurface,
   PopoverTrigger,
-  Spinner,
   Tooltip,
 } from "@fluentui/react-components";
 import {
@@ -647,7 +647,7 @@ export function EmployeeProfileDialog({
             action={<Button appearance="subtle" icon={<Dismiss24Regular />} aria-label="Закрыть профиль" onClick={() => onOpenChange(false)} />}
           >{personalShown ? "Моя эффективность" : "Профиль сотрудника"}</DialogTitle>
           <DialogContent ref={profileContentRef}>
-            {!profile && !error ? <div className="employee-profile-loading"><Spinner label="Загружаем профиль" /></div> : null}
+            {!profile && !error ? <LoadingSkeleton layout="profile" label="Загружаем профиль" /> : null}
             {error && !profile ? <WorkspaceNotice tone="error" className="employee-profile-error" role="alert">{error}</WorkspaceNotice> : null}
             {profile && personalShown ? <PersonalEfficiencyView token={token} onBack={() => setPersonalUserId(undefined)} onOpenTask={onOpenTask ? (taskId) => { onOpenTask(taskId); onOpenChange(false); } : undefined} /> : profile ? <div className="employee-profile-shell">
               <div ref={profileHeaderRef} className="employee-profile-sticky">

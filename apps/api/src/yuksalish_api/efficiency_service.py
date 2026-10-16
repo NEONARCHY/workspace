@@ -20,6 +20,7 @@ from .auth import AuthenticatedUser
 from .tables import (
     employee_efficiency_methodologies,
     employee_efficiency_snapshots,
+    task_deadline_requests,
     task_efficiency_events,
     task_participants,
     tasks,
@@ -210,7 +211,10 @@ def replay_task_events(events: Sequence[Record], tracking_started_at: datetime) 
                 if deadline.replaced_at is None and (old_due is None or deadline.due_at == old_due):
                     if occurred_at <= deadline.due_at:
                         deadline.replaced_at = occurred_at
-                    break
+                    # Historical snapshots/retried writes can describe the same
+                    # obligation twice. A timely replacement supersedes both.
+                    if old_due is None:
+                        break
             if new_due is not None:
                 state.deadlines.append(_Deadline(due_at=new_due, set_at=occurred_at))
             continue
@@ -246,6 +250,47 @@ def replay_task_events(events: Sequence[Record], tracking_started_at: datetime) 
         elif event_type in {"efficiency_excluded", "efficiency_exclusion_changed"}:
             state.exclusions.append((occurred_at, bool(new_value.get("excluded", True))))
     return list(states.values())
+
+
+def reconcile_deadline_decisions(
+    events: Sequence[Record], decisions: Sequence[Record],
+) -> list[Record]:
+    """Use persisted approvals, never request time or tasks.updated_at, as facts.
+
+    Older installations may contain an approved request without its ledger event.
+    Reconcile on read without rewriting the append-only ledger or erasing a late miss.
+    """
+    approved = {
+        str(row["id"]): row for row in decisions
+        if row["status"] == "approved" and row.get("decided_at") is not None
+    }
+    result: list[Record] = []
+    for event in events:
+        metadata = event.get("metadata")
+        request_id = str(metadata.get("requestId")) if isinstance(metadata, Mapping) else ""
+        decision = approved.get(request_id)
+        if event["event_type"] == "deadline_changed" and decision is not None \
+                and event["task_id"] == decision["task_id"]:
+            continue  # The persisted decision below is the authoritative instant.
+        result.append(event)
+    for row in approved.values():
+        result.append({
+            "id": row["id"], "task_id": row["task_id"], "event_type": "deadline_changed",
+            "occurred_at": row["decided_at"], "actor_user_id": row["decided_by_user_id"],
+            "due_at": row["proposed_due_at"],
+            "old_value": {"dueAt": row["old_due_at"].isoformat()},
+            "new_value": {"dueAt": row["proposed_due_at"].isoformat()},
+            "metadata": {"requestId": str(row["id"])},
+        })
+    return result
+
+
+async def _load_calculation_events(connection: AsyncConnection) -> list[Record]:
+    events = (await connection.execute(select(task_efficiency_events))).mappings().all()
+    decisions = (await connection.execute(select(task_deadline_requests).where(
+        task_deadline_requests.c.status == "approved",
+    ))).mappings().all()
+    return reconcile_deadline_decisions(events, decisions)
 
 
 def _calculate_aggregate_from_states(
@@ -477,18 +522,7 @@ async def load_efficiency_overview(
         .mappings()
         .all()
     )
-    event_rows = (
-        (
-            await connection.execute(
-                select(task_efficiency_events).order_by(
-                    task_efficiency_events.c.occurred_at,
-                    task_efficiency_events.c.created_at,
-                )
-            )
-        )
-        .mappings()
-        .all()
-    )
+    event_rows = await _load_calculation_events(connection)
     tracking_started_at = methodology["tracking_started_at"]
     states = replay_task_events(event_rows, tracking_started_at)
     history_periods = previous_periods(requested_period, 6)
@@ -569,7 +603,7 @@ async def load_personal_efficiency(
         .one()
     )
     tracking = methodology["tracking_started_at"]
-    events = (await connection.execute(select(task_efficiency_events))).mappings().all()
+    events = await _load_calculation_events(connection)
     states = replay_task_events(events, tracking)
     aggregates = {
         period_key: _calculate_aggregate_from_states(
@@ -714,11 +748,7 @@ async def materialize_efficiency_digest_notifications(
         .mappings()
         .one()
     )
-    event_rows = (
-        (await connection.execute(select(task_efficiency_events)))
-        .mappings()
-        .all()
-    )
+    event_rows = await _load_calculation_events(connection)
     states = replay_task_events(event_rows, methodology["tracking_started_at"])
     user_ids = (
         (await connection.execute(select(users.c.id).where(users.c.status == "active")))

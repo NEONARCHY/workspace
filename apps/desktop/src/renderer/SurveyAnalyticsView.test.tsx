@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SurveyAnalysisDetail } from "@yuksalish/contracts";
 import { SurveyAnalyticsView } from "./SurveyAnalyticsView";
@@ -14,6 +14,28 @@ async function open() { fireEvent.click(await screen.findByRole("button", { name
 describe("private survey workspace", () => {
   beforeEach(() => { vi.resetAllMocks(); vi.mocked(listSurveyAnalyses).mockResolvedValue([fixture.analysis]); vi.mocked(loadSurveyAnalysis).mockResolvedValue(fixture); });
   afterEach(cleanup);
+  it("mounts the actual survey layout immediately and only skeletons library records", () => {
+    vi.mocked(listSurveyAnalyses).mockImplementationOnce(() => new Promise(() => {}));
+    const { container } = show();
+    expect(screen.getByRole("heading", { name: "Аналитика опросов" })).toBeVisible();
+    expect(screen.getByRole("region", { name: "Загрузка опроса" })).toBeVisible();
+    expect(screen.getByLabelText("Поиск анализов")).toBeInTheDocument();
+    expect(container.querySelectorAll(".survey-library .survey-analysis-item")).toHaveLength(3);
+    expect(container.querySelector(".ws-section-skeleton, .is-table, .is-circle")).toBeNull();
+    expect(screen.getByRole("status", { name: "Загрузка личных анализов" })).toHaveAttribute("data-skeleton-deferred");
+  });
+  it("keeps a confirmed empty library during refresh and removes pending placeholders after a fast read", async () => {
+    vi.mocked(listSurveyAnalyses).mockResolvedValueOnce([]);
+    show();
+    const empty = await screen.findByRole("heading", { name: "Пока нет анализов" });
+    let finish!: (items: []) => void;
+    vi.mocked(listSurveyAnalyses).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    fireEvent.click(screen.getByRole("button", { name: "Обновить список" }));
+    expect(empty).toBeVisible();
+    expect(screen.queryByRole("status", { name: "Загрузка личных анализов" })).toBeNull();
+    await act(async () => finish([]));
+    expect(empty).toBeVisible();
+  });
   it("uses product dropdowns and passes the chosen CSV settings only on explicit import", async () => {
     vi.mocked(importSurveyAnalysis).mockResolvedValue(fixture);
     show(); await screen.findByRole("button", { name: /Опрос команды/ });

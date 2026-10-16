@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { motion, type Variants } from "framer-motion";
+import type { MessageEntity } from "@yuksalish/contracts";
+import { RichMessageText } from "./message-rich-text";
 
 // The owner's blurInUp preset, restricted to message text (never the chat canvas).
 export const MESSAGE_TEXT_DURATION = 0.35;
@@ -11,8 +13,9 @@ const item: Variants = {
   exit: { opacity: 0, filter: "blur(10px)", top: 20, transition: { duration: MESSAGE_TEXT_DURATION } },
 };
 
-export function MessageTextAnimate({ children, enabled, disabled, outgoing = false, onComplete }: {
+export function MessageTextAnimate({ children, entities, enabled, disabled, outgoing = false, onComplete }: {
   readonly children: string;
+  readonly entities?: readonly MessageEntity[];
   readonly enabled: boolean;
   readonly disabled: boolean;
   readonly outgoing?: boolean;
@@ -20,6 +23,9 @@ export function MessageTextAnimate({ children, enabled, disabled, outgoing = fal
 }) {
   const [active, setActive] = useState(enabled && !disabled);
   if (disabled && active) setActive(false);
+  if (entities?.length) return !enabled || disabled || !active ? <RichMessageText text={children} entities={entities} />
+    : <motion.span className="message-text-word" initial={outgoing ? "show" : "hidden"} animate={outgoing ? "exit" : "show"} variants={item}
+      onAnimationComplete={() => { setActive(false); onComplete?.(); }}><RichMessageText text={children} entities={entities} /></motion.span>;
   if (!enabled || disabled || !active) return <>{children}</>;
   const segments = children.split(/(\s+)/u);
   const words = segments.filter(segment => segment && !/^\s+$/u.test(segment));
@@ -45,9 +51,10 @@ export function MessageTextAnimate({ children, enabled, disabled, outgoing = fal
   </motion.span>;
 }
 
-export function ComposerSendTransition({ inputRef, text, scrollLeft, scrollTop = 0, disabled, onComplete }: {
-  readonly inputRef: RefObject<HTMLInputElement | HTMLTextAreaElement | null>;
+export function ComposerSendTransition({ inputRef, text, entities, scrollLeft, scrollTop = 0, disabled, onComplete }: {
+  readonly inputRef: RefObject<HTMLInputElement | HTMLTextAreaElement | HTMLDivElement | null>;
   readonly text: string;
+  readonly entities?: readonly MessageEntity[];
   readonly scrollLeft: number;
   readonly scrollTop?: number;
   readonly disabled: boolean;
@@ -77,13 +84,13 @@ export function ComposerSendTransition({ inputRef, text, scrollLeft, scrollTop =
     overlay.style.height = `${inputRect.height}px`;
     overlay.style.font = style.font;
     overlay.style.padding = style.padding;
-    overlay.style.whiteSpace = input.tagName === "TEXTAREA" ? "pre-wrap" : "pre";
+    overlay.style.whiteSpace = input.tagName !== "INPUT" ? "pre-wrap" : "pre";
     overlay.style.lineHeight = style.lineHeight;
   }, [disabled, inputRef, onComplete]);
   if (disabled) return null;
   return <div ref={ref} className="composer-send-text" aria-hidden="true">
     <span style={{ display: "block", transform: `translate(${-scrollLeft}px, ${-scrollTop}px)` }}>
-      <MessageTextAnimate enabled disabled={false} outgoing onComplete={onComplete}>{text}</MessageTextAnimate>
+      <MessageTextAnimate entities={entities} enabled disabled={false} outgoing onComplete={onComplete}>{text}</MessageTextAnimate>
     </span>
   </div>;
 }

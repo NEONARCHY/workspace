@@ -23,6 +23,7 @@ import {
 } from "@fluentui/react-icons";
 
 import { TeamPresencePanel } from "./TeamPresencePanel";
+import { EfficiencyDeadlineExplanation } from "./EfficiencyDeadlineExplanation";
 import { useContextMotion } from "./useContextMotion";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
@@ -110,7 +111,14 @@ function overdueLabel(task: WorkspaceTask, now: Date): string {
   const due = validDueDate(task);
   if (!due) return "Отмечена как просроченная";
   const days = Math.max(1, Math.ceil((startOfDay(now).getTime() - startOfDay(due).getTime()) / 86_400_000));
-  return `Просрочена на ${plural(days, ["день", "дня", "дней"])}`;
+  return `Текущий срок истёк ${plural(days, ["день", "дня", "дней"])} назад`;
+}
+
+function deadlineContext(task: WorkspaceTask, now: Date): string | undefined {
+  if (task.efficiencyExcluded) return "Исключена из эффективности — процент не снижает. Причина — в маршруте задачи";
+  if (!isTaskOverdue(task, now)) return undefined;
+  if (task.status === "awaiting_review") return "Ожидает решения постановщика. Вовремя сданный результат не снижает процент; время сдачи — в маршруте задачи";
+  return "Истёкший срок сам по себе не доказывает нарушение исполнителя. Проверьте месяц расчёта и маршрут задачи";
 }
 
 function taskAttention(task: WorkspaceTask, now: Date): { readonly score: number; readonly tone: AttentionTone; readonly label: string } | undefined {
@@ -194,13 +202,15 @@ export function TeamDashboardView({
   const teamRows = (() => {
     const rows = visiblePeople.map((person) => {
       const assigned = activeTasks.filter((task) => task.assigneeId === person.id);
-      const overdue = assigned.filter((task) => isTaskOverdue(task, now)).length;
+      const expiredTasks = assigned.filter((task) => isTaskOverdue(task, now));
+      const overdue = expiredTasks.length;
+      const excludedExpired = expiredTasks.filter((task) => task.efficiencyExcluded).length;
       const review = assigned.filter((task) => task.status === "awaiting_review").length;
       const soon = assigned.filter((task) => {
         const due = validDueDate(task);
         return Boolean(due && due > now && due <= weekEnd);
       }).length;
-      return { person, active: assigned.length, overdue, review, soon, efficiency: efficiencyByUser.get(person.id) };
+      return { person, active: assigned.length, overdue, excludedExpired, review, soon, efficiency: efficiencyByUser.get(person.id) };
     });
     return rows
       .filter((row) => teamFilter === "all" || teamFilter === "risk" && row.overdue > 0 || teamFilter === "review" && row.review > 0)
@@ -222,7 +232,7 @@ export function TeamDashboardView({
     { key: "new", label: "Новые", value: activeTasks.filter((task) => task.status === "new" && !isTaskOverdue(task, now)).length },
     { key: "progress", label: "В работе", value: activeTasks.filter((task) => ["in_progress", "overdue"].includes(task.status) && !isTaskOverdue(task, now)).length },
     { key: "review", label: "На проверке", value: reviewTasks.filter(task => !isTaskOverdue(task, now)).length },
-    { key: "overdue", label: "Просрочены", value: overdueTasks.length },
+    { key: "overdue", label: "Срок истёк", value: overdueTasks.length },
   ];
   const firstName = currentUser?.name.split(" ")[0] ?? "руководитель";
   const flowSelectionTasks = flowSelection?.kind === "status"
@@ -274,7 +284,7 @@ export function TeamDashboardView({
         <span>Обзор команды · сегодня</span>
         <h2 id="team-dashboard-title">Добрый день, {firstName}</h2>
         <p>{overdueTasks.length || reviewTasks.length
-          ? `В фокусе ${plural(overdueTasks.length + reviewTasks.length, ["задача", "задачи", "задач"])}: просрочки и результаты, ожидающие решения.`
+          ? `В фокусе ${plural(overdueTasks.length + reviewTasks.length, ["задача", "задачи", "задач"])}: истёкшие сроки и результаты, ожидающие решения.`
           : "Срочных блокеров нет. Можно сосредоточиться на задачах ближайших семи дней."}</p>
       </div>
       <div className="team-dash-hero-summary" aria-label="Краткая сводка команды">
@@ -294,7 +304,7 @@ export function TeamDashboardView({
 
     <section className="team-dash-metrics" aria-label="Ключевые показатели команды">
       <MetricCard active={attentionFilter === "all"} onSelect={() => setAttentionFilter("all")} icon={<Sparkle24Regular />} label="Активные задачи" value={activeTasks.length} note={`${dueThisWeek.length} со сроком в ближайшие 7 дней`} tone="brand" />
-      <MetricCard active={attentionFilter === "overdue"} onSelect={() => setAttentionFilter("overdue")} icon={<Warning24Regular />} label="Нужна помощь" value={overdueTasks.length} note={overdueTasks.length ? "просроченные задачи" : "просрочек нет"} tone="danger" />
+      <MetricCard active={attentionFilter === "overdue"} onSelect={() => setAttentionFilter("overdue")} icon={<Warning24Regular />} label="Нужна помощь" value={overdueTasks.length} note={overdueTasks.length ? "истёк текущий срок" : "истёкших сроков нет"} tone="danger" />
       <MetricCard active={attentionFilter === "review"} onSelect={() => setAttentionFilter("review")} icon={<CheckmarkCircle24Regular />} label="Ждут решения" value={reviewTasks.length} note="результаты на проверке" tone="review" />
       <MetricCard active={attentionFilter === "today"} onSelect={() => setAttentionFilter("today")} icon={<CalendarClock24Regular />} label="Срок сегодня" value={dueToday.length} note={dueToday.length ? "дедлайны до конца дня" : "сегодня без дедлайнов"} tone="calm" />
     </section>
@@ -310,12 +320,12 @@ export function TeamDashboardView({
             const assignee = personById.get(task.assigneeId);
             return <button className={`team-dash-task tone-${attention.tone}`} key={task.id} type="button" onClick={() => onSelectTask(task.id)}>
               <span className="team-dash-task-signal" aria-hidden="true" />
-              <span className="team-dash-task-copy"><strong>{task.title}</strong><small>{task.project} · {attention.label}</small></span>
+              <span className="team-dash-task-copy"><strong>{task.title}</strong><small>{task.project} · {attention.label}</small>{deadlineContext(task, now) ? <small>{deadlineContext(task, now)}</small> : null}</span>
               <EmployeeProfileLink userId={assignee?.id} personName={assignee?.name ?? "Сотрудник"} className="team-dash-task-person"><Avatar name={assignee?.name ?? "Сотрудник"} size={28} /><span>{assignee?.name ?? "Сотрудник"}</span></EmployeeProfileLink>
               <ArrowRight20Regular aria-hidden="true" />
             </button>;
           })}
-          {!attentionTasks.length ? <div className="team-dash-empty"><CheckmarkCircle24Regular /><div><strong>Всё спокойно</strong><span>{selectedPersonId ? "У сотрудника нет срочных задач." : "Просрочек, срочных сроков и результатов на проверке сейчас нет."}</span></div></div> : null}
+          {!attentionTasks.length ? <div className="team-dash-empty"><CheckmarkCircle24Regular /><div><strong>Всё спокойно</strong><span>{selectedPersonId ? "У сотрудника нет срочных задач." : "Задач с истёкшим или срочным сроком и результатов на проверке сейчас нет."}</span></div></div> : null}
         </div>
       </section>
 
@@ -383,10 +393,11 @@ export function TeamDashboardView({
           <span><small>Ответственный</small><strong>{personById.get(drawerTask.assigneeId)?.name ?? "Сотрудник"}</strong></span>
         </EmployeeProfileLink>
         <dl>
-          <div><dt>Статус</dt><dd>{isTaskOverdue(drawerTask, now) ? "Просрочена" : taskStatusLabels[drawerTask.status]}</dd></div>
+          <div><dt>Статус</dt><dd>{isTaskOverdue(drawerTask, now) ? "Истёк текущий срок" : drawerTask.status === "overdue" ? "В работе" : taskStatusLabels[drawerTask.status]}</dd></div>
           <div><dt>Проект</dt><dd>{drawerTask.project || "Без проекта"}</dd></div>
           <div><dt>Срок</dt><dd>{drawerTask.dueLabel}</dd></div>
           <div><dt>Прогресс</dt><dd>{drawerTask.checklistTotal ? `${drawerTask.checklistDone} из ${drawerTask.checklistTotal}` : "Без чек-листа"}</dd></div>
+          <div><dt>Учёт в эффективности</dt><dd>{deadlineContext(drawerTask, now) ?? "По истории сроков и сдачи результата, не только по текущему статусу"}</dd></div>
         </dl>
         <section><span>Описание</span><p>{drawerTask.description || "Описание для этой задачи пока не добавлено."}</p></section>
         <Button appearance="primary" onClick={() => onSelectTask(drawerTask.id)}>Открыть полную карточку</Button>
@@ -397,7 +408,7 @@ export function TeamDashboardView({
             const assignee = personById.get(task.assigneeId);
             return <button type="button" key={task.id} onClick={() => setDrawerTaskId(task.id)}>
               <span className={`team-dash-drawer-status status-${isTaskOverdue(task, now) ? "overdue" : task.status}`} aria-hidden="true" />
-              <span><strong>{task.title}</strong><small>{task.project || "Без проекта"} · {task.dueLabel}</small></span>
+              <span><strong>{task.title}</strong><small>{task.project || "Без проекта"} · {task.dueLabel}</small>{deadlineContext(task, now) ? <small>{deadlineContext(task, now)}</small> : null}</span>
               <EmployeeProfileLink userId={assignee?.id} personName={assignee?.name ?? "Сотрудник"}><Avatar name={assignee?.name ?? "Сотрудник"} size={32} color="colorful" /></EmployeeProfileLink>
               <ArrowRight20Regular aria-hidden="true" />
             </button>;
@@ -409,19 +420,20 @@ export function TeamDashboardView({
 
     <section className="team-dash-panel team-dash-workload" aria-labelledby="workload-title">
       <header className="team-dash-panel-heading team-dash-workload-heading">
-        <div><span>Без скрытых оценок</span><h3 id="workload-title">Текущая нагрузка</h3><p>Полоса показывает только количество активных задач относительно команды — не норму и не оценку сотрудника.</p></div>
+        <div><span>Без скрытых оценок</span><h3 id="workload-title">Текущая нагрузка</h3><p>Полоса показывает только количество активных задач относительно команды — не норму и не оценку сотрудника.</p><p>«Истёк срок» — текущие дедлайны. Процент справа — эффективность{efficiency ? ` за ${new Intl.DateTimeFormat("ru-RU", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${efficiency.period}-01T00:00:00Z`))}` : " за месяц"}, а не доля активных задач без просрочки.</p></div>
         <SlidingSegmented className="team-dash-filters" role="group" aria-label="Фильтр нагрузки">
-          {([ ["all", "Все"], ["risk", "С просрочкой"], ["review", "На проверке"] ] as const).map(([key, label]) => <button className={teamFilter === key ? "active" : ""} aria-pressed={teamFilter === key} key={key} onClick={() => setTeamFilter(key)} type="button">{label}</button>)}
+          {([ ["all", "Все"], ["risk", "Истёк срок"], ["review", "На проверке"] ] as const).map(([key, label]) => <button className={teamFilter === key ? "active" : ""} aria-pressed={teamFilter === key} key={key} onClick={() => setTeamFilter(key)} type="button">{label}</button>)}
         </SlidingSegmented>
       </header>
-      {efficiencyError ? <WorkspaceNotice tone="warning" className="team-dash-data-note" role="status">Показана нагрузка по задачам. Данные EFF‑1 временно недоступны: {efficiencyError}</WorkspaceNotice> : null}
+      <EfficiencyDeadlineExplanation />
+      {efficiencyError ? <WorkspaceNotice tone="warning" className="team-dash-data-note" role="status">Показана нагрузка по задачам. Данные эффективности временно недоступны: {efficiencyError}</WorkspaceNotice> : null}
       <div className="team-dash-people" ref={workloadMotion}>
         {teamRows.map((row) => <button className={`team-dash-person ${selectedPersonId === row.person.id ? "selected" : ""}`} key={row.person.id} type="button" onClick={() => setSelectedPersonId((current) => current === row.person.id ? undefined : row.person.id)}>
           <EmployeeProfileLink userId={row.person.id} personName={row.person.name}><Avatar name={row.person.name} size={40} color="colorful" /></EmployeeProfileLink>
           <EmployeeProfileLink userId={row.person.id} personName={row.person.name} className="team-dash-person-name"><strong>{row.person.name}</strong><small>{row.person.jobTitle || "Должность не указана"}</small></EmployeeProfileLink>
           <span className="team-dash-load"><span><i style={{ width: `${row.active / maximumActive * 100}%` }} /></span><small>{plural(row.active, ["активная задача", "активные задачи", "активных задач"])}</small></span>
           <span className="team-dash-person-facts">
-            {row.overdue ? <b className="is-danger">{row.overdue} проср.</b> : null}
+            {row.overdue ? <><b className="is-soon">Истёк срок: {row.overdue}</b><small>Счётчик сроков, не нарушений исполнителя</small>{row.excludedExpired ? <b className="is-calm">Из них не снижают процент: {row.excludedExpired} · исключены</b> : null}</> : null}
             {row.review ? <b className="is-review">{row.review} на проверке</b> : null}
             {row.soon ? <b className="is-soon">{row.soon} на неделе</b> : null}
             {!row.overdue && !row.review && !row.soon ? <b className="is-calm">без срочных рисков</b> : null}

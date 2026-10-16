@@ -1,6 +1,7 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { attachmentImageCache, waitForCachedImage } from "./attachment-image-cache";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { WorkspaceSectionContent } from "./WorkspaceSectionContent";
 import { workspaceImageGallery, type GalleryImage } from "./image-gallery";
 import { ForwardDialog } from "./ForwardDialog";
 import { fileViewerKind } from "./file-viewer-kind";
@@ -989,7 +990,7 @@ export function App() {
       setFocusTarget(current => ({ section: "feed", entityId: id, revision: (current?.revision ?? 0) + 1 }));
       setActiveSection("feed");
     } catch (failure) { reportError(failure); }
-  }, [reportError, session]);
+  }, [reportError, session, setActiveSection]);
 
   const handleSendVoiceMessage = async (
     chatId: string,
@@ -1031,9 +1032,9 @@ export function App() {
     storeMessage(await toggleWorkspaceMessageReaction(session.accessToken, message.id, emoji));
   };
 
-  const handleMessagePin = async (message: ChatMessage, pinned: boolean) => {
+  const handleMessagePin = async (message: ChatMessage, pinned: boolean, scope: "all" | "self" = "all") => {
     if (!session) throw new Error("Войдите снова");
-    storeMessage(await setWorkspaceMessagePinned(session.accessToken, message.id, pinned));
+    storeMessage(await setWorkspaceMessagePinned(session.accessToken, message.id, pinned, scope));
   };
 
   const handleMarkChatRead = async (chatId: string) => {
@@ -1846,7 +1847,7 @@ export function App() {
       }));
       setActiveSection(section);
     });
-  }, [openFeedPost, reportError, session, workspace.notifications]);
+  }, [openFeedPost, reportError, session, setActiveSection, workspace.notifications]);
 
   const preloadToken = session?.accessToken;
   const preloadUserId = session?.user.id;
@@ -2040,8 +2041,8 @@ export function App() {
     currentUserId={workspace.currentUser.id}
     currentUserRole={workspace.currentUser.role}
     chatActions={chatActions}
-    onEditMessage={async (message, body, mentionUserIds) => {
-      await messengerMutation((token) => editWorkspaceMessage(token, message, body, mentionUserIds));
+    onEditMessage={async (message, body, mentionUserIds, entities) => {
+      await messengerMutation((token) => editWorkspaceMessage(token, message, body, mentionUserIds, entities));
     }}
     onDeleteMessage={async (message) => {
       await messengerMutation((token) => deleteWorkspaceMessage(token, message));
@@ -2167,8 +2168,7 @@ export function App() {
             <span>{backgroundError}</span>
           </WorkspaceNotice> : null}
 
-          <main className="app-content" id="workspace-content" tabIndex={-1}>
-            <Suspense fallback={<div className="workspace-module-loading" role="status">Открываем раздел…</div>}>
+          <WorkspaceSectionContent authorityKey={JSON.stringify([session.user.id, session.user.role, workspace.moduleAccess])} section={displayedSection}>
             <RecoveryBoundary key={`${session.user.id}:${displayedSection}`} onHome={() => setActiveSection("home")}>
             {displayedSection === "home" ? <PersonalHomeView
               key={session.user.id}
@@ -2177,6 +2177,7 @@ export function App() {
               canView={canView}
               zoomMeetings={zoomRegistry?.meetings}
               zoomError={zoomError}
+              zoomLoading={canView("zoom_meetings") && !zoomRegistry && !zoomError}
               onOpenNotification={openNotification}
               onRefresh={async () => {
                 await refreshWorkspace(session.accessToken);
@@ -2268,7 +2269,7 @@ export function App() {
                 currentUserId={workspace.currentUser.id}
                 currentUserRole={workspace.currentUser.role}
                 chatActions={chatActions}
-                onEditMessage={async (message, body, mentionUserIds) => { await messengerMutation((token) => editWorkspaceMessage(token, message, body, mentionUserIds)); }}
+                onEditMessage={async (message, body, mentionUserIds, entities) => { await messengerMutation((token) => editWorkspaceMessage(token, message, body, mentionUserIds, entities)); }}
                 onDeleteMessage={async (message) => { await messengerMutation((token) => deleteWorkspaceMessage(token, message)); }}
                 onCreateTaskFromMessage={handleCreateTaskFromMessage}
                 onRequestTaskDeadline={handleRequestTaskDeadline}
@@ -2634,12 +2635,11 @@ export function App() {
                 </RecoveryBoundary>
               </div>
             ) : null}
-            </Suspense>
-          </main>
+          </WorkspaceSectionContent>
         </div>
       </div>
       {accountOpen ? (
-        <Suspense fallback={<div className="workspace-overlay-loading" role="status">Открываем настройки…</div>}>
+        <Suspense fallback={null}>
         <RecoveryBoundary overlay onHome={closeAccount}>
         <AccountPanel
           token={session.accessToken}

@@ -1,0 +1,44 @@
+/* Placeholders occupy content slots, never a page-covering loading layer. */
+.ws-loading-skeleton { min-width: 0; width: 100%; flex: none; }
+.ws-skeleton-layout { display: grid; gap: 12px; min-width: 0; pointer-events: none; }
+/* Reserve the real slot immediately, but reveal neither bars nor shimmer on fast reads.
+   A discrete visibility change also works with reduced motion; no minimum hold. */
+[data-skeleton-deferred] > .ws-skeleton-layout,
+[data-skeleton-frame] > table,
+.ws-skeleton-table-body[data-skeleton-deferred] { visibility: hidden; animation: ws-skeleton-reveal 0s linear 250ms forwards; }
+.ws-skeleton-table-body .ws-skeleton-copy { min-height: 36px; align-content: center; }
+.ws-skeleton-block { --skeleton-width: 100%; --skeleton-height: 14px; position: relative; display: block; flex: none; width: var(--skeleton-width, 100%); max-width: 100%; height: var(--skeleton-height, 14px); overflow: hidden; border-radius: 6px; background: color-mix(in srgb, var(--ws-muted) 13%, var(--ws-surface)); }
+.ws-skeleton-block.is-circle { border-radius: 50%; }
+.ws-skeleton-block::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--ws-text) 8%, transparent), transparent); transform: translateX(-100%); animation: ws-skeleton-shimmer 1400ms ease-in-out 180ms infinite; }
+.ws-skeleton-item { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.ws-skeleton-copy { display: grid; flex: 1; gap: 8px; min-width: 0; }
+.is-rows > .ws-skeleton-layout > .ws-skeleton-item { min-height: 64px; padding: 10px 12px; border-radius: 14px; }
+.is-table > .ws-skeleton-layout { gap: 0; }
+.is-table > .ws-skeleton-layout > .ws-skeleton-item { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; min-height: 56px; padding: 12px 16px; border-bottom: 1px solid var(--ws-line); }
+.is-cards > .ws-skeleton-layout { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.is-cards > .ws-skeleton-layout > .ws-skeleton-item { min-height: 160px; padding: 20px; border: 1px solid var(--ws-line); border-radius: 18px; background: var(--ws-surface); }
+.is-metrics > .ws-skeleton-layout { grid-template-columns: repeat(var(--skeleton-columns, 4), minmax(0, 1fr)); gap: 16px; }
+.is-metrics > .ws-skeleton-layout > .ws-skeleton-item { min-height: 78px; padding: 16px 20px; border: 1px solid var(--ws-line); border-radius: 16px; background: var(--ws-surface); }
+.is-form > .ws-skeleton-layout > .ws-skeleton-item { display: grid; min-height: 68px; }
+.is-profile > .ws-skeleton-layout { gap: 16px; }
+.ws-skeleton-profile { display: flex; align-items: center; gap: 32px; padding: 24px; border: 1px solid var(--ws-line); border-radius: 20px; }
+.ws-skeleton-profile > div { display: grid; gap: 14px; flex: 1; min-width: 0; }
+.is-calendar > .ws-skeleton-layout { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 1px; }
+.ws-skeleton-day { display: grid; align-content: start; gap: 16px; min-height: 100px; padding: 12px; border: 1px solid var(--ws-line); }
+.is-board > .ws-skeleton-layout { grid-template-columns: repeat(5, minmax(170px, 1fr)); overflow-x: auto; }
+.ws-skeleton-column { display: grid; align-content: start; gap: 20px; min-height: 400px; padding: 16px; border-radius: 20px; background: var(--ws-muted-surface); }
+.ws-skeleton-column .is-cards > .ws-skeleton-layout { grid-template-columns: minmax(0, 1fr); }
+.ws-settings-skeleton { width: min(520px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto; padding: 24px; border: 1px solid var(--ws-line); border-radius: 22px; background: var(--ws-surface); box-shadow: var(--ws-shadow-float); }
+.ws-skeleton-toolbar { margin-bottom: 16px; padding: 12px 16px; }
+.ws-skeleton-toolbar .ws-skeleton-block { height: 32px; width: min(430px, 80%); }
+@keyframes ws-skeleton-shimmer { to { transform: translateX(100%); } }
+@keyframes ws-skeleton-reveal { to { visibility: visible; } }
+@media (max-width: 600px) {
+  .is-cards > .ws-skeleton-layout { grid-template-columns: minmax(0, 1fr); }
+  .is-metrics > .ws-skeleton-layout { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ws-skeleton-profile { gap: 16px; padding: 16px; }
+  .ws-skeleton-profile > .ws-skeleton-block { width: 80px; height: 80px; }
+  .ws-skeleton-day { min-height: 64px; padding: 6px; }
+}
+@media (prefers-reduced-motion: reduce), (forced-colors: active) { .ws-skeleton-block::after { animation: none; display: none; } }
+@media (forced-colors: active) { .ws-skeleton-block { background: GrayText; forced-color-adjust: none; opacity: .25; } }

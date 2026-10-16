@@ -1,7 +1,8 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { ReactionEmoji } from "./ReactionEmoji";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { Button, Spinner } from "@fluentui/react-components";
+import { Button } from "@fluentui/react-components";
+import { LoadingSkeleton, SkeletonBlock } from "./LoadingSkeleton";
 import { ArrowRight20Regular, ArrowSync20Regular, CalendarLtr24Regular, Chat24Regular, Mail24Regular, PeopleTeam24Regular, Reward24Regular, TaskListSquareLtr24Regular } from "@fluentui/react-icons";
 import type { NavigationKey, WorkspaceNotification, ZoomMeeting } from "@yuksalish/contracts";
 import { HistoryChart, ScoreGauge } from "./EfficiencyView";
@@ -21,6 +22,7 @@ interface Props {
   readonly canView: (key: NavigationKey) => boolean;
   readonly zoomMeetings?: readonly ZoomMeeting[];
   readonly zoomError?: string;
+  readonly zoomLoading?: boolean;
   readonly onOpen: (target: HomeTarget) => void;
   readonly onOpenNotification: (notification: WorkspaceNotification) => void;
   readonly onRefresh: () => Promise<void>;
@@ -42,8 +44,13 @@ function useResource<T>(identity: string, enabled: boolean, loader: () => Promis
   }, [enabled, identity, loader, revision]);
   return enabled && resource?.identity === identity ? resource : undefined;
 }
-function ResourceState({ loading, error, onRetry }: { readonly loading: boolean; readonly error?: string; readonly onRetry: () => void }) {
-  return error ? <div className="home-empty" role="alert"><p>{error}</p><Button size="small" onClick={onRetry}>Повторить</Button></div> : loading ? <div className="home-skeleton" role="status" aria-label="Загрузка данных"><i /><i /><i /></div> : null;
+function ResourceState({ loading, error, onRetry, efficiency = false }: { readonly loading: boolean; readonly error?: string; readonly onRetry: () => void; readonly efficiency?: boolean }) {
+  return error ? <div className="home-empty" role="alert"><p>{error}</p><Button size="small" onClick={onRetry}>Повторить</Button></div> : loading ? efficiency
+    ? <div role="status" aria-label="Загрузка данных" aria-busy="true"><div className="home-efficiency" aria-hidden="true"><SkeletonBlock width="104px" height="104px" circle /><div><SkeletonBlock width="100px" height="24px" /><SkeletonBlock width="80%" /><SkeletonBlock width="65%" /></div></div><SkeletonBlock height="110px" /></div>
+    : <HomeRowsSkeleton rows={3} /> : null;
+}
+function HomeRowsSkeleton({ rows, label }: { readonly rows: number; readonly label?: string }) {
+  return <LoadingSkeleton layout="custom" label={label}><ul className="home-list">{Array.from({ length: rows }, (_, index) => <li key={index}><div className="home-row"><span className="home-row-copy ws-skeleton-copy"><SkeletonBlock width="78%" /><SkeletonBlock width="55%" height="12px" /></span><SkeletonBlock width="20px" height="20px" /></div></li>)}</ul></LoadingSkeleton>;
 }
 function Panel({ id, title, icon, note, action, children }: { readonly id: string; readonly title: string; readonly icon: ReactNode; readonly note: ReactNode; readonly action?: ReactNode; readonly children: ReactNode }) {
   return <section className="home-panel" aria-labelledby={"home-" + id} data-home-panel={id}>
@@ -60,7 +67,7 @@ function SignalNote({ note }: { readonly note: string }) {
   return separator < 0 ? <>{note}</> : <>{note.slice(0, separator + 2)} {note.slice(separator + 3)}</>;
 }
 
-export function PersonalHomeView({ token, workspace, canView, zoomMeetings = [], zoomError, onOpen, onOpenNotification, onRefresh }: Props) {
+export function PersonalHomeView({ token, workspace, canView, zoomMeetings = [], zoomError, zoomLoading = false, onOpen, onOpenNotification, onRefresh }: Props) {
   const user = workspace.currentUser;
   // Credential renewal reloads the same employee's resources without clearing
   // already visible cards. The loader cleanup still fences late token requests.
@@ -83,15 +90,7 @@ export function PersonalHomeView({ token, workspace, canView, zoomMeetings = [],
   const referent = useResource(identity, canView("ai_referent"), referentLoader, revision);
   const edo = useResource(identity, canView("incoming_letters"), edoLoader, revision);
   const projects = useResource(identity, canView("project_hub"), projectLoader, revision);
-  const [loadingDeadline, setLoadingDeadline] = useState<string>();
-  useEffect(() => {
-    // One slow optional integration must not lock the entire home page.
-    const timer = window.setTimeout(() => setLoadingDeadline(identity), 3000);
-    return () => window.clearTimeout(timer);
-  }, [identity]);
-  const initialLoading = loadingDeadline !== identity && (!efficiency || !recognition
-    || (canView("messenger") && !reactions) || (canView("ai_referent") && !referent)
-    || (canView("incoming_letters") && !edo) || (canView("project_hub") && !projects));
+  const projectsLoading = canView("project_hub") && !projects;
   const data = buildPersonalHome(workspace, canView, now, zoomMeetings, projects?.data?.projects);
   const [order, setOrder] = useState(() => rankHomePanels(data, now));
   const [layoutRevision, setLayoutRevision] = useState(0);
@@ -131,7 +130,8 @@ export function PersonalHomeView({ token, workspace, canView, zoomMeetings = [],
   const panels: Record<HomePanelKey, ReactNode> = {
     attention: <Panel id="attention" title="Мой фокус" note="Сначала риски, затем ближайшие действия" icon={<TaskListSquareLtr24Regular />} action={canView("tasks") ? allLink("tasks", "Открыть все задачи") : undefined}>
       {projects?.error ? <WorkspaceNotice tone="warning" className="home-notice" role="status" actions={<><button type="button" onClick={retry}>Повторить</button></>}>Сроки проектов не загружены. </WorkspaceNotice> : null}
-      {data.signals.length ? <ul className="home-list">{data.signals.slice(0, 5).map(s => <Row key={s.id} title={s.title} note={<SignalNote note={s.note} />} tone={s.tone} onClick={() => onOpen(s)} />)}</ul> : <Empty>Срочных действий нет. Можно спокойно продолжить текущую работу.</Empty>}
+      {data.signals.length ? <ul className="home-list">{data.signals.slice(0, 5).map(s => <Row key={s.id} title={s.title} note={<SignalNote note={s.note} />} tone={s.tone} onClick={() => onOpen(s)} />)}</ul> : !projectsLoading ? <Empty>Срочных действий нет. Можно спокойно продолжить текущую работу.</Empty> : null}
+      {projectsLoading ? <HomeRowsSkeleton rows={1} label="Загрузка сроков проектов" /> : null}
       {canView("tasks") ? <div className="home-workload" aria-label="Текущие личные задачи">{[["Новые", "new"], ["В работе", "in_progress"], ["На проверке", "awaiting_review"]].map(([label, status]) => <div key={status}><strong>{data.tasks.filter(t => t.status === status || (status === "in_progress" && t.status === "overdue")).length}</strong><span>{label}</span></div>)}</div> : null}
     </Panel>,
     notifications: canView("notifications") ? <Panel id="notifications" title="Важные уведомления" note={important ? <>{important} требуют вашего решения</> : "Последние обновления вашей очереди"} icon={<Mail24Regular />} action={allLink("notifications", "Открыть центр уведомлений")}>
@@ -147,11 +147,12 @@ export function PersonalHomeView({ token, workspace, canView, zoomMeetings = [],
       })}</ul> : <Empty>Сообщения появятся здесь, когда начнётся переписка.</Empty>}
     </Panel> : null,
     schedule: canView("calendar") || canView("zoom_meetings") ? <Panel id="schedule" title="Ближайшие встречи" note="Ваш календарь и приглашения в Zoom" icon={<CalendarLtr24Regular />} action={canView("calendar") ? allLink("calendar", "Открыть календарь") : undefined}>
-      {data.schedule.length ? <ul className="home-list">{data.schedule.slice(0, 4).map(e => <Row key={e.section + e.id} title={e.title} note={homeDate.format(timestamp(e.startsAt)) + " · " + e.note} onClick={() => onOpen({ section: e.section, entityId: e.id })} />)}</ul> : <Empty>Ближайших встреч в вашем расписании нет.</Empty>}
+      {data.schedule.length ? <ul className="home-list">{data.schedule.slice(0, 4).map(e => <Row key={e.section + e.id} title={e.title} note={homeDate.format(timestamp(e.startsAt)) + " · " + e.note} onClick={() => onOpen({ section: e.section, entityId: e.id })} />)}</ul> : !zoomLoading ? <Empty>Ближайших встреч в вашем расписании нет.</Empty> : null}
+      {zoomLoading ? <HomeRowsSkeleton rows={2} label="Загрузка встреч" /> : null}
       {zoomError && canView("zoom_meetings") ? <WorkspaceNotice tone="warning" className="home-notice" role="status" actions={<><button type="button" onClick={() => onOpen({ section: "zoom_meetings" })}>Открыть конференции</button></>}>Расписание Zoom не загружено. </WorkspaceNotice> : null}
     </Panel> : null,
     efficiency: <Panel id="efficiency" title="Моя эффективность" note="Выполнение задач в срок · текущий месяц" icon={<TaskListSquareLtr24Regular />}>
-      <ResourceState loading={!efficiency} error={efficiency?.error} onRetry={retry} />
+      <ResourceState loading={!efficiency} error={efficiency?.error} onRetry={retry} efficiency />
       {efficiency?.data && efficiency.data.employee.userId === user.id ? <><div className="home-efficiency"><ScoreGauge employee={efficiency.data.employee} /><div><strong>{efficiency.data.employee.onTimeCount} из {efficiency.data.employee.eligibleCount}</strong><p>учтённых задач сданы вовремя</p><small>Это соблюдение сроков, не оценка человека.</small>{efficiency.data.employee.smallSample ? <WorkspaceNotice tone="warning" className="home-notice">Малая выборка</WorkspaceNotice> : null}{efficiency.data.employee.historyCompleteness !== "complete" ? <WorkspaceNotice tone="warning" className="home-notice">История месяца неполная</WorkspaceNotice> : null}</div></div><HistoryChart employee={efficiency.data.employee} /></> : null}
     </Panel>,
     department: <Panel id="department" title="Мой отдел" note={data.department?.name ?? "Подразделение пока не назначено"} icon={<PeopleTeam24Regular />}>
@@ -193,12 +194,11 @@ export function PersonalHomeView({ token, workspace, canView, zoomMeetings = [],
       {reactions?.data ? <><div className="home-reaction-total"><strong>{reactions.data.totalCount}</strong><span>полученных реакций</span></div>{reactions.data.reactions.length ? <ul className="home-reactions">{reactions.data.reactions.slice(0, 5).map(r => <li key={r.emoji}><span aria-label={r.emoji}><ReactionEmoji emoji={r.emoji} /></span><strong>{r.count}</strong></li>)}</ul> : <Empty>Когда коллеги отреагируют на ваши сообщения, здесь появится сводка.</Empty>}</> : null}
     </Panel> : null,
   };
-  return <div className="workspace-view personal-home" aria-label="Персональная Главная" data-loading={initialLoading}>
+  return <div className="workspace-view personal-home" aria-label="Персональная Главная">
     <WorkspaceSectionHeader motif="team" className="home-hero"><div><span>Главная · ваше рабочее пространство</span><h2>Добрый день, {personalGreetingName(user.name)}</h2><p>{next ? <>В фокусе: {next.title}</> : "Всё важное — рядом. Спокойный день начинается с ясного плана."}</p></div><Button icon={<ArrowSync20Regular />} disabled={refreshing} onClick={() => void refresh()}>{refreshing ? "Обновляем…" : "Обновить"}</Button></WorkspaceSectionHeader>
-    {initialLoading && <div className="home-initial-loader" role="status"><Spinner label="Собираем ваше рабочее пространство…" /></div>}
-    <div className="home-ready-content" aria-busy={initialLoading} aria-hidden={initialLoading} inert={initialLoading}>
+    <div className="home-ready-content">
     {refreshError ? <WorkspaceNotice tone="warning" className="home-notice" role="alert">{refreshError}</WorkspaceNotice> : null}
-    <div className="home-overview" aria-label="Мой день"><article><strong>{data.signals.length + important}</strong><span>сигналов внимания</span></article><article><strong>{canView("tasks") ? data.tasks.length : "—"}</strong><span>моих активных задач</span></article><article><strong>{canView("messenger") ? data.chats.reduce((sum, c) => sum + c.chat.unread, 0) : "—"}</strong><span>непрочитанных сообщений</span></article><article><strong>{unread}</strong><span>новых уведомлений</span></article></div>
+    <div className="home-overview" aria-label="Мой день"><article><strong>{projectsLoading ? <SkeletonBlock width="32px" height="28px" /> : data.signals.length + important}</strong><span>сигналов внимания</span></article><article><strong>{canView("tasks") ? data.tasks.length : "—"}</strong><span>моих активных задач</span></article><article><strong>{canView("messenger") ? data.chats.reduce((sum, c) => sum + c.chat.unread, 0) : "—"}</strong><span>непрочитанных сообщений</span></article><article><strong>{unread}</strong><span>новых уведомлений</span></article></div>
     {orderChanged ? <div className="home-priority-update" role="status"><span>Приоритеты изменились. Обновить порядок блоков?</span><Button size="small" onClick={() => { setOrder(recommendedOrder); setLayoutRevision(value => value + 1); }}>Обновить фокус дня</Button></div> : null}
     <div className="home-grid" ref={motionRef}>{order.map(key => panels[key] ? <div key={key} className="home-panel-slot">{panels[key]}</div> : null)}</div>
     </div>

@@ -20,6 +20,7 @@ import "../src/renderer/workspace-2-messenger.css";
 import "../src/renderer/workspace-2-focus.css";
 import { useQaTheme } from "./color-theme";
 import "../src/renderer/messenger-outgoing.css";
+import "../src/renderer/messenger-voice.css";
 
 const message = (id: string, authorId: string, body: string, hour: number, minute: number): ChatMessage => ({
   id, chatId: "finance", authorId, body,
@@ -38,6 +39,12 @@ const messages: readonly ChatMessage[] = [
   message("later", "baxtiyor", "Отлично, договорились.", 9, 28),
   message("photo", "baxtiyor", "Файл", 9, 31),
   message("documents", "aziza", "Файл", 9, 35),
+  message("caption-document", "baxtiyor", "Пожалуйста, посмотрите документ и напишите предложения по итогам обсуждения.", 9, 36),
+  { ...message("mentions", "aziza", "!", 9, 37), mentionUserIds: ["baxtiyor", "dilshod"] },
+  message("voice-incoming", "baxtiyor", "Голосовое сообщение", 9, 38),
+  { ...message("voice-forwarded", "aziza", "Голосовое сообщение", 9, 39), forwarded: {
+    kind: "message", authorId: "dilshod", authorName: "Дилшод Рахимов", available: true,
+  } },
   { ...message("conference", "aziza", "Приглашение", 9, 40), zoomInvitation: {
     meetingId: "qa", topic: "Обсуждение проекта", startsAt: "2026-10-01T10:00:00Z", endsAt: "2026-10-01T11:00:00Z",
     timezone: "Asia/Tashkent", status: "scheduled", organizerId: "aziza", participants: [], canRespond: false, available: true,
@@ -46,6 +53,8 @@ const messages: readonly ChatMessage[] = [
 const attachments: WorkspaceAttachment[] = [
   { id: "qa-photo", ownerType: "message", ownerId: "photo", fileName: "photo.svg", contentType: "image/svg+xml", byteSize: 1000, documentRole: "general", sha256: "qa", uploadedByUserId: "baxtiyor", createdAt: "2026-10-03T09:31:00+05:00" },
   ...["Профиль_сотрудника.doc", "Итоговый_отчёт_за_октябрь_с_приложениями.pdf"].slice(0, new URLSearchParams(location.search).has("single") ? 1 : 2).map((fileName, index): WorkspaceAttachment => ({ id: `qa-document-${index}`, ownerType: "message", ownerId: "documents", fileName, contentType: index ? "application/pdf" : "application/msword", byteSize: 251904, documentRole: "general", sha256: "qa", uploadedByUserId: "aziza", createdAt: "2026-10-03T09:35:00+05:00" })),
+  { id: "qa-caption-file", ownerType: "message", ownerId: "caption-document", fileName: "Предложения.docx", contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", byteSize: 81000, documentRole: "general", sha256: "qa-caption", uploadedByUserId: "baxtiyor", createdAt: "2026-10-03T09:36:00+05:00" },
+  ...["voice-incoming", "voice-forwarded"].map((ownerId): WorkspaceAttachment => ({ id: `qa-${ownerId}`, ownerType: "message", ownerId, fileName: "voice.webm", contentType: "audio/webm", mediaKind: "voice", mediaDurationMs: 22000, byteSize: 29000, documentRole: "general", sha256: "qa-voice", uploadedByUserId: "baxtiyor", createdAt: "2026-10-03T09:38:00+05:00" })),
 ];
 const albumCount = Math.min(30, Math.max(0, Number(new URLSearchParams(location.search).get("album"))));
 if (albumCount) {

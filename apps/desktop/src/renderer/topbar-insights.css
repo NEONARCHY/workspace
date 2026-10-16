@@ -19,6 +19,19 @@
 html body .topbar-context-surface { display: flex; flex-direction: column; width: 410px; max-width: calc(100vw - 24px); max-height: calc(100dvh - 24px); padding: 0; overflow: hidden; border: 1px solid var(--ws-theme-line, var(--ws-line)); border-radius: 20px; color: var(--ws-theme-ink, var(--ws-text)); background: var(--ws-theme-surface, var(--ws-surface)); box-shadow: var(--ws-shadow-float); }
 .topbar-context-surface .context-panel-head { display: flex; align-items: center; gap: 16px; padding: 18px 18px 14px; background: linear-gradient(105deg, var(--ws-theme-wash-teal, var(--ws-selected)), var(--ws-theme-surface, var(--ws-surface))); }
 .context-panel-head > div { flex: 1; min-width: 0; }
+/* Reveal an already laid-out panel, never its dimensions. The mask extends past
+   the border box so it progressively reveals the existing shadow too. Native
+   border-radius stays unchanged; the mask must not round/compress the content. */
+@media (prefers-reduced-motion: no-preference) and (forced-colors: none) {
+  html body .topbar-context-surface {
+    clip-path: inset(-128px);
+    animation: topbar-context-curtain 280ms var(--ws-ease-spatial, cubic-bezier(.2, 0, 0, 1)) both;
+  }
+}
+@keyframes topbar-context-curtain {
+  from { clip-path: inset(-128px -128px 100%); }
+  to { clip-path: inset(-128px); }
+}
 .context-panel-head h2 { margin: 5px 0 0; font-size: 20px; line-height: 1.3; font-weight: 600; overflow-wrap: anywhere; }
 .context-kicker { font-size: 11px; color: var(--ws-link); }
 .topbar-context-surface .context-icon-action { display: grid; place-items: center; flex: none; min-width: 36px; min-height: 36px; border: 0; border-radius: 10px; background: transparent; color: var(--ws-theme-muted, var(--ws-muted)); cursor: pointer; }
@@ -90,7 +103,8 @@ html body .topbar-context-surface { display: flex; flex-direction: column; width
 }
 @media (min-width: 601px) {
   .browser-compact .app-stage .global-bar:has(.topbar-insights) { grid-template-columns: 48px 48px minmax(0, 1fr) repeat(3, 48px) auto; }
-  .browser-compact .app-stage .global-bar:has(.topbar-insights):not(:has(.assistant-launcher)) { grid-template-columns: 48px 48px minmax(0, 1fr) repeat(2, 48px) auto; }
+  .browser-compact .app-stage .global-bar:has(.topbar-insights):not(:has(.assistant-launcher)),
+  .browser-compact .app-stage .global-bar:has(.topbar-insights):has(.assistant-launcher-space[data-vacated]) { grid-template-columns: 48px 48px minmax(0, 1fr) repeat(2, 48px) auto; }
   .browser-compact .global-bar:has(.topbar-insights) .workspace-top-context { display: contents; }
   .browser-compact .global-bar:has(.topbar-insights) .browser-menu-trigger { grid-column: 1; grid-row: 1; }
   .browser-compact .global-bar:has(.topbar-insights) .section-jump-trigger { grid-column: 2; grid-row: 1; }
@@ -102,7 +116,8 @@ html body .topbar-context-surface { display: flex; flex-direction: column; width
 }
 @media (max-width: 600px) {
   .browser-compact .app-stage .global-bar:has(.topbar-insights) { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-  .browser-compact .app-stage .global-bar:has(.topbar-insights):not(:has(.assistant-launcher)) { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .browser-compact .app-stage .global-bar:has(.topbar-insights):not(:has(.assistant-launcher)),
+  .browser-compact .app-stage .global-bar:has(.topbar-insights):has(.assistant-launcher-space[data-vacated]) { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .browser-compact .workspace-workday-status:has(.topbar-insights) { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 8px; }
   .browser-compact .workspace-workday-status:has(.topbar-insights) > .connection-indicator { position: static; grid-column: 1; grid-row: 1; }
   .browser-compact .workspace-workday-status:has(.topbar-insights) > .topbar-insights { grid-column: 2; grid-row: 1; display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); }

@@ -1,5 +1,6 @@
 import type { OfficePreviewResult } from "./file-viewer-kind";
 import type {
+  MessageEntity,
   ExchangeSnapshot, WeatherSnapshot,
   HiringDetail, HiringRegistry, HiringFields, HiringSignatureBox, HiringActionName, HiringActionRequest, HiringDocumentKind, IdentityRecognition,
   SurveyAnalysis, SurveyAnalysisDetail, SurveyAnalysisUpdate, SurveyExport,
@@ -123,6 +124,7 @@ import type {
   WorkspaceBootstrap,
   WorkspaceAttachment,
   WorkspaceTask,
+  TaskHistoryPage,
   WorkspaceTaskCreateInput,
   TotpSetup,
   WorkspacePosition,
@@ -1458,9 +1460,10 @@ export function editWorkspaceMessage(
   message: ChatMessage,
   body: string,
   mentionUserIds: readonly string[],
+  entities?: readonly MessageEntity[],
 ): Promise<ChatMessage> {
   return apiRequest(`/messages/${message.id}`, {
-    method: "PATCH", body: JSON.stringify({ body, expectedRevision: message.revision ?? 1, mentionUserIds }),
+    method: "PATCH", body: JSON.stringify({ body, expectedRevision: message.revision ?? 1, mentionUserIds, entities }),
   }, token);
 }
 
@@ -1485,10 +1488,11 @@ export function setWorkspaceMessagePinned(
   token: string,
   messageId: string,
   pinned: boolean,
+  scope: "all" | "self" = "all",
 ): Promise<ChatMessage> {
   return apiRequest(`/messages/${messageId}/pin`, {
     method: "PUT",
-    body: JSON.stringify({ pinned }),
+    body: JSON.stringify({ pinned, scope }),
   }, token);
 }
 
@@ -1642,6 +1646,10 @@ export function createWorkspaceTask(
     { method: "POST", body: JSON.stringify(payload) },
     token,
   );
+}
+
+export function loadTaskHistory(token: string, taskId: string, offset = 0): Promise<TaskHistoryPage> {
+  return apiRequest<TaskHistoryPage>(`/tasks/${encodeURIComponent(taskId)}/history?offset=${offset}`, {}, token);
 }
 
 export function loadTaskProjectOptions(token: string): Promise<readonly TaskProjectOption[]> {

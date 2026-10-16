@@ -1,8 +1,9 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
+import { LoadingSkeleton } from "./LoadingSkeleton";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { AIReferentManualRecipientInput, AIReferentRecipient } from "@yuksalish/contracts";
-import { Button, Input, Spinner } from "@fluentui/react-components";
+import { Button, Input } from "@fluentui/react-components";
 
 import { WorkspaceSelect } from "./WorkspaceSelect";
 import {
@@ -124,7 +125,7 @@ export function AIReferentAddressBook({ token, readOnly }: Props) {
       <div className="ai-referent-address-list" aria-label="Адресаты, добавленные администраторами">
         <div className="ai-referent-address-list-heading"><h3>Добавленные организации</h3>
           <Button appearance="subtle" disabled={loading || busy} onClick={() => void refresh()}>Обновить</Button></div>
-        {loading ? <Spinner label="Загружаем адресатов" /> : null}
+        {loading && !entries.length ? <LoadingSkeleton layout="rows" label="Загружаем адресатов" /> : null}
         {!loading && !entries.length ? <p className="ai-referent-address-empty">Пока нет добавленных адресов. Справочник робота продолжает работать как прежде.</p> : null}
         {entries.map((entry) => <div className="ai-referent-address-row" key={entry.id}>
           <span className="ai-referent-address-mark" aria-hidden="true">{entry.name.slice(0, 1)}</span>

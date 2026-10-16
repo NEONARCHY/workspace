@@ -1,7 +1,7 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
+import { LoadingSkeleton } from "./LoadingSkeleton";
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { createPortal } from "react-dom";
 import { SlidingSegmented } from "./SlidingSegmented";
 
 import type {
@@ -25,6 +25,9 @@ import {
   Button,
   Checkbox,
   ProgressBar,
+  Popover,
+  PopoverSurface,
+  PopoverTrigger,
   DialogSurface,
   Textarea,
   useRestoreFocusTarget,
@@ -49,6 +52,7 @@ import { TaskCalendarView } from "./TaskCalendarView";
 import { TaskComposer } from "./TaskComposer";
 import { SpatialBoard, SpatialCard, SpatialLane } from "./SpatialBoard";
 import { TaskRecords } from "./TaskRecords";
+import { TaskHistory } from "./TaskHistory";
 import { TaskPlansView } from "./TaskPlansView";
 import { tasksForPlan } from "./task-plan-filter";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
@@ -102,54 +106,37 @@ function cycleLabel(cycle: NonNullable<WorkspaceTask["cycle"]>): string {
 
 export function TaskHelp({ title, children }: { readonly title: string; readonly children: ReactNode }) {
   const [open, setOpen] = useState(false);
-  const [portalContainer, setPortalContainer] = useState<Element | null>(null);
-  const [position, setPosition] = useState<{ readonly top: number; readonly left: number } | null>(null);
+  const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(null);
   const surfaceId = useId();
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const surfaceRef = useRef<HTMLSpanElement>(null);
   useLayoutEffect(() => {
-    if (!open) return;
-    const updatePosition = () => {
-      const anchor = buttonRef.current?.getBoundingClientRect();
-      const surface = surfaceRef.current?.getBoundingClientRect();
-      if (!anchor || !surface) return;
-      const margin = 12;
-      const left = Math.max(margin, Math.min(anchor.left, window.innerWidth - surface.width - margin));
-      const top = anchor.top >= surface.height + margin * 2
-        ? anchor.top - surface.height - 7
-        : Math.min(anchor.bottom + 7, window.innerHeight - surface.height - margin);
-      setPosition({ top: Math.max(margin, top), left });
-    };
-    updatePosition();
-    window.addEventListener("resize", updatePosition);
-    document.addEventListener("scroll", updatePosition, true);
-    return () => {
-      window.removeEventListener("resize", updatePosition);
-      document.removeEventListener("scroll", updatePosition, true);
-    };
-  }, [open]);
+    setPortalContainer(buttonRef.current?.closest<HTMLElement>(".fui-DialogSurface") ?? document.body);
+  }, []);
   useEffect(() => {
     if (!open) return;
-    const closeOutside = (event: PointerEvent) => {
-      if (!buttonRef.current?.contains(event.target as Node) && !surfaceRef.current?.contains(event.target as Node)) setOpen(false);
-    };
     const closeOnEscape = (event: globalThis.KeyboardEvent) => {
       if (event.key !== "Escape") return;
       event.stopPropagation();
       setOpen(false);
-      buttonRef.current?.focus();
+      buttonRef.current?.focus({ preventScroll: true });
     };
-    document.addEventListener("pointerdown", closeOutside);
     document.addEventListener("keydown", closeOnEscape, true);
     return () => {
-      document.removeEventListener("pointerdown", closeOutside);
       document.removeEventListener("keydown", closeOnEscape, true);
     };
   }, [open]);
-  return <>
-    <button ref={buttonRef} className="task-section-help" type="button" aria-label={`Справка: ${title}`} aria-expanded={open} aria-controls={open ? surfaceId : undefined} title={`О разделе «${title}»`} onClick={(event) => { setPortalContainer(event.currentTarget.closest(".fui-DialogSurface") ?? document.body); setOpen((current) => !current); }}>?</button>
-    {open && portalContainer ? createPortal(<span id={surfaceId} ref={surfaceRef} className="task-section-help-surface" role="note" style={{ position: "fixed", top: position?.top ?? 0, left: position?.left ?? 0, visibility: position ? "visible" : "hidden" }}><strong>{title}</strong><span>{children}</span></span>, portalContainer) : null}
-  </>;
+  // Fluent positioning converts viewport coordinates to the modal's containing block
+  // and tracks scrolling/resizing; keep the portal inside the modal's focus layer.
+  return <Popover open={open} onOpenChange={(_, data) => setOpen(data.open)}
+    mountNode={portalContainer} surfaceMotion={null} unstable_disableAutoFocus
+    positioning={{ position: "above", align: "start", offset: 7, overflowBoundaryPadding: 12 }}>
+    <PopoverTrigger disableButtonEnhancement>
+      <button ref={buttonRef} className="task-section-help" type="button" aria-label={`Справка: ${title}`} aria-expanded={open} aria-controls={open ? surfaceId : undefined} title={`О разделе «${title}»`}>?</button>
+    </PopoverTrigger>
+    <PopoverSurface id={surfaceId} className="task-section-help-surface" role="note" aria-label={title}>
+      <strong>{title}</strong><span>{children}</span>
+    </PopoverSurface>
+  </Popover>;
 }
 
 function TaskSectionHeading({ title, help, meta }: {
@@ -795,21 +782,21 @@ export function TasksView(props: TasksViewProps) {
         {selectedTask.sourceMessageId && sourceNoticeTaskId === selectedTask.id ? <WorkspaceNotice tone="info" className="source-link-note" role="status" actions={<><button type="button" aria-label="Закрыть уведомление" onClick={() => setSourceNoticeTaskId(null)}><Dismiss16Regular /></button></>}>
           <span>Создана из сообщения · связь сохранена</span>
         </WorkspaceNotice> : null}
-        <div className="detail-meta"><EmployeeProfileLink userId={selectedTask.assigneeId} personName={personById(selectedTask.assigneeId)?.name ?? "Сотрудник"}><Avatar name={personById(selectedTask.assigneeId)?.name ?? "Сотрудник"} size={36} color="colorful" /><span className="task-meta-copy"><small>Ответственный</small><strong>{personById(selectedTask.assigneeId)?.name ?? "Сотрудник"}</strong></span></EmployeeProfileLink><div><Calendar24Regular /><span className="task-meta-copy"><small>Срок</small><strong>{taskDeadlineLabel(selectedTask)}</strong></span></div></div>
+        <div className="detail-meta"><EmployeeProfileLink userId={selectedTask.assigneeId} personName={personById(selectedTask.assigneeId)?.name ?? "Сотрудник"}><span className="task-person-avatar"><Avatar name={personById(selectedTask.assigneeId)?.name ?? "Сотрудник"} size={48} color="colorful" /></span><span className="task-meta-copy"><small>Ответственный</small><strong>{personById(selectedTask.assigneeId)?.name ?? "Сотрудник"}</strong></span></EmployeeProfileLink><div className="task-deadline-meta"><Calendar24Regular /><span className="task-meta-copy"><small>Срок</small><strong>{taskDeadlineLabel(selectedTask)}</strong>{canExtendDeadline && <Button className="task-deadline-trigger" size="small" appearance="subtle" aria-expanded={extendingDeadline} disabled={deadlineBusy} onClick={() => {
+          const base = Math.max(Date.now(), new Date(selectedTask.dueAt!).getTime());
+          setExtendedDueAt(localDateTime(new Date(base + 24 * 60 * 60_000).toISOString()));
+          setExtendingDeadline(value => !value);
+        }}>Продлить срок</Button>}</span></div></div>
         </div>
         <div ref={lifecycleRef} tabIndex={-1} className="task-lifecycle-summary"><span>Статус <TaskHelp title="Статус задачи">Показывает текущий этап. Действия рядом доступны только тем, у кого есть право менять состояние задачи.</TaskHelp></span><Badge appearance="tint" color={selectedTask.status === "completed" ? "success" : selectedTask.status === "overdue" ? "danger" : selectedTask.status === "awaiting_review" ? "warning" : "informative"}>{statusLabels[selectedTask.status]}</Badge>{canEdit && selectedTask.status === "new" ? <Button appearance="subtle" onClick={() => void onChangeStatus(selectedTask.id, "in_progress")}>Начать работу</Button> : canManageParticipants && ["in_progress", "overdue"].includes(selectedTask.status) ? <Button appearance="subtle" onClick={() => void onChangeStatus(selectedTask.id, "cancelled")}>Отменить задачу</Button> : null}</div>
-        {canExtendDeadline ? <div className="task-deadline-control">
-          <Button appearance="subtle" onClick={() => {
-            const base = Math.max(Date.now(), new Date(selectedTask.dueAt!).getTime());
-            setExtendedDueAt(localDateTime(new Date(base + 24 * 60 * 60_000).toISOString()));
-            setExtendingDeadline(true);
-          }}>Продлить срок</Button>
-          {extendingDeadline ? <div className="task-deadline-editor" role="region" aria-label="Продление срока">
+        {canExtendDeadline && extendingDeadline ? <div className="task-deadline-control">
+          <div className="task-deadline-editor" role="region" aria-label="Продление срока">
             <label>Новый срок<WorkspaceDateTimePicker ariaLabel="Новый срок задачи" value={extendedDueAt} min={localDateTime(selectedTask.dueAt)} onChange={setExtendedDueAt} /></label>
             <Button appearance="primary" disabled={deadlineBusy} onClick={() => void extendDeadline()}>{deadlineBusy ? "Сохраняем…" : "Сохранить срок"}</Button>
             <Button appearance="subtle" disabled={deadlineBusy} onClick={() => setExtendingDeadline(false)}>Отмена</Button>
-          </div> : null}
+          </div>
         </div> : null}
+        <TaskHistory key={selectedTask.id} token={props.token} taskId={selectedTask.id} revision={selectedTask} />
         <ol className="task-journey" aria-label="Маршрут задачи">
           {["Поставлена", "Выполняется", "Проверка", "Принята"].map((label, index) => <li className={index < taskJourneyStep(selectedTask.status) ? "done" : index === taskJourneyStep(selectedTask.status) ? "current" : ""} key={label}><span aria-hidden="true">{index + 1}</span><strong>{label}</strong></li>)}
         </ol>
@@ -856,7 +843,7 @@ export function TasksView(props: TasksViewProps) {
         </div>{canManageParticipants ? <div className="inline-task-form">{departments ? <EmployeeScopeSwitch value={participantScope} onChange={(next) => { setParticipantScope(next); setParticipantId(""); }} label="Группа новых участников" /> : null}<WorkspaceSelect aria-label="Новый участник" value={participantId} onChange={(event) => setParticipantId(event.target.value)}><option value="">Выберите сотрудника</option>{people.filter((person) => inEmployeeScope(person, participantScope) && person.id !== selectedTask.assigneeId && !selectedTask.participants.some((item) => item.userId === person.id)).map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</WorkspaceSelect><WorkspaceSelect aria-label="Роль участника" value={participantRole} onChange={(event) => setParticipantRole(event.target.value as TaskParticipantRole)}><option value="co_assignee">Соисполнитель</option><option value="observer">Наблюдатель</option></WorkspaceSelect><Button appearance="secondary" onClick={() => void addParticipant()} disabled={!participantId}>Добавить</Button></div> : null}</div>
 
         <div className="detail-section task-plan-links"><TaskSectionHeading title="Планы" help="Задача может входить в несколько планов. Связи меняет постановщик или уполномоченный сотрудник." meta={plans.filter((plan) => plan.taskIds.includes(selectedTask.id)).length} />
-          {plansLoading ? <p role="status">Загружаем планы…</p> : plansError ? <WorkspaceNotice tone="error" className="task-plan-error" role="alert">{plansError}</WorkspaceNotice> : <>
+          {plansLoading ? <LoadingSkeleton layout="lines" rows={3} label="Загружаем планы…" /> : plansError ? <WorkspaceNotice tone="error" className="task-plan-error" role="alert">{plansError}</WorkspaceNotice> : <>
             <ul>{plans.filter((plan) => plan.taskIds.includes(selectedTask.id)).map((plan) => <li key={plan.id}><span>{plan.title}</span>{canManageParticipants ? <Button appearance="subtle" size="small" disabled={planLinkBusy} aria-label={`Убрать задачу из плана ${plan.title}`} onClick={() => void changePlanLink(plan.id, selectedTask.id, false)}>Убрать</Button> : null}</li>)}</ul>
             {canManageParticipants && plans.some((plan) => !plan.taskIds.includes(selectedTask.id)) ? <div className="inline-task-form"><WorkspaceSelect aria-label="Добавить задачу в план" value={planChoice} onChange={(event) => setPlanChoice(event.target.value)}><option value="">Выберите план</option>{plans.filter((plan) => !plan.taskIds.includes(selectedTask.id)).map((plan) => <option key={plan.id} value={plan.id}>{plan.title}</option>)}</WorkspaceSelect><Button appearance="secondary" disabled={!planChoice || planLinkBusy} onClick={() => void changePlanLink(planChoice, selectedTask.id, true)}>Привязать</Button></div> : null}
             {!plans.some((plan) => plan.taskIds.includes(selectedTask.id)) ? <p className="task-section-empty">План пока не назначен.</p> : null}
@@ -931,5 +918,5 @@ function ParticipantChip({ person, label, onRemove }: {
   readonly label: string;
   readonly onRemove?: () => void;
 }) {
-  return <div className={`participant-chip${person?.status && person.status !== "active" ? " workspace-person-inactive" : ""}`}><EmployeeProfileLink userId={person?.id} personName={person?.name ?? "Сотрудник"}><Avatar name={person?.name ?? "Сотрудник"} size={24} /><span>{person?.name ?? "Сотрудник"}<small>{label}</small></span></EmployeeProfileLink>{onRemove ? <button aria-label={`Убрать участника ${person?.name ?? ""}`} onClick={onRemove} type="button">×</button> : null}</div>;
+  return <div className={`participant-chip${person?.status && person.status !== "active" ? " workspace-person-inactive" : ""}`}><EmployeeProfileLink userId={person?.id} personName={person?.name ?? "Сотрудник"}><span className="task-person-avatar"><Avatar name={person?.name ?? "Сотрудник"} size={32} /></span><span>{person?.name ?? "Сотрудник"}<small>{label}</small></span></EmployeeProfileLink>{onRemove ? <button aria-label={`Убрать участника ${person?.name ?? ""}`} onClick={onRemove} type="button">×</button> : null}</div>;
 }

@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { FluentProvider } from "@fluentui/react-components";
 import type { PersonalEfficiency, PersonalEfficiencyTask } from "@yuksalish/contracts";
 import { afterEach, expect, it, vi } from "vitest";
-import { PersonalEfficiencyView, personalPeriods, taskImpact } from "./PersonalEfficiencyView";
+import { PersonalEfficiencyView, personalPeriods, taskImpact, currentTaskLabel } from "./PersonalEfficiencyView";
 import { loadPersonalEfficiency } from "./workspace-api";
 import { workspaceTheme } from "./workspace-theme";
 import { HistoryChart } from "./EfficiencyView";
@@ -42,10 +42,46 @@ it("leaves a gap in the chart when a month has no data", () => {
 
 it("explains credit, overdue, exclusions, returns and tasks without deadlines", () => {
   expect(taskImpact(task)).toContain("зачёт");
-  expect(taskImpact({ ...task, onTimeCount: 0, overdueCount: 1 })).toContain("просроченная");
+  expect(taskImpact({ ...task, onTimeCount: 0, overdueCount: 1 })).toContain("Просрочка учтена в эффективности");
   expect(taskImpact({ ...task, excludedCount: 1 })).toContain("процент не снижает");
   expect(taskImpact({ ...task, onTimeCount: 0, returnedForRevisionCount: 1 })).toContain("отменил зачёт");
   expect(taskImpact({ ...task, onTimeCount: 0, dueAt: null })).toContain("Без срока");
+});
+
+it("keeps current deadline state separate from recorded monthly credit", () => {
+  const now = Date.parse("2026-10-06T12:00:00Z");
+  expect(currentTaskLabel(task, now)).toBe("На проверке · текущий срок истёк");
+  expect(taskImpact(task)).toContain("Сдана в срок");
+  expect(currentTaskLabel({ ...task, status: "overdue", dueAt: "2026-10-20T12:00:00Z" }, now)).toBe("В работе");
+  expect(taskImpact({ ...task, onTimeCount: 0, dueAt: "2026-09-01T12:00:00Z" })).toBe("Не вошла в расчёт за выбранный месяц");
+});
+
+it("explains why an active expired task is excluded while monthly overdue remains zero", async () => {
+  const excluded = { ...task, title: "Исключённая активная задача", status: "in_progress" as const, onTimeCount: 0, excludedCount: 1 };
+  vi.mocked(loadPersonalEfficiency).mockResolvedValue({ ...summary,
+    employee: { ...summary.employee, overdueCount: 0, onTimeCount: 0, eligibleCount: 0, excludedCount: 7, percentage: null },
+    recentTasks: [excluded], impactTasks: [excluded],
+  });
+  show();
+  const metric = (await screen.findByText("Просрочки в расчёте")).closest("article")!;
+  expect(metric).toHaveTextContent("0");
+  expect(screen.getByText("Исключено из расчёта").closest("article")).toHaveTextContent("7");
+  expect(screen.getAllByText(/Исключена из расчёта — процент не снижает/)).toHaveLength(2);
+  expect(screen.getAllByTitle("Текущий срок задачи, не обязательно срок, учтённый в эффективности")).toHaveLength(2);
+  const explanation = screen.getByText("Почему истёкший срок не всегда снижает эффективность?");
+  fireEvent.click(explanation);
+  expect(explanation.closest("details")).toHaveAttribute("open");
+  expect(screen.getByText(/исключение не продлевает срок и не закрывает задачу/)).toBeInTheDocument();
+});
+
+it("keeps confirmed same-month data while a refresh is pending", async () => {
+  vi.mocked(loadPersonalEfficiency).mockResolvedValueOnce(summary).mockImplementationOnce(() => new Promise(() => {}));
+  show();
+  await screen.findByRole("region", { name: "Выполнение задач в срок" });
+  fireEvent.click(screen.getByRole("button", { name: "Обновить мою эффективность" }));
+  await waitFor(() => expect(loadPersonalEfficiency).toHaveBeenCalledTimes(2));
+  expect(screen.getByRole("region", { name: "Выполнение задач в срок" })).toBeVisible();
+  expect(screen.queryByRole("status", { name: "Готовим вашу эффективность" })).toBeNull();
 });
 
 it("shows actual data, task explanations and navigation without a nested dialog", async () => {
