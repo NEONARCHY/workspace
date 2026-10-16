@@ -25,6 +25,10 @@
 
 - 43 focused renderer tests passed (picker, emoji playback, assets, warmup,
   theme and context menu); TypeScript, ESLint, release notes and 15 workflow tests passed.
+- Additional MessengerView/theme-geometry regression: 104 tests passed (147 total).
+- Docker production web build passed; TEST web became healthy. HTTPS root and API
+  readiness passed; deployed version 2.0.039, build ID below, built at
+  2026-10-16T12:59:24.705Z. This is a provisional local release, not merged main.
 - `scripts/emoji-theme-polish-smoke.cjs` uses real components and styles on a
   synthetic read-only fixture. Both themes, category/search geometry, square
   close, equal strip/menu widths, 1024×768 and 390×600, reduced motion passed.
@@ -39,8 +43,9 @@
 TEST: `https://192.168.0.127:8443/`, project `yuksalish-localtest`.
 Only build/recreate web with explicit environment and regenerated release-note order.
 Build ID: `localtest-20261016-emoji-theme-polish`.
+Deployed source commit: `fb06f52dff14351d51aa6a812315c95a0e34d160`.
 Pre-change web image: `sha256:a2a66453cacccd2cde653ceab7f96a560c788a21a14dfee92cb95ce1345b482d`.
-Verify deployed version/buildId, HTTPS root, API readiness and unchanged other containers.
+Verified deployed version/buildId, HTTPS root, API readiness and unchanged other containers.
 The pending note's version is provisional until an authorized merge; never present it as main.
 
 Next task: obtain owner feedback on TEST. Keep branch local until explicit push/merge
