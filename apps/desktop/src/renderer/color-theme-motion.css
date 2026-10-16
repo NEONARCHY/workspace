@@ -7,4 +7,4 @@ html[data-theme-transition]::view-transition-new(root) {
   mix-blend-mode: normal;
 }
 html[data-theme-transition]::view-transition-old(root) { z-index: 1; }
-html[data-theme-transition]::view-transition-new(root) { z-index: 2; }
+html[data-theme-transition]::view-transition-new(root) { z-index: 2; will-change: clip-path; }

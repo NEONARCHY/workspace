@@ -32,7 +32,7 @@ describe("ReactionPicker", () => {
     expect(reactionCatalog.map((item) => item.emoji).sort()).toEqual([...reactionEmojis].sort());
     expect(new Set(reactionCatalog.map((item) => item.emoji)).size).toBe(reactionEmojis.length);
     expect(reactionImageUrl("❤️")).toBe("/emoji/twemoji/2764.svg");
-    expect(reactionAnimatedUrl("❤️")).toBe("/emoji/noto/2764.webp");
+    expect(reactionAnimatedUrl("❤️")).toBe("/emoji/noto/2764.webp?v=native-2");
     expect(reactionStillUrl("❤️")).toBe("/emoji/noto/2764-still.webp");
     expect(reactionCatalog.filter(item => reactionAnimatedUrl(item.emoji))).toHaveLength(115);
     expect(reactionCatalog.every((item) => Boolean(item.label))).toBe(true);

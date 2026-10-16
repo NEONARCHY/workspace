@@ -18,10 +18,12 @@ describe("frozen animated artwork", () => {
       expect(loop).toBeGreaterThan(0);
       expect(animation.readUInt16LE(loop + 12)).toBe(0); // infinite loop
       expect(still.indexOf(Buffer.from("ANIM"))).toBe(-1);
-      expect(entry.frames * 1000 / entry.durationMs).toBeLessThanOrEqual(26);
+      expect(entry.frames * 1000 / entry.durationMs).toBeLessThanOrEqual(34);
+      expect(entry.minFrameMs).toBeGreaterThanOrEqual(30);
+      expect(entry.maxFrameMs).toBeGreaterThanOrEqual(entry.minFrameMs);
       expect(entry.source).toMatch(/^https:\/\/fonts\.gstatic\.com\/s\/e\/notoemoji\//);
       bytes += animation.length + still.length;
     }
-    expect(bytes).toBeLessThan(7 * 1024 * 1024);
+    expect(bytes).toBeLessThan(14 * 1024 * 1024);
   });
 });

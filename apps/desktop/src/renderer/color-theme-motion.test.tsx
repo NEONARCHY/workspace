@@ -56,7 +56,7 @@ it.each(["dark", "light"] as const)("reveals %s from the trigger to the farthest
   expect(f.animate).toHaveBeenCalledWith([
     { clipPath: "circle(0px at 900px 40px)" },
     { clipPath: `circle(${Math.ceil(Math.hypot(900, 760)) + 2}px at 900px 40px)` },
-  ], expect.objectContaining({ duration: 560, pseudoElement: "::view-transition-new(root)" }));
+  ], expect.objectContaining({ duration: 680, pseudoElement: "::view-transition-new(root)" }));
   expect(screen.getByRole("textbox")).toBe(input);
   expect(input).toHaveValue("Сохраняемый текст"); expect(input).toHaveFocus();
   f.finish(); await pending;

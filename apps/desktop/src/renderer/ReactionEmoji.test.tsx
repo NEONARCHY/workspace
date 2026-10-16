@@ -36,7 +36,7 @@ describe("native animated reactions", () => {
     expect(observed.size).toBe(2);
     expect(images[0]).toHaveAttribute("src", "/emoji/noto/1f44d-still.webp");
     visible(images);
-    expect(images[0]).toHaveAttribute("src", "/emoji/noto/1f44d.webp");
+    expect(images[0]).toHaveAttribute("src", "/emoji/noto/1f44d.webp?v=native-2");
     visible([images[0]!], false);
     expect(images[0]).not.toHaveAttribute("data-animated");
     expect(images[1]).toHaveAttribute("data-animated", "true");
