@@ -2239,6 +2239,7 @@ describe("corporate workspace authentication alpha", () => {
       "Лента",
       "Проекты",
       "Поездки",
+      "Отпуска",
       "Отсутствия",
       "Работа с членами",
       "HR",
