@@ -839,19 +839,30 @@ export function App() {
   }, [refreshWorkspace, reportError, session, activeApiOrigin]);
 
   useEffect(() => {
-    if (!session || activeSection !== "tasks") return;
+    if (!session || !["tasks", "messenger"].includes(activeSection)) return;
     const refresh = () => {
       if (document.visibilityState !== "hidden") {
         void refreshWorkspace(session.accessToken).catch(reportError);
       }
     };
-    refresh();
-    const timer = window.setInterval(refresh, 60_000);
+    const poll = () => {
+      if (document.visibilityState !== "hidden") {
+        // Recovery ticks join a slow request without keeping its trailing
+        // queue alive indefinitely. Actual events still request a fresh read.
+        void refreshWorkspace(session.accessToken, { trailing: false }).catch(reportError);
+      }
+    };
+    poll();
+    const timer = window.setInterval(poll, activeSection === "messenger" ? 10_000 : 60_000);
     window.addEventListener("yuksalish:workday-changed", refresh);
+    window.addEventListener("online", refresh);
+    window.addEventListener("focus", refresh);
     document.addEventListener("visibilitychange", refresh);
     return () => {
       window.clearInterval(timer);
       window.removeEventListener("yuksalish:workday-changed", refresh);
+      window.removeEventListener("online", refresh);
+      window.removeEventListener("focus", refresh);
       document.removeEventListener("visibilitychange", refresh);
     };
   }, [activeSection, refreshWorkspace, reportError, session]);
@@ -938,12 +949,15 @@ export function App() {
   }, [session]);
 
   const storeMessage = (message: ChatMessage) => {
+    if (!session || activeToken.current !== session.accessToken) return;
+    refreshWorkspace.invalidate(session.accessToken);
     setWorkspace((current) => ({
       ...current,
       messages: current.messages.some((item) => item.id === message.id)
         ? current.messages.map((item) => item.id === message.id ? message : item)
         : [...current.messages, message],
     }));
+    void refreshWorkspace(session.accessToken).catch(reportError);
   };
 
   const handleSendMessage = async (chatId: string, body: string, files: readonly File[], options: MessageOptions) => {
@@ -1049,6 +1063,8 @@ export function App() {
   const messengerMutation = async <T,>(operation: (token: string) => Promise<T>, onCommitted?: () => void): Promise<T> => {
     if (!session) throw new Error("Войдите в Workspace");
     const result = await operation(session.accessToken);
+    if (activeToken.current !== session.accessToken) return result;
+    refreshWorkspace.invalidate(session.accessToken);
     onCommitted?.();
     try {
       await refreshWorkspace(session.accessToken);
