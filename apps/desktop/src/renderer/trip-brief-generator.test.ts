@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { tripBriefError, tripBriefPreview } from "./trip-brief-generator";
+import { editedTripBriefError, tripBriefError, tripBriefPreview } from "./trip-brief-generator";
 
 const facts = {
   destination: "Қашқадарё вилояти, Деҳқонобод тумани",
@@ -22,5 +22,11 @@ describe("structured trip brief preview", () => {
     expect(tripBriefError({ ...facts, purpose: "test" })).toMatch(/Основание|мероприятие|Опишите/u);
     expect(tripBriefError({ ...facts, expenseSource: "https://example.com" })).toMatch(/источник/u);
     expect(tripBriefError({ ...facts, endDate: "2026-10-21" })).toMatch(/Дата окончания/u);
+  });
+
+  it("requires meaningful employee edits without links", () => {
+    expect(editedTripBriefError(tripBriefPreview(facts))).toBeUndefined();
+    expect(editedTripBriefError("test ".repeat(40))).toMatch(/Проверьте текст/u);
+    expect(editedTripBriefError(`${tripBriefPreview(facts)} https://example.com`)).toMatch(/Проверьте текст/u);
   });
 });

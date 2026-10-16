@@ -69,3 +69,14 @@ def generate_trip_brief(
         "Shu munosabat bilan mazkur xizmat safariga ruxsat berishingizni soʻrayman.",  # noqa: RUF001
         f"Safar xarajatlarini qoplash manbai: {funding}.",
     ))
+
+
+def validate_edited_trip_brief(value: str) -> str:
+    """Keep the employee's paragraphs while rejecting empty or placeholder briefs."""
+    normalized = "\n".join(line.strip() for line in value.replace("\r\n", "\n").split("\n"))
+    normalized = re.sub(r"\n{3,}", "\n\n", normalized).strip()
+    validate_fact(
+        normalized, field="Текст билдирги", min_letters=80, min_words=12,
+        max_length=6000,
+    )
+    return _latin(normalized)

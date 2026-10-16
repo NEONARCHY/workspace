@@ -171,6 +171,36 @@ describe("Trip approvals interaction", async () => {
     await waitFor(() => expect(onDownloadDocument).toHaveBeenCalledWith("new-trip", "brief-preview", expect.any(AbortSignal)));
     expect(screen.getByRole("button", { name: "Изменить" })).toBeInTheDocument();
   });
+  it("lets the requester edit the generated preview, restore it, and save reviewed text", async () => {
+    const onCreate = vi.fn(async () => ({ ...request, id: "edited-trip", stage: "launch" as const,
+      status: "draft" as const, workflowVersion: 3, briefFormat: "edited" as const,
+      canEdit: true, allowedActions: ["submit" as const] }));
+    render(<FluentProvider theme={webLightTheme}><TripApprovalsView
+      requests={[]} people={people} currentUser={people[0]!}
+      onCreate={onCreate} onUpdate={vi.fn()} onAction={vi.fn()}
+    /></FluentProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Новая командировка" }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Куда едем" }), { target: { value: "Термиз" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Основание и мероприятие" }), { target: { value: "Yuridik klinika ishtirokchilari sayyor qabul o'tkazadi" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Источник покрытия расходов" }), { target: { value: "KAS loyihasi mablagʻlari" } });
+    fireEvent.click(screen.getByRole("button", { name: "Редактировать текст" }));
+    const editor = screen.getByRole("textbox", { name: "Редактируемый текст билдирги" });
+    expect((editor as HTMLTextAreaElement).value).toContain("Safar davomida");
+    fireEvent.change(editor, { target: { value: "test" } });
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
+    expect(screen.getAllByText(/Проверьте текст билдирги/u).length).toBeGreaterThan(0);
+    expect(onCreate).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Вернуть автотекст" }));
+    expect(screen.queryByRole("textbox", { name: "Редактируемый текст билдирги" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Редактировать текст" }));
+    const reviewed = (screen.getByRole("textbox", { name: "Редактируемый текст билдирги" }) as HTMLTextAreaElement).value
+      .replace("Safar davomida", "Safar doirasida");
+    fireEvent.change(screen.getByRole("textbox", { name: "Редактируемый текст билдирги" }), { target: { value: reviewed } });
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
+    await waitFor(() => expect(onCreate).toHaveBeenCalledWith(expect.objectContaining({
+      briefFormat: "edited", briefText: reviewed,
+    })));
+  });
   it("keeps selected employees while searching and previews the trip without sending it", async () => {
     const { onCreate } = setup();
     fireEvent.click(screen.getByRole("button", { name: "Новая командировка" }));

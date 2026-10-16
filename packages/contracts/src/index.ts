@@ -2128,7 +2128,7 @@ export interface TripRequest {
   readonly endDate: string;
   readonly employeeIds: readonly string[];
   readonly briefText?: string;
-  readonly briefFormat?: "manual" | "generated";
+  readonly briefFormat?: "manual" | "generated" | "edited";
   readonly expenseSource?: string;
   readonly briefAttachmentName?: string | null;
   readonly briefAttachmentType?: string | null;
@@ -2161,7 +2161,7 @@ export interface TripRequestInput {
   readonly endDate: string;
   readonly employeeIds: readonly string[];
   readonly briefText?: string;
-  readonly briefFormat?: "manual" | "generated";
+  readonly briefFormat?: "manual" | "generated" | "edited";
   readonly expenseSource?: string;
 }
 

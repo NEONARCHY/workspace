@@ -69,7 +69,7 @@ from .tables import (
     workspace_notifications,
     workspace_projects,
 )
-from .trip_brief_generator import generate_trip_brief
+from .trip_brief_generator import generate_trip_brief, validate_edited_trip_brief
 from .workday_service import working_user_ids
 from .workspace_schemas import (
     ApprovalActionHistoryResponse,
@@ -137,6 +137,7 @@ from .workspace_schemas import (
     TripActionRequest,
     TripRequestResponse,
     TripStatus,
+    TripWriteRequest,
     UpdateApprovalRequest,
     UpdateCalendarEventRequest,
     UpdateChecklistItemRequest,
@@ -7445,19 +7446,28 @@ async def _validate_trip_employees(
     return employee_ids
 
 
+def _trip_brief_text(
+    payload: TripWriteRequest, brief_format: Literal["manual", "generated", "edited"],
+) -> str:
+    if brief_format == "manual":
+        return payload.brief_text.strip()
+    generated = generate_trip_brief(
+        destination=payload.destination, start=payload.start_date,
+        end=payload.end_date, purpose=payload.purpose,
+        expense_source=payload.expense_source,
+    )
+    return generated if brief_format == "generated" else validate_edited_trip_brief(
+        payload.brief_text
+    )
+
+
 async def create_trip_request(
     connection: AsyncConnection,
     current_user: AuthenticatedUser,
     payload: CreateTripRequest,
 ) -> TripRequestResponse:
     try:
-        brief_text = (
-            generate_trip_brief(
-                destination=payload.destination, start=payload.start_date,
-                end=payload.end_date, purpose=payload.purpose,
-                expense_source=payload.expense_source,
-            ) if payload.brief_format == "generated" else payload.brief_text.strip()
-        )
+        brief_text = _trip_brief_text(payload, payload.brief_format)
     except ValueError as error:
         raise WorkspaceRepositoryError(422, str(error)) from error
     employee_ids = await _validate_trip_employees(connection, current_user, payload.employee_ids)
@@ -7540,21 +7550,17 @@ async def update_trip_request(
         raise WorkspaceRepositoryError(409, "Only a draft or returned trip can be edited")
     if row["workflow_version"] == 1 and not payload.purpose:
         raise WorkspaceRepositoryError(422, "Цель обязательна для поездки прежнего маршрута")
-    brief_format = row.get("brief_format") or "manual"
+    brief_format = cast(
+        Literal["manual", "generated", "edited"], row.get("brief_format") or "manual"
+    )
     if "brief_format" in payload.model_fields_set:
-        if brief_format == "generated" and payload.brief_format != "generated":
+        if brief_format in {"generated", "edited"} and payload.brief_format == "manual":
             raise WorkspaceRepositoryError(
-                422, "Автоматическую билдирги нельзя заменить ручным текстом"
+                422, "Билдирги новой заявки нельзя заменить старым ручным форматом"
             )
         brief_format = payload.brief_format
     try:
-        brief_text = (
-            generate_trip_brief(
-                destination=payload.destination, start=payload.start_date,
-                end=payload.end_date, purpose=payload.purpose,
-                expense_source=payload.expense_source,
-            ) if brief_format == "generated" else payload.brief_text.strip()
-        )
+        brief_text = _trip_brief_text(payload, brief_format)
     except ValueError as error:
         raise WorkspaceRepositoryError(422, str(error)) from error
     employee_ids = await _validate_trip_employees(connection, current_user, payload.employee_ids)

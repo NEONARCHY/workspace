@@ -40,6 +40,13 @@ export function tripBriefError(facts: TripBriefFacts): string | undefined {
   return undefined;
 }
 
+export function editedTripBriefError(value: string): string | undefined {
+  if (value.length > 6000 || !meaningful(value, 80, 12)) {
+    return "Проверьте текст билдирги: минимум 12 слов и 80 букв, максимум 6000 знаков, без ссылок и заглушек.";
+  }
+  return undefined;
+}
+
 function datePhrase(startDate: string, endDate: string): string {
   const [startYear, startMonth, startDay] = startDate.split("-").map(Number);
   const [endYear, endMonth, endDay] = endDate.split("-").map(Number);
