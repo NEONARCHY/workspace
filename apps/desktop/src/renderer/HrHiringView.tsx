@@ -6,6 +6,7 @@ import { Button, Checkbox, DialogActions, DialogBody, DialogContent, DialogSurfa
 import { WorkspaceDialog } from "./WorkspaceDialog";
 import { LocalFileViewer } from "./FileViewer";
 import { HrIdentityImport } from "./HrIdentityImport";
+import { employeeDisplayName } from "./employee-display-name";
 import { ApiHttpError, actHiringCase, downloadHiringDocument, loadHiringCase, loadHiringRegistry, saveHiringCase, saveHiringSignature, uploadHiringDocument } from "./workspace-api";
 import "./hr-hiring.css";
 
@@ -95,13 +96,13 @@ export function HrHiringView({ token }: { readonly token: string }) {
         if (file) void run(async () => { await saveHiringSignature(token, file); await refresh(); }); }} /><Button disabled={busy} onClick={() => signatureInput.current?.click()}>Настроить мою подпись</Button></> : null}</div>
       <div className="hr-hiring-layout"><aside aria-label="Оформления сотрудников">
         {registry.items.map((item) => <button type="button" disabled={busy} key={item.id} className={selected?.id === item.id ? "selected" : ""}
-          aria-pressed={selected?.id === item.id} onClick={() => selectCase(item.id)}><strong>{item.fullName}</strong><span>{item.jobTitle}</span><small>{labels[item.status]} · версия {item.revision}</small></button>)}
+          aria-pressed={selected?.id === item.id} onClick={() => selectCase(item.id)}><strong>{employeeDisplayName(item.fullName)}</strong><span>{item.jobTitle}</span><small>{labels[item.status]} · версия {item.revision}</small></button>)}
         {!registry.items.length ? <p>Оформлений пока нет.</p> : null}
         <div className="hr-hiring-pagination"><Button disabled={busy || offset === 0} onClick={() => { if (!dirty) setOffset(Math.max(0, offset - 50)); }}>Назад</Button>
           <span>{registry.total} всего</span><Button disabled={busy || offset + 50 >= registry.total || dirty} onClick={() => setOffset(offset + 50)}>Далее</Button></div>
       </aside><div className="hr-hiring-detail">
         {!draftId ? <p>Выберите оформление или начните новый приём.</p> : <>
-          <div className="hr-hiring-record-title"><div><span className="hr-kicker">КАДРОВОЕ ОФОРМЛЕНИЕ</span><h3>{selected ? selected.fullName : "Новый сотрудник"}</h3></div>
+          <div className="hr-hiring-record-title"><div><span className="hr-kicker">КАДРОВОЕ ОФОРМЛЕНИЕ</span><h3>{selected ? employeeDisplayName(selected.fullName) : "Новый сотрудник"}</h3></div>
             <span className="hr-hiring-state">{selected ? labels[selected.status] : "Новый черновик"}</span></div>
           <ol className="hr-hiring-steps" aria-label="Этапы оформления">{["Данные и документы", "Решение руководителя", "Подпись сотрудника", "Завершено"].map((label, index) =>
             <li key={label} aria-current={stage === index + 1 ? "step" : undefined} data-complete={stage > index + 1}><span>{index + 1}</span>{label}</li>)}</ol>

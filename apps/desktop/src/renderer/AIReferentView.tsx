@@ -5,6 +5,7 @@ import { previewAIReferentLocalFile } from "./workspace-api";
 
 const LocalFileViewer = lazy(() => import("./FileViewer").then(module => ({ default: module.LocalFileViewer })));
 import { SlidingSegmented } from "./SlidingSegmented";
+import { employeeDisplayName } from "./employee-display-name";
 
 import type {
   AIReferentAuthorityStatus,
@@ -265,7 +266,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
   const activeCheck = documentCheck?.file === form.file ? documentCheck : undefined;
   const checkingFile = Boolean(form.file && (!activeCheck?.result || ["pending", "checking"].includes(activeCheck.result.status)));
   const reviewers = reviewerConfig?.reviewers.flatMap((item) =>
-    item.canApprove && item.userId ? [{ id: item.userId, name: item.fullName }] : []) ?? [];
+    item.canApprove && item.userId ? [{ id: item.userId, name: employeeDisplayName(item.fullName) }] : []) ?? [];
   const boburId = reviewerConfig?.reviewers.find((item) => item.key === "bobur" && item.canApprove)?.userId;
   // Search and counts use the same server-side selection across all pages.
   const visibleLetters = registry?.letters ?? [];

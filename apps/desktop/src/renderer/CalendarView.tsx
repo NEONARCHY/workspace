@@ -17,7 +17,8 @@ import type {
   WorkspaceTaskCreateInput,
   ZoomMeeting,
 } from "@yuksalish/contracts";
-import { Avatar, Button, Checkbox, DialogSurface, DialogBody, DialogTitle, DialogContent, DialogActions, Input, Textarea, useRestoreFocusTarget } from "@fluentui/react-components";
+import { Button, Checkbox, DialogSurface, DialogBody, DialogTitle, DialogContent, DialogActions, Input, Textarea, useRestoreFocusTarget } from "@fluentui/react-components";
+import { EmployeeAvatar as Avatar } from "./EmployeeAvatar";
 import {
   Add24Regular,
   ArrowLeft20Regular,

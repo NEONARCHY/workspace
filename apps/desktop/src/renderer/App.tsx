@@ -113,6 +113,7 @@ import { AdaptiveNavigation } from "./AdaptiveNavigation";
 import { AiModulesNavigation, groupAiNavigation } from "./AiModulesNavigation";
 import { RecoveryBoundary } from "./RecoveryBoundary";
 import { ProfileAvatar } from "./ProfileAvatar";
+import { employeeDisplayName, employeeDisplayPerson } from "./employee-display-name";
 import { EmployeeProfileProvider } from "./EmployeeProfileLink";
 import { WorkspacePeopleProvider } from "./WorkspaceSelect";
 import {
@@ -416,12 +417,23 @@ export function App() {
   const [activeApiOrigin, setActiveApiOrigin] = useState<string>();
   const [switchingNetwork, setSwitchingNetwork] = useState(false);
   const [workspace, setWorkspace] = useState<WorkspaceState>(initialWorkspace);
+  const displayPeople = useMemo(() => workspace.people.map(employeeDisplayPerson), [workspace.people]);
+  const displayCurrentUser = useMemo(() => employeeDisplayPerson(workspace.currentUser), [workspace.currentUser]);
+  const displayChats = useMemo(() => workspace.chats.map((chat) => {
+    if (chat.kind !== "direct") return chat;
+    const peer = displayPeople.find((person) => person.id !== workspace.currentUser.id
+      && chat.members.some((member) => member.userId === person.id));
+    return { ...chat, title: peer?.name ?? employeeDisplayName(chat.title) };
+  }), [workspace.chats, workspace.currentUser.id, displayPeople]);
   const previewImages = useMemo(() => previewAttachment && fileViewerKind(previewAttachment) === "image"
-    ? workspaceImageGallery(previewAttachment, workspace.attachments, workspace.messages, workspace.people) : [],
-  [previewAttachment, workspace.attachments, workspace.messages, workspace.people]);
+    ? workspaceImageGallery(previewAttachment, workspace.attachments, workspace.messages, displayPeople) : [],
+  [previewAttachment, workspace.attachments, workspace.messages, displayPeople]);
   useNotificationSounds(session && workspace.currentUser.id === session.user.id ? session.user.id : undefined,
     workspace.notifications, workspace.notificationPreferences);
   const [efficiency, setEfficiency] = useState<EfficiencyOverview>();
+  const displayEfficiency = useMemo(() => efficiency && ({ ...efficiency,
+    employees: efficiency.employees.map((employee) => ({ ...employee, name: employeeDisplayName(employee.name) })),
+  }), [efficiency]);
   const [efficiencyLoading, setEfficiencyLoading] = useState(false);
   const [efficiencyError, setEfficiencyError] = useState<string>();
   const [membersRegistry, setMembersRegistry] = useState<MembersRegistry>();
@@ -2030,12 +2042,12 @@ export function App() {
     chatId={chatId}
     contextLabel={contextLabel}
     token={session.accessToken}
-    chats={workspace.chats}
+    chats={displayChats}
     personalPreferences={workspace.personalPreferences}
     messages={workspace.messages}
     tasks={workspace.tasks}
     attachments={workspace.attachments}
-    people={workspace.people}
+    people={displayPeople}
     onSendMessage={handleSendMessage}
     onForwardContent={handleForwardContent}
     onOpenFeedPost={openFeedPost}
@@ -2063,7 +2075,7 @@ export function App() {
   return (
     <FluentProvider theme={fluentTheme} className="app-provider">
       <UndoActionsProvider key={workspace.currentUser.id}>
-      <WorkspacePeopleProvider people={workspace.people}>
+      <WorkspacePeopleProvider people={displayPeople}>
       <EmployeeProfileProvider onOpenProfile={setProfileUserId} onPrepareProfile={(userId) => {
         void prepareEmployeeProfile(session.accessToken, userId).catch(() => undefined);
       }}>
@@ -2131,9 +2143,9 @@ export function App() {
               );
             }} />}
           <div className="rail-bottom">
-            <button className="rail-profile" type="button" aria-label={`Открыть профиль: ${workspace.currentUser.name}`} aria-haspopup="dialog" onClick={() => { closeBrowserMenu(); setProfileUserId(workspace.currentUser.id); }}>
-              <ProfileAvatar person={workspace.currentUser} token={session.accessToken} size={32} />
-              <span>{workspace.currentUser.name}</span>
+            <button className="rail-profile" type="button" aria-label={`Открыть профиль: ${displayCurrentUser.name}`} aria-haspopup="dialog" onClick={() => { closeBrowserMenu(); setProfileUserId(workspace.currentUser.id); }}>
+              <ProfileAvatar person={displayCurrentUser} token={session.accessToken} size={32} />
+              <span>{displayCurrentUser.name}</span>
             </button>
           </div>
         </aside>
@@ -2144,7 +2156,7 @@ export function App() {
             {browserCompact ? <button ref={browserMenuTrigger} type="button" className="browser-menu-trigger" aria-label="Открыть меню" aria-controls={browserMenuOpen ? "browser-navigation" : undefined} aria-haspopup="dialog" aria-expanded={browserMenuOpen} onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setBrowserMenuOpen(true); }}><Navigation24Regular /></button> : null}
             <SectionJump items={orderedNavItems} commands={[
               ...(canView("tasks") ? workspace.tasks.map(task => ({ id: `task:${task.id}`, label: task.title, context: `Задача · ${task.project}`, icon: <TaskListSquareLtr24Regular />, onSelect: () => { setPreparedAction(undefined); setFocusTarget(current => ({ section: "tasks", entityId: task.id, revision: (current?.revision ?? 0) + 1 })); setActiveSection("tasks"); } })) : []),
-              ...(canView("messenger") ? workspace.chats.map(chat => ({ id: `chat:${chat.id}`, label: chat.title, context: "Рабочий чат", icon: <Chat24Regular />, onSelect: () => { setPreparedAction(undefined); setFocusTarget(current => ({ section: "messenger", entityId: chat.id, revision: (current?.revision ?? 0) + 1 })); setActiveSection("messenger"); } })) : []),
+              ...(canView("messenger") ? displayChats.map(chat => ({ id: `chat:${chat.id}`, label: chat.title, context: "Рабочий чат", icon: <Chat24Regular />, onSelect: () => { setPreparedAction(undefined); setFocusTarget(current => ({ section: "messenger", entityId: chat.id, revision: (current?.revision ?? 0) + 1 })); setActiveSection("messenger"); } })) : []),
             ]} onNavigate={(key) => {
               if (key === "settings") { setAccountOpen(true); return; }
               if (key === "team_overview" && efficiency === undefined && !efficiencyLoading) void handleLoadEfficiency();
@@ -2164,7 +2176,7 @@ export function App() {
                 onOpenReference={openAssistantReference} onPrepareAction={prepareAssistantAction} />}
               <div className="workspace-workday-person">
                 <WorkdayControl token={session.accessToken} />
-                <WorkspaceIdentity person={workspace.currentUser} token={session.accessToken} onProfile={() => setProfileUserId(workspace.currentUser.id)} onSupport={() => { setSupportFocusRequestId(undefined); setSupportOpen(true); }} supportMode={supportRegistry?.mode ?? (isAdmin ? "inbox" : "support")} supportIndicator={supportRegistry?.indicator} supportUnreadCount={supportRegistry?.unreadResponseCount} onSettings={() => setAccountOpen(true)} onLogout={() => void handleLogout()} />
+                <WorkspaceIdentity person={displayCurrentUser} token={session.accessToken} onProfile={() => setProfileUserId(workspace.currentUser.id)} onSupport={() => { setSupportFocusRequestId(undefined); setSupportOpen(true); }} supportMode={supportRegistry?.mode ?? (isAdmin ? "inbox" : "support")} supportIndicator={supportRegistry?.indicator} supportUnreadCount={supportRegistry?.unreadResponseCount} onSettings={() => setAccountOpen(true)} onLogout={() => void handleLogout()} />
               </div></div>
           </header>
 
@@ -2238,7 +2250,7 @@ export function App() {
               <ZoomView
                 key={focusTarget?.revision}
                 token={session.accessToken}
-                people={workspace.people}
+                people={displayPeople}
                 departments={workspace.departments}
                 currentUserId={workspace.currentUser.id}
                 registry={zoomRegistry}
@@ -2255,14 +2267,14 @@ export function App() {
                 assistantDraft={canUseAssistant && preparedAction?.kind === "message" ? preparedAction : undefined}
                 assistantRecipientId={canUseAssistant && preparedAction?.kind === "message" ? assistantRecipientId : undefined}
                 token={session.accessToken}
-                chats={workspace.chats}
+                chats={displayChats}
                 personalPreferences={workspace.personalPreferences}
                 onPersonalChat={(chatId, action) => personalMutation((token) => changePersonalChat(token, chatId, action))}
                 onPinnedOrder={(order) => personalMutation((token) => reorderPinnedChats(token, order, workspace.personalPreferences.revision))}
                 messages={workspace.messages}
                 tasks={workspace.tasks}
                 attachments={workspace.attachments}
-                people={workspace.people}
+                people={displayPeople}
                 departments={workspace.departments}
                 onSendMessage={handleSendMessage}
                 onForwardContent={handleForwardContent}
@@ -2307,10 +2319,10 @@ export function App() {
                 assistantDraft={canUseAssistant && preparedAction?.kind === "task" ? preparedAction : undefined}
                 tasks={workspace.tasks}
                 attachments={workspace.attachments}
-                people={workspace.people}
+                people={displayPeople}
                 departments={workspace.departments}
                 currentUserId={workspace.currentUser.id}
-                efficiency={efficiency}
+                efficiency={displayEfficiency}
                 efficiencyLoading={efficiencyLoading}
                 efficiencyError={efficiencyError}
                 onLoadEfficiency={handleLoadEfficiency}
@@ -2350,10 +2362,10 @@ export function App() {
                 <TeamDashboardView
                   token={session.accessToken}
                   tasks={workspace.tasks}
-                  people={workspace.people}
+                  people={displayPeople}
                   departments={workspace.departments}
                   currentUserId={workspace.currentUser.id}
-                  efficiency={efficiency}
+                  efficiency={displayEfficiency}
                   efficiencyLoading={efficiencyLoading}
                   efficiencyError={efficiencyError}
                   onSelectTask={(taskId) => {
@@ -2377,7 +2389,7 @@ export function App() {
                 isSuperadmin={workspace.currentUser.role === "superadmin"}
                 canCreateRequest={workspace.canCreatePaymentRequests}
                 currentUserId={workspace.currentUser.id}
-                people={workspace.people}
+                people={displayPeople}
                 departments={workspace.departments}
                 positions={workspace.positions}
                 requests={workspace.requests}
@@ -2398,7 +2410,7 @@ export function App() {
               <AIReferentView
                 onPreviewAttachment={setPreviewAttachment}
                 token={session.accessToken}
-                people={workspace.people}
+                people={displayPeople}
                 canCreate={modulePermissions.ai_referent?.create ?? false}
                 canAdmin={session.user.role === "admin" || session.user.role === "superadmin"}
                 focusRequestId={focusTarget?.section === "ai_referent" && !focusTarget.incomingReferent ? focusTarget.entityId : undefined}
@@ -2411,7 +2423,7 @@ export function App() {
                 key={focusTarget?.revision}
                 focusLetterId={focusTarget?.section === "incoming_letters" ? Number(focusTarget.entityId) : undefined}
                 token={session.accessToken}
-                people={workspace.people}
+                people={displayPeople}
                 currentUserId={workspace.currentUser.id}
                 canEdit={modulePermissions.incoming_letters?.edit ?? false}
                 canManageAccess={isAdmin}
@@ -2430,9 +2442,9 @@ export function App() {
                 assistantDraft={canUseAssistant && preparedAction?.kind === "feed" ? preparedAction : undefined}
                 posts={workspace.feedPosts}
                 focusPostId={focusTarget?.section === "feed" ? focusTarget.entityId : undefined}
-                chats={workspace.chats}
+                chats={displayChats}
                 onForwardContent={canView("messenger") ? handleForwardContent : undefined}
-                people={workspace.people}
+                people={displayPeople}
                 token={session.accessToken}
                 currentUserId={workspace.currentUser.id}
                 onCreate={handleCreateFeedPost}
@@ -2447,9 +2459,9 @@ export function App() {
               <ProjectsView
                 key={focusTarget?.section === "projects" ? focusTarget.revision : undefined}
                 projects={workspace.projects}
-                people={workspace.people}
+                people={displayPeople}
                 departments={workspace.departments}
-                currentUser={workspace.currentUser}
+                currentUser={displayCurrentUser}
                 workflow={workspace.projectWorkflow ?? undefined}
                 positions={workspace.positions}
                 canManageWorkflow={["admin", "superadmin"].includes(workspace.currentUser.role) && (modulePermissions.projects?.admin ?? true)}
@@ -2471,7 +2483,7 @@ export function App() {
                 assistantDraft={canUseAssistant && preparedAction?.kind === "project" ? preparedAction : undefined}
                 mode={displayedSection === "project_hub" ? "projects" : "funding"}
                 token={session.accessToken}
-                people={workspace.people}
+                people={displayPeople}
                 departments={workspace.departments}
                 currentUserId={workspace.currentUser.id}
                 canCreateProject={modulePermissions.project_hub?.create ?? false}
@@ -2501,9 +2513,9 @@ export function App() {
                 key={focusTarget?.revision}
                 assistantDraft={canUseAssistant && preparedAction?.kind === "trip" ? preparedAction : undefined}
                 requests={workspace.tripRequests}
-                people={workspace.people}
+                people={displayPeople}
                 departments={workspace.departments}
-                currentUser={workspace.currentUser}
+                currentUser={displayCurrentUser}
                 workflow={workspace.tripWorkflow ?? undefined}
                 positions={workspace.positions}
                 canManageWorkflow={["admin", "superadmin"].includes(workspace.currentUser.role) && (modulePermissions.trip_approvals?.admin ?? true)}
@@ -2541,7 +2553,7 @@ export function App() {
                   setFocusTarget((current) => ({ section: "zoom_meetings", entityId: meetingId, revision: (current?.revision ?? 0) + 1 }));
                   setActiveSection("zoom_meetings");
                 }}
-                people={workspace.people}
+                people={displayPeople}
                 departments={workspace.departments}
                 currentUserId={workspace.currentUser.id}
                 onCreate={handleCreateCalendarEvent}
@@ -2559,7 +2571,7 @@ export function App() {
                 key={focusTarget?.section === "absences" ? focusTarget.revision : undefined}
                 assistantDraft={canUseAssistant && preparedAction?.kind === "absence" ? preparedAction : undefined}
                 currentUserId={workspace.currentUser.id}
-                people={workspace.people}
+                people={displayPeople}
                 requests={workspace.absenceRequests}
                 summary={workspace.presenceSummary}
                 token={session.accessToken}
@@ -2582,7 +2594,7 @@ export function App() {
             {displayedSection === "hr" ? (
               <HrView
                 token={session.accessToken}
-                people={workspace.people}
+                people={displayPeople}
                 departments={workspace.departments}
                 currentUser={workspace.currentUser}
               />
@@ -2643,7 +2655,7 @@ export function App() {
         <RecoveryBoundary overlay onHome={closeAccount}>
         <AccountPanel
           token={session.accessToken}
-          user={workspace.currentUser}
+          user={displayCurrentUser}
           locale={workspace.personalPreferences.locale}
           onLocaleChange={(locale) => personalMutation((token) => changeInterfaceLocale(token, locale, workspace.personalPreferences.revision))}
           onClose={closeAccount}
@@ -2663,7 +2675,8 @@ export function App() {
         userId={profileUserId}
         currentUserId={workspace.currentUser.id}
         open={profileUserId !== undefined}
-        people={workspace.people}
+        people={displayPeople}
+        showFullName={displayedSection === "employees"}
         onOpenPersonProfile={setProfileUserId}
         onOpenTask={canView("tasks") ? (taskId) => {
           setFocusTarget((current) => ({ section: "tasks", entityId: taskId, revision: (current?.revision ?? 0) + 1 }));
@@ -2712,7 +2725,7 @@ export function App() {
         onForward={canView("messenger") ? (image) => { setPreviewAttachment(undefined); setForwardPhoto(image); } : undefined}
         onLoadOffice={handleLoadOffice} onDownload={handleSaveAttachment} /></Suspense> : null}
       {forwardPhoto?.messageId && <ForwardDialog source={{ kind: "message", id: forwardPhoto.messageId }} preview={forwardPhoto.caption || forwardPhoto.attachment.fileName}
-        chats={workspace.chats} excludeChatId={forwardPhoto.chatId} onForward={handleForwardContent} onClose={() => setForwardPhoto(undefined)} />}
+        chats={displayChats} excludeChatId={forwardPhoto.chatId} onForward={handleForwardContent} onClose={() => setForwardPhoto(undefined)} />}
       <WebUpdateNotice mandatory={Boolean(updatePolicy?.mandatory)} onAvailabilityChange={setWebUpdateAvailable} />
       </EmployeeProfileProvider>
       </WorkspacePeopleProvider>

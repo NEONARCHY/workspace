@@ -9,7 +9,8 @@ import type {
   WorkspacePerson,
   WorkspaceTask,
 } from "@yuksalish/contracts";
-import { Avatar, Button } from "@fluentui/react-components";
+import { Button } from "@fluentui/react-components";
+import { EmployeeAvatar as Avatar } from "./EmployeeAvatar";
 import {
   ArrowRight20Regular,
   ArrowLeft20Regular,
