@@ -209,11 +209,11 @@ export function TripWorldMap({ requests, people, onOpenRequest, onClose }: TripW
     <header className="trip-map-heading">
       <div><span className="view-kicker">География командировок</span><h2>Карта поездок</h2>
         <p>Утверждённые поездки, доступные вам. Приближайте карту и открывайте место, чтобы увидеть участников и даты.</p></div>
-      <Button ref={backButtonRef} icon={<ArrowLeft20Regular />} onClick={onClose}>К поездкам</Button>
     </header>
     <div className="trip-map-stats" aria-label="Сводка карты">
       <span><strong>{approved.length}</strong> {plural(approved.length, "утверждённая поездка", "утверждённые поездки", "утверждённых поездок")}</span>
       <span><strong>{locations.length}</strong> {plural(locations.length, "место", "места", "мест")} на карте</span>
+      <Button ref={backButtonRef} icon={<ArrowLeft20Regular />} onClick={onClose}>К поездкам</Button>
       {withoutPoint.length ? <span><strong>{withoutPoint.length}</strong> {plural(withoutPoint.length, "поездка", "поездки", "поездок")} без точной отметки</span> : null}
     </div>
     {error ? <div className="trip-map-error" role="alert">{error} <Button onClick={() => setRetry((value) => value + 1)}>Повторить</Button></div> : null}
@@ -277,10 +277,10 @@ export function TripWorldMap({ requests, people, onOpenRequest, onClose }: TripW
           aria-pressed={selectedId === location.place.id} onClick={() => focusLocation(location)}>
           <span>{location.place.name}</span><small>{tripCount(location.requests.length)}</small>
         </button>)}{!locations.length ? <p>Пока нет утверждённых поездок с определённым местом.</p> : null}</div>
+        {withoutPoint.length ? <section className="trip-map-unresolved" aria-label="Поездки без точной отметки"><h3>Поездки без точной отметки</h3><p>Эти места были введены свободным текстом. Чтобы не показывать неверные точки, они остаются в списке.</p>
+      <div>{withoutPoint.map((request) => <button type="button" key={request.id} onClick={() => onOpenRequest(request.id)}>{request.destination}<small>{period(request)} · {request.employeeIds.map((id) => nameById.get(id) ?? "Сотрудник").join(", ")}</small></button>)}</div>
+        </section> : null}
       </aside>
     </div>
-    {withoutPoint.length ? <div className="trip-map-unresolved"><h3>Поездки без точной отметки</h3><p>Эти места были введены свободным текстом. Чтобы не показывать неверные точки, они остаются в списке.</p>
-      <div>{withoutPoint.map((request) => <button type="button" key={request.id} onClick={() => onOpenRequest(request.id)}>{request.destination}<small>{period(request)} · {request.employeeIds.map((id) => nameById.get(id) ?? "Сотрудник").join(", ")}</small></button>)}</div>
-    </div> : null}
   </section>;
 }

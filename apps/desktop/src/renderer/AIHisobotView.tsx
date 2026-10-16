@@ -255,11 +255,13 @@ export function AIHisobotView({ token }: { readonly token: string }) {
       {tab === "team" && profile.managementAccess ? <div className="hisobot-list-page">
         <div className="hisobot-list-heading"><h2>Отчёты сотрудников</h2><span>{visibleTeam.length + visibleTeamUnits.length} записей</span></div>
         <div className="hisobot-filters">
-          <label>С&nbsp;<WorkspaceDateTimePicker mode="date" ariaLabel="Начало периода" value={startDate} onChange={setStartDate} /></label>
-          <label>По&nbsp;<WorkspaceDateTimePicker mode="date" ariaLabel="Конец периода" value={endDate} min={startDate} onChange={setEndDate} /></label>
-          <WorkspaceSelect value={scope} onChange={(event) => setScope(event.target.value as typeof scope)} aria-label="Контур отчётности"><option value="all">Все подразделения</option><option value="central">Центральный аппарат</option><option value="hudud">Hudud</option></WorkspaceSelect>
+          <label><span>С даты</span><WorkspaceDateTimePicker mode="date" ariaLabel="Начало периода" value={startDate} onChange={setStartDate} /></label>
+          <label><span>По дату</span><WorkspaceDateTimePicker mode="date" ariaLabel="Конец периода" value={endDate} min={startDate} onChange={setEndDate} /></label>
+          <label className="hisobot-filter-scope"><span>Подразделение</span><WorkspaceSelect value={scope} onChange={(event) => setScope(event.target.value as typeof scope)} aria-label="Контур отчётности"><option value="all">Все подразделения</option><option value="central">Центральный аппарат</option><option value="hudud">Hudud</option></WorkspaceSelect></label>
+          <div className="hisobot-filter-search">
           <Input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Поиск по региону, имени или тексту" aria-label="Поиск отчётов" />
           <button type="button" onClick={() => void loadTeam()}>Обновить</button>
+          </div>
         </div>
         {visibleTeam.length || visibleTeamUnits.length ? <div className="hisobot-report-grid">{visibleTeam.map((report) => <ReportCard key={report.id} report={report} />)}{visibleTeamUnits.map((report) => <UnitReportCard key={report.id} report={report} />)}</div> : <p className="hisobot-empty">За выбранный период отчётов нет.</p>}
       </div> : null}

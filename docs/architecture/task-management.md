@@ -21,6 +21,13 @@ avatar is 48 px (formerly 36 px), shared by both palettes. Employee cards and av
 have a soft light edge or the existing satin dark edge; profile links and removal
 actions retain their previous behaviour.
 
+The route/history disclosure expands downwards over 260 ms, including asynchronous
+content-size changes. Only its measured local height animates; no per-frame React
+renders or document-wide resize loop. Collapsed content is inert/aria-hidden;
+reduced motion and forced colours switch immediately. Participant scope tabs fill
+the form width with two compact equal segments. Recurrence actions occupy a
+separate row below the aligned fields, adapting to the card's actual width.
+
 The project field is optional. New clients select an active project visible to the
 task author from the current project hub; the server validates its identity and
 access again when the task is saved. The task retains a nullable project ID and a

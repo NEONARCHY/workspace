@@ -321,6 +321,22 @@
 .task-record-dialog .task-checklist-section .inline-task-form { grid-template-columns: minmax(0, 1fr) auto; margin-top: 13px; }
 .task-record-dialog .dependency-row { margin-top: 8px; padding: 11px 12px; border: 1px solid var(--ws-theme-line, #e2e9f0); border-radius: 11px; background: var(--ws-theme-surface, #fff); }
 .task-record-dialog .task-cycle-section > p { margin-top: 10px; }
+.task-cycle-section { container: task-cycle / inline-size; }
+.task-cycle-section .cycle-form { grid-template-columns: minmax(0, 1fr); }
+.task-cycle-section .cycle-form-main { grid-template-columns: minmax(0, 1.2fr) minmax(80px, .45fr) minmax(0, 1.3fr); align-items: end; gap: 12px; }
+.task-cycle-section .cycle-form-main > label { min-width: 0; }
+.task-record-dialog .task-cycle-section .cycle-form-main :is(.fui-Input, .workspace-select, .ws-date-time-trigger) { box-sizing: border-box; width: 100%; min-width: 0; height: 40px; min-height: 40px; }
+.task-cycle-section .cycle-form-main .workspace-select > button { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.task-cycle-section .task-editor-actions { align-items: center; justify-content: flex-end; }
+.task-cycle-section .task-editor-actions > .fui-Button { height: 36px; min-height: 36px; align-self: center; }
+@container task-cycle (max-width: 580px) {
+  .task-cycle-section .cycle-form-main { grid-template-columns: minmax(0, 1fr) minmax(80px, .45fr); }
+  .task-cycle-section .cycle-form-main > label:last-child { grid-column: 1 / -1; }
+}
+@container task-cycle (max-width: 340px) {
+  .task-cycle-section .cycle-form-main { grid-template-columns: minmax(0, 1fr); }
+  .task-cycle-section .task-editor-actions > .fui-Button { flex: 1; }
+}
 .task-record-dialog .task-section-empty { margin: 11px 0 0; padding: 12px 13px; border: 1px dashed var(--ws-theme-line, #d5e3e5); border-radius: 10px; background: rgb(var(--ws-theme-surface-rgb, 255 255 255) / 0.68); color: var(--ws-theme-muted, #607587); font-size: 12px; }
 .task-record-dialog .task-review-hint { margin: 9px 0 0; color: var(--ws-muted, var(--ws-theme-muted, #526a7b)); }
 .task-record-dialog .task-result-error { color: var(--ws-theme-ink-danger, #a23b45); font-size: 13px; }

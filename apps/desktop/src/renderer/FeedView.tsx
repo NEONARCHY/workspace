@@ -229,6 +229,7 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
                   {post.isPinned ? <span className="feed-pin">Закреплено</span> : null}
                   {post.canPin ? (
                     <Button
+                      className="feed-post-icon-action"
                       appearance="subtle"
                       size="small"
                       icon={post.isPinned ? <Pin24Filled /> : <Pin24Regular />}
@@ -238,6 +239,7 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
                   ) : null}
                   {post.canDelete ? (
                     <Button
+                      className="feed-post-icon-action feed-post-delete"
                       {...deleteFocusTarget}
                       appearance="subtle"
                       size="small"

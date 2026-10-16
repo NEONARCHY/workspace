@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { LoadingSkeleton } from "./LoadingSkeleton";
 import type { TaskHistoryEvent, TaskHistoryPage } from "@yuksalish/contracts";
 import { Button } from "@fluentui/react-components";
@@ -46,6 +46,20 @@ export function TaskHistory({ token, taskId, revision }: {
   readonly token?: string; readonly taskId: string; readonly revision: object;
 }) {
   const [open, setOpen] = useState(false);
+  const contentId = useId();
+  const disclosureRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const disclosure = disclosureRef.current, content = contentRef.current;
+    if (!disclosure || !content) return;
+    // Only this requested disclosure animates layout. Measure content changes
+    // (including the async history response), not every animation frame.
+    const measure = () => { disclosure.style.height = open ? `${content.getBoundingClientRect().height}px` : "0px"; };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, [open]);
   const [request, setRequest] = useState({ revision, offset: 0, retry: 0 });
   const [result, setResult] = useState<{
     request: typeof request; taskId: string; token: string;
@@ -74,15 +88,15 @@ export function TaskHistory({ token, taskId, revision }: {
     return () => { active = false; };
   }, [open, token, taskId, request]);
   return <section className="detail-section task-history-section" aria-label="Маршрут и история задачи">
-    <Button appearance="subtle" aria-expanded={open} onClick={() => setOpen(value => !value)}>Маршрут и история</Button>
-    {open ? <div>
+    <Button appearance="subtle" aria-expanded={open} aria-controls={contentId} onClick={() => setOpen(value => !value)}>Маршрут и история</Button>
+    <div ref={disclosureRef} id={contentId} className="task-history-disclosure" data-open={open} aria-hidden={!open} inert={!open}><div ref={contentRef} className="task-history-content">
       {!token ? <p>История доступна после подключения к серверу.</p> : null}
       {page && !page.historyComplete ? <p className="task-history-note">Ранние действия могли не фиксироваться. Ниже — только сохранённые события; дата создания известна из карточки.</p> : null}
       {page ? <ol className="task-history-list">{page.events.map(event => <HistoryEntry key={event.id} event={event} />)}</ol> : null}
-      {pending ? <LoadingSkeleton layout="rows" rows={3} label="Загружаем маршрут…" /> : null}
+      {pending && !page ? <LoadingSkeleton layout="rows" rows={3} label="Загружаем маршрут…" /> : null}
       {error ? <p role="alert">{error} <Button appearance="subtle" onClick={() => setRequest(value => ({ ...value, retry: value.retry + 1 }))}>Повторить</Button></p> : null}
       {!pending && !error && page?.nextOffset != null ? <Button appearance="subtle" onClick={() => setRequest(value => ({ ...value, offset: page.nextOffset ?? 0 }))}>Показать более ранние события</Button> : null}
       {page && !pending ? <Button appearance="subtle" onClick={() => setRequest(value => ({ ...value, offset: 0, retry: value.retry + 1 }))}>Обновить маршрут</Button> : null}
-    </div> : null}
+    </div></div>
   </section>;
 }

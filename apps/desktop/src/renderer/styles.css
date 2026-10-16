@@ -1125,6 +1125,9 @@ button { -webkit-tap-highlight-color: transparent; }
 .feed-card.pinned { border-top: 3px solid var(--ws-link, var(--ws-theme-line-blue, #0f6cbd)); }
 .feed-card > header { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto auto; align-items: center; gap: 9px; }
 .feed-card > header > span { display: grid; gap: 2px; }
+.feed-card > header > .feed-post-icon-action.fui-Button { box-sizing: border-box; flex: none; width: 36px; min-width: 36px; max-width: 36px; height: 36px; min-height: 36px; padding: 0; border-radius: 9px; background: var(--ws-muted-surface, var(--ws-theme-surface-soft, #edf3f4)); }
+.feed-card > header > .feed-post-icon-action:hover { background: var(--ws-selected); }
+.feed-card > header > .feed-post-delete:hover { color: var(--ws-theme-ink-danger, #a23b45); background: var(--ws-theme-wash-danger, #fff0ed); }
 .feed-card header strong { color: var(--ws-theme-ink, #2d4357); font-size: 11px; }
 .feed-card header small { color: var(--ws-theme-muted, #7a8997); font-size: 11px; }
 .feed-card h2 { margin: 15px 0 7px; color: var(--ws-theme-ink, #20364a); font-size: 15px; }
