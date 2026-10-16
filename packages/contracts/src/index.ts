@@ -1691,6 +1691,24 @@ export interface WorkspaceTaskCreateInput {
   readonly cycle?: TaskCycleInput | null;
 }
 
+export interface TaskProposal {
+  readonly id: string;
+  readonly creatorUserId: string;
+  readonly authorUserId: string;
+  readonly status: "pending" | "approved" | "rejected" | "cancelled";
+  readonly task: WorkspaceTaskCreateInput;
+  readonly taskId: string | null;
+  readonly reason: string;
+  readonly createdAt: string;
+  readonly decidedAt: string | null;
+}
+
+export interface TaskProposalWrite {
+  readonly requestId: string;
+  readonly authorUserId: string;
+  readonly task: WorkspaceTaskCreateInput;
+}
+
 export interface TaskProjectOption {
   readonly id: string;
   readonly code: string;

@@ -14,6 +14,19 @@ edo_incoming_access = sa.Table(
 )
 uuid_type = postgresql.UUID(as_uuid=True)
 
+task_proposals = sa.Table(
+    "task_proposals", metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("creator_user_id", uuid_type),
+    sa.Column("author_user_id", uuid_type),
+    sa.Column("status", sa.String(16)),
+    sa.Column("payload", postgresql.JSONB()),
+    sa.Column("task_id", uuid_type),
+    sa.Column("reason", sa.Text()),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("decided_at", sa.DateTime(timezone=True)),
+)
+
 survey_analyses = sa.Table(
     "survey_analyses", metadata,
     sa.Column("id", uuid_type, primary_key=True),

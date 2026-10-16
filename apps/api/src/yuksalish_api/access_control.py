@@ -189,6 +189,7 @@ def request_module_action(path: str, method: str) -> tuple[str, ModuleAction] | 
         (("/messenger/", "/chats/", "/messages/"), "messenger"),
         (("/tasks",), "tasks"),
         (("/task-plans",), "tasks"),
+        (("/task-proposals",), "tasks"),
         (("/approval-templates",), "payment_requests"),
         (("/approval-requests",), "payment_requests"),
         (("/ai-referent",), "ai_referent"),
@@ -220,6 +221,9 @@ def request_module_action(path: str, method: str) -> tuple[str, ModuleAction] | 
         return module_key, "admin"
     if normalized.endswith("/actions"):
         return module_key, "view"
+    if normalized.startswith("/task-proposals/") and normalized.endswith("/decision"):
+        # Consent/withdrawal is object-scoped; approval additionally requires create.
+        return module_key, "view"
     if normalized in {"/ai-referent/telegram-link", "/ai-referent/file-preview"}:
         return module_key, "view"
     if module_key == "tasks" and normalized.endswith(
@@ -232,6 +236,7 @@ def request_module_action(path: str, method: str) -> tuple[str, ModuleAction] | 
         "/survey-analyses",
         "/tasks",
         "/task-plans",
+        "/task-proposals",
         "/task-plans/import/preview",
         "/task-plans/import/confirm",
         "/approval-requests",

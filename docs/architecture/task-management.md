@@ -180,6 +180,34 @@ request. An accepted extension records the same efficiency deadline event as a
 direct change. Extending an already missed deadline does not erase that prior
 late event from EFF-2 history.
 
+### Deadline decision inbox and work-first detail — 16 October 2026
+
+Creating an extension request atomically persists a dedicated action-required
+task notification for the task's author, in addition to the existing chat
+message. It names the requester, task, old/proposed dates and reason. The normal
+desktop/web notification pipeline delivers the system banner according to the
+employee's existing notification preferences and platform permissions. Its
+Tasks/entity link opens the card with the pending decision immediately below
+the heading. Existing pending requests are materialised on bootstrap with a
+stable event key, without replaying read/delivered notifications on every read.
+Decisions resolve the action immediately; superseded/closed requests resolve on
+reconciliation. No new schema or change to the efficiency methodology is needed.
+
+The «Перенос срока» filter counts only live pending requests on tasks authored
+by the current employee, and combines with text/role/plan filters. List rows show
+a compact request badge to all task readers, with personal decision wording for
+the author. Rejected, approved, superseded, closed and stale-deadline requests
+are not counted. The task card uses the existing protected decision endpoint;
+authorized managers retain their prior rights but do not receive every author's
+inbox notification.
+
+Delivered result and task files precede lifecycle/configuration content in DOM
+and keyboard reading order. The task description, comments and history remain
+available; team, plan links, subtasks, checklist, dependencies, recurrence and
+efficiency controls are grouped under «Команда и настройки задачи», collapsed
+by default. Disclosure hides but does not discard drafts or controls. Dark
+recessed surfaces and light-theme styling remain consistent inside the group.
+
 The current valid deadline, not a historical `overdue` status, determines the
 current overdue filter and counters. After rescheduling into the future, the
 task leaves that filter and returns to the working Kanban lane even while a
@@ -233,6 +261,37 @@ efficiency rules, stored instants and historical decisions are unchanged.
 No database migration is required; deploy API before using the new delete button.
 
 ## Atomic creation
+
+### Task proposals with explicit author consent — 16 October 2026
+
+The standalone Tasks composer defaults to the current user as author. Selecting
+another active employee switches the final action to «Отправить на подтверждение»
+and fixes the primary assignee to the requester. The complete title, description,
+project, priority, deadline, co-assignees/observers, checklist, dependencies and
+recurrence become an immutable private proposal, not a task. The two parties can
+review it in «Заявки на постановку»; its notification opens the proposal itself.
+Participants receive no task/chat access before approval. Pending, rejected and
+withdrawn proposals are not queried as tasks, overdue items or efficiency events.
+
+Only the named author may approve or reject; administrator/manager privileges do
+not substitute for consent. Rejection requires a reason. Only the requester may
+withdraw a pending proposal. Approval locks the proposal and atomically creates
+the real task and its managed chat under the approver's authorship, retaining the
+requester as primary assignee and creation actor. An audit entry records the
+approver and linked task; future recurrences use the confirmed author as well.
+Repeated identical submissions use a stable request UUID, duplicate decisions are
+idempotent, and conflicting decisions return 409. Active participants, current
+module permissions, links and dates are revalidated at approval. If the deadline
+or next recurrence has expired, withdraw/reject and submit a new future-dated
+proposal; time awaiting consent is not backdated into the task lifecycle.
+
+Routes: GET/POST `/api/v1/task-proposals` and POST
+`/api/v1/task-proposals/{id}/decision` (approve/reject/cancel). Lists are visible
+only to the requester and selected author. Migration `0101_task_proposals` adds
+the separate table without changing existing tasks. Deploy the migration and API
+before the new client. The ordinary creation endpoint never accepts a delegated
+author from the client. Linked-message/calendar/subtask proposal variants are not
+part of this standalone flow; their existing direct creation stays unchanged.
 
 The creation dialog sends the title, expected result, project, assignee, deadline,
 priority, participants, checklist, dependencies and optional recurrence in one
