@@ -705,8 +705,56 @@ describe("Private messenger", () => {
     fireEvent.contextMenu(message!, { clientX: 420, clientY: 260 });
 
     const menu = screen.getByRole("menu");
-    expect(menu).toHaveStyle({ left: "420px", top: "260px" });
+    expect(menu.closest(".message-context-stack")).toHaveStyle({ left: "420px", top: "260px" });
+    expect(screen.getByRole("group", { name: "Быстрые реакции" }).nextElementSibling).toBe(menu);
     expect(document.querySelector(".conversation-pane")?.contains(menu)).toBe(false);
+  });
+
+  it("reacts directly from the context strip and closes the actions", async () => {
+    const onReactMessage = vi.fn().mockResolvedValue(undefined);
+    renderMessenger({ onReactMessage });
+    openMessageMenu(initialMessages[0]!.body);
+    fireEvent.click(within(screen.getByRole("group", { name: "Быстрые реакции" })).getByRole("button", { name: "👍" }));
+    expect(onReactMessage).toHaveBeenCalledWith(initialMessages[0], "👍");
+    await waitFor(() => expect(screen.queryByRole("menu")).not.toBeInTheDocument());
+  });
+
+  it("keeps the actions open inside the expanded catalog and closes one layer per Escape", async () => {
+    renderMessenger();
+    openMessageMenu(initialMessages[0]!.body);
+    const arrow = screen.getByRole("button", { name: "Все реакции" });
+    fireEvent.pointerDown(arrow);
+    fireEvent.click(arrow);
+    const search = screen.getByRole("textbox", { name: "Поиск эмодзи" });
+    fireEvent.pointerDown(search);
+    expect(screen.getByRole("menu")).toBeInTheDocument();
+    fireEvent.keyDown(search, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByLabelText("Выберите реакцию")).not.toBeInTheDocument());
+    expect(screen.getByRole("menu")).toBeInTheDocument();
+    expect(arrow).toHaveFocus();
+    fireEvent.keyDown(arrow, { key: "Escape" });
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+
+  it("selects from the full context catalog and exposes server errors", async () => {
+    const onReactMessage = vi.fn().mockRejectedValue(new Error("Не удалось поставить реакцию"));
+    renderMessenger({ onReactMessage });
+    openMessageMenu(initialMessages[0]!.body);
+    fireEvent.click(screen.getByRole("button", { name: "Все реакции" }));
+    const catalog = screen.getByLabelText("Выберите реакцию");
+    const emoji = within(catalog).getByRole("button", { name: "🐇" });
+    fireEvent.pointerDown(emoji);
+    fireEvent.click(emoji);
+    expect(onReactMessage).toHaveBeenCalledWith(initialMessages[0], "🐇");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Не удалось поставить реакцию");
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Выберите реакцию")).not.toBeInTheDocument();
+  });
+
+  it("disables context reactions in a read-only conversation", () => {
+    renderMessenger({ chats: [{ ...initialChats[0]!, permissions: { ...initialChats[0]!.permissions, sendMessages: false } }] });
+    openMessageMenu(initialMessages[0]!.body);
+    expect(within(screen.getByRole("group", { name: "Быстрые реакции" })).getAllByRole("button").every((button) => button.hasAttribute("disabled"))).toBe(true);
   });
 
   it("keeps right-click actions available without a visible hint", () => {
@@ -756,7 +804,13 @@ describe("Private messenger", () => {
 
     fireEvent.pointerDown(document.body);
     fireEvent.contextMenu(within(dialog).getByText(message.body).closest(".message")!, { clientX: 90, clientY: 90 });
-    expect(screen.getByRole("menu").parentElement?.parentElement).toBe(dialog.parentElement);
+    expect(screen.getByRole("menu").closest(".message-context-stack")?.parentElement?.parentElement).toBe(dialog.parentElement);
+    fireEvent.click(screen.getByRole("button", { name: "Все реакции" }));
+    const search = screen.getByRole("textbox", { name: "Поиск эмодзи" });
+    fireEvent.keyDown(search, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByLabelText("Выберите реакцию")).not.toBeInTheDocument());
+    expect(dialog).toBeInTheDocument();
+    expect(screen.getByRole("menu")).toBeInTheDocument();
   });
 
   it("sends an executor's deadline request from the task chat and lets its author decide", async () => {
