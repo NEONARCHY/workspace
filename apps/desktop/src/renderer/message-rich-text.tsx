@@ -24,9 +24,11 @@ export function richSegments(text: string, entities: readonly MessageEntity[] = 
     entities: valid.filter(e => e.offset <= start && e.offset + e.length >= points[i + 1]!) }));
 }
 export function RichMessageText({ text, entities }: { readonly text: string; readonly entities?: readonly MessageEntity[] }) {
-  return <>{richSegments(text, entities).map(segment => {
+  const groups = quoteGroups(text, entities);
+  return <>{groups.map(group => {
+    const children = group.segments.map(segment => {
     let content: ReactNode = segment.text;
-    for (const kind of ["code", "bold", "italic", "underline", "strikethrough", "quote", "link"] as const) {
+    for (const kind of ["code", "bold", "italic", "underline", "strikethrough", "link"] as const) {
       const entity = segment.entities.find(e => e.type === kind);
       if (!entity) continue;
       switch (kind) {
@@ -35,12 +37,23 @@ export function RichMessageText({ text, entities }: { readonly text: string; rea
         case "underline": content = <u>{content}</u>; break;
         case "strikethrough": content = <s>{content}</s>; break;
         case "code": content = <code>{content}</code>; break;
-        case "quote": content = <span className="message-inline-quote">{content}</span>; break;
         case "link": content = <a href={entity.url} target="_blank" rel="noopener noreferrer">{content}</a>; break;
       }
     }
     return <span key={segment.start}>{content}</span>;
+    });
+    return <span key={group.segments[0]!.start} className={group.quoted ? "message-inline-quote" : undefined}>{children}</span>;
   })}</>;
+}
+
+function quoteGroups(text: string, entities?: readonly MessageEntity[]) {
+  const groups: { quoted: boolean; segments: ReturnType<typeof richSegments> }[] = [];
+  for (const segment of richSegments(text, entities)) {
+    const quoted = segment.entities.some(e => e.type === "quote"), previous = groups.at(-1);
+    if (previous?.quoted === quoted) previous.segments.push(segment);
+    else groups.push({ quoted, segments: [segment] });
+  }
+  return groups;
 }
 
 interface Point { node: Node; offset: number }
@@ -117,16 +130,21 @@ export function setEditorSelection(root: HTMLElement, start: number, end = start
 }
 export function writeRichEditor(root: HTMLElement, text: string, entities: readonly MessageEntity[]) {
   const fragment = document.createDocumentFragment();
-  for (const segment of richSegments(text, entities)) {
+  for (const group of quoteGroups(text, entities)) {
+    const parent = group.quoted ? document.createElement("span") : fragment;
+    if (parent instanceof HTMLElement) parent.className = "message-inline-quote";
+    for (const segment of group.segments) {
     let node: Node = document.createTextNode(segment.text);
     for (const entity of segment.entities) {
+      if (entity.type === "quote") continue;
       const tags = { bold: "strong", italic: "em", underline: "u", strikethrough: "s", code: "code", quote: "span", link: "a" };
       const wrapper = document.createElement(tags[entity.type]);
-      if (entity.type === "quote") wrapper.className = "message-inline-quote";
-      if (entity.type === "link") wrapper.setAttribute("href", entity.url!);
+      if (entity.type === "link") { wrapper.setAttribute("href", entity.url!); wrapper.setAttribute("target", "_blank"); wrapper.setAttribute("rel", "noopener noreferrer"); }
       wrapper.append(node); node = wrapper;
     }
-    fragment.append(node);
+      parent.append(node);
+    }
+    if (parent !== fragment) fragment.append(parent);
   }
   root.replaceChildren(fragment);
 }

@@ -29,6 +29,15 @@ describe("structured rich text", () => {
     expect(readRichEditor(root).text).toBe("Первая\nВторая"); setEditorSelection(root, 7, 13);
     expect(editorSelection(root)).toEqual({ offset: 7, text: "Вторая" }); root.remove();
   });
+  it("renders one quote container across mixed inline formatting", () => {
+    const entities: MessageEntity[] = [{ type: "quote", offset: 0, length: 6 }, { type: "bold", offset: 2, length: 2 }];
+    const root = document.createElement("div"); writeRichEditor(root, "abcdef", entities);
+    expect(root.querySelectorAll(".message-inline-quote")).toHaveLength(1);
+    expect(readRichEditor(root).text).toBe("abcdef");
+    expect(readRichEditor(root).entities).toEqual(expect.arrayContaining(entities));
+    const { container } = render(<RichMessageText text="abcdef" entities={entities} />);
+    expect(container.querySelectorAll(".message-inline-quote")).toHaveLength(1);
+  });
   it("clips marks after trimming and preserves backward-compatible drafts", () => {
     const marks: MessageEntity[] = [{ type: "bold", offset: 0, length: 6 }];
     expect(trimRichDocument("  Тест  ", marks)).toEqual({ text: "Тест", entities: [{ type: "bold", offset: 0, length: 4 }] });

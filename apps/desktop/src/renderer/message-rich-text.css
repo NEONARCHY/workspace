@@ -5,6 +5,7 @@ html body .app-provider .messenger-view .composer-textarea.composer-rich-editor 
 .composer-rich-editor[data-empty]::before { content: attr(data-placeholder); color: var(--ws-muted); pointer-events: none; }
 .composer-rich-editor[aria-disabled="true"] { opacity: .6; cursor: default; }
 .composer-rich-editor blockquote, .message-inline-quote {
+  display: block;
   margin: 0; padding-inline-start: 8px; border-inline-start: 3px solid var(--ws-link);
   color: inherit; background-color: color-mix(in srgb, var(--ws-link) 8%, transparent);
 }
