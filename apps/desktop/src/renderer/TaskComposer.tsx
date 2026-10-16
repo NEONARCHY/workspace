@@ -10,7 +10,6 @@ import type {
   TaskProjectOption,
 } from "@yuksalish/contracts";
 import {
-  Avatar,
   Button,
   Checkbox,
   DialogSurface,
@@ -26,6 +25,7 @@ import {
   Search20Regular,
 } from "@fluentui/react-icons";
 import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
+import { EmployeeAvatar as Avatar } from "./EmployeeAvatar";
 import { SlidingSegmented } from "./SlidingSegmented";
 
 import { RecordComposer, RecordSection, RecordSummary } from "./RecordComposer";

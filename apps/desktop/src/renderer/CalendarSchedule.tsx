@@ -2,6 +2,7 @@ import type { CalendarEvent, WorkspacePerson, ZoomMeeting } from "@yuksalish/con
 import { useRestoreFocusTarget } from "@fluentui/react-components";
 import { CalendarIcon, calendarAppearanceStyle } from "./CalendarAppearance";
 import { calendarDateKey, calendarScheduleGroups, type CalendarScheduleItem } from "./calendar-filters";
+import { employeeDisplayName } from "./employee-display-name";
 
 export function CalendarSchedule({ items, showDates = false, periodStart, currentUserId, people, onEvent, onZoom, disabled = false }: {
   readonly items: readonly CalendarScheduleItem[];
@@ -37,7 +38,7 @@ export function CalendarSchedule({ items, showDates = false, periodStart, curren
           }}>
           <span className="calendar-agenda-time"><CalendarIcon zoom={item.kind === "zoom"} iconKey={item.kind === "event" ? item.record.iconKey : undefined} />{time}</span>
           <strong>{item.title}</strong>
-          <small>{item.kind === "zoom" ? `Zoom-конференция · ${item.record.organizerName}` : item.record.location || person?.name || "Мероприятие"}</small>
+          <small>{item.kind === "zoom" ? `Zoom-конференция · ${employeeDisplayName(item.record.organizerName)}` : item.record.location || person?.name || "Мероприятие"}</small>
           <span className="calendar-agenda-meta">Участников: {ids.length}{pending ? " · Нужно подтвердить участие" : ""}</span>
           {actualDay !== lastDay && <span className="calendar-agenda-meta">{start.toLocaleDateString("ru-RU")} — {new Date(end.getTime() - 1).toLocaleDateString("ru-RU")}</span>}
           {item.record.status === "cancelled" && <em>Отменено</em>}

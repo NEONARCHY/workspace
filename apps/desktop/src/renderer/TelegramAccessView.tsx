@@ -3,6 +3,7 @@ import { LoadingSkeleton, SkeletonBlock } from "./LoadingSkeleton";
 import { Input } from "./WorkspaceInput";
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
 import { WorkspaceSelect } from "./WorkspaceSelect";
+import { employeeDisplayName, employeeInitials } from "./employee-display-name";
 import { useEffect, useMemo, useState } from "react";
 
 import type {
@@ -101,13 +102,13 @@ function PersonAccessRow({
     }
   };
 
-  const initials = person.fullName.split(/\s+/).slice(0, 2).map((word) => word[0]).join("").toUpperCase();
+  const initials = employeeInitials(person.fullName);
   return (
-    <article className="telegram-access-row" aria-label={`${person.fullName}, @${person.username}`}>
+    <article className="telegram-access-row" aria-label={`${employeeDisplayName(person.fullName)}, @${person.username}`}>
       <div className="telegram-access-person">
         <span className="telegram-access-avatar" aria-hidden="true">{initials}</span>
         <div className="telegram-access-person-copy">
-          <strong>{person.fullName}</strong>
+          <strong>{employeeDisplayName(person.fullName)}</strong>
           <span>@{person.username}{person.jobTitle ? ` · ${person.jobTitle}` : ""}</span>
         </div>
       </div>

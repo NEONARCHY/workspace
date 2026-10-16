@@ -12,6 +12,7 @@ import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
 import { PersonPicker } from "./PersonPicker";
 import { HrHiringView } from "./HrHiringView";
+import { employeeDisplayName } from "./employee-display-name";
 
 type TabKey = "staff" | "tenure" | "registers" | "hiring";
 const today = () => new Date().toISOString().slice(0, 10);
@@ -42,7 +43,9 @@ export function HrView({ token, people, departments, currentUser }: Props) {
   const isConfigured = Boolean(data?.settings.hrUserId); const isHr = ["admin", "superadmin"].includes(currentUser.role) || data?.settings.hrUserId === currentUser.id;
   const isChair = ["admin", "superadmin"].includes(currentUser.role) || data?.settings.chairUserId === currentUser.id;
   const isAccountant = ["admin", "superadmin"].includes(currentUser.role) || data?.settings.accountantUserId === currentUser.id;
-  const profiles = useMemo(() => (data?.profiles ?? []).filter((item) => `${item.fullName} ${item.jobTitle ?? ""}`.toLocaleLowerCase("ru").includes(query.toLocaleLowerCase("ru"))), [data, query]);
+  const profiles = useMemo(() => (data?.profiles ?? [])
+    .filter((item) => `${item.fullName} ${item.jobTitle ?? ""}`.toLocaleLowerCase("ru").includes(query.toLocaleLowerCase("ru")))
+    .map((item) => ({ ...item, fullName: employeeDisplayName(item.fullName) })), [data, query]);
   const save = async () => { if (!fullName.trim() || !reason.trim()) return; setBusy(true); try { await createHrProfile(token, { fullName: fullName.trim(), jobTitle: jobTitle.trim() || null, employmentDate, serviceAnchorDate: anchorDate, serviceYears: Number(years), serviceMonths: Number(months), serviceDays: Number(days), serviceReason: reason.trim() }); setEditorOpen(false); setFullName(""); setJobTitle(""); setReason(""); await load(); } catch (value) { setError(value instanceof Error ? value.message : "Не удалось сохранить стаж"); setBusy(false); } };
   const previewImport = async (file: File) => { setBusy(true); setError(undefined); try { setWorkbookPreview(await previewHrWorkbook(token, file)); } catch (value) { setError(value instanceof Error ? value.message : "Не удалось прочитать файл Excel"); } finally { setBusy(false); } };
   const confirmImport = async () => { if (!workbookPreview) return; setBusy(true); try { const result = await importHrProfiles(token, { sourceLabel: workbookPreview.sourceLabel, rows: workbookPreview.rows }); setWorkbookPreview(undefined); setError(`Импорт завершён: создано ${result.created}, уже было в списке ${result.alreadyImported}.`); await load(); } catch (value) { setError(value instanceof Error ? value.message : "Не удалось импортировать карточки"); setBusy(false); } };

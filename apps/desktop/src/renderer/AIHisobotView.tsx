@@ -3,6 +3,7 @@ import { LoadingSkeleton, SkeletonBlock } from "./LoadingSkeleton";
 import { Input } from "./WorkspaceInput";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { WorkspaceSelect } from "./WorkspaceSelect";
+import { employeeDisplayName } from "./employee-display-name";
 
 import {
   CalendarClock24Regular, CalendarLtr24Regular, Clock24Regular,
@@ -28,8 +29,8 @@ function ReportCard({ report }: { readonly report: HisobotReport }) {
       <span className="hisobot-report-date"><CalendarLtr24Regular /> {dateLabel(report.reportDate)}</span>
       <span className={`hisobot-source ${report.source}`}>{report.source === "telegram" ? "Telegram" : "Workspace"}</span>
     </div>
-    <h3>{report.reportScope === "hudud" ? report.regionName ?? report.fullName : report.fullName}</h3>
-    <p className="hisobot-report-byline">{report.reportScope === "hudud" ? `${report.fullName} · ` : ""}{report.position}</p>
+    <h3>{report.reportScope === "hudud" ? report.regionName ?? employeeDisplayName(report.fullName) : employeeDisplayName(report.fullName)}</h3>
+    <p className="hisobot-report-byline">{report.reportScope === "hudud" ? `${employeeDisplayName(report.fullName)} · ` : ""}{report.position}</p>
     <p className="hisobot-report-content">{report.content}</p>
     <div className="hisobot-report-foot">Отправлено {new Date(report.submittedAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Tashkent" })}{report.isLate ? " · опоздавший (после 18:30)" : ""}</div>
   </article>;
@@ -221,7 +222,7 @@ export function AIHisobotView({ token }: { readonly token: string }) {
       {tab === "today" ? <div className="hisobot-today-layout">
         <div className="hisobot-panel hisobot-compose">
           <div className="hisobot-panel-heading"><span><DocumentBulletList24Regular /> Отчёт за {dateLabel(profile.today)}</span><strong>{profile.todayReport || ownUnitReport ? "Получен" : "Ожидается"}</strong></div>
-          <p className="hisobot-panel-description">{profile.reportScope === "hudud" ? `${profile.regionName} · ` : "Центральный аппарат · "}{profile.fullName}</p>
+          <p className="hisobot-panel-description">{profile.reportScope === "hudud" ? `${profile.regionName} · ` : "Центральный аппарат · "}{employeeDisplayName(profile.fullName)}</p>
           {profile.reportRequired && !ownUnitReport ? <>
             <label htmlFor="hisobot-report-text">{profile.todayReport ? "Чтобы исправить или дополнить, измените полный текст отчёта:" : "Опишите выполненные задачи одним текстовым сообщением:"}</label>
             <textarea id="hisobot-report-text" value={content} onChange={(event) => { setContent(event.target.value); setDirty(true); }} disabled={!profile.canSubmit || busy} placeholder={"1. Текст первой выполненной задачи.\n2. Текст второй выполненной задачи.\n3. Текст третьей выполненной задачи."} />

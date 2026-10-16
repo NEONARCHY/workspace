@@ -9,7 +9,8 @@ import { SpatialBoard, SpatialCard, SpatialLane } from "./SpatialBoard";
 import { useMiddleMousePan } from "./useMiddleMousePan";
 import { WorkspaceSelect } from "./WorkspaceSelect";
 import { workflowStageColor } from "./workflow-stage-colors";
-import { Avatar, DialogSurface } from "@fluentui/react-components";
+import { DialogSurface } from "@fluentui/react-components";
+import { EmployeeAvatar as Avatar } from "./EmployeeAvatar";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 
 import type {
