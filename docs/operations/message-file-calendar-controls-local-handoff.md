@@ -25,4 +25,12 @@ explicit Close, native Ctrl-wheel vs ordinary scroll, calendar at 1366/1024/720/
 in ignored `tmp/message-file-controls-qa/`; no messages submitted to a live API.
 Design changes follow existing scoped selectors, semantic colours and native focus.
 
-Next: deploy TEST web and record actual version/readiness evidence. No push/merge.
+Deployed TEST web `2.0.042`, build ID above, built at
+`2026-10-16T13:32:51.690Z`, source `71412f99da3884a2fe7e82b0bcdf1adf3e6e9d9d`.
+Production web build passed. HTTPS root/version checked through the gateway;
+web healthy, API `0.23.0` ready; only web recreated. Previous image:
+`sha256:1e8a9944695c98e3c53f88d87fa0d7e8a3c2890fe595c7748e97c858ea3307c2`.
+QA Vite 5178 stopped after confirming its exact process. Browser QA is synthetic,
+not an installed-Electron or real-account delivery check.
+
+Next: collect owner feedback. Keep local; do not push/merge without authorization.
