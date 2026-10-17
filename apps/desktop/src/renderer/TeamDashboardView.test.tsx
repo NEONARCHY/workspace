@@ -85,6 +85,7 @@ describe("TeamDashboardView", () => {
   it("removes the redundant horizontal employee strip while keeping the workload selector", () => {
     renderDashboard();
     expect(screen.queryByRole("group", { name: "Фокус на сотруднике" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Сотрудники в обзоре команды" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Азиза Каримова.*1 активная задача/i })).toBeInTheDocument();
   });
 

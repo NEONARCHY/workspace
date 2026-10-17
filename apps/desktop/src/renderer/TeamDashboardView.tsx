@@ -6,7 +6,6 @@ import type { ReactNode } from "react";
 import type {
   CalendarEvent,
   EfficiencyOverview,
-  WorkspaceDepartment,
   WorkspacePerson,
   WorkspaceTask,
 } from "@yuksalish/contracts";
@@ -30,16 +29,13 @@ import { needsTaskDeadlineDecision, pendingTaskDeadlineRequest } from "./task-de
 import { EfficiencyDeadlineExplanation } from "./EfficiencyDeadlineExplanation";
 import { useContextMotion } from "./useContextMotion";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
-import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
 import { SlidingSegmented } from "./SlidingSegmented";
-import { employeeScope, type EmployeeScope } from "./employee-scope";
 import { isTaskOverdue as deadlineIsOverdue } from "./task-deadline";
 
 interface TeamDashboardViewProps {
   readonly token: string;
   readonly tasks: readonly WorkspaceTask[];
   readonly people: readonly WorkspacePerson[];
-  readonly departments?: readonly WorkspaceDepartment[];
   readonly currentUserId: string;
   readonly efficiency?: EfficiencyOverview;
   readonly efficiencyLoading: boolean;
@@ -161,7 +157,6 @@ export function TeamDashboardView({
   token,
   tasks,
   people,
-  departments,
   currentUserId,
   efficiency,
   efficiencyLoading,
@@ -177,18 +172,17 @@ export function TeamDashboardView({
   const [invitationBusyId, setInvitationBusyId] = useState<string>();
   const [invitationError, setInvitationError] = useState("");
   const [selectedPersonId, setSelectedPersonId] = useState<string>();
-  const [scope, setScope] = useState<EmployeeScope>("central");
   const [attentionFilter, setAttentionFilter] = useState<"all" | "overdue" | "review" | "today">("all");
   const [flowSelection, setFlowSelection] = useState<FlowSelection>();
   const [drawerTaskId, setDrawerTaskId] = useState<string>();
-  const attentionMotion = useContextMotion(`${scope}:${selectedPersonId}:${attentionFilter}`);
-  const workloadMotion = useContextMotion(`${scope}:${teamFilter}`);
+  const attentionMotion = useContextMotion(`${selectedPersonId}:${attentionFilter}`);
+  const workloadMotion = useContextMotion(teamFilter);
   const now = new Date();
   const todayStart = startOfDay(now);
   const todayEnd = endOfDay(now);
   const weekEnd = endOfDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7));
   const currentUser = people.find((person) => person.id === currentUserId);
-  const visiblePeople = people.filter((person) => !departments || employeeScope(person.departmentId, departments) === scope);
+  const visiblePeople = people;
   const activeTasks = tasks.filter((task) => activeStatuses.has(task.status));
   const overdueTasks = activeTasks.filter((task) => isTaskOverdue(task, now));
   const reviewTasks = activeTasks.filter((task) => task.status === "awaiting_review");
@@ -324,7 +318,6 @@ export function TeamDashboardView({
     {["manager", "admin", "superadmin"].includes(currentUser?.role ?? "")
       ? <TeamPresencePanel token={token} /> : null}
 
-    {departments ? <EmployeeScopeSwitch value={scope} onChange={(next) => { setScope(next); setSelectedPersonId(undefined); }} label="Сотрудники в обзоре команды" /> : null}
     <section className="team-dash-metrics" aria-label="Ключевые показатели команды">
       <MetricCard active={attentionFilter === "all"} onSelect={() => setAttentionFilter("all")} icon={<Sparkle24Regular />} label="Активные задачи" value={activeTasks.length} note={`${dueThisWeek.length} со сроком в ближайшие 7 дней`} tone="brand" />
       <MetricCard active={attentionFilter === "overdue"} onSelect={() => setAttentionFilter("overdue")} icon={<Warning24Regular />} label="Нужна помощь" value={overdueTasks.length} note={overdueTasks.length ? "истёк текущий срок" : "истёкших сроков нет"} tone="danger" />

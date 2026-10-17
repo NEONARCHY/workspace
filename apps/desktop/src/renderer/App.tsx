@@ -2377,7 +2377,6 @@ export function App() {
                   onCalendarResponse={handleCalendarResponse}
                   onDecideDeadline={handleDecideTaskDeadline}
                   people={displayPeople}
-                  departments={workspace.departments}
                   currentUserId={workspace.currentUser.id}
                   efficiency={displayEfficiency}
                   efficiencyLoading={efficiencyLoading}

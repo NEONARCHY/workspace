@@ -8,6 +8,8 @@ import { loadTripGeoIndex, resolveTripDestination, type TripGeoIndex, type TripP
 import { clampTripMapViewport, fitTripMapPoints, interpolateTripMapViewport,
   maxMapZoom, minMapZoom, tripMapViewBox, worldViewport, zoomTripMapAt,
   type TripMapViewport } from "./trip-map-viewport";
+import { tripMapLocationStatus, tripMapStatus, tripMapStatusLabels, tripMapToday,
+  type TripMapStatus } from "./trip-map-status";
 
 interface TripWorldMapProps {
   readonly requests: readonly TripRequest[];
@@ -40,11 +42,14 @@ export function TripWorldMap({ requests, people, onOpenRequest, onClose }: TripW
   const [retry, setRetry] = useState(0);
   const [selectedId, setSelectedId] = useState("");
   const [hoveredId, setHoveredId] = useState("");
+  const [employeeFilter, setEmployeeFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState<TripMapStatus | "all">("all");
+  const [placeFilter, setPlaceFilter] = useState("");
+  const [today, setToday] = useState(() => tripMapToday(new Date()));
   const [viewport, setViewport] = useState<TripMapViewport>(worldViewport);
   const viewportRef = useRef<TripMapViewport>(worldViewport);
   const targetRef = useRef<TripMapViewport>(worldViewport);
   const animationRef = useRef<number | undefined>(undefined);
-  const didAutoFrame = useRef(false);
   const svgRef = useRef<SVGSVGElement>(null);
   const sidebarRef = useRef<HTMLElement>(null);
   const backButtonRef = useRef<HTMLButtonElement>(null);
@@ -52,6 +57,11 @@ export function TripWorldMap({ requests, people, onOpenRequest, onClose }: TripW
     viewport: TripMapViewport } | undefined>(undefined);
 
   useEffect(() => { backButtonRef.current?.focus({ preventScroll: true }); }, []);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setToday(tripMapToday(new Date())), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -73,11 +83,21 @@ export function TripWorldMap({ requests, people, onOpenRequest, onClose }: TripW
   }, [retry]);
 
   const approved = useMemo(() => requests.filter((request) => request.status === "approved"), [requests]);
+  const availablePeople = useMemo(() => {
+    const ids = new Set(approved.flatMap((request) => request.employeeIds));
+    return people.filter((person) => ids.has(person.id)).sort((left, right) => left.name.localeCompare(right.name, "ru"));
+  }, [approved, people]);
+  const filtered = useMemo(() => approved.filter((request) =>
+    (!employeeFilter || request.employeeIds.includes(employeeFilter))
+    && (statusFilter === "all" || tripMapStatus(request, today) === statusFilter)
+    && (!placeFilter.trim() || request.destination.toLocaleLowerCase("ru").includes(placeFilter.trim().toLocaleLowerCase("ru"))),
+  ), [approved, employeeFilter, statusFilter, placeFilter, today]);
+  const filtersActive = Boolean(employeeFilter || statusFilter !== "all" || placeFilter.trim());
   const { locations, withoutPoint } = useMemo(() => {
     const grouped = new Map<string, { place: TripPlace; requests: TripRequest[] }>();
     const unresolved: TripRequest[] = [];
     if (!index) return { locations: [] as TripMapLocation[], withoutPoint: unresolved };
-    for (const request of approved) {
+    for (const request of filtered) {
       const place = resolveTripDestination(index, request.destination);
       if (!place) { unresolved.push(request); continue; }
       const group = grouped.get(place.id) ?? { place, requests: [] };
@@ -88,7 +108,7 @@ export function TripWorldMap({ requests, people, onOpenRequest, onClose }: TripW
       ...group, requests: group.requests.sort((left, right) => right.startDate.localeCompare(left.startDate)),
     })).sort((left, right) => right.requests.length - left.requests.length || left.place.name.localeCompare(right.place.name, "ru"));
     return { locations, withoutPoint: unresolved };
-  }, [approved, index]);
+  }, [filtered, index]);
   const selected = locations.find((location) => location.place.id === selectedId);
   const hovered = locations.find((location) => location.place.id === hoveredId);
   const nameById = new Map(people.map((person) => [person.id, person.name]));
@@ -126,9 +146,10 @@ export function TripWorldMap({ requests, people, onOpenRequest, onClose }: TripW
 
   useEffect(() => () => cancelAnimation(), [cancelAnimation]);
   useEffect(() => {
-    if (!landPath || !locations.length || didAutoFrame.current) return;
-    didAutoFrame.current = true;
-    animateTo(fitTripMapPoints(locations.map(({ place }) => coordinate(place))), 420);
+    if (!landPath || !locations.length) return;
+    const frame = window.requestAnimationFrame(() =>
+      animateTo(fitTripMapPoints(locations.map(({ place }) => coordinate(place))), 420));
+    return () => window.cancelAnimationFrame(frame);
   }, [animateTo, landPath, locations]);
   useEffect(() => {
     const svg = svgRef.current;
@@ -211,10 +232,35 @@ export function TripWorldMap({ requests, people, onOpenRequest, onClose }: TripW
         <p>Утверждённые поездки, доступные вам. Приближайте карту и открывайте место, чтобы увидеть участников и даты.</p></div>
     </header>
     <div className="trip-map-stats" aria-label="Сводка карты">
-      <span><strong>{approved.length}</strong> {plural(approved.length, "утверждённая поездка", "утверждённые поездки", "утверждённых поездок")}</span>
+      <span><strong>{filtered.length}</strong> {plural(filtered.length, "утверждённая поездка", "утверждённые поездки", "утверждённых поездок")}{filtersActive ? ` из ${approved.length}` : ""}</span>
       <span><strong>{locations.length}</strong> {plural(locations.length, "место", "места", "мест")} на карте</span>
       <Button ref={backButtonRef} icon={<ArrowLeft20Regular />} onClick={onClose}>К поездкам</Button>
       {withoutPoint.length ? <span><strong>{withoutPoint.length}</strong> {plural(withoutPoint.length, "поездка", "поездки", "поездок")} без точной отметки</span> : null}
+    </div>
+    <div className="trip-map-filter-bar" role="group" aria-label="Фильтры поездок">
+      <label>Сотрудник
+        <select value={employeeFilter} onChange={(event) => { setEmployeeFilter(event.target.value); setSelectedId(""); setHoveredId(""); }}>
+          <option value="">Все сотрудники</option>
+          {availablePeople.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}
+        </select>
+      </label>
+      <label>Период поездки
+        <select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value as TripMapStatus | "all"); setSelectedId(""); setHoveredId(""); }}>
+          <option value="all">Все периоды</option>
+          <option value="upcoming">Предстоящие</option>
+          <option value="current">Активные сейчас</option>
+          <option value="past">Прошедшие по датам</option>
+        </select>
+      </label>
+      <label>Место
+        <input type="search" value={placeFilter} onChange={(event) => { setPlaceFilter(event.target.value); setSelectedId(""); setHoveredId(""); }} placeholder="Город или страна" />
+      </label>
+      {filtersActive ? <Button size="small" onClick={() => { setEmployeeFilter(""); setStatusFilter("all"); setPlaceFilter(""); }}>Сбросить фильтры</Button> : null}
+    </div>
+    <div className="trip-map-legend" aria-label="Цвета точек">
+      <span className="trip-map-legend-upcoming">Предстоит</span>
+      <span className="trip-map-legend-current">Идёт сейчас</span>
+      <span className="trip-map-legend-past">Даты прошли</span>
     </div>
     {error ? <div className="trip-map-error" role="alert">{error} <Button onClick={() => setRetry((value) => value + 1)}>Повторить</Button></div> : null}
     <div className="trip-map-layout">
@@ -241,9 +287,10 @@ export function TripWorldMap({ requests, people, onOpenRequest, onClose }: TripW
           {locations.map((location) => {
             const { x, y } = coordinate(location.place);
             const highlighted = selectedId === location.place.id || hoveredId === location.place.id;
+            const timing = tripMapLocationStatus(location.requests, today);
             return <g key={location.place.id} data-trip-pin="true" role="button" tabIndex={0}
-              aria-label={`${location.place.name}: ${tripCount(location.requests.length)}. Показать участников и даты`}
-              className={`trip-map-pin${highlighted ? " active" : ""}`} transform={`translate(${x} ${y})`}
+              aria-label={`${location.place.name}: ${tripCount(location.requests.length)}. ${tripMapStatusLabels[timing]}. Показать участников и даты`}
+              className={`trip-map-pin status-${timing}${highlighted ? " active" : ""}`} transform={`translate(${x} ${y})`}
               onPointerEnter={() => setHoveredId(location.place.id)} onPointerLeave={() => setHoveredId("")}
               onFocus={() => setHoveredId(location.place.id)} onBlur={() => setHoveredId("")}
               onClick={() => focusLocation(location)}
@@ -257,7 +304,7 @@ export function TripWorldMap({ requests, people, onOpenRequest, onClose }: TripW
           })}
         </svg> : !error ? <LoadingSkeleton layout="map" label="Загружаем карту мира…" /> : null}
         {hovered ? <div className="trip-map-hover-card" role="status">
-          <strong>{hovered.place.name}</strong><span>{tripCount(hovered.requests.length)}</span>
+          <strong>{hovered.place.name}</strong><span>{tripCount(hovered.requests.length)} · {tripMapStatusLabels[tripMapLocationStatus(hovered.requests, today)]}</span>
           <small>{period(hovered.requests[0]!)} · {hovered.requests[0]!.employeeIds.map((id) => nameById.get(id) ?? "Сотрудник").join(", ")}</small>
         </div> : null}
         <div id="trip-map-gesture-hint" className="trip-map-gesture-hint">Колесо — масштаб · Перетащите карту · Двойной щелчок — приблизить</div>
@@ -267,7 +314,7 @@ export function TripWorldMap({ requests, people, onOpenRequest, onClose }: TripW
         {selected ? <>
           <div className="trip-map-selected-heading"><div><span>Выбранное место</span><h3>{selected.place.name}</h3><p>{selected.place.context}</p></div><Button className="trip-map-clear-selection" appearance="subtle" icon={<Dismiss20Regular />} aria-label="Сбросить выбор места" onClick={() => setSelectedId("")} /></div>
           <div className="trip-map-trip-list">{selected.requests.map((request) => <article key={request.id} className="trip-map-trip">
-            <span>{request.number} · {period(request)}</span><strong>{request.purpose || request.destination}</strong>
+            <span>{request.number} · {period(request)} · {tripMapStatusLabels[tripMapStatus(request, today)]}</span><strong>{request.purpose || request.destination}</strong>
             <p>{request.employeeIds.map((id) => nameById.get(id) ?? "Сотрудник").join(", ")}</p>
             <Button size="small" onClick={() => onOpenRequest(request.id)}>Открыть карточку</Button>
           </article>)}</div>
@@ -276,9 +323,9 @@ export function TripWorldMap({ requests, people, onOpenRequest, onClose }: TripW
         <div className="trip-map-location-list">{locations.map((location) => <button type="button" key={location.place.id}
           aria-pressed={selectedId === location.place.id} onClick={() => focusLocation(location)}>
           <span>{location.place.name}</span><small>{tripCount(location.requests.length)}</small>
-        </button>)}{!locations.length ? <p>Пока нет утверждённых поездок с определённым местом.</p> : null}</div>
+        </button>)}{!locations.length ? <p>{filtersActive ? "По выбранным фильтрам нет поездок с точной отметкой." : "Пока нет утверждённых поездок с определённым местом."}</p> : null}</div>
         {withoutPoint.length ? <section className="trip-map-unresolved" aria-label="Поездки без точной отметки"><h3>Поездки без точной отметки</h3><p>Эти места были введены свободным текстом. Чтобы не показывать неверные точки, они остаются в списке.</p>
-      <div>{withoutPoint.map((request) => <button type="button" key={request.id} onClick={() => onOpenRequest(request.id)}>{request.destination}<small>{period(request)} · {request.employeeIds.map((id) => nameById.get(id) ?? "Сотрудник").join(", ")}</small></button>)}</div>
+      <div>{withoutPoint.map((request) => <button type="button" key={request.id} onClick={() => onOpenRequest(request.id)}>{request.destination}<small>{period(request)} · {tripMapStatusLabels[tripMapStatus(request, today)]} · {request.employeeIds.map((id) => nameById.get(id) ?? "Сотрудник").join(", ")}</small></button>)}</div>
         </section> : null}
       </aside>
     </div>

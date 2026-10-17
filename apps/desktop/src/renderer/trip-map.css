@@ -26,6 +26,17 @@
 .trip-map-stats > .fui-Button { flex: none; min-height: 40px; }
 .trip-map-stats > span { display: inline-flex; align-items: baseline; gap: 7px; padding: 8px 12px; color: var(--ws-muted); background: var(--ws-theme-surface, #fff); border: 1px solid var(--ws-line); border-radius: 11px; font-size: 12px; }
 .trip-map-stats strong { color: var(--ws-text); font-size: 19px; font-variant-numeric: tabular-nums; }
+.trip-map-filter-bar { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; margin-bottom: 9px; }
+.trip-map-filter-bar label { display: grid; flex: 1 1 180px; gap: 5px; min-width: 150px; max-width: 290px; color: var(--ws-muted); font-size: 12px; font-weight: 600; }
+.trip-map-filter-bar select, .trip-map-filter-bar input { width: 100%; min-height: 39px; padding: 0 11px; color: var(--ws-text); background: var(--ws-theme-surface, #fff); border: 1px solid var(--ws-line); border-radius: 11px; font: inherit; font-size: 13px; font-weight: 500; }
+.trip-map-filter-bar select:focus-visible, .trip-map-filter-bar input:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 2px; }
+.trip-map-filter-bar > .fui-Button { min-height: 39px; }
+.trip-map-legend { display: flex; flex-wrap: wrap; gap: 9px 15px; margin: 0 0 13px; color: var(--ws-muted); font-size: 12px; }
+.trip-map-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.trip-map-legend span::before { width: 9px; height: 9px; border-radius: 50%; background: var(--trip-pin-color); content: ""; }
+.trip-map-legend-upcoming { --trip-pin-color: #293a55; }
+.trip-map-legend-current { --trip-pin-color: #007eab; }
+.trip-map-legend-past { --trip-pin-color: #238054; }
 .trip-map-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 320px); gap: 14px; align-items: start; }
 .trip-map-stage { position: relative; display: grid; min-width: 0; aspect-ratio: 2 / 1; place-items: center; overflow: hidden; isolation: isolate; border: 1px solid var(--ws-line); border-radius: 20px; background: #e4f1f4; }
 .trip-map-svg { display: block; width: 100%; height: 100%; border-radius: inherit; touch-action: none; cursor: grab; }
@@ -35,9 +46,14 @@
 .trip-map-grid-line { stroke: #c7dce2; stroke-width: .65; }
 .trip-map-land { fill: #f9fcfa; stroke: #afc9c8; stroke-width: .75; vector-effect: non-scaling-stroke; }
 .trip-map-pin { cursor: pointer; outline: none; }
-.trip-map-pin-halo { fill: rgb(0 145 168 / 22%); stroke: rgb(0 103 121 / 55%); stroke-width: 1; vector-effect: non-scaling-stroke; }
-.trip-map-pin-core { fill: #007e91; stroke: #fff; stroke-width: 2; vector-effect: non-scaling-stroke; }
-.trip-map-pin.active .trip-map-pin-halo { fill: rgb(0 145 168 / 35%); stroke: #293a55; stroke-width: 2; }
+.trip-map-pin { --trip-pin-color: #293a55; --trip-pin-halo: rgb(41 58 85 / 22%); }
+.trip-map-pin.status-current { --trip-pin-color: #007eab; --trip-pin-halo: rgb(0 126 171 / 23%); }
+.trip-map-pin.status-past { --trip-pin-color: #238054; --trip-pin-halo: rgb(35 128 84 / 23%); }
+.trip-map-pin-halo { fill: var(--trip-pin-halo); stroke: var(--trip-pin-color); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.trip-map-pin-core { fill: var(--trip-pin-color); stroke: #fff; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.trip-map-pin.status-current .trip-map-pin-halo { animation: trip-map-current-pulse 2.8s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes trip-map-current-pulse { 50% { opacity: .55; transform: scale(1.12); } }
+.trip-map-pin.active .trip-map-pin-halo { stroke-width: 2; }
 .trip-map-pin:focus-visible .trip-map-pin-halo { stroke: #293a55; stroke-width: 3; }
 .trip-map-pin text { fill: #fff; font-weight: 750; pointer-events: none; }
 .trip-map-pin .trip-map-pin-label { fill: #293a55; stroke: #fff; paint-order: stroke fill; font-weight: 700; }
@@ -80,8 +96,12 @@ html[data-color-theme="dark"] .trip-map-attribution, html[data-color-theme="dark
 html[data-color-theme="dark"] .trip-map-gesture-hint { color: #c4d7d9; }
 html[data-color-theme="dark"] .trip-map-pin .trip-map-pin-label { fill: #fff; stroke: #18252c; }
 html[data-color-theme="dark"] .trip-map-pin-core { stroke: #1b1c22; }
+html[data-color-theme="dark"] .trip-map-pin.status-upcoming { --trip-pin-color: #7d91b4; --trip-pin-halo: rgb(125 145 180 / 25%); }
+html[data-color-theme="dark"] .trip-map-legend-upcoming { --trip-pin-color: #7d91b4; }
 
 @media (max-width: 1200px) { .trip-map-layout { grid-template-columns: minmax(0, 1fr); }.trip-map-sidebar { grid-row: 1; min-height: 0; max-height: 300px; } }
 @media (any-pointer: coarse) { .trip-map-selected-heading > .trip-map-clear-selection { flex-basis: 48px; width: 48px; min-width: 48px; height: 48px; min-height: 48px; } }
 @media (max-width: 600px) { .trip-header-actions { justify-content: flex-start; }.trip-map-heading { flex-wrap: wrap; }.trip-map-heading > .fui-Button { margin-left: 0; }.trip-map-controls { top: 8px; left: 8px; right: 8px; flex-wrap: wrap; width: fit-content; max-width: calc(100% - 16px); }.trip-map-controls .fui-Button { font-size: 11px; }.trip-map-gesture-hint { display: none; }.trip-map-hover-card { bottom: 30px; }.trip-map-attribution { font-size: 9px; } }
+@media (prefers-reduced-motion: reduce) { .trip-map-pin.status-current .trip-map-pin-halo { animation: none; } }
 @media (forced-colors: active) { .trip-map-stage, .trip-map-sidebar, .trip-map-stats > span, .trip-map-trip, .trip-map-unresolved { border: 1px solid CanvasText; }.trip-map-ocean { fill: Canvas; }.trip-map-land { fill: Canvas; stroke: CanvasText; }.trip-map-pin-core { fill: Highlight; stroke: HighlightText; }.trip-map-pin-halo { fill: Canvas; stroke: CanvasText; }.trip-map-pin text { fill: HighlightText; }.trip-map-pin .trip-map-pin-label { fill: CanvasText; stroke: Canvas; }.trip-map-grid-line { stroke: GrayText; } }
+@media (forced-colors: active) { .trip-map-pin.status-current .trip-map-pin-halo { animation: none; }.trip-map-legend span::before { background: Highlight; border: 1px solid CanvasText; } }

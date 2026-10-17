@@ -6,13 +6,18 @@ import { TripWorldMap } from "./TripWorldMap";
 
 vi.mock("./trip-geo", () => ({
   loadTripGeoIndex: vi.fn(async () => ({})),
-  resolveTripDestination: vi.fn((_index, destination: string) => destination === "Ташкент, Узбекистан"
-    ? { id: "city:1", name: "Ташкент", context: "Узбекистан", destination,
-      latitude: 41.26465, longitude: 69.21627, kind: "city" } : undefined),
+  resolveTripDestination: vi.fn((_index, destination: string) => {
+    if (destination === "Ташкент, Узбекистан") return { id: "city:1", name: "Ташкент", context: "Узбекистан", destination,
+      latitude: 41.26465, longitude: 69.21627, kind: "city" };
+    if (destination === "Самарканд, Узбекистан") return { id: "city:2", name: "Самарканд", context: "Узбекистан", destination,
+      latitude: 39.6542, longitude: 66.9597, kind: "city" };
+    return undefined;
+  }),
 }));
 
 const people: WorkspacePerson[] = [
   { id: "worker-1", name: "Нигора Шокирова", initials: "НШ", color: "#456789", role: "employee", status: "active" },
+  { id: "worker-2", name: "Азиза Каримова", initials: "АК", color: "#456789", role: "employee", status: "active" },
 ];
 const base: TripRequest = {
   id: "trip-1", number: "TR-001", requesterUserId: "worker-1", purpose: "Встреча",
@@ -66,6 +71,40 @@ describe("trip world map", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Карту не удалось загрузить");
     fireEvent.click(screen.getByRole("button", { name: "Повторить" }));
     expect(await screen.findByRole("group", { name: "Карта мира с отметками утверждённых поездок" })).toBeInTheDocument();
+  });
+
+  it("marks trip timing and filters the map, list and unresolved trips together", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({ path: "M0,0L5,0L5,5Z" }) })));
+    vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true })));
+    const today = new Date();
+    const date = (offset: number) => {
+      const value = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() + offset));
+      return value.toISOString().slice(0, 10);
+    };
+    const current = { ...base, id: "current", startDate: date(-1), endDate: date(1) };
+    const upcoming = { ...base, id: "upcoming", destination: "Самарканд, Узбекистан", employeeIds: ["worker-2"],
+      startDate: date(4), endDate: date(5) };
+    const past = { ...base, id: "past", startDate: date(-5), endDate: date(-4) };
+    const unresolved = { ...past, id: "unresolved", destination: "адрес партнёра" };
+    render(<FluentProvider theme={webLightTheme}><TripWorldMap
+      requests={[current, upcoming, past, unresolved]} people={people} onOpenRequest={vi.fn()} onClose={vi.fn()} />
+    </FluentProvider>);
+    const map = await screen.findByRole("group", { name: "Карта мира с отметками утверждённых поездок" });
+    await waitFor(() => expect(map.querySelectorAll("[data-trip-pin]")).toHaveLength(2));
+    expect(within(map).getByRole("button", { name: /Ташкент:.*Идёт сейчас/ })).toHaveClass("status-current");
+    expect(within(map).getByRole("button", { name: /Самарканд:.*Предстоит/ })).toHaveClass("status-upcoming");
+    fireEvent.change(screen.getByLabelText("Период поездки"), { target: { value: "past" } });
+    expect(map.querySelectorAll("[data-trip-pin]")).toHaveLength(1);
+    expect(within(map).getByRole("button", { name: /Ташкент:.*Даты прошли/ })).toHaveClass("status-past");
+    expect(screen.getByRole("region", { name: "Поездки без точной отметки" })).toHaveTextContent("Даты прошли");
+    fireEvent.change(screen.getByLabelText("Период поездки"), { target: { value: "all" } });
+    fireEvent.change(screen.getByLabelText("Сотрудник"), { target: { value: "worker-2" } });
+    expect(within(map).queryByRole("button", { name: /Ташкент:/ })).not.toBeInTheDocument();
+    expect(within(map).getByRole("button", { name: /Самарканд:/ })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Место"), { target: { value: "неизвестно" } });
+    expect(screen.getByText("По выбранным фильтрам нет поездок с точной отметкой.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Сбросить фильтры" }));
+    expect(map.querySelectorAll("[data-trip-pin]")).toHaveLength(2);
   });
 
   it("frames trip locations and zooms with the wheel, selected pin and keyboard", async () => {
