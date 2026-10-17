@@ -107,8 +107,20 @@
 .trip-dialog .trip-brief-paper-editor textarea { font: inherit; line-height: 1.7; }
 .trip-dialog .trip-brief-paper-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 12px; border-top: 1px solid var(--ws-line, #d8e5e7); }
 .trip-dialog .trip-brief-paper-foot { min-width: 0; }
+.trip-dialog .trip-brief-example { margin: 0 0 18px; }
+.trip-dialog .trip-brief-example > summary { width: fit-content; padding: 8px 12px; border: 1px solid var(--ws-line); border-radius: 10px; color: var(--ws-link); background: var(--ws-surface); font-size: 13px; font-weight: 650; cursor: pointer; }
+.trip-dialog .trip-brief-example > summary:hover { border-color: var(--ws-turquoise); }
+.trip-dialog .trip-brief-example > summary:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 2px; }
+.trip-dialog .trip-brief-example-content { display: grid; gap: 14px; max-width: 670px; padding: 16px 0 0; }
+.trip-dialog .trip-brief-example-content > p { margin: 0; color: var(--ws-muted); font-size: 12px; }
+.trip-dialog .trip-brief-example-content dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; margin: 0; }
+.trip-dialog .trip-brief-example-content dl > div { min-width: 0; }
+.trip-dialog .trip-brief-example-content dt { color: var(--ws-muted); font-size: 11px; }
+.trip-dialog .trip-brief-example-content dd { margin: 3px 0 0; overflow-wrap: anywhere; color: var(--ws-text); font-size: 13px; }
+.trip-dialog .trip-brief-example-content .trip-brief-paper { box-shadow: none; }
 
 @media (max-width: 640px) {
+  .trip-dialog .trip-brief-example-content dl { grid-template-columns: 1fr; }
   .trip-dialog .trip-document-panel { padding: 14px; }
   .trip-dialog .trip-brief-paper-actions { align-items: stretch; flex-direction: column; }
   .trip-dialog .trip-document-files > .fui-Button { width: 100%; justify-content: flex-start; }

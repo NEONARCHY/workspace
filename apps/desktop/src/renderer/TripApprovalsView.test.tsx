@@ -131,6 +131,20 @@ describe("Trip approvals interaction", async () => {
       briefFormat: "generated", briefText: "", expenseSource: "KAS loyihasi mablagʻlari",
     })));
   });
+  it("shows a fictional brief example without inserting it into the trip form", () => {
+    const onCreate = vi.fn();
+    render(<FluentProvider theme={webLightTheme}><TripApprovalsView
+      requests={[]} people={people} currentUser={people[0]!}
+      onCreate={onCreate} onUpdate={vi.fn()} onAction={vi.fn()} /></FluentProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Новая командировка" }));
+    const purpose = screen.getByRole("textbox", { name: "Основание и мероприятие" });
+    fireEvent.change(purpose, { target: { value: "Собственное основание поездки" } });
+    fireEvent.click(screen.getByText("Посмотреть пример билдирги"));
+    expect(screen.getByRole("region", { name: "Пример билдирги на поездку" })).toHaveTextContent("Samarqand");
+    expect(screen.getByRole("region", { name: "Пример билдирги на поездку" })).toHaveTextContent("Safar xarajatlarini qoplash manbai");
+    expect(purpose).toHaveValue("Собственное основание поездки");
+    expect(onCreate).not.toHaveBeenCalled();
+  });
   it("opens an unsent prefilled trip when the assistant prepared it", () => {
     const onCreate = vi.fn();
     render(<FluentProvider theme={webLightTheme}><TripApprovalsView

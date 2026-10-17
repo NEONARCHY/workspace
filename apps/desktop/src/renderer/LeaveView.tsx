@@ -89,6 +89,7 @@ export function LeaveView({ token, people, currentUserId, canCreate, focusReques
   const [endsOn, setEndsOn] = useState("");
   const [applicationText, setApplicationText] = useState("");
   const [previewText, setPreviewText] = useState(false);
+  const [showApplicationExample, setShowApplicationExample] = useState(false);
   const [hrForm, setHrForm] = useState<HrForm>(initialHr);
   const [comment, setComment] = useState("");
   const [document, setDocument] = useState<{ requestId: string; kind: DocumentKind }>();
@@ -132,6 +133,7 @@ export function LeaveView({ token, people, currentUserId, canCreate, focusReques
     setSelectedId(item.id);
     setShowCreate(false);
     setEditing(false);
+    setShowApplicationExample(false);
     setComment("");
     setHrForm(formFor(item, people, context?.deputyUserId));
     setApplicationText(item.applicationText);
@@ -213,7 +215,7 @@ export function LeaveView({ token, people, currentUserId, canCreate, focusReques
       <div className="leave-header-actions">
         <Button icon={<ArrowClockwise20Regular />} disabled={loading || busy} onClick={() => void refresh()}>Обновить</Button>
         {canCreate ? <Button appearance="primary" icon={<Add24Regular />} onClick={() => {
-          setSelectedId(undefined); setShowCreate(true); setEditing(false); setApplicationText(""); setStartsOn(""); setEndsOn(""); setPreviewText(false);
+          setSelectedId(undefined); setShowCreate(true); setEditing(false); setApplicationText(""); setStartsOn(""); setEndsOn(""); setPreviewText(false); setShowApplicationExample(false);
         }}>Новое заявление</Button> : null}
       </div>
     </WorkspaceSectionHeader>
@@ -239,8 +241,15 @@ export function LeaveView({ token, people, currentUserId, canCreate, focusReques
           <Field label="Предполагаемое начало" required><Input type="date" value={startsOn} onChange={(_, data) => setStartsOn(data.value)} /></Field>
           <Field label="Предполагаемое окончание (если известно)"><Input type="date" min={startsOn} value={endsOn} onChange={(_, data) => setEndsOn(data.value)} /></Field>
           <Field label="Текст заявления" required><Textarea rows={9} value={applicationText} onChange={(_, data) => setApplicationText(data.value)} /></Field>
-          <div className="leave-actions"><Button disabled={busy} onClick={() => setApplicationText(example)}>Вставить образец</Button>
+          <div className="leave-actions"><Button aria-expanded={showApplicationExample} aria-controls={showApplicationExample ? "leave-application-example" : undefined} onClick={() => setShowApplicationExample((open) => !open)}>{showApplicationExample ? "Скрыть пример аризы" : "Посмотреть пример аризы"}</Button>
+            <Button disabled={busy} onClick={() => setApplicationText(example)}>Вставить текст примера</Button>
             <Button disabled={!applicationText.trim()} onClick={() => setPreviewText(!previewText)}>{previewText ? "Скрыть предпросмотр" : "Предпросмотр текста"}</Button></div>
+          {showApplicationExample ? <div id="leave-application-example" className="leave-paper leave-example-paper" role="region" aria-label="Пример аризы на отпуск">
+            <small>Пример для ориентира · даты и данные сотрудника в PDF подставляются из заявки и аккаунта</small>
+            <div className="leave-example-address">«Юксалиш» ҳаракати ижрочи директорига<br />[лавозим] [исм фамилия]дан</div>
+            <h3>АРИЗА</h3><p>{example}</p>
+            <p className="leave-example-note">В электронном заявлении подпись от руки не нужна: отправка фиксируется из вашего аккаунта.</p>
+          </div> : null}
           {previewText ? <div className="leave-paper"><div>«Юксалиш» ҳаракати ижрочи директорига</div><h3>АРИЗА</h3><p>{applicationText}</p><small>После отправки будет создан PDF с датой и данными аккаунта.</small></div> : null}
           <div className="leave-actions"><Button appearance="primary" disabled={busy} onClick={submitApplication}>{editing ? "Сохранить и отправить кадрам" : "Отправить кадрам"}</Button>
             <Button disabled={busy} onClick={() => { setShowCreate(false); setEditing(false); }}>Отмена</Button></div>

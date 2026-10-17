@@ -83,6 +83,14 @@ function emptyForm(currentUserId: string): TripFormState {
     employeeIds: [currentUserId], briefText: "", expenseSource: "", briefFormat: "generated" };
 }
 
+const exampleTripFacts = {
+  destination: "Samarqand, Oʻzbekiston",
+  startDate: "2030-05-12",
+  endDate: "2030-05-12",
+  purpose: "Hamkor tashkilot vakillari bilan loyiha natijalarini muhokama qilish va keyingi vazifalarni kelishish",
+  expenseSource: "loyiha mablagʻlari",
+};
+
 export function TripApprovalsView({ focusRequestId, requests, people, departments, currentUser, onCreate, onUpdate, onDelete, onAction, onLoadBriefOffice, onDownloadDocument, onOpenChat, renderTripChat, workflow, positions = [], canManageWorkflow = false, onSaveWorkflow, onPublishWorkflow, assistantDraft }: TripApprovalsViewProps) {
   const boardPan = useMiddleMousePan<HTMLDivElement>();
   const restoreFocusTarget = useRestoreFocusTarget();
@@ -390,7 +398,18 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
                 </RecordSummary>
                 <section className="record-summary-card record-summary-note"><h3>Что произойдёт дальше</h3><p>После сохранения вы увидите PDF билдирги до отправки. Текст можно изменить. Первый заместитель согласует заявку, затем председатель утвердит её или вернёт на уточнение.</p><p>После утверждения приказ получит отдельный номер серии WS и появится во вкладке «Утверждено».</p></section>
               </>}>
-              <RecordSection title="Билдирги" description={form.briefFormat === "manual" ? "Ручной текст прежней заявки сохранён. После правок проверьте PDF до отправки." : "Укажите факты поездки. Билдирги составится автоматически; вы можете поправить текст перед сохранением и проверить PDF до отправки."}><div className="record-field-grid">
+              <RecordSection title="Билдирги" description={form.briefFormat === "manual" ? "Ручной текст прежней заявки сохранён. После правок проверьте PDF до отправки." : "Укажите факты поездки. Билдирги составится автоматически; вы можете поправить текст перед сохранением и проверить PDF до отправки."}>
+                <details className="trip-brief-example"><summary>Посмотреть пример билдирги</summary>
+                  <div className="trip-brief-example-content" role="region" aria-label="Пример билдирги на поездку">
+                    <p>Вымышленный пример для ориентира. Он не подставляется в вашу заявку.</p>
+                    <dl><div><dt>Место</dt><dd>{exampleTripFacts.destination}</dd></div>
+                      <div><dt>Дата</dt><dd>12.05.2030</dd></div>
+                      <div><dt>Основание</dt><dd>{exampleTripFacts.purpose}</dd></div>
+                      <div><dt>Источник расходов</dt><dd>{exampleTripFacts.expenseSource}</dd></div></dl>
+                    <div className="trip-brief-paper"><span className="trip-brief-paper-kicker">YUKSALISH · BILDIRGI</span><p>{tripBriefPreview(exampleTripFacts)}</p></div>
+                  </div>
+                </details>
+                <div className="record-field-grid">
                 <TripDestinationPicker value={form.destination} onChange={(destination) => setForm((current) => ({ ...current, destination }))} disabled={busy} />
                 {form.briefFormat !== "manual" ? <>
                   <label className="record-field-wide">Основание и мероприятие<Textarea aria-label="Основание и мероприятие" resize="vertical" rows={3} required maxLength={600} placeholder="Например: EI va KAS loyihasi doirasida yuridik klinika ishtirokchilari sayyor qabul o'tkazadi" value={form.purpose} onChange={(_, data) => setForm({ ...form, purpose: data.value })} /><small>Опишите проверенные факты на узбекском языке, не более 600 знаков. Кириллица в PDF преобразуется в латиницу.</small></label>

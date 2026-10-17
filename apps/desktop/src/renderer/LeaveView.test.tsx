@@ -48,6 +48,19 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
 describe("LeaveView", () => {
+  it("shows the leave application example beside the editor without changing the draft", async () => {
+    view();
+    fireEvent.click(await screen.findByRole("button", { name: "Новое заявление" }));
+    const editor = screen.getByRole("textbox", { name: "Текст заявления" });
+    fireEvent.change(editor, { target: { value: "Мой текст заявления" } });
+    fireEvent.click(screen.getByRole("button", { name: "Посмотреть пример аризы" }));
+    expect(screen.getByRole("region", { name: "Пример аризы на отпуск" })).toHaveTextContent("АРИЗА");
+    expect(editor).toHaveValue("Мой текст заявления");
+    expect(api.create).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Скрыть пример аризы" }));
+    expect(screen.queryByRole("region", { name: "Пример аризы на отпуск" })).not.toBeInTheDocument();
+  });
+
   it("keeps the employee's text after a failed submission and needs no drawn signature", async () => {
     api.create.mockRejectedValue(new Error("Сервер временно недоступен"));
     view();

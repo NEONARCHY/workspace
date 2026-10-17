@@ -22,8 +22,10 @@ from yuksalish_api.leave_service import (
     read_leave_document,
     review_deputy,
     review_hr,
+    revise_leave,
     save_deputy_signature,
     visible_leaves,
+    withdraw_leave,
 )
 from yuksalish_api.object_storage import InMemoryObjectStorage
 from yuksalish_api.tables import hr_settings, leave_request_actions, positions, users
@@ -199,6 +201,76 @@ async def test_leave_is_authorized_audited_and_signed_only_after_deputy() -> Non
                 ]
                 summary = await presence_summary(connection, allow_admin=True)
                 assert any(item.user_id == str(actors["employee"].id) for item in summary)
+
+                with pytest.raises(LeaveError) as hidden_document:
+                    await read_leave_document(
+                        connection, actors["other"], storage, request_id, "order"
+                    )
+                assert hidden_document.value.status_code == 404
+                with pytest.raises(LeaveError) as replay:
+                    await review_deputy(
+                        connection,
+                        actors["deputy"],
+                        storage,
+                        request_id,
+                        LeaveDeputyDecisionRequest(action="approve"),
+                    )
+                assert replay.value.status_code == 409
+                with pytest.raises(LeaveError) as overlap:
+                    await create_leave(
+                        connection,
+                        actors["employee"],
+                        storage,
+                        LeaveWriteRequest(application_text="Иккинчи ариза", starts_on=start),
+                    )
+                assert overlap.value.status_code == 409
+
+                next_start = end + timedelta(days=30)
+                second = await create_leave(
+                    connection,
+                    actors["employee"],
+                    storage,
+                    LeaveWriteRequest(
+                        application_text="Янги ариза",
+                        starts_on=next_start,
+                    ),
+                )
+                second_id = UUID(second.id)
+                with pytest.raises(LeaveError) as missing_reason:
+                    await review_hr(
+                        connection,
+                        actors["hr"],
+                        second_id,
+                        LeaveHrDecisionRequest(action="return"),
+                    )
+                assert missing_reason.value.status_code == 422
+                returned = await review_hr(
+                    connection,
+                    actors["hr"],
+                    second_id,
+                    LeaveHrDecisionRequest(action="return", comment="Уточните дату"),
+                )
+                assert returned.status == "needs_revision" and not returned.can_revise
+                assert (await visible_leaves(connection, actors["employee"]))[0].can_revise
+                revised = await revise_leave(
+                    connection,
+                    actors["employee"],
+                    storage,
+                    second_id,
+                    LeaveWriteRequest(
+                        application_text="Тузатилган ариза",
+                        starts_on=next_start + timedelta(days=1),
+                    ),
+                )
+                assert revised.status == "pending_hr"
+                withdrawn = await withdraw_leave(connection, actors["employee"], second_id)
+                assert withdrawn.status == "withdrawn" and not withdrawn.can_withdraw
+                assert [entry.action for entry in withdrawn.actions] == [
+                    "created",
+                    "returned",
+                    "revised",
+                    "withdrawn",
+                ]
             finally:
                 await transaction.rollback()
     finally:
