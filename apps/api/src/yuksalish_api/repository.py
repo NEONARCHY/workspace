@@ -1,6 +1,6 @@
 from calendar import monthrange
 from collections.abc import Mapping, Sequence
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, time, timedelta
 from typing import Any, Literal, cast
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
@@ -1041,6 +1041,7 @@ def _calendar_event(
 ) -> CalendarEventResponse:
     attendance_by_user = {attendee["user_id"]: attendee for attendee in attendees}
     current_attendance = attendance_by_user.get(current_user.id)
+    linked_trip = row.get("trip_request_id") is not None
     return CalendarEventResponse(
         id=str(row["id"]),
         organizer_user_id=str(row["organizer_user_id"]),
@@ -1070,11 +1071,13 @@ def _calendar_event(
             current_attendance["status"] if current_attendance is not None else None
         ),
         can_respond=(
-            current_attendance is not None
+            not linked_trip and current_attendance is not None
             and current_user.id != row["organizer_user_id"]
             and row["status"] == "scheduled"
         ),
-        can_edit=row["organizer_user_id"] == current_user.id or _is_privileged(current_user),
+        can_edit=not linked_trip and (
+            row["organizer_user_id"] == current_user.id or _is_privileged(current_user)
+        ),
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
@@ -2826,7 +2829,14 @@ async def load_workspace(
         [row["id"] for row in feed_rows],
     )
     calendar_rows = (
-        (await connection.execute(select(calendar_events).order_by(calendar_events.c.starts_at)))
+        (await connection.execute(
+            select(calendar_events).where(
+                or_(
+                    calendar_events.c.trip_request_id.is_(None),
+                    calendar_events.c.trip_request_id.in_([row["id"] for row in trip_rows]),
+                )
+            ).order_by(calendar_events.c.starts_at)
+        ))
         .mappings()
         .all()
     )
@@ -3827,6 +3837,8 @@ async def update_calendar_event(
         raise WorkspaceRepositoryError(404, "Calendar event was not found")
     if row["organizer_user_id"] != current_user.id and not _is_privileged(current_user):
         raise WorkspaceRepositoryError(403, "Calendar event cannot be changed by this user")
+    if row.get("trip_request_id") is not None:
+        raise WorkspaceRepositoryError(409, "Change the trip in the trip approval section")
     if row["status"] == "cancelled":
         raise WorkspaceRepositoryError(409, "Cancelled calendar events cannot be edited")
     project_ids = (
@@ -3951,6 +3963,8 @@ async def cancel_calendar_event(
         raise WorkspaceRepositoryError(404, "Calendar event was not found")
     if row["organizer_user_id"] != current_user.id and not _is_privileged(current_user):
         raise WorkspaceRepositoryError(403, "Calendar event cannot be cancelled by this user")
+    if row.get("trip_request_id") is not None:
+        raise WorkspaceRepositoryError(409, "Change the trip in the trip approval section")
     await connection.execute(
         update(calendar_events)
         .where(calendar_events.c.id == event_id)
@@ -4010,6 +4024,8 @@ async def respond_to_calendar_event(
     )
     if attendance is None:
         raise WorkspaceRepositoryError(403, "Only an invited colleague can respond to this event")
+    if event_row.get("trip_request_id") is not None:
+        raise WorkspaceRepositoryError(409, "Trip participants are fixed by the approved order")
     if payload.status == "accepted":
         await _ensure_calendar_participants_are_available(
             connection,
@@ -7644,6 +7660,76 @@ async def delete_trip_request(
     ))
 
 
+async def _sync_trip_calendar_event(
+    connection: AsyncConnection,
+    trip: Record,
+    *,
+    approved: bool,
+    now: datetime,
+) -> None:
+    """Keep the official all-day trip and its travelers in the calendar atomically."""
+    request_id = cast(UUID, trip["id"])
+    if not approved:
+        await connection.execute(
+            update(calendar_events)
+            .where(calendar_events.c.trip_request_id == request_id)
+            .values(status="cancelled", updated_at=now)
+        )
+        return
+
+    tashkent = ZoneInfo("Asia/Tashkent")
+    starts_at = datetime.combine(trip["start_date"], time.min, tzinfo=tashkent)
+    ends_at = datetime.combine(trip["end_date"] + timedelta(days=1), time.min, tzinfo=tashkent)
+    event_insert = pg_insert(calendar_events).values(
+        id=uuid4(), trip_request_id=request_id,
+        organizer_user_id=trip["requester_user_id"],
+        title=f"Командировка · {trip['destination']}"[:240],
+        description=(f"Приказ № {trip['order_number']}" if trip["order_number"]
+                     else "Утверждённая командировка"),
+        event_type="trip", color="#0091A8", icon_key="trip",
+        starts_at=starts_at, ends_at=ends_at, all_day=True,
+        location=trip["destination"], status="scheduled",
+        created_at=now, updated_at=now,
+    )
+    event_id = (await connection.execute(
+        event_insert.on_conflict_do_update(
+            index_elements=[calendar_events.c.trip_request_id],
+            set_={
+                "title": event_insert.excluded.title,
+                "description": event_insert.excluded.description,
+                "starts_at": event_insert.excluded.starts_at,
+                "ends_at": event_insert.excluded.ends_at,
+                "location": event_insert.excluded.location,
+                "status": "scheduled",
+                "updated_at": now,
+            },
+        )
+        .returning(calendar_events.c.id)
+    )).scalar_one()
+    traveler_ids = (await connection.execute(
+        select(trip_request_employees.c.user_id).where(
+            trip_request_employees.c.request_id == request_id
+        )
+    )).scalars().all()
+    for traveler_id in traveler_ids:
+        await connection.execute(
+            pg_insert(calendar_event_attendees).values(
+                event_id=event_id, user_id=traveler_id,
+                status="accepted", responded_at=now,
+            ).on_conflict_do_update(
+                index_elements=[
+                    calendar_event_attendees.c.event_id,
+                    calendar_event_attendees.c.user_id,
+                ],
+                set_={"status": "accepted", "responded_at": now},
+            )
+        )
+    await connection.execute(delete(calendar_event_attendees).where(
+        calendar_event_attendees.c.event_id == event_id,
+        calendar_event_attendees.c.user_id.not_in(traveler_ids),
+    ))
+
+
 async def act_on_trip_request(
     connection: AsyncConnection,
     current_user: AuthenticatedUser,
@@ -7721,6 +7807,10 @@ async def act_on_trip_request(
                 created_at=now,
             )
         )
+        if target_status == "approved":
+            await _sync_trip_calendar_event(connection, row, approved=True, now=now)
+        elif row["status"] == "approved":
+            await _sync_trip_calendar_event(connection, row, approved=False, now=now)
         return await _trip_response(connection, current_user, request_id)
     allowed = _trip_allowed_actions(row, current_user, chair_user_id, effective_deputy_id)
     if payload.action not in allowed:
@@ -7801,6 +7891,10 @@ async def act_on_trip_request(
             created_at=now,
         )
     )
+    if status == "approved" and row["status"] != "approved":
+        await _sync_trip_calendar_event(connection, row, approved=True, now=now)
+    elif status == "annulled":
+        await _sync_trip_calendar_event(connection, row, approved=False, now=now)
     if row["workflow_version"] >= 2 and payload.action in {"approve", "reject", "annul"} and (
         payload.action in {"reject", "annul"} or to_stage == "approved"
     ):

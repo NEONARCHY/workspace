@@ -28,6 +28,10 @@
 .calendar-event-dialog .calendar-detail-description p { margin: 6px 0 0; max-width: 65ch; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
 .calendar-event-dialog .calendar-linked-records { padding: 16px; border-radius: 14px; background: var(--ws-theme-surface-soft, #edf4f6); }
 .calendar-event-dialog .calendar-form > .calendar-form-actions { position: sticky; bottom: -28px; margin: 0 -28px -28px; padding: 16px 28px; background: var(--ws-theme-surface, #fff); border-top: 1px solid var(--ws-theme-line, #d8e3eb); }
+.calendar-event-dialog .calendar-attendance-confirmed,
+.calendar-event-dialog .calendar-attendance-declined { display: inline-flex; align-items: center; min-height: 32px; padding: 5px 12px; border-radius: 10px; font-size: 13px; font-weight: 650; }
+.calendar-event-dialog .calendar-attendance-confirmed { color: var(--ws-theme-ink-success, #14654b); background: color-mix(in srgb, var(--ws-accent-success, #4f9f6f) 17%, var(--ws-theme-surface, #fff)); }
+.calendar-event-dialog .calendar-attendance-declined { color: var(--ws-muted, #526b77); background: var(--ws-theme-surface-soft, #edf4f6); }
 @media (max-width: 680px) {
   .calendar-event-dialog.fui-DialogSurface { width: calc(100vw - 20px); max-height: calc(100dvh - 20px); border-radius: 20px; }
   .calendar-event-dialog > .fui-DialogBody { max-height: calc(100dvh - 22px); }
@@ -40,4 +44,6 @@
 @media (forced-colors: active) {
   .calendar-event-dialog.fui-DialogSurface { border: 1px solid CanvasText; background: Canvas; box-shadow: none; }
   .calendar-event-dialog .calendar-detail-hero { background: Canvas; border: 1px solid CanvasText; }
+  .calendar-event-dialog .calendar-attendance-confirmed,
+  .calendar-event-dialog .calendar-attendance-declined { border: 1px solid CanvasText; color: CanvasText; background: Canvas; }
 }
