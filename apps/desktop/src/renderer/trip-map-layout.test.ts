@@ -22,4 +22,11 @@ describe("trip map layout", () => {
     expect(button).toContain("flex: 0 0 36px");
     expect(css).toMatch(/@media \(any-pointer: coarse\)[^}]+width: 48px[^}]+height: 48px/);
   });
+
+  it("keeps time states visible without relying on the current-trip animation", () => {
+    expect(rule(".trip-map-pin.status-current")).toContain("--trip-pin-color: #007eab");
+    expect(rule(".trip-map-pin.status-past")).toContain("--trip-pin-color: #238054");
+    expect(css).toMatch(/prefers-reduced-motion: reduce[^}]+animation: none/);
+    expect(css).toMatch(/forced-colors: active[^}]+animation: none/);
+  });
 });
