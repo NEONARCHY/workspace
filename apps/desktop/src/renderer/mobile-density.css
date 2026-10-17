@@ -125,6 +125,7 @@
   .web-platform .team-dashboard .team-presence-heading { gap: 8px; }
   .web-platform .team-dashboard .team-presence-intro h3 { margin: 4px 0; font-size: 20px; }
   .web-platform .team-dashboard .team-presence-count { min-width: 0; padding: 6px 10px; gap: 4px 8px; grid-template-columns: 20px auto auto; border-radius: 10px; }
+  .web-platform .team-dashboard .team-presence-count:not(:has(svg)) { grid-template-columns: auto; }
   .web-platform .team-dashboard .team-presence-count > svg { grid-row: 1; width: 20px; }
   .web-platform .team-dashboard .team-presence-count strong { font-size: 22px; }
   .web-platform .team-dashboard .team-presence-toolbar { margin-top: 8px; padding-bottom: 8px; gap: 6px; }

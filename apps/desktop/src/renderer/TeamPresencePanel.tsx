@@ -22,6 +22,7 @@ const absenceLabels: Record<string, string> = {
   late_arrival: "Согласованное позднее прибытие",
   sick_leave: "На больничном",
   business_event: "На мероприятии",
+  trip: "В поездке",
 };
 
 function statusLabel(person: WorkdayTeamMember): string {
@@ -40,13 +41,13 @@ function clockLabel(value: string): string {
 export function TeamPresencePanel({ token }: { readonly token: string }) {
   const [data, setData] = useState<WorkdayTeam>();
   const [error, setError] = useState("");
-  const [onlyWorking, setOnlyWorking] = useState(true);
+  const [presenceFilter, setPresenceFilter] = useState<"working" | "vacation" | "trip" | "all">("working");
   const [editing, setEditing] = useState<WorkdayTeamMember>();
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
-  const peopleMotion = useContextMotion(`${Boolean(data)}:${onlyWorking}`, {
+  const peopleMotion = useContextMotion(`${Boolean(data)}:${presenceFilter}`, {
     resize: true, duration: 360, fade: false,
   });
 
@@ -100,7 +101,11 @@ export function TeamPresencePanel({ token }: { readonly token: string }) {
     }
   };
 
-  const members = data?.members.filter((person) => !onlyWorking || person.status === "working") ?? [];
+  const members = data?.members.filter((person) => presenceFilter === "all"
+    || presenceFilter === "working" && person.status === "working"
+    || presenceFilter === person.absenceKind) ?? [];
+  const vacationCount = data?.members.filter((person) => person.absenceKind === "vacation").length ?? 0;
+  const tripCount = data?.members.filter((person) => person.absenceKind === "trip").length ?? 0;
   return <section className="team-presence-panel" aria-labelledby="team-presence-title">
     <header className="team-presence-heading">
       <div className="team-presence-intro">
@@ -108,16 +113,20 @@ export function TeamPresencePanel({ token }: { readonly token: string }) {
         <h3 id="team-presence-title">Команда в работе</h3>
         <p>На основе кнопки начала и завершения работы, не геолокации. Согласованные отсутствия показаны отдельно.</p>
       </div>
-      <div className="team-presence-count" aria-live="polite">
-        <PeopleTeam24Regular aria-hidden="true" />
-        <strong>{data?.workingCount ?? "—"}</strong>
-        <span>из {data?.members.length ?? "—"} работают</span>
+      <div className="team-presence-summary" aria-label="Состояние команды" aria-live="polite">
+        <button type="button" className="team-presence-count" aria-pressed={presenceFilter === "working"} onClick={() => setPresenceFilter("working")}>
+          <PeopleTeam24Regular aria-hidden="true" />
+          <strong>{data?.workingCount ?? "—"}</strong>
+          <span>из {data?.members.length ?? "—"} работают</span>
+        </button>
+        <button type="button" className="team-presence-count" aria-pressed={presenceFilter === "vacation"} onClick={() => setPresenceFilter("vacation")}><strong>{data ? vacationCount : "—"}</strong><span>в отпуске</span></button>
+        <button type="button" className="team-presence-count" aria-pressed={presenceFilter === "trip"} onClick={() => setPresenceFilter("trip")}><strong>{data ? tripCount : "—"}</strong><span>в поездке</span></button>
       </div>
     </header>
     <div className="team-presence-toolbar">
       <SlidingSegmented className="team-presence-filter" role="group" aria-label="Показать сотрудников">
-        <button type="button" aria-pressed={onlyWorking} className={onlyWorking ? "active" : ""} onClick={() => setOnlyWorking(true)}>Сейчас работают</button>
-        <button type="button" aria-pressed={!onlyWorking} className={!onlyWorking ? "active" : ""} onClick={() => setOnlyWorking(false)}>Вся команда</button>
+        <button type="button" aria-pressed={presenceFilter === "working"} className={presenceFilter === "working" ? "active" : ""} onClick={() => setPresenceFilter("working")}>Сейчас работают</button>
+        <button type="button" aria-pressed={presenceFilter === "all"} className={presenceFilter === "all" ? "active" : ""} onClick={() => setPresenceFilter("all")}>Вся команда</button>
       </SlidingSegmented>
       <div className="team-presence-toolbar-meta"><small>Обновлено в {data ? clockLabel(data.asOf) : "—"}</small>
         <Button appearance="subtle" size="small" icon={<ArrowSync20Regular />} aria-label="Обновить отметки" onClick={() => {
@@ -143,7 +152,7 @@ export function TeamPresencePanel({ token }: { readonly token: string }) {
         {person.session?.isWeekend ? <small className="team-presence-weekend">Работа в выходной</small> : null}
       </div>)}
       {!data && !error ? <LoadingSkeleton layout="rows" rows={3} label="Загружаем отметки команды…" /> : null}
-      {data && !members.length ? <p className="team-presence-empty">{onlyWorking ? "Сейчас никто не начал рабочий день." : "Сотрудников пока нет."}</p> : null}
+      {data && !members.length ? <p className="team-presence-empty">{presenceFilter === "working" ? "Сейчас никто не начал рабочий день." : presenceFilter === "vacation" ? "Сегодня никто не в отпуске." : presenceFilter === "trip" ? "Сегодня никто не в поездке." : "Сотрудников пока нет."}</p> : null}
     </div>
     </div>
     <Dialog open={Boolean(editing)} onOpenChange={(_event, next) => { if (!next.open && !saving) setEditing(undefined); }}>

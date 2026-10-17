@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { FluentProvider } from "@fluentui/react-components";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -82,23 +82,35 @@ describe("TeamDashboardView", () => {
     return onSelectTask;
   }
 
-  it("scrolls the employee focus strip after half a second without changing selection", () => {
+  it("removes the redundant horizontal employee strip while keeping the workload selector", () => {
     renderDashboard();
-    const strip = screen.getByRole("group", { name: "Фокус на сотруднике" });
-    Object.defineProperties(strip, { clientWidth: { value: 400 }, scrollWidth: { value: 1200 } });
-    const all = within(strip).getByRole("button", { name: "Вся команда" });
-    fireEvent.mouseEnter(strip);
-    const wheel = () => {
-      const event = new WheelEvent("wheel", { bubbles: true, cancelable: true, deltaY: 40 });
-      fireEvent(all, event); return event;
-    };
-    expect(wheel().defaultPrevented).toBe(false);
-    vi.advanceTimersByTime(500);
-    expect(wheel().defaultPrevented).toBe(true);
-    expect(strip.scrollLeft).toBe(40);
-    expect(all).toHaveAttribute("aria-pressed", "true");
-    fireEvent.mouseLeave(strip);
-    expect(wheel().defaultPrevented).toBe(false);
+    expect(screen.queryByRole("group", { name: "Фокус на сотруднике" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Азиза Каримова.*1 активная задача/i })).toBeInTheDocument();
+  });
+
+  it("shows pending deadline decisions and sends the approval through the existing action", async () => {
+    const onDecideDeadline = vi.fn().mockResolvedValue(task({ id: "deadline", title: "Отчёт", assigneeId: "employee", status: "in_progress" }));
+    const pending = task({ id: "deadline", title: "Отчёт", assigneeId: "employee", status: "in_progress", dueAt: "2026-09-10T09:00:00Z", deadlineRequests: [{
+      id: "request", messageId: "message", requesterUserId: "employee", oldDueAt: "2026-09-10T09:00:00Z", proposedDueAt: "2026-09-12T09:00:00Z", reason: "Нужны данные", status: "pending", createdAt: "2026-09-09T09:00:00Z",
+    }] });
+    render(<FluentProvider theme={workspaceTheme}><TeamDashboardView token="test-token" tasks={[pending]} people={people} currentUserId="manager" efficiencyLoading={false} onSelectTask={vi.fn()} onDecideDeadline={onDecideDeadline} /></FluentProvider>);
+    fireEvent.click(screen.getByText("Перенос срока").closest("button")!);
+    const decisions = screen.getByRole("region", { name: "Запросы на перенос срока" });
+    fireEvent.click(within(decisions).getByRole("button", { name: /Отчёт/ }));
+    expect(within(decisions).getByText("Нужны данные")).toBeInTheDocument();
+    await act(async () => { fireEvent.click(within(decisions).getByRole("button", { name: "Согласовать перенос срока" })); });
+    expect(onDecideDeadline).toHaveBeenCalledWith(pending, "request", true);
+  });
+
+  it("shows pending invitations and responds as the invited user", async () => {
+    const event = { id: "invite", organizerUserId: "employee", title: "Рабочая встреча", description: "Повестка", eventType: "meeting" as const, startsAt: "2026-09-10T09:00:00Z", endsAt: "2026-09-10T10:00:00Z", allDay: false, location: "Зал 1", status: "scheduled" as const, attendeeIds: ["manager"], attendees: [{ userId: "manager", status: "pending" as const }], currentUserAttendanceStatus: "pending" as const, canRespond: true, canEdit: false, createdAt: "2026-09-09T09:00:00Z", updatedAt: "2026-09-09T09:00:00Z", historyComplete: true };
+    const onCalendarResponse = vi.fn().mockResolvedValue({ ...event, currentUserAttendanceStatus: "accepted" });
+    render(<FluentProvider theme={workspaceTheme}><TeamDashboardView token="test-token" tasks={[]} people={people} currentUserId="manager" efficiencyLoading={false} onSelectTask={vi.fn()} calendarEvents={[event]} onCalendarResponse={onCalendarResponse} /></FluentProvider>);
+    fireEvent.click(screen.getByText("Приглашения").closest("button")!);
+    const invitations = screen.getByRole("region", { name: "Приглашения на мероприятия и встречи" });
+    expect(within(invitations).getByText("Повестка")).toBeInTheDocument();
+    await act(async () => { fireEvent.click(within(invitations).getByRole("button", { name: "Подтвердить участие" })); });
+    expect(onCalendarResponse).toHaveBeenCalledWith(event, "accepted");
   });
   it("shows an operational summary without turning workload into a rating", () => {
     renderDashboard();

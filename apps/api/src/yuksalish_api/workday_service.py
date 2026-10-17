@@ -12,7 +12,17 @@ from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from .auth import AuthenticatedUser
-from .tables import absence_requests, audit_events, users, workday_schedules, workday_sessions
+from .position_policy import is_calendar_chairman
+from .tables import (
+    absence_requests,
+    audit_events,
+    leave_requests,
+    trip_request_employees,
+    trip_requests,
+    users,
+    workday_schedules,
+    workday_sessions,
+)
 from .workday_schemas import (
     WorkdayMeResponse,
     WorkdayScheduleResponse,
@@ -122,6 +132,33 @@ async def _today_data(
         session_by_user,
         {row["requester_user_id"]: str(row["kind"]) for row in absences},
     )
+
+
+async def _team_leave_and_trip(
+    connection: AsyncConnection, user_ids: list[UUID], now: datetime
+) -> dict[UUID, str]:
+    if not user_ids:
+        return {}
+    leave_rows = (await connection.execute(select(leave_requests.c.requester_user_id).where(
+        leave_requests.c.requester_user_id.in_(user_ids),
+        leave_requests.c.status == "approved",
+        leave_requests.c.starts_on <= local_day(now),
+        leave_requests.c.ends_on >= local_day(now),
+    ))).all()
+    by_user = {row[0]: "vacation" for row in leave_rows}
+    trip_rows = (await connection.execute(select(trip_request_employees.c.user_id).select_from(
+        trip_request_employees.join(
+            trip_requests, trip_requests.c.id == trip_request_employees.c.request_id,
+        )
+    ).where(
+        trip_request_employees.c.user_id.in_(user_ids),
+        trip_requests.c.status == "approved",
+        trip_requests.c.deleted_at.is_(None),
+        trip_requests.c.start_date <= local_day(now),
+        trip_requests.c.end_date >= local_day(now),
+    ))).all()
+    by_user.update({row[0]: "trip" for row in trip_rows})
+    return by_user
 
 
 async def load_me(
@@ -263,13 +300,14 @@ async def load_team(
     checked_at = now or datetime.now(UTC)
     statement = select(users.c.id, users.c.full_name, users.c.job_title, users.c.avatar_updated_at,
         users.c.direct_manager_user_id).where(users.c.status == "active")
-    if current_user.role == "manager":
+    if current_user.role == "manager" and not is_calendar_chairman(current_user.job_title):
         statement = statement.where(
             (users.c.direct_manager_user_id == current_user.id) | (users.c.id == current_user.id)
         )
     rows = (await connection.execute(statement.order_by(users.c.full_name))).mappings().all()
     user_ids = [row["id"] for row in rows]
     schedules, sessions, absences = await _today_data(connection, user_ids, checked_at)
+    absences.update(await _team_leave_and_trip(connection, user_ids, checked_at))
     members = [
         WorkdayTeamMemberResponse(
             user_id=row["id"],

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 
 import type {
+  CalendarEvent,
   EfficiencyOverview,
   WorkspaceDepartment,
   WorkspacePerson,
@@ -24,13 +25,14 @@ import {
 } from "@fluentui/react-icons";
 
 import { TeamPresencePanel } from "./TeamPresencePanel";
+import { TaskDeadlineDecision } from "./TaskDeadlineDecision";
+import { needsTaskDeadlineDecision, pendingTaskDeadlineRequest } from "./task-deadline-request";
 import { EfficiencyDeadlineExplanation } from "./EfficiencyDeadlineExplanation";
 import { useContextMotion } from "./useContextMotion";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
 import { SlidingSegmented } from "./SlidingSegmented";
 import { employeeScope, type EmployeeScope } from "./employee-scope";
-import { useHorizontalBoardScroll } from "./useHorizontalBoardScroll";
 import { isTaskOverdue as deadlineIsOverdue } from "./task-deadline";
 
 interface TeamDashboardViewProps {
@@ -43,6 +45,9 @@ interface TeamDashboardViewProps {
   readonly efficiencyLoading: boolean;
   readonly efficiencyError?: string;
   readonly onSelectTask: (taskId: string) => void;
+  readonly calendarEvents?: readonly CalendarEvent[];
+  readonly onCalendarResponse?: (event: CalendarEvent, status: "accepted" | "declined") => Promise<CalendarEvent | undefined>;
+  readonly onDecideDeadline?: (task: WorkspaceTask, requestId: string, approved: boolean) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
 }
 
 type TeamFilter = "all" | "risk" | "review";
@@ -162,9 +167,15 @@ export function TeamDashboardView({
   efficiencyLoading,
   efficiencyError,
   onSelectTask,
+  calendarEvents = [],
+  onCalendarResponse,
+  onDecideDeadline,
 }: TeamDashboardViewProps) {
   const [teamFilter, setTeamFilter] = useState<TeamFilter>("all");
-  const peopleScrollRef = useHorizontalBoardScroll<HTMLDivElement>({ hoverDelayMs: 500, overButtons: true });
+  const [decisionPanel, setDecisionPanel] = useState<"extensions" | "invitations">();
+  const [selectedDeadlineTaskId, setSelectedDeadlineTaskId] = useState<string>();
+  const [invitationBusyId, setInvitationBusyId] = useState<string>();
+  const [invitationError, setInvitationError] = useState("");
   const [selectedPersonId, setSelectedPersonId] = useState<string>();
   const [scope, setScope] = useState<EmployeeScope>("central");
   const [attentionFilter, setAttentionFilter] = useState<"all" | "overdue" | "review" | "today">("all");
@@ -191,6 +202,22 @@ export function TeamDashboardView({
   });
   const efficiencyByUser = new Map(efficiency?.employees.map((employee) => [employee.userId, employee]));
   const personById = new Map(people.map((person) => [person.id, person]));
+  const deadlineTasks = tasks.filter((task) => needsTaskDeadlineDecision(task, currentUserId));
+  const pendingInvitations = calendarEvents.filter((event) => event.status === "scheduled"
+    && event.canRespond && (event.currentUserAttendanceStatus ?? "pending") === "pending"
+    && new Date(event.endsAt).getTime() > now.getTime());
+  const respondToInvitation = async (event: CalendarEvent, status: "accepted" | "declined") => {
+    if (!onCalendarResponse || invitationBusyId) return;
+    setInvitationBusyId(event.id);
+    setInvitationError("");
+    try {
+      if (!await onCalendarResponse(event, status)) setInvitationError("Ответ не сохранён. Повторите попытку.");
+    } catch (error) {
+      setInvitationError(error instanceof Error ? error.message : "Не удалось сохранить ответ.");
+    } finally {
+      setInvitationBusyId(undefined);
+    }
+  };
 
   const attentionTasks = tasks
     .map((task) => ({ task, attention: taskAttention(task, now) }))
@@ -298,17 +325,29 @@ export function TeamDashboardView({
       ? <TeamPresencePanel token={token} /> : null}
 
     {departments ? <EmployeeScopeSwitch value={scope} onChange={(next) => { setScope(next); setSelectedPersonId(undefined); }} label="Сотрудники в обзоре команды" /> : null}
-    <div ref={peopleScrollRef} className="team-focus-strip" role="group" aria-label="Фокус на сотруднике">
-      <button type="button" aria-pressed={!selectedPersonId} className="team-focus-all" onClick={() => setSelectedPersonId(undefined)}><PeopleTeam24Regular /><span>Вся команда</span></button>
-      {visiblePeople.map(person => <button key={person.id} type="button" className="team-focus-person" aria-pressed={selectedPersonId === person.id} onClick={() => setSelectedPersonId(current => current === person.id ? undefined : person.id)} title={person.jobTitle ?? person.name}><EmployeeProfileLink userId={person.id} personName={person.name}><Avatar size={36} name={person.name} color="colorful" /><span>{person.name}</span></EmployeeProfileLink></button>)}
-    </div>
-
     <section className="team-dash-metrics" aria-label="Ключевые показатели команды">
       <MetricCard active={attentionFilter === "all"} onSelect={() => setAttentionFilter("all")} icon={<Sparkle24Regular />} label="Активные задачи" value={activeTasks.length} note={`${dueThisWeek.length} со сроком в ближайшие 7 дней`} tone="brand" />
       <MetricCard active={attentionFilter === "overdue"} onSelect={() => setAttentionFilter("overdue")} icon={<Warning24Regular />} label="Нужна помощь" value={overdueTasks.length} note={overdueTasks.length ? "истёк текущий срок" : "истёкших сроков нет"} tone="danger" />
       <MetricCard active={attentionFilter === "review"} onSelect={() => setAttentionFilter("review")} icon={<CheckmarkCircle24Regular />} label="Ждут решения" value={reviewTasks.length} note="результаты на проверке" tone="review" />
       <MetricCard active={attentionFilter === "today"} onSelect={() => setAttentionFilter("today")} icon={<CalendarClock24Regular />} label="Срок сегодня" value={dueToday.length} note={dueToday.length ? "дедлайны до конца дня" : "сегодня без дедлайнов"} tone="calm" />
+      <MetricCard active={decisionPanel === "extensions"} onSelect={() => setDecisionPanel((current) => current === "extensions" ? undefined : "extensions")} icon={<Clock24Regular />} label="Перенос срока" value={deadlineTasks.length} note="запросы на ваше решение" tone="review" />
+      <MetricCard active={decisionPanel === "invitations"} onSelect={() => setDecisionPanel((current) => current === "invitations" ? undefined : "invitations")} icon={<CalendarClock24Regular />} label="Приглашения" value={pendingInvitations.length} note="ожидают вашего ответа" tone="brand" />
     </section>
+    {decisionPanel ? <section className="team-dash-decisions" aria-label={decisionPanel === "extensions" ? "Запросы на перенос срока" : "Приглашения на мероприятия и встречи"}>
+      <header><h3>{decisionPanel === "extensions" ? "Запросы на перенос срока" : "Приглашения на мероприятия и встречи"}</h3><Button appearance="subtle" onClick={() => setDecisionPanel(undefined)}>Скрыть</Button></header>
+      {decisionPanel === "extensions" ? deadlineTasks.length ? deadlineTasks.map((task) => {
+        const request = pendingTaskDeadlineRequest(task);
+        return request ? <div className="team-dash-decision-item" key={request.id}>
+          <button type="button" aria-expanded={selectedDeadlineTaskId === task.id} onClick={() => setSelectedDeadlineTaskId((current) => current === task.id ? undefined : task.id)}><strong>{task.title}</strong><span>Предлагаемый срок: {new Date(request.proposedDueAt).toLocaleString("ru-RU")}</span></button>
+          {selectedDeadlineTaskId === task.id ? <><TaskDeadlineDecision task={task} request={request} people={people} canDecide={Boolean(onDecideDeadline)} onDecide={onDecideDeadline} onResolved={() => setSelectedDeadlineTaskId(undefined)} /><Button appearance="subtle" onClick={() => onSelectTask(task.id)}>Открыть задачу</Button></> : null}
+        </div> : null;
+      }) : <p>Запросов на перенос срока нет.</p> : pendingInvitations.length ? pendingInvitations.map((event) => <article className="team-dash-decision-item" key={event.id}>
+        <strong>{event.title}</strong><span>{new Date(event.startsAt).toLocaleString("ru-RU")}{event.location ? ` · ${event.location}` : ""}</span>
+        {event.description ? <p>{event.description}</p> : null}
+        <div><Button appearance="primary" disabled={Boolean(invitationBusyId)} onClick={() => void respondToInvitation(event, "accepted")}>Подтвердить участие</Button><Button disabled={Boolean(invitationBusyId)} onClick={() => void respondToInvitation(event, "declined")}>Отказаться</Button></div>
+      </article>) : <p>Приглашений, ожидающих ответа, нет.</p>}
+      {invitationError && decisionPanel === "invitations" ? <WorkspaceNotice tone="error" role="alert">{invitationError}</WorkspaceNotice> : null}
+    </section> : null}
 
     <div className="team-dash-main-grid">
       <section className="team-dash-panel team-dash-attention" aria-labelledby="attention-title">
