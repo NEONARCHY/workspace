@@ -344,7 +344,7 @@ export function TeamDashboardView({
       }) : <p>Запросов на перенос срока нет.</p> : pendingInvitations.length ? pendingInvitations.map((event) => <article className="team-dash-decision-item" key={event.id}>
         <strong>{event.title}</strong><span>{new Date(event.startsAt).toLocaleString("ru-RU")}{event.location ? ` · ${event.location}` : ""}</span>
         {event.description ? <p>{event.description}</p> : null}
-        <div><Button appearance="primary" disabled={Boolean(invitationBusyId)} onClick={() => void respondToInvitation(event, "accepted")}>Подтвердить участие</Button><Button disabled={Boolean(invitationBusyId)} onClick={() => void respondToInvitation(event, "declined")}>Отказаться</Button></div>
+        <div><Button appearance="primary" disabled={Boolean(invitationBusyId) || !onCalendarResponse} onClick={() => void respondToInvitation(event, "accepted")}>Подтвердить участие</Button><Button disabled={Boolean(invitationBusyId) || !onCalendarResponse} onClick={() => void respondToInvitation(event, "declined")}>Отказаться</Button></div>
       </article>) : <p>Приглашений, ожидающих ответа, нет.</p>}
       {invitationError && decisionPanel === "invitations" ? <WorkspaceNotice tone="error" role="alert">{invitationError}</WorkspaceNotice> : null}
     </section> : null}
