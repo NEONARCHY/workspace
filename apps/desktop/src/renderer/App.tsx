@@ -2373,6 +2373,9 @@ export function App() {
                 <TeamDashboardView
                   token={session.accessToken}
                   tasks={workspace.tasks}
+                  calendarEvents={workspace.calendarEvents}
+                  onCalendarResponse={handleCalendarResponse}
+                  onDecideDeadline={handleDecideTaskDeadline}
                   people={displayPeople}
                   departments={workspace.departments}
                   currentUserId={workspace.currentUser.id}
