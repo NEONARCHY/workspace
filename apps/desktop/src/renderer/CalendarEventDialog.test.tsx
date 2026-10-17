@@ -96,7 +96,10 @@ it("shows an approved trip as read-only without asking travelers to RSVP", () =>
   render(<CalendarView events={[trip]} people={[]} currentUserId="me"
     onCreate={vi.fn()} onUpdate={vi.fn()} onCancel={vi.fn()} onRespond={vi.fn()} />);
   fireEvent.change(screen.getByLabelText("Перейти к дате"), { target: { value: "2026-10-13" } });
-  fireEvent.click(within(screen.getByRole("grid")).getByRole("button", { name: /Командировка/ }));
+  const tripDay = within(screen.getByRole("grid")).getByRole("gridcell", {
+    name: /вторник, 13 октября 2026 г./,
+  });
+  fireEvent.click(within(tripDay).getByRole("button", { name: /Командировка/ }));
   const dialog = screen.getByRole("dialog", { name: trip.title });
   expect(within(dialog).getByText("Участие в поездке утверждено")).toBeInTheDocument();
   expect(within(dialog).queryByRole("button", { name: "Подтвердить участие" })).not.toBeInTheDocument();
