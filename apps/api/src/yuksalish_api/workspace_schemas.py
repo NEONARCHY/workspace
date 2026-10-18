@@ -1167,7 +1167,8 @@ class LeaveActionHistoryResponse(ApiModel):
     from_status: LeaveStatus | None
     to_status: LeaveStatus
     action: Literal[
-        "created", "revised", "hr_approved", "deputy_approved", "returned", "rejected", "withdrawn"
+        "created", "revised", "hr_corrected", "hr_approved", "deputy_approved",
+        "returned", "rejected", "withdrawn"
     ]
     comment: str | None
     created_at: datetime
@@ -1185,11 +1186,16 @@ class LeaveRequestResponse(ApiModel):
     work_year_ends_on: date | None
     calendar_days: int | None
     paid_days: int | None
+    tenure_additional_days: int | None
+    organization_employment_date: date | None
     return_on: date | None
     accounting_officer: str | None
     order_employee_name: str | None
     order_job_title: str | None
     order_signer_name: str | None
+    order_clause_1: str | None
+    order_clause_2: str | None
+    order_clause_3: str | None
     status: LeaveStatus
     status_label: str
     order_number: str | None
@@ -1206,11 +1212,30 @@ class LeaveRequestResponse(ApiModel):
     updated_at: datetime
 
 
+class LeaveTenureRule(ApiModel):
+    after_years: int = Field(ge=0, le=50)
+    extra_days: int = Field(ge=1, le=30)
+
+
 class LeaveContextResponse(ApiModel):
     hr_user_id: str
     deputy_user_id: str
     can_configure_signature: bool
     signature_ready: bool
+    tenure_rules: list[LeaveTenureRule]
+    can_edit_tenure_rules: bool
+
+
+class LeaveTenureRulesWrite(ApiModel):
+    rules: list[LeaveTenureRule] = Field(min_length=1, max_length=10)
+
+    @model_validator(mode="after")
+    def validate_rules(self) -> "LeaveTenureRulesWrite":
+        years = [rule.after_years for rule in self.rules]
+        days = [rule.extra_days for rule in self.rules]
+        if years != sorted(set(years)) or days != sorted(set(days)):
+            raise ValueError("Пороги и дополнительные дни должны строго возрастать")
+        return self
 
 
 class LeaveWriteRequest(ApiModel):
@@ -1236,12 +1261,16 @@ class LeaveHrDecisionRequest(ApiModel):
     work_year_ends_on: date | None = None
     calendar_days: int | None = Field(default=None, ge=1, le=366)
     paid_days: int | None = Field(default=None, ge=1, le=366)
+    tenure_additional_days: int = Field(default=0, ge=0, le=30)
     return_on: date | None = None
     accounting_officer: str = Field(default="", max_length=200)
     order_employee_name: str = Field(default="", max_length=200)
     order_job_title: str = Field(default="", max_length=240)
     order_signer_name: str = Field(default="", max_length=200)
     order_number: str = Field(default="", max_length=40)
+    order_clause_1: str = Field(default="", max_length=4000)
+    order_clause_2: str = Field(default="", max_length=2000)
+    order_clause_3: str = Field(default="", max_length=3000)
     comment: str = Field(default="", max_length=4000)
 
 

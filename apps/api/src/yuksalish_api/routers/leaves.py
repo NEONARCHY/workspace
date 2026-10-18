@@ -16,11 +16,13 @@ from yuksalish_api.leave_service import (
     LeaveError,
     create_leave,
     leave_context,
+    preview_hr_order,
     read_leave_document,
     review_deputy,
     review_hr,
     revise_leave,
     save_deputy_signature,
+    save_tenure_rules,
     visible_leaves,
     withdraw_leave,
 )
@@ -30,6 +32,7 @@ from yuksalish_api.workspace_schemas import (
     LeaveDeputyDecisionRequest,
     LeaveHrDecisionRequest,
     LeaveRequestResponse,
+    LeaveTenureRulesWrite,
     LeaveWriteRequest,
 )
 
@@ -88,6 +91,14 @@ async def get_leave_context(user: User, connection: Connection) -> LeaveContextR
     return await leave_context(connection, user)
 
 
+@router.put("/tenure-rules", response_model=LeaveContextResponse)
+async def put_tenure_rules(
+    payload: LeaveTenureRulesWrite, user: User, connection: Connection,
+) -> LeaveContextResponse:
+    await ensure_module_action(connection, user, "leave_approvals", "approve")
+    return await save_tenure_rules(connection, user, payload)
+
+
 @router.put("/signature", response_model=LeaveContextResponse)
 async def put_deputy_signature(
     user: User,
@@ -122,7 +133,7 @@ async def patch_leave(
     user: User,
     connection: Connection,
 ) -> LeaveRequestResponse:
-    await ensure_module_action(connection, user, "leave_approvals", "edit")
+    await ensure_module_action(connection, user, "leave_approvals", "view")
     return await revise_leave(connection, user, _storage(request), request_id, payload)
 
 
@@ -135,6 +146,17 @@ async def post_hr_review(
 ) -> LeaveRequestResponse:
     await ensure_module_action(connection, user, "leave_approvals", "approve")
     return await review_hr(connection, user, request_id, payload)
+
+
+@router.post("/{request_id}/order-preview")
+async def post_hr_order_preview(
+    request_id: UUID, payload: LeaveHrDecisionRequest, user: User, connection: Connection,
+) -> Response:
+    await ensure_module_action(connection, user, "leave_approvals", "approve")
+    content = await preview_hr_order(connection, user, request_id, payload)
+    return Response(content=content, media_type="application/pdf", headers={
+        **_PRIVATE, "Content-Disposition": 'inline; filename="leave-order-preview.pdf"',
+    })
 
 
 @router.post("/{request_id}/deputy-decision", response_model=LeaveRequestResponse)

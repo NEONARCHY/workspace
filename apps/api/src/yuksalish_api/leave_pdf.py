@@ -137,6 +137,8 @@ def application_pdf(
     requested_start: date,
     requested_end: date | None,
     submitted_at: datetime,
+    edited_by_hr: str | None = None,
+    edited_at: datetime | None = None,
 ) -> bytes:
     """Typeset the employee's words, with account submission instead of a drawn signature."""
     _fonts()
@@ -194,6 +196,14 @@ def application_pdf(
             ),
         ]
     )
+    if edited_by_hr and edited_at:
+        story.extend([
+            Spacer(1, 12),
+            Paragraph(
+                f"Кадрлар хизмати томонидан {_text(edited_by_hr)} "
+                f"{edited_at:%d.%m.%Y} куни таҳрир қилинган электрон нусха.", body,
+            ),
+        ])
     return _build(story, "Меҳнат таътили аризаси", order=False)
 
 
@@ -213,6 +223,10 @@ def order_pdf(
     accounting_officer: str | None,
     signer_name: str,
     signature: bytes | None,
+    tenure_additional_days: int = 0,
+    order_clause_1: str | None = None,
+    order_clause_2: str | None = None,
+    order_clause_3: str | None = None,
 ) -> bytes:
     """Generate an A4 order with the supplied sample's hierarchy and three clauses."""
     _fonts()
@@ -253,23 +267,22 @@ def order_pdf(
         Paragraph("“Меҳнат таътили бериш тўғрисида”", bold),
         Spacer(1, 14),
         Paragraph(
+            "1. " + _text(order_clause_1)
+            + (f" Ташкилотдаги иш стажи учун қўшимча {tenure_additional_days} кун."
+               if tenure_additional_days else "") if order_clause_1 else
             f"1. {_text(job_title)} {_text(employee_name)}га "
             f"{work_year_start:%d.%m.%Y}–{work_year_end:%d.%m.%Y} йиллар иш даври "
             f"учун {calendar_days} календарь кундан иборат меҳнат таътили "
-            f"{_date(starts_on)}дан {_date(ends_on)}гача "
-            "берилсин.",
-            body,
+            + (f"(шу жумладан ташкилотдаги иш стажи учун {tenure_additional_days} кун) "
+               if tenure_additional_days else "")
+            + f"{_date(starts_on)}дан {_date(ends_on)}гача берилсин.", body,
         ),
-        Paragraph(
-            f"2. Ишга чиқиш санаси – {_date(return_on)} куни этиб белгилансин.",
-            body,
-        ),
-        Paragraph(
-            f"3. {accounting}{_text(employee_name)}га меҳнат таътили берилиши "
-            f"муносабати билан тегишли тартибда {paid_days} кунга "
-            "ҳисоб-китобларни амалга оширсин.",
-            body,
-        ),
+        Paragraph("2. " + _text(order_clause_2) if order_clause_2 else
+                  f"2. Ишга чиқиш санаси – {_date(return_on)} куни этиб белгилансин.", body),
+        Paragraph("3. " + _text(order_clause_3) if order_clause_3 else
+                  f"3. {accounting}{_text(employee_name)}га меҳнат таътили берилиши "
+                  f"муносабати билан тегишли тартибда {paid_days} кунга "
+                  "ҳисоб-китобларни амалга оширсин.", body),
         Spacer(1, 9),
         Paragraph(
             "Асос: ходимнинг аризаси, Ўзбекистон Республикаси Меҳнат "
