@@ -214,9 +214,10 @@ async def test_leave_is_authorized_audited_and_signed_only_after_deputy() -> Non
                     connection, actors["employee"], storage, request_id, "order-preview"
                 )
                 assert len(PdfReader(BytesIO(preview)).pages[0].images) == 1
+                preview_text = " ".join(PdfReader(BytesIO(preview)).pages[0].extract_text().split())
                 assert (
                     "ташкилотдаги иш стажи учун 2 кун"
-                    in PdfReader(BytesIO(preview)).pages[0].extract_text()
+                    in preview_text
                 )
                 with pytest.raises(LeaveError) as unsigned:
                     await review_deputy(
@@ -262,6 +263,7 @@ async def test_leave_is_authorized_audited_and_signed_only_after_deputy() -> Non
                 )
                 assert [row["action"] for row in history] == [
                     "created",
+                    "hr_corrected",
                     "hr_approved",
                     "deputy_approved",
                 ]
