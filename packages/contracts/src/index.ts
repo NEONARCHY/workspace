@@ -664,7 +664,7 @@ export interface LeaveActionHistory {
   readonly actorUserId: string;
   readonly fromStatus: LeaveStatus | null;
   readonly toStatus: LeaveStatus;
-  readonly action: "created" | "revised" | "hr_approved" | "deputy_approved" | "returned" | "rejected" | "withdrawn";
+  readonly action: "created" | "revised" | "hr_corrected" | "hr_approved" | "deputy_approved" | "returned" | "rejected" | "withdrawn";
   readonly comment: string | null;
   readonly createdAt: string;
 }
@@ -681,11 +681,16 @@ export interface LeaveRequest {
   readonly workYearEndsOn: string | null;
   readonly calendarDays: number | null;
   readonly paidDays: number | null;
+  readonly tenureAdditionalDays: number | null;
+  readonly organizationEmploymentDate: string | null;
   readonly returnOn: string | null;
   readonly accountingOfficer: string | null;
   readonly orderEmployeeName: string | null;
   readonly orderJobTitle: string | null;
   readonly orderSignerName: string | null;
+  readonly orderClause1: string | null;
+  readonly orderClause2: string | null;
+  readonly orderClause3: string | null;
   readonly status: LeaveStatus;
   readonly statusLabel: string;
   readonly orderNumber: string | null;
@@ -707,6 +712,13 @@ export interface LeaveContext {
   readonly deputyUserId: string;
   readonly canConfigureSignature: boolean;
   readonly signatureReady: boolean;
+  readonly tenureRules: readonly LeaveTenureRule[];
+  readonly canEditTenureRules: boolean;
+}
+
+export interface LeaveTenureRule {
+  readonly afterYears: number;
+  readonly extraDays: number;
 }
 
 export interface LeaveRequestInput {
@@ -723,12 +735,16 @@ export interface LeaveHrDecisionInput {
   readonly workYearEndsOn?: string;
   readonly calendarDays?: number;
   readonly paidDays?: number;
+  readonly tenureAdditionalDays?: number;
   readonly returnOn?: string;
   readonly accountingOfficer?: string;
   readonly orderEmployeeName?: string;
   readonly orderJobTitle?: string;
   readonly orderSignerName?: string;
   readonly orderNumber?: string;
+  readonly orderClause1?: string;
+  readonly orderClause2?: string;
+  readonly orderClause3?: string;
   readonly comment?: string;
 }
 

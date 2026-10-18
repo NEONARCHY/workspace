@@ -25,6 +25,8 @@ from .leave_pdf import application_pdf, order_pdf
 from .object_storage import ObjectStorage
 from .tables import (
     absence_requests,
+    audit_events,
+    hr_employee_profiles,
     hr_settings,
     leave_request_actions,
     leave_requests,
@@ -42,11 +44,46 @@ from .workspace_schemas import (
     LeaveHrDecisionRequest,
     LeaveRequestResponse,
     LeaveStatus,
+    LeaveTenureRule,
+    LeaveTenureRulesWrite,
     LeaveWriteRequest,
 )
 
 _LOCAL = ZoneInfo("Asia/Tashkent")
 _ACTIVE = {"pending_hr", "pending_deputy", "approved"}
+_DEFAULT_TENURE_RULES = [
+    {"after_years": 5, "extra_days": 2},
+    {"after_years": 10, "extra_days": 4},
+    {"after_years": 15, "extra_days": 6},
+]
+
+
+async def _tenure_rules(connection: AsyncConnection) -> list[LeaveTenureRule]:
+    saved = await connection.scalar(
+        select(hr_settings.c.leave_tenure_rules).where(hr_settings.c.id == 1)
+    )
+    return [LeaveTenureRule.model_validate(rule) for rule in (saved or _DEFAULT_TENURE_RULES)]
+
+
+def _eligible_days(employment_date: date | None, starts_on: date,
+                   rules: list[LeaveTenureRule]) -> int:
+    if employment_date is None or employment_date > starts_on:
+        return 0
+    years = starts_on.year - employment_date.year - (
+        (starts_on.month, starts_on.day) < (employment_date.month, employment_date.day)
+    )
+    anniversary_day = (
+        min(employment_date.day, 28) if employment_date.month == 2 else employment_date.day
+    )
+    anniversary = date(employment_date.year + years, employment_date.month, anniversary_day)
+    return max(
+        (
+            rule.extra_days for rule in rules
+            if years > rule.after_years
+            or (years == rule.after_years and starts_on > anniversary)
+        ),
+        default=0,
+    )
 _LABELS = {
     "pending_hr": "На проверке кадровой службы",
     "pending_deputy": "На утверждении первого заместителя",
@@ -135,6 +172,14 @@ async def _response(
 ) -> LeaveRequestResponse:
     status = cast(LeaveStatus, str(row["status"]))
     owner = row["requester_user_id"] == user.id
+    employment_date = row["organization_employment_date"]
+    if status == "pending_hr":
+        employment_date = await connection.scalar(
+            select(hr_employee_profiles.c.employment_date).where(
+                hr_employee_profiles.c.user_id == row["requester_user_id"],
+                hr_employee_profiles.c.employment_status == "active",
+            )
+        )
     return LeaveRequestResponse(
         id=str(row["id"]),
         requester_user_id=str(row["requester_user_id"]),
@@ -147,18 +192,24 @@ async def _response(
         work_year_ends_on=row["work_year_ends_on"],
         calendar_days=row["calendar_days"],
         paid_days=row["paid_days"],
+        tenure_additional_days=row["tenure_additional_days"],
+        organization_employment_date=employment_date,
         return_on=row["return_on"],
         accounting_officer=row["accounting_officer"],
         order_employee_name=row["order_employee_name"],
         order_job_title=row["order_job_title"],
         order_signer_name=row["order_signer_name"],
+        order_clause_1=row["order_clause_1"],
+        order_clause_2=row["order_clause_2"],
+        order_clause_3=row["order_clause_3"],
         status=status,
         status_label=_LABELS[status],
         order_number=row["order_number"],
         order_year=row["order_year"],
         signed_by_user_id=(str(row["signed_by_user_id"]) if row["signed_by_user_id"] else None),
         approved_at=row["approved_at"],
-        can_revise=owner and status in {"pending_hr", "needs_revision"},
+        can_revise=(owner and status in {"pending_hr", "needs_revision"})
+        or (user.id == hr_id and status == "pending_hr"),
         can_review_hr=user.id == hr_id and status == "pending_hr",
         can_review_deputy=user.id == deputy_id and status == "pending_deputy",
         can_withdraw=owner and status in {"pending_hr", "pending_deputy", "needs_revision"},
@@ -332,6 +383,8 @@ async def _application(
     starts_on: date,
     ends_on: date | None,
     submitted_at: datetime,
+    edited_by_hr: str | None = None,
+    edited_at: datetime | None = None,
 ) -> tuple[str, str]:
     people = (
         (
@@ -360,6 +413,8 @@ async def _application(
         requested_start=starts_on,
         requested_end=ends_on,
         submitted_at=submitted_at.astimezone(_LOCAL),
+        edited_by_hr=edited_by_hr,
+        edited_at=edited_at.astimezone(_LOCAL) if edited_at else None,
     )
     key = f"leave-requests/{request_id}/applications/{uuid4()}.pdf"
     await storage.put(key, content, "application/pdf")
@@ -393,7 +448,31 @@ async def leave_context(
         deputy_user_id=str(deputy_id),
         can_configure_signature=user.id == deputy_id,
         signature_ready=ready is not None,
+        tenure_rules=await _tenure_rules(connection),
+        can_edit_tenure_rules=user.id == hr_id,
     )
+
+
+async def save_tenure_rules(
+    connection: AsyncConnection, user: AuthenticatedUser, payload: LeaveTenureRulesWrite
+) -> LeaveContextResponse:
+    hr_id, _ = await _reviewers(connection)
+    if user.id != hr_id:
+        raise LeaveError(403, "Изменять пороги стажа может только назначенный кадровик")
+    previous = [rule.model_dump() for rule in await _tenure_rules(connection)]
+    current = [rule.model_dump() for rule in payload.rules]
+    await connection.execute(
+        update(hr_settings).where(hr_settings.c.id == 1).values(
+            leave_tenure_rules=current,
+            updated_at=datetime.now(UTC), updated_by_user_id=user.id,
+        )
+    )
+    await connection.execute(insert(audit_events).values(
+        id=uuid4(), actor_user_id=user.id, action="leave.tenure_rules_updated",
+        target_type="leave_tenure_rules", target_id=hr_id,
+        details={"previous": previous, "current": current}, created_at=datetime.now(UTC),
+    ))
+    return await leave_context(connection, user)
 
 
 async def save_deputy_signature(
@@ -478,11 +557,16 @@ async def create_leave(
         work_year_ends_on=None,
         calendar_days=None,
         paid_days=None,
+        tenure_additional_days=None,
+        organization_employment_date=None,
         return_on=None,
         accounting_officer=None,
         order_employee_name=None,
         order_job_title=None,
         order_signer_name=None,
+        order_clause_1=None,
+        order_clause_2=None,
+        order_clause_3=None,
         status="pending_hr",
         order_number=None,
         order_year=None,
@@ -518,8 +602,11 @@ async def revise_leave(
 ) -> LeaveRequestResponse:
     hr_id, deputy_id = await _reviewers(connection)
     row = await _row(connection, request_id, lock=True)
-    if row["requester_user_id"] != user.id:
-        raise LeaveError(403, "Изменить заявление может только его автор")
+    is_owner = row["requester_user_id"] == user.id
+    if not is_owner and user.id != hr_id:
+        raise LeaveError(403, "Изменить заявление может только автор или назначенный кадровик")
+    if not is_owner and row["status"] != "pending_hr":
+        raise LeaveError(409, "Кадровая правка доступна только на этапе проверки")
     if row["status"] not in {"pending_hr", "needs_revision"}:
         raise LeaveError(409, "Заявление уже находится на следующем этапе")
     await _ensure_period(
@@ -534,12 +621,14 @@ async def revise_leave(
         connection,
         storage,
         request_id,
-        user.id,
+        row["requester_user_id"],
         deputy_id,
         payload.application_text,
         payload.starts_on,
         payload.ends_on,
-        now,
+        now if is_owner else row["created_at"],
+        edited_by_hr=None if is_owner else user.full_name,
+        edited_at=None if is_owner else now,
     )
     values = dict(
         application_text=payload.application_text,
@@ -553,11 +642,16 @@ async def revise_leave(
         work_year_ends_on=None,
         calendar_days=None,
         paid_days=None,
+        tenure_additional_days=None,
+        organization_employment_date=None,
         return_on=None,
         accounting_officer=None,
         order_employee_name=None,
         order_job_title=None,
         order_signer_name=None,
+        order_clause_1=None,
+        order_clause_2=None,
+        order_clause_3=None,
         status="pending_hr",
         order_number=None,
         order_year=None,
@@ -571,15 +665,12 @@ async def revise_leave(
         .values(**values)
     )
     await _resolve_action_notifications(connection, request_id)
-    event_id = await _audit(connection, row, user.id, "pending_hr", "revised", None)
+    event_id = await _audit(connection, row, user.id, "pending_hr",
+                            "revised" if is_owner else "hr_corrected", None)
     await _notify(
-        connection,
-        hr_id,
-        request_id,
-        event_id,
-        "Заявление на отпуск дополнено",
-        "Проверьте обновлённое заявление",
-        action=True,
+        connection, hr_id if is_owner else row["requester_user_id"], request_id, event_id,
+        "Заявление на отпуск дополнено" if is_owner else "Кадры уточнили заявление",
+        "Проверьте обновлённое заявление", action=is_owner,
     )
     return await _response(connection, user, {**row, **values}, hr_id, deputy_id)
 
@@ -626,8 +717,22 @@ async def review_hr(
             raise LeaveError(422, "Заполните ФИО и должность для приказа")
         if payload.work_year_ends_on < payload.work_year_starts_on:
             raise LeaveError(422, "Конец рабочего периода раньше начала")
+        if payload.ends_on < payload.starts_on:
+            raise LeaveError(422, "Конец отпуска раньше начала")
         if payload.return_on <= payload.ends_on:
             raise LeaveError(422, "Дата выхода должна быть после окончания отпуска")
+        employment_date = await connection.scalar(
+            select(hr_employee_profiles.c.employment_date).where(
+                hr_employee_profiles.c.user_id == row["requester_user_id"],
+                hr_employee_profiles.c.employment_status == "active",
+            )
+        )
+        eligible = _eligible_days(employment_date, payload.starts_on,
+                                  await _tenure_rules(connection))
+        if payload.tenure_additional_days not in {0, eligible}:
+            raise LeaveError(422, "Дополнительные дни не соответствуют стажу в организации")
+        if payload.tenure_additional_days > payload.calendar_days:
+            raise LeaveError(422, "Дополнительных дней не может быть больше дней отпуска")
         number = payload.order_number.strip()
         if not number:
             raise LeaveError(422, "Укажите номер приказа до передачи заместителю")
@@ -657,11 +762,16 @@ async def review_hr(
             work_year_ends_on=payload.work_year_ends_on,
             calendar_days=payload.calendar_days,
             paid_days=payload.paid_days,
+            tenure_additional_days=payload.tenure_additional_days,
+            organization_employment_date=employment_date,
             return_on=payload.return_on,
             accounting_officer=payload.accounting_officer.strip() or None,
             order_employee_name=payload.order_employee_name.strip(),
             order_job_title=payload.order_job_title.strip(),
             order_signer_name=payload.order_signer_name.strip(),
+            order_clause_1=payload.order_clause_1.strip() or None,
+            order_clause_2=payload.order_clause_2.strip() or None,
+            order_clause_3=payload.order_clause_3.strip() or None,
             order_number=number,
             order_year=order_year,
             status="pending_deputy",
@@ -707,6 +817,72 @@ async def review_hr(
             action=needs_action,
         )
     return await _response(connection, user, {**row, **values}, hr_id, deputy_id)
+
+
+async def preview_hr_order(
+    connection: AsyncConnection, user: AuthenticatedUser, request_id: UUID,
+    payload: LeaveHrDecisionRequest,
+) -> bytes:
+    hr_id, _ = await _reviewers(connection)
+    if user.id != hr_id:
+        raise LeaveError(403, "Проект приказа может подготовить только назначенный кадровик")
+    row = await _row(connection, request_id)
+    if row["status"] != "pending_hr":
+        raise LeaveError(409, "Проект приказа уже передан на следующий этап")
+    if payload.action != "approve" or not all((
+        payload.starts_on, payload.ends_on, payload.work_year_starts_on,
+        payload.work_year_ends_on, payload.calendar_days, payload.paid_days,
+        payload.return_on, payload.order_number.strip(), payload.order_employee_name.strip(),
+        payload.order_job_title.strip(), payload.order_signer_name.strip(),
+    )):
+        raise LeaveError(422, "Для просмотра заполните все обязательные поля приказа")
+    assert payload.starts_on and payload.ends_on and payload.work_year_starts_on
+    assert payload.work_year_ends_on and payload.return_on
+    assert payload.calendar_days and payload.paid_days
+    if (payload.ends_on < payload.starts_on or payload.return_on <= payload.ends_on
+            or payload.work_year_ends_on < payload.work_year_starts_on):
+        raise LeaveError(422, "Проверьте даты отпуска и выхода на работу")
+    if any(char in payload.order_number for char in "\\/\r\n\t"):
+        raise LeaveError(422, "Номер приказа содержит недопустимые символы")
+    if payload.tenure_additional_days > payload.calendar_days:
+        raise LeaveError(422, "Дополнительных дней не может быть больше дней отпуска")
+    employment_date = await connection.scalar(
+        select(hr_employee_profiles.c.employment_date).where(
+            hr_employee_profiles.c.user_id == row["requester_user_id"],
+            hr_employee_profiles.c.employment_status == "active",
+        )
+    )
+    eligible = _eligible_days(employment_date, payload.starts_on, await _tenure_rules(connection))
+    if payload.tenure_additional_days not in {0, eligible}:
+        raise LeaveError(422, "Дополнительные дни не соответствуют стажу в организации")
+    await _ensure_period(
+        connection, row["requester_user_id"], payload.starts_on, payload.ends_on,
+        excluded=request_id,
+    )
+    order_year = datetime.now(_LOCAL).year
+    taken = await connection.scalar(select(leave_requests.c.id).where(
+        leave_requests.c.order_year == order_year,
+        leave_requests.c.order_number == payload.order_number.strip(),
+        leave_requests.c.id != request_id,
+    ))
+    if taken:
+        raise LeaveError(409, "Этот номер приказа уже занят")
+    return await run_in_threadpool(
+        order_pdf,
+        number=payload.order_number.strip(), issued_on=datetime.now(_LOCAL).date(),
+        employee_name=payload.order_employee_name.strip(),
+        job_title=payload.order_job_title.strip(),
+        work_year_start=payload.work_year_starts_on,
+        work_year_end=payload.work_year_ends_on,
+        starts_on=payload.starts_on, ends_on=payload.ends_on,
+        calendar_days=payload.calendar_days, paid_days=payload.paid_days,
+        return_on=payload.return_on, accounting_officer=payload.accounting_officer.strip(),
+        signer_name=payload.order_signer_name.strip(), signature=None,
+        tenure_additional_days=payload.tenure_additional_days,
+        order_clause_1=payload.order_clause_1.strip() or None,
+        order_clause_2=payload.order_clause_2.strip() or None,
+        order_clause_3=payload.order_clause_3.strip() or None,
+    )
 
 
 async def withdraw_leave(
@@ -803,6 +979,10 @@ async def review_deputy(
             accounting_officer=row["accounting_officer"],
             signer_name=row["order_signer_name"],
             signature=image,
+            tenure_additional_days=row["tenure_additional_days"] or 0,
+            order_clause_1=row["order_clause_1"],
+            order_clause_2=row["order_clause_2"],
+            order_clause_3=row["order_clause_3"],
         )
         key = f"leave-requests/{request_id}/orders/{uuid4()}.pdf"
         await storage.put(key, content, "application/pdf")
@@ -919,5 +1099,9 @@ async def read_leave_document(
             accounting_officer=row["accounting_officer"],
             signer_name=row["order_signer_name"],
             signature=None,
+            tenure_additional_days=row["tenure_additional_days"] or 0,
+            order_clause_1=row["order_clause_1"],
+            order_clause_2=row["order_clause_2"],
+            order_clause_3=row["order_clause_3"],
         )
     raise LeaveError(404, "Неизвестный вид документа")

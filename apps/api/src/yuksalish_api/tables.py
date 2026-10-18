@@ -967,6 +967,11 @@ leave_requests = sa.Table(
     sa.Column("work_year_ends_on", sa.Date()),
     sa.Column("calendar_days", sa.SmallInteger()),
     sa.Column("paid_days", sa.SmallInteger()),
+    sa.Column("tenure_additional_days", sa.SmallInteger()),
+    sa.Column("organization_employment_date", sa.Date()),
+    sa.Column("order_clause_1", sa.Text()),
+    sa.Column("order_clause_2", sa.Text()),
+    sa.Column("order_clause_3", sa.Text()),
     sa.Column("return_on", sa.Date()),
     sa.Column("accounting_officer", sa.String(200)),
     sa.Column("order_employee_name", sa.String(200)),
@@ -1159,6 +1164,7 @@ hr_settings = sa.Table(
     sa.Column("accountant_user_id", uuid_type),
     sa.Column("updated_by_user_id", uuid_type),
     sa.Column("updated_at", sa.DateTime(timezone=True)),
+    sa.Column("leave_tenure_rules", sa.JSON()),
 )
 
 hr_employee_profiles = sa.Table(

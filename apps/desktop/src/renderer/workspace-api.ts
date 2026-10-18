@@ -57,6 +57,7 @@ import type {
   AbsenceRequest,
   AbsenceRequestInput,
   LeaveContext,
+  LeaveTenureRule,
   LeaveRequest,
   LeaveRequestInput,
   LeaveHrDecisionInput,
@@ -2444,6 +2445,16 @@ export function reviseWorkspaceLeave(token: string, id: string, payload: LeaveRe
 
 export function reviewWorkspaceLeaveHr(token: string, id: string, payload: LeaveHrDecisionInput): Promise<LeaveRequest> {
   return apiRequest<LeaveRequest>(`/leave-requests/${encodeURIComponent(id)}/hr-review`, { method: "POST", body: JSON.stringify(payload) }, token);
+}
+
+export function saveWorkspaceLeaveTenureRules(token: string, rules: readonly LeaveTenureRule[]): Promise<LeaveContext> {
+  return apiRequest<LeaveContext>("/leave-requests/tenure-rules", { method: "PUT", body: JSON.stringify({ rules }) }, token);
+}
+
+export function previewWorkspaceLeaveHrOrder(token: string, id: string, payload: LeaveHrDecisionInput): Promise<Blob> {
+  return boundedRequest(`${getApiBaseUrl()}/api/v1/leave-requests/${encodeURIComponent(id)}/order-preview`,
+    { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(payload) },
+    (response) => response.blob(), 120_000);
 }
 
 export function reviewWorkspaceLeaveDeputy(token: string, id: string, payload: LeaveDeputyDecisionInput): Promise<LeaveRequest> {

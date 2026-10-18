@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { LeaveDecision, LeaveHrDecisionInput, LeaveRequest, WorkspacePerson } from "@yuksalish/contracts";
+import type { LeaveDecision, LeaveHrDecisionInput, LeaveRequest, LeaveTenureRule, WorkspacePerson } from "@yuksalish/contracts";
 import { Button, Field, Input, Textarea } from "@fluentui/react-components";
 import { Add24Regular, ArrowClockwise20Regular, DocumentPdf20Regular } from "@fluentui/react-icons";
 import { ExternalFileViewer, type FileViewerSource } from "./FileViewer";
@@ -7,8 +7,8 @@ import { WorkspaceNotice } from "./WorkspaceNotice";
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
 import {
   createWorkspaceLeave, loadWorkspaceLeaveContext, loadWorkspaceLeaveDocument,
-  loadWorkspaceLeaves, reviewWorkspaceLeaveDeputy, reviewWorkspaceLeaveHr,
-  reviseWorkspaceLeave, saveWorkspaceLeaveSignature, withdrawWorkspaceLeave,
+  loadWorkspaceLeaves, previewWorkspaceLeaveHrOrder, reviewWorkspaceLeaveDeputy, reviewWorkspaceLeaveHr,
+  reviseWorkspaceLeave, saveWorkspaceLeaveSignature, saveWorkspaceLeaveTenureRules, withdrawWorkspaceLeave,
 } from "./workspace-api";
 import "./leave-view.css";
 
@@ -20,12 +20,13 @@ interface Props {
   readonly focusRequestId?: string;
 }
 
-type DocumentKind = "application" | "order-preview" | "order";
+type DocumentKind = "application" | "order-preview" | "order" | "hr-preview";
 type HrForm = {
   startsOn: string; endsOn: string; workYearStartsOn: string; workYearEndsOn: string;
   calendarDays: string; paidDays: string; returnOn: string; accountingOfficer: string;
   orderEmployeeName: string; orderJobTitle: string; orderSignerName: string;
-  orderNumber: string;
+  orderNumber: string; tenureAdditionalDays: string;
+  orderClause1: string; orderClause2: string; orderClause3: string;
 };
 
 const example = "Менга йиллик меҳнат таътили беришингизни сўрайман.";
@@ -33,6 +34,7 @@ const initialHr: HrForm = {
   startsOn: "", endsOn: "", workYearStartsOn: "", workYearEndsOn: "",
   calendarDays: "", paidDays: "", returnOn: "", accountingOfficer: "",
   orderEmployeeName: "", orderJobTitle: "", orderSignerName: "", orderNumber: "",
+  tenureAdditionalDays: "0", orderClause1: "", orderClause2: "", orderClause3: "",
 };
 const hrFields: { key: keyof HrForm; label: string; type?: "date" | "number" | "text" }[] = [
   { key: "startsOn", label: "Начало отпуска", type: "date" },
@@ -59,6 +61,15 @@ function formatDate(value: string | null): string {
   return `${day}.${month}.${year}`;
 }
 
+function eligibleTenureDays(employmentDate: string | null, startsOn: string, rules: readonly LeaveTenureRule[]): number {
+  if (!employmentDate || !startsOn || startsOn < employmentDate) return 0;
+  const [year = 0, month = 1, day = 1] = employmentDate.split("-").map(Number);
+  return rules.reduce((days, rule) => {
+    const threshold = new Date(Date.UTC(year + rule.afterYears, month - 1, day)).toISOString().slice(0, 10);
+    return startsOn > threshold ? Math.max(days, rule.extraDays) : days;
+  }, 0);
+}
+
 function formFor(item: LeaveRequest, people: readonly WorkspacePerson[], deputyId?: string): HrForm {
   return {
     startsOn: item.startsOn ?? item.requestedStartsOn,
@@ -73,6 +84,8 @@ function formFor(item: LeaveRequest, people: readonly WorkspacePerson[], deputyI
     orderJobTitle: item.orderJobTitle ?? people.find((person) => person.id === item.requesterUserId)?.jobTitle ?? "",
     orderSignerName: item.orderSignerName ?? people.find((person) => person.id === deputyId)?.name ?? "",
     orderNumber: item.orderNumber ?? "",
+    tenureAdditionalDays: item.tenureAdditionalDays?.toString() ?? "0",
+    orderClause1: item.orderClause1 ?? "", orderClause2: item.orderClause2 ?? "", orderClause3: item.orderClause3 ?? "",
   };
 }
 
@@ -93,6 +106,9 @@ export function LeaveView({ token, people, currentUserId, canCreate, focusReques
   const [hrForm, setHrForm] = useState<HrForm>(initialHr);
   const [comment, setComment] = useState("");
   const [document, setDocument] = useState<{ requestId: string; kind: DocumentKind }>();
+  const [hrPreview, setHrPreview] = useState<Blob>();
+  const [ruleDraft, setRuleDraft] = useState<LeaveTenureRule[]>();
+  const [rulesOpen, setRulesOpen] = useState(false);
   const [filter, setFilter] = useState<"all" | "mine" | "action" | "approved">("all");
   const focused = useRef(false);
 
@@ -123,6 +139,8 @@ export function LeaveView({ token, people, currentUserId, canCreate, focusReques
   }, [refresh]);
 
   const selected = requests.find((item) => item.id === selectedId);
+  const tenureRules = ruleDraft ?? context?.tenureRules ?? [];
+  const eligibleDays = selected ? eligibleTenureDays(selected.organizationEmploymentDate, hrForm.startsOn, context?.tenureRules ?? []) : 0;
   const peopleById = useMemo(() => new Map(people.map((person) => [person.id, person])), [people]);
   const visible = requests.filter((item) => filter === "all" ||
     filter === "mine" && item.requesterUserId === currentUserId ||
@@ -171,18 +189,50 @@ export function LeaveView({ token, people, currentUserId, canCreate, focusReques
       : createWorkspaceLeave(token, payload));
   }
 
-  function hrDecision(action: LeaveDecision) {
-    const payload: LeaveHrDecisionInput = action === "approve" ? {
-      action, startsOn: hrForm.startsOn, endsOn: hrForm.endsOn,
+  function hrApprovalPayload(): LeaveHrDecisionInput {
+    return {
+      action: "approve", startsOn: hrForm.startsOn, endsOn: hrForm.endsOn,
       workYearStartsOn: hrForm.workYearStartsOn, workYearEndsOn: hrForm.workYearEndsOn,
       calendarDays: Number(hrForm.calendarDays), paidDays: Number(hrForm.paidDays),
+      tenureAdditionalDays: Number(hrForm.tenureAdditionalDays),
       returnOn: hrForm.returnOn, orderNumber: hrForm.orderNumber,
       orderEmployeeName: hrForm.orderEmployeeName, orderJobTitle: hrForm.orderJobTitle,
       orderSignerName: hrForm.orderSignerName, accountingOfficer: hrForm.accountingOfficer,
+      orderClause1: hrForm.orderClause1, orderClause2: hrForm.orderClause2, orderClause3: hrForm.orderClause3,
       comment,
-    } : { action, comment };
+    };
+  }
+
+  function hrDecision(action: LeaveDecision) {
+    const payload: LeaveHrDecisionInput = action === "approve" ? hrApprovalPayload() : { action, comment };
     if (!selected) return;
     void mutate(() => reviewWorkspaceLeaveHr(token, selected.id, payload));
+  }
+
+  async function previewHrOrder() {
+    if (!selected || busy) return;
+    setBusy(true); setError("");
+    try {
+      setHrPreview(await previewWorkspaceLeaveHrOrder(token, selected.id, hrApprovalPayload()));
+      setDocument({ requestId: selected.id, kind: "hr-preview" });
+    } catch (cause) { setError(errorText(cause)); }
+    finally { setBusy(false); }
+  }
+
+  async function saveRules() {
+    if (!ruleDraft || busy) return;
+    if (!ruleDraft.length || ruleDraft.length > 10 || ruleDraft.some((rule, index) =>
+      !Number.isInteger(rule.afterYears) || !Number.isInteger(rule.extraDays) ||
+      rule.afterYears < 0 || rule.afterYears > 50 || rule.extraDays < 1 || rule.extraDays > 30 ||
+      (index > 0 && (rule.afterYears <= ruleDraft[index - 1]!.afterYears ||
+        rule.extraDays <= ruleDraft[index - 1]!.extraDays)))) {
+      setError("Пороги лет и дополнительные дни должны строго возрастать (не более 10 порогов).");
+      return;
+    }
+    setBusy(true); setError("");
+    try { setContext(await saveWorkspaceLeaveTenureRules(token, ruleDraft)); setHrForm((current) => ({ ...current, tenureAdditionalDays: "0" })); setRuleDraft(undefined); setRulesOpen(false); }
+    catch (cause) { setError(errorText(cause)); }
+    finally { setBusy(false); }
   }
 
   function deputyDecision(action: LeaveDecision) {
@@ -237,11 +287,12 @@ export function LeaveView({ token, people, currentUserId, canCreate, focusReques
       <div className="leave-detail">
         {showCreate || editing && selected?.canRevise ? <div className="leave-card">
           <h2>{editing ? "Дополнить заявление" : "Новое заявление"}</h2>
-          <p>По образцу сотрудник описывает просьбу об отпуске. Подпись от руки не требуется: отправка фиксируется из вашего аккаунта.</p>
+          <p>Подпись от руки не требуется. Каждое исправление сохраняется в истории с указанием автора.</p>
           <Field label="Предполагаемое начало" required><Input type="date" value={startsOn} onChange={(_, data) => setStartsOn(data.value)} /></Field>
           <Field label="Предполагаемое окончание (если известно)"><Input type="date" min={startsOn} value={endsOn} onChange={(_, data) => setEndsOn(data.value)} /></Field>
           <Field label="Текст заявления" required><Textarea rows={9} value={applicationText} onChange={(_, data) => setApplicationText(data.value)} /></Field>
           <div className="leave-actions"><Button aria-expanded={showApplicationExample} aria-controls={showApplicationExample ? "leave-application-example" : undefined} onClick={() => setShowApplicationExample((open) => !open)}>{showApplicationExample ? "Скрыть пример аризы" : "Посмотреть пример аризы"}</Button>
+            {editing && selected ? <Button icon={<DocumentPdf20Regular />} onClick={() => setDocument({ requestId: selected.id, kind: "application" })}>Открыть текущее заявление PDF</Button> : null}
             <Button disabled={busy} onClick={() => setApplicationText(example)}>Вставить текст примера</Button>
             <Button disabled={!applicationText.trim()} onClick={() => setPreviewText(!previewText)}>{previewText ? "Скрыть предпросмотр" : "Предпросмотр текста"}</Button></div>
           {showApplicationExample ? <div id="leave-application-example" className="leave-paper leave-example-paper" role="region" aria-label="Пример аризы на отпуск">
@@ -251,24 +302,45 @@ export function LeaveView({ token, people, currentUserId, canCreate, focusReques
             <p className="leave-example-note">В электронном заявлении подпись от руки не нужна: отправка фиксируется из вашего аккаунта.</p>
           </div> : null}
           {previewText ? <div className="leave-paper"><div>«Юксалиш» ҳаракати ижрочи директорига</div><h3>АРИЗА</h3><p>{applicationText}</p><small>После отправки будет создан PDF с датой и данными аккаунта.</small></div> : null}
-          <div className="leave-actions"><Button appearance="primary" disabled={busy} onClick={submitApplication}>{editing ? "Сохранить и отправить кадрам" : "Отправить кадрам"}</Button>
+          <div className="leave-actions"><Button appearance="primary" disabled={busy} onClick={submitApplication}>{editing ? selected?.requesterUserId === currentUserId ? "Сохранить и отправить кадрам" : "Сохранить исправления кадровика" : "Отправить кадрам"}</Button>
             <Button disabled={busy} onClick={() => { setShowCreate(false); setEditing(false); }}>Отмена</Button></div>
         </div> : selected ? <div className="leave-card">
           <div className="leave-detail-heading"><div><span className="leave-eyebrow">{selected.statusLabel}</span>
             <h2>{peopleById.get(selected.requesterUserId)?.name ?? "Заявление"}</h2><p>Предполагаемая дата: {formatDate(selected.requestedStartsOn)} · Подано {formatDate(selected.createdAt.slice(0, 10))}</p></div>
             <Button icon={<DocumentPdf20Regular />} onClick={() => setDocument({ requestId: selected.id, kind: "application" })}>Заявление PDF</Button></div>
           <div className="leave-paper"><h3>Заявление сотрудника</h3><p>{selected.applicationText}</p></div>
-          {selected.canRevise ? <div className="leave-actions"><Button onClick={() => setEditing(true)}>Изменить заявление</Button></div> : null}
+          {selected.canRevise ? <div className="leave-actions"><Button onClick={() => setEditing(true)}>Исправить заявление</Button></div> : null}
           {selected.startsOn ? <div className="leave-summary"><div><span>Отпуск</span><strong>{formatDate(selected.startsOn)} — {formatDate(selected.endsOn)}</strong></div>
             <div><span>Рабочий период</span><strong>{formatDate(selected.workYearStartsOn)} — {formatDate(selected.workYearEndsOn)}</strong></div>
             <div><span>Приказ</span><strong>{selected.orderNumber}-сон а/ф · {selected.calendarDays} календ. дней</strong></div>
+            {selected.tenureAdditionalDays ? <div><span>За стаж в организации</span><strong>+{selected.tenureAdditionalDays} дн. · приём {formatDate(selected.organizationEmploymentDate)}</strong></div> : null}
             <div><span>Выход на работу</span><strong>{formatDate(selected.returnOn)}</strong></div></div> : null}
           {selected.canReviewHr ? <div className="leave-review"><h3>Проверка кадровой службы</h3>
-            <p>Уточните все реквизиты вручную. После подтверждения они перейдут первому заместителю.</p>
+            <p>Уточните реквизиты, проверьте и при необходимости исправьте заявление. Проект приказа можно открыть до передачи заместителю.</p>
+            <div className="leave-tenure"><strong>Дополнительные дни за стаж только в нашей организации</strong>
+              <p>Дата приёма по HR-профилю: {formatDate(selected.organizationEmploymentDate)}. На дату начала отпуска положено {eligibleDays} дн. Общий трудовой стаж не используется.{!selected.organizationEmploymentDate ? " Для допдней сначала укажите дату приёма в разделе HR." : ""}</p>
+              <Field label="Добавить дней по стажу"><select aria-label="Добавить дней по стажу" value={hrForm.tenureAdditionalDays}
+                onChange={(event) => setHrForm((current) => ({ ...current, tenureAdditionalDays: event.target.value }))}>
+                <option value="0">0 дней</option>{eligibleDays ? <option value={eligibleDays}>{eligibleDays} дней</option> : null}
+              </select></Field>
+              {context?.canEditTenureRules ? <div className="leave-actions"><Button aria-expanded={rulesOpen} onClick={() => { setRulesOpen(!rulesOpen); setRuleDraft([...tenureRules]); }}>Настроить пороги стажа</Button></div> : null}
+              {rulesOpen ? <div className="leave-rules" aria-label="Пороги стажа">{tenureRules.map((rule, index) => <div className="leave-rule-row" key={index}>
+                <Field label={`Более лет · порог ${index + 1}`}><Input type="number" min="0" max="50" value={String(rule.afterYears)} onChange={(_, data) => setRuleDraft(tenureRules.map((entry, i) => i === index ? { ...entry, afterYears: Number(data.value) } : entry))} /></Field>
+                <Field label={`Дополнительных дней · порог ${index + 1}`}><Input type="number" min="1" max="30" value={String(rule.extraDays)} onChange={(_, data) => setRuleDraft(tenureRules.map((entry, i) => i === index ? { ...entry, extraDays: Number(data.value) } : entry))} /></Field>
+                <Button disabled={tenureRules.length <= 1} aria-label={`Убрать порог ${index + 1}`} onClick={() => setRuleDraft(tenureRules.filter((_, i) => i !== index))}>Убрать порог</Button>
+              </div>)}<div className="leave-actions"><Button disabled={tenureRules.length >= 10} onClick={() => setRuleDraft([...tenureRules, { afterYears: (tenureRules.at(-1)?.afterYears ?? 0) + 5, extraDays: (tenureRules.at(-1)?.extraDays ?? 0) + 2 }])}>Добавить порог</Button>
+                <Button appearance="primary" disabled={busy} onClick={() => void saveRules()}>Сохранить пороги</Button></div></div> : null}
+            </div>
             <div className="leave-field-grid">{hrFields.map((field) => <Field key={field.key} label={field.label}>
               <Input type={field.type ?? "text"} min={field.type === "number" ? "1" : undefined}
                 value={hrForm[field.key]} onChange={(_, data) => setHrForm((current) => ({ ...current, [field.key]: data.value }))} />
             </Field>)}</div>
+            <p>«Календарных дней» — итог с учётом дополнительных дней; «дней для расчёта» кадровик уточняет отдельно.</p>
+            <h4>Текст приказа</h4><p>Оставьте пункты пустыми для текста по образцу либо исправьте нужный пункт без номера «1.»/«2.»/«3.». Даты и дни в исправленном тексте проверьте перед передачей.</p>
+            {([1, 2, 3] as const).map((number) => <Field key={number} label={`Пункт ${number} (необязательно)`}>
+              <Textarea rows={3} value={hrForm[`orderClause${number}`]} onChange={(_, data) => setHrForm((current) => ({ ...current, [`orderClause${number}`]: data.value }))} />
+            </Field>)}
+            <div className="leave-actions"><Button disabled={busy} onClick={() => void previewHrOrder()}>Посмотреть проект приказа PDF</Button></div>
             <Field label="Комментарий при возврате или отказе"><Textarea value={comment} onChange={(_, data) => setComment(data.value)} /></Field>
             <div className="leave-actions"><Button appearance="primary" disabled={busy} onClick={() => hrDecision("approve")}>Передать первому заместителю</Button>
               <Button disabled={busy || !comment.trim()} onClick={() => hrDecision("return")}>Вернуть на дополнение</Button>
@@ -288,15 +360,17 @@ export function LeaveView({ token, people, currentUserId, canCreate, focusReques
           </div> : null}
           {selected.hasOrder ? <div className="leave-actions"><Button appearance="primary" icon={<DocumentPdf20Regular />} onClick={() => setDocument({ requestId: selected.id, kind: "order" })}>Открыть подписанный приказ</Button></div> : null}
           {selected.canWithdraw ? <div className="leave-actions"><Button disabled={busy} onClick={() => void mutate(() => withdrawWorkspaceLeave(token, selected.id))}>Отозвать заявление</Button></div> : null}
-          <div className="leave-history"><h3>История решений</h3>{selected.actions.map((entry) => <p key={entry.id}><strong>{entry.toStatus === "approved" ? "Утверждено" : entry.toStatus === "pending_deputy" ? "Проверено кадрами" : entry.action === "created" ? "Заявление подано" : entry.toStatus === "needs_revision" ? "Возвращено на дополнение" : entry.toStatus === "rejected" ? "Отклонено" : entry.action === "revised" ? "Дополнено" : "Обновлено"}</strong> · {new Date(entry.createdAt).toLocaleString("ru-RU")}{entry.comment ? ` — ${entry.comment}` : ""}</p>)}</div>
+          <div className="leave-history"><h3>История решений</h3>{selected.actions.map((entry) => <p key={entry.id}><strong>{entry.toStatus === "approved" ? "Утверждено" : entry.toStatus === "pending_deputy" ? "Проверено кадрами" : entry.action === "created" ? "Заявление подано" : entry.action === "hr_corrected" ? "Исправлено кадровиком" : entry.toStatus === "needs_revision" ? "Возвращено на дополнение" : entry.toStatus === "rejected" ? "Отклонено" : entry.action === "revised" ? "Дополнено" : "Обновлено"}</strong> · {new Date(entry.createdAt).toLocaleString("ru-RU")}{entry.comment ? ` — ${entry.comment}` : ""}</p>)}</div>
         </div> : <div className="leave-empty leave-placeholder">Выберите заявление или создайте новое.</div>}
       </div>
     </div>}
     {source && document ? <ExternalFileViewer attachment={source} onClose={() => setDocument(undefined)}
-      onLoad={(_, signal) => loadWorkspaceLeaveDocument(token, document.requestId, document.kind, signal)}
+      onLoad={(_, signal) => document.kind === "hr-preview" && hrPreview
+        ? Promise.resolve(hrPreview) : loadWorkspaceLeaveDocument(token, document.requestId, document.kind as "application" | "order-preview" | "order", signal)}
       onLoadOffice={async () => { throw new Error("Для PDF предпросмотр Office не требуется"); }}
       onDownload={async () => {
-        const blob = await loadWorkspaceLeaveDocument(token, document.requestId, document.kind);
+        const blob = document.kind === "hr-preview" && hrPreview ? hrPreview
+          : await loadWorkspaceLeaveDocument(token, document.requestId, document.kind as "application" | "order-preview" | "order");
         const url = URL.createObjectURL(blob);
         const anchor = globalThis.document.createElement("a"); anchor.href = url; anchor.download = source.fileName; anchor.click();
         window.setTimeout(() => URL.revokeObjectURL(url), 60_000);

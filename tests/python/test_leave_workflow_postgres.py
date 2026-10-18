@@ -19,19 +19,29 @@ from yuksalish_api.auth import AuthenticatedUser
 from yuksalish_api.leave_service import (
     LeaveError,
     create_leave,
+    preview_hr_order,
     read_leave_document,
     review_deputy,
     review_hr,
     revise_leave,
     save_deputy_signature,
+    save_tenure_rules,
     visible_leaves,
     withdraw_leave,
 )
 from yuksalish_api.object_storage import InMemoryObjectStorage
-from yuksalish_api.tables import hr_settings, leave_request_actions, positions, users
+from yuksalish_api.tables import (
+    hr_employee_profiles,
+    hr_settings,
+    leave_request_actions,
+    positions,
+    users,
+)
 from yuksalish_api.workspace_schemas import (
     LeaveDeputyDecisionRequest,
     LeaveHrDecisionRequest,
+    LeaveTenureRule,
+    LeaveTenureRulesWrite,
     LeaveWriteRequest,
 )
 
@@ -107,6 +117,12 @@ async def test_leave_is_authorized_audited_and_signed_only_after_deputy() -> Non
                 )
                 start = datetime.now(UTC).date() + timedelta(days=30)
                 end = start + timedelta(days=20)
+                await connection.execute(insert(hr_employee_profiles).values(
+                    id=uuid4(), user_id=actors["employee"].id, full_name="Тестова Зебо",
+                    employment_date=start.replace(year=start.year - 6),
+                    employment_status="active", created_at=datetime.now(UTC),
+                    updated_at=datetime.now(UTC),
+                ))
                 created = await create_leave(
                     connection,
                     actors["employee"],
@@ -118,6 +134,29 @@ async def test_leave_is_authorized_audited_and_signed_only_after_deputy() -> Non
                 )
                 request_id = UUID(created.id)
                 assert created.status == "pending_hr" and created.can_revise
+                corrected = await revise_leave(
+                    connection, actors["hr"], storage, request_id,
+                    LeaveWriteRequest(
+                        application_text="Уточнённое заявление кадровика.", starts_on=start
+                    ),
+                )
+                assert corrected.application_text == "Уточнённое заявление кадровика."
+                assert corrected.actions[-1].action == "hr_corrected"
+                corrected_pdf = await read_leave_document(
+                    connection, actors["hr"], storage, request_id, "application"
+                )
+                corrected_text = PdfReader(BytesIO(corrected_pdf)).pages[0].extract_text()
+                assert "Тестова Зебо" in corrected_text
+                assert "Кадрлар хизмати томонидан" in corrected_text
+                rules = LeaveTenureRulesWrite(rules=[
+                    LeaveTenureRule(after_years=5, extra_days=2),
+                    LeaveTenureRule(after_years=10, extra_days=4),
+                ])
+                with pytest.raises(LeaveError) as unauthorized_rules:
+                    await save_tenure_rules(connection, actors["other"], rules)
+                assert unauthorized_rules.value.status_code == 403
+                saved_rules = await save_tenure_rules(connection, actors["hr"], rules)
+                assert saved_rules.tenure_rules == rules.rules
                 assert len(await visible_leaves(connection, actors["other"])) == 0
                 with pytest.raises(LeaveError) as forbidden:
                     await review_hr(
@@ -127,11 +166,7 @@ async def test_leave_is_authorized_audited_and_signed_only_after_deputy() -> Non
                         LeaveHrDecisionRequest(action="reject", comment="Нет"),
                     )
                 assert forbidden.value.status_code == 403
-                reviewed = await review_hr(
-                    connection,
-                    actors["hr"],
-                    request_id,
-                    LeaveHrDecisionRequest(
+                approval_payload = LeaveHrDecisionRequest(
                         action="approve",
                         starts_on=start,
                         ends_on=end,
@@ -139,19 +174,46 @@ async def test_leave_is_authorized_audited_and_signed_only_after_deputy() -> Non
                         work_year_ends_on=start - timedelta(days=1),
                         calendar_days=21,
                         paid_days=18,
+                        tenure_additional_days=2,
                         return_on=end + timedelta(days=1),
                         order_employee_name="Тестова Зебо",
                         order_job_title="бош мутахассис",
                         order_signer_name="Тестов Али",
                         order_number="10",
                         accounting_officer="Тестов Бек",
-                    ),
+                        order_clause_2="Ишга чиқиш санаси алоҳида белгилансин.",
+                )
+                with pytest.raises(LeaveError) as invalid_tenure:
+                    await review_hr(
+                        connection, actors["hr"], request_id,
+                        approval_payload.model_copy(update={"tenure_additional_days": 4}),
+                    )
+                assert invalid_tenure.value.status_code == 422
+                with pytest.raises(LeaveError) as forbidden_preview:
+                    await preview_hr_order(
+                        connection, actors["other"], request_id, approval_payload
+                    )
+                assert forbidden_preview.value.status_code == 403
+                draft = await preview_hr_order(
+                    connection, actors["hr"], request_id, approval_payload
+                )
+                assert "алоҳида" in PdfReader(BytesIO(draft)).pages[0].extract_text()
+                reviewed = await review_hr(
+                    connection,
+                    actors["hr"],
+                    request_id,
+                    approval_payload,
                 )
                 assert reviewed.status == "pending_deputy"
+                assert reviewed.tenure_additional_days == 2
                 preview = await read_leave_document(
                     connection, actors["employee"], storage, request_id, "order-preview"
                 )
                 assert len(PdfReader(BytesIO(preview)).pages[0].images) == 1
+                assert (
+                    "ташкилотдаги иш стажи учун 2 кун"
+                    in PdfReader(BytesIO(preview)).pages[0].extract_text()
+                )
                 with pytest.raises(LeaveError) as unsigned:
                     await review_deputy(
                         connection,
