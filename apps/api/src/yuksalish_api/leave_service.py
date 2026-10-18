@@ -829,16 +829,21 @@ async def preview_hr_order(
     row = await _row(connection, request_id)
     if row["status"] != "pending_hr":
         raise LeaveError(409, "Проект приказа уже передан на следующий этап")
-    if payload.action != "approve" or not all((
-        payload.starts_on, payload.ends_on, payload.work_year_starts_on,
-        payload.work_year_ends_on, payload.calendar_days, payload.paid_days,
-        payload.return_on, payload.order_number.strip(), payload.order_employee_name.strip(),
-        payload.order_job_title.strip(), payload.order_signer_name.strip(),
-    )):
+    if (
+        payload.action != "approve"
+        or payload.starts_on is None
+        or payload.ends_on is None
+        or payload.work_year_starts_on is None
+        or payload.work_year_ends_on is None
+        or payload.calendar_days is None
+        or payload.paid_days is None
+        or payload.return_on is None
+        or not payload.order_number.strip()
+        or not payload.order_employee_name.strip()
+        or not payload.order_job_title.strip()
+        or not payload.order_signer_name.strip()
+    ):
         raise LeaveError(422, "Для просмотра заполните все обязательные поля приказа")
-    assert payload.starts_on and payload.ends_on and payload.work_year_starts_on
-    assert payload.work_year_ends_on and payload.return_on
-    assert payload.calendar_days and payload.paid_days
     if (payload.ends_on < payload.starts_on or payload.return_on <= payload.ends_on
             or payload.work_year_ends_on < payload.work_year_starts_on):
         raise LeaveError(422, "Проверьте даты отпуска и выхода на работу")
