@@ -120,7 +120,11 @@ async def test_leave_is_authorized_audited_and_signed_only_after_deputy() -> Non
                 await connection.execute(insert(hr_employee_profiles).values(
                     id=uuid4(), user_id=actors["employee"].id, full_name="Тестова Зебо",
                     employment_date=start.replace(year=start.year - 6),
+                    service_anchor_date=start, service_years=6,
+                    service_months=0, service_days=0,
+                    service_reason="Тестовый профиль для проверки отпуска",
                     employment_status="active", created_at=datetime.now(UTC),
+                    created_by_user_id=actors["hr"].id,
                     updated_at=datetime.now(UTC),
                 ))
                 created = await create_leave(
