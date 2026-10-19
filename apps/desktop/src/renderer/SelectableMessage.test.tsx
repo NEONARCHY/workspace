@@ -60,9 +60,14 @@ describe("message selection shell", () => {
     }
     render(<Fixture />);
     expect(richRender).toHaveBeenCalledTimes(200);
+    const hiddenMark = document.querySelector(".message-select");
+    expect(hiddenMark).toHaveAttribute("aria-hidden", "true");
+    expect(hiddenMark).toHaveAttribute("inert");
     fireEvent.click(screen.getByText("Выделить"));
     const first = screen.getByRole("checkbox", { name: "Сообщение 0" });
     expect(first).toBeChecked();
+    expect(first).toHaveAttribute("aria-hidden", "false");
+    expect(first).not.toHaveAttribute("inert");
     fireEvent.focus(first);
     expect(reactionFocus).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("checkbox", { name: "Сообщение 1" }));
@@ -75,6 +80,8 @@ describe("message selection shell", () => {
     fireEvent.keyDown(first, { key: "Escape" });
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
     expect(richRender).toHaveBeenCalledTimes(200);
+    expect(first).toHaveAttribute("aria-hidden", "true");
+    expect(first).toHaveAttribute("inert");
     fireEvent.click(screen.getAllByText("Фото")[0]!);
     expect(openAttachment).toHaveBeenCalledOnce();
   });

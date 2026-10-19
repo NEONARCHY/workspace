@@ -63,7 +63,7 @@ export function SelectableMessage({ messageId, label, className, children, onKey
     {children}
   </div>
     {visible ? <input className="message-select" type="checkbox" data-satin-excluded="true" hidden={!selection.active}
-      checked={selected} aria-label={label} onChange={() => selection.toggle(messageId)}
+      checked={selected} aria-hidden={!selection.active} inert={!selection.active} aria-label={label} onChange={() => selection.toggle(messageId)}
       onKeyDown={event => { if (event.key === "Escape") { event.preventDefault(); selection.cancel(); } }} /> : null}
   </>;
 }
