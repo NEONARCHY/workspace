@@ -48,6 +48,18 @@ Release-note validation and15 workflow tests passed. QA never sent real messages
 
 Final TypeScript check passed; Vite5178 stopped.
 
-Next: cherry-pick
-only this patch onto TESTf15066ca and update web only. Preserve rollback and check
-version/readiness/data counts/non-web IDs. No API/DB/office/installed EXE updates.
+## Delivered TEST
+
+Web2.0.074 / `localtest-20261019-jump-latest-7bf0b554`, built
+2026-10-19T11:39:15.515Z from compatibilityc211ef1b (source7bf0b554).
+Root/version/API readiness returned200 at `https://192.168.0.127:8443/`;
+web is healthy. Only web changed to49a59fdae655; all nine non-web IDs unchanged.
+Schema0102_merge_leave_task, users3/tasks1/messages133 unchanged. Rollback image:
+`yuksalish-localtest-web:pre-jump-latest-20261019` (2.0.073).
+No API/DB/office/installed EXE update, push/PR/merge/CI. Browser interactions and
+incoming-message fixtures were synthetic, not real-account writes.
+
+Continue source `feat/messenger-jump-latest`. Never merge TEST compatibility branch
+`feat/messenger-jump-latest-test` into main. If changing receipt semantics/history
+pagination, keep the captured entry boundary and use an explicit server cursor;
+the current per-viewport badge intentionally does not alter global read receipts.
