@@ -1915,6 +1915,27 @@ async def _sync_notifications_for_user(
         )
 
     for task_row in task_rows:
+        if (
+            task_row["author_user_id"] == current_user.id
+            and task_row["status"] == "awaiting_review"
+        ):
+            review_key = (
+                f"task:review:pending:{task_row['id']}:{task_row['updated_at'].isoformat()}"
+            )
+            active_attention_keys.add(review_key)
+            await _upsert_notification(
+                connection,
+                user_id=current_user.id,
+                event_key=review_key,
+                kind="task",
+                priority="attention",
+                title="Результат ожидает вашей проверки",
+                body=task_row["title"],
+                section="tasks",
+                entity_id=task_row["id"],
+                requires_action=True,
+                occurred_at=task_row["updated_at"],
+            )
         if task_row["primary_assignee_user_id"] != current_user.id or task_row["status"] in {
             "completed",
             "cancelled",
@@ -5278,6 +5299,8 @@ async def accept_task_result(
         (await connection.execute(select(tasks).where(tasks.c.id == task_id).with_for_update()))
         .mappings().one()
     )
+    if task_row["author_user_id"] != current_user.id:
+        raise WorkspaceRepositoryError(403, "Only the task author can accept the result")
     if task_row["status"] != "awaiting_review":
         raise WorkspaceRepositoryError(409, "Only a submitted result can be accepted")
     await _ensure_task_can_be_submitted(connection, task_id)

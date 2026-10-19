@@ -436,8 +436,7 @@ export function TasksView(props: TasksViewProps) {
     const names = new Map(people.map((person) => [person.id, person.name]));
     return planTasks.filter((task) => {
       const matchesFilter = filter === "mine" ? isMyTask(task, currentUserId)
-        : filter === "review" ? task.status === "awaiting_review"
-          && (task.authorId === currentUserId || ["manager", "admin", "superadmin"].includes(people.find((person) => person.id === currentUserId)?.role ?? ""))
+        : filter === "review" ? task.status === "awaiting_review" && task.authorId === currentUserId
         : filter === "extensions" ? needsTaskDeadlineDecision(task, currentUserId)
         : filter === "overdue" ? isTaskOverdue(task, deadlineNow)
         : filter === "completed" ? task.status === "completed"
@@ -456,9 +455,8 @@ export function TasksView(props: TasksViewProps) {
     extensions: planTasks.filter((task) => needsTaskDeadlineDecision(task, currentUserId)).length,
     overdue: planTasks.filter((task) => isTaskOverdue(task, deadlineNow)).length,
     completed: planTasks.filter((task) => task.status === "completed").length,
-    review: planTasks.filter((task) => task.status === "awaiting_review"
-      && (task.authorId === currentUserId || ["manager", "admin", "superadmin"].includes(people.find((person) => person.id === currentUserId)?.role ?? ""))).length,
-  }), [currentUserId, people, planTasks, deadlineNow]);
+    review: planTasks.filter((task) => task.status === "awaiting_review" && task.authorId === currentUserId).length,
+  }), [currentUserId, planTasks, deadlineNow]);
 
   const selectedTask = tasks.find((task) => task.id === selectedId)
     ?? visibleTasks[0];
@@ -489,6 +487,8 @@ export function TasksView(props: TasksViewProps) {
     && (selectedTask.assigneeId === currentUserId || coAssignee)
     && ["new", "in_progress", "overdue"].includes(selectedTask.status);
   const canReviewResult = selectedTask !== undefined && canManageParticipants && selectedTask.status === "awaiting_review";
+  const canAcceptResult = selectedTask !== undefined && selectedTask.authorId === currentUserId
+    && selectedTask.status === "awaiting_review";
   const canExtendDeadline = selectedTask !== undefined && canManageParticipants
     && !!selectedTask.dueAt && !["completed", "cancelled"].includes(selectedTask.status);
   const selectedSubtasks = selectedTask === undefined ? [] : tasks.filter((task) => task.parentTaskId === selectedTask.id);
@@ -699,7 +699,7 @@ export function TasksView(props: TasksViewProps) {
   };
 
   const acceptResult = async () => {
-    if (selectedTask === undefined || reviewBusy) return;
+    if (selectedTask === undefined || !canAcceptResult || reviewBusy) return;
     setReviewBusy(true);
     try {
       await onAcceptResult(selectedTask);
@@ -927,10 +927,8 @@ export function TasksView(props: TasksViewProps) {
         </div></div>
         <div className="detail-footer">
           {canDelete ? <Button className="task-delete-button" appearance="secondary" icon={<Delete24Regular />} disabled={deleting || reviewBusy} onClick={() => void deleteSelectedTask()}>{deleting ? "Удаление…" : "Удалить задачу"}</Button> : null}
-          {canReviewResult ? <>
-            <Button appearance="secondary" disabled={reviewBusy} onClick={() => { setEfficiencyAction("return"); setEfficiencyReason("corrections_required"); }}>Вернуть на доработку</Button>
-            <Button appearance="primary" disabled={reviewBusy} onClick={() => void acceptResult()}>{reviewBusy ? "Сохранение…" : "Утвердить результат"}</Button>
-          </> : null}
+          {canReviewResult ? <Button appearance="secondary" disabled={reviewBusy} onClick={() => { setEfficiencyAction("return"); setEfficiencyReason("corrections_required"); }}>Вернуть на доработку</Button> : null}
+          {canAcceptResult ? <Button appearance="primary" disabled={reviewBusy} onClick={() => void acceptResult()}>{reviewBusy ? "Сохранение…" : "Утвердить результат"}</Button> : null}
           {canSubmitResult && !canReviewResult ? <Button appearance="primary" disabled={reviewBusy || resultUploading || !resultText.trim()} onClick={() => void submitResult()}>{reviewBusy ? "Отправка…" : "Завершить и отправить на проверку"}</Button> : null}
         </div>
       </aside>{renderTaskChat(selectedTask)}</div></DialogSurface>

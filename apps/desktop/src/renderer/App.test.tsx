@@ -1915,6 +1915,21 @@ describe("corporate workspace authentication alpha", () => {
     );
   }, 30_000);
 
+  it("does not offer result acceptance to a manager who is not the task author", async () => {
+    mockServer();
+    render(<App />);
+    await loginToWorkspace("aziza");
+
+    fireEvent.click(screen.getByRole("button", { name: "Задачи" }));
+    fireEvent.click(await screen.findByRole("button", {
+      name: `Открыть задачу: ${initialTasks[1]!.title}`,
+    }, { timeout: 10_000 }));
+    screen.getByRole("button", { name: "Закрыть задачу" }).focus();
+
+    expect(screen.getByRole("button", { name: "Вернуть на доработку" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Утвердить результат" })).not.toBeInTheDocument();
+  });
+
   it("shows the executor's result actions without the former payment shortcut", async () => {
     const fetchMock = mockServer();
     render(<App />);
