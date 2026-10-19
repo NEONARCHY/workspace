@@ -12,7 +12,7 @@ let browser;
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`http://127.0.0.1:5178/qa/detail-layout.html?view=floating-messenger&theme=${theme}`);
     await page.evaluate(() => { document.documentElement.classList.add('web-platform'); localStorage.removeItem('ws:mini-messenger-position:aziza'); });
-    const launcher = page.getByRole('button', { name: 'Открыть мини-мессенджер', exact: true });
+    const launcher = page.locator('.floating-messenger-launcher');
     await launcher.waitFor();
     assert.equal(await launcher.getAttribute('data-unread'), 'true');
     await launcher.click();
@@ -32,13 +32,19 @@ let browser;
     await launcher.click();
     assert.equal(await editor.textContent(), 'Черновик мини-окна');
     assert.equal(await node.evaluate(element => element.isConnected), true);
-    // Drag uses pointer capture, must move without opening/closing the window.
+    // The button is the collapsed window, not a second control underneath it.
+    assert.equal(await launcher.isVisible(), false);
+    await panel.getByRole('button', { name: 'Свернуть мини-мессенджер' }).click();
+    await launcher.waitFor({ state: 'visible' });
+    // Drag uses pointer capture and must not open the window.
     const start = await launcher.boundingBox();
     await page.mouse.move(start.x + 24, start.y + 24); await page.mouse.down();
     await page.mouse.move(50, 100, { steps: 12 }); await page.mouse.up();
-    assert.equal(await launcher.getAttribute('aria-expanded'), 'true');
+    assert.equal(await launcher.getAttribute('aria-expanded'), 'false');
     const moved = await launcher.boundingBox();
     assert.ok(Math.abs(moved.x - start.x) > 20);
+    await launcher.click();
+    await panel.waitFor();
     box = await panel.boundingBox();
     assert.ok(box.x >= 15 && box.y >= 15 && box.x + box.width <= width - 15, JSON.stringify(box));
     await panel.getByRole('button', { name: 'Вернуть кнопку в правый нижний угол' }).click();
@@ -84,6 +90,7 @@ let browser;
     assert.equal(await launcher.locator('.floating-messenger-icon').evaluate(element => getComputedStyle(element).animationName), 'none');
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     await panel.getByRole('button', { name: 'Свернуть мини-мессенджер' }).click();
+    await launcher.waitFor({ state: 'visible' });
     await launcher.focus(); await launcher.press('Alt+ArrowLeft');
     const saved = await launcher.boundingBox();
     await page.reload();

@@ -35,6 +35,7 @@ it("opens a modeless panel, retains its draft on minimize and expands without an
   expect(screen.queryByTestId("shared-messenger")).not.toBeInTheDocument();
   fireEvent.click(launcher);
   const dialog = screen.getByRole("dialog", { name: "Мини-мессенджер" });
+  expect(launcher).toHaveAttribute("hidden");
   expect(dialog).toHaveAttribute("aria-modal", "false");
   fireEvent.change(screen.getByLabelText("Test draft"), { target: { value: "Не потерять" } });
   fireEvent.click(screen.getByText("Choose finance"));

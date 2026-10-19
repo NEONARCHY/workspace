@@ -16,6 +16,7 @@ let browser;
     const search = page.locator('.notification-head-actions > .workspace-search');
     const header = page.locator('.notification-header');
     await input.waitFor();
+    await page.waitForTimeout(650); // Let the page-entry motion settle before comparing focus geometry.
     const before = { button: await button.boundingBox(), search: await search.boundingBox(), header: await header.boundingBox() };
     await input.focus();
     await search.evaluate(node => Promise.all(node.getAnimations().map(animation => animation.finished.catch(() => undefined))));

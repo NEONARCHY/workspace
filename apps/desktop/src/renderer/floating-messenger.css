@@ -6,6 +6,7 @@
   box-shadow: 0 8px 26px rgb(25 65 77 / 18%); cursor: grab; touch-action: none; user-select: none;
 }
 .floating-messenger-launcher:hover { background: var(--ws-selected); }
+.floating-messenger-launcher[hidden] { display: none; }
 .floating-messenger-launcher[data-dragging] { cursor: grabbing; }
 .floating-messenger-launcher:focus-visible, .floating-messenger-toolbar button:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 3px; }
 .floating-messenger-icon { display: flex; transform-origin: 50% 30%; }
@@ -19,7 +20,6 @@
   position: fixed; z-index: 45; display: flex; flex-direction: column; min-width: 0; min-height: 0;
   overflow: hidden; border: 1px solid var(--ws-line); border-radius: 22px;
   color: var(--ws-text); background: var(--ws-surface); box-shadow: 0 20px 60px rgb(25 65 77 / 22%);
-  animation: floating-messenger-enter 180ms var(--ws-ease-out, ease);
 }
 .floating-messenger-panel[hidden], .floating-messenger-toolbar[hidden] { display: none; }
 .floating-messenger-panel.is-full-page { z-index: 1; border: 0; border-radius: 0; background: transparent; box-shadow: none; animation: none; }
@@ -58,7 +58,6 @@
 .floating-messenger-panel .messenger-mini .conversation-pane { container: messenger-conversation / inline-size; }
 .floating-messenger-panel .messenger-mini .message-selection-toolbar { gap: 6px; padding: 8px; }
 .floating-messenger-panel .messenger-mini .message-selection-toolbar .fui-Button { font-size: 12px; }
-@keyframes floating-messenger-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce), (forced-colors: active) {
   .floating-messenger-panel { animation: none; }
   .floating-messenger-launcher[data-unread="true"] .floating-messenger-icon { animation: none; }

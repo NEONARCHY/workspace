@@ -1,5 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent } from "react";
-import { Portal, Tooltip } from "@fluentui/react-components";
+import { Portal } from "@fluentui/react-components";
 import { ArrowUpRight, MessageCircle, Minus, RotateCcw } from "lucide-react";
 import { MessengerView, type MessengerViewProps } from "./MessengerView";
 import { hasBlockingDialog, useBlockingDialog } from "./components/ui/use-blocking-dialog";
@@ -28,6 +28,8 @@ export function FloatingMessenger({ messenger, fullPage, pageSlot, onOpenFullPag
   const drag = useRef<{ id: number; x: number; y: number; start: MessengerPosition; next: MessengerPosition; moved: boolean } | undefined>(undefined);
   const frame = useRef<number | undefined>(undefined);
   const suppressClick = useRef(false);
+  const morph = useRef<Animation | undefined>(undefined);
+  const restoreFocus = useRef(false);
   const blocking = useBlockingDialog();
   const panelId = useId();
   const helpId = useId();
@@ -35,6 +37,37 @@ export function FloatingMessenger({ messenger, fullPage, pageSlot, onOpenFullPag
   const visible = fullPage ? Boolean(pageSlot) : miniOpen;
   const unread = messenger.chats.reduce((total, chat) => total + Math.max(0, chat.unread), 0);
   if (fullPage && !visited) setVisited(true);
+
+  useLayoutEffect(() => {
+    if (miniOpen || fullPage || !restoreFocus.current) return;
+    restoreFocus.current = false;
+    const frame = requestAnimationFrame(() => launcher.current?.focus({ preventScroll: true }));
+    return () => cancelAnimationFrame(frame);
+  }, [miniOpen, fullPage]);
+
+  useLayoutEffect(() => {
+    const element = panel.current;
+    if (!miniOpen || !element) return;
+    const preference = matchMedia("(prefers-reduced-motion: reduce), (forced-colors: active)");
+    if (element.animate && !preference.matches) {
+      const origin = element.style.getPropertyValue("--messenger-origin-clip");
+      morph.current = element.animate([{ clipPath: origin }, { clipPath: "inset(0 round 22px)" }],
+        { duration: 320, easing: "cubic-bezier(.22, 1, .36, 1)" });
+    }
+    const finish = () => morph.current?.finish();
+    const onVisibility = () => { if (document.visibilityState === "hidden") finish(); };
+    window.addEventListener("resize", finish);
+    window.visualViewport?.addEventListener("resize", finish);
+    document.addEventListener("visibilitychange", onVisibility);
+    preference.addEventListener("change", finish);
+    return () => {
+      morph.current?.cancel(); morph.current = undefined;
+      window.removeEventListener("resize", finish);
+      window.visualViewport?.removeEventListener("resize", finish);
+      document.removeEventListener("visibilitychange", onVisibility);
+      preference.removeEventListener("change", finish);
+    };
+  }, [miniOpen]);
 
   useLayoutEffect(() => {
     // A pending microphone permission request must not start recording invisibly
@@ -87,8 +120,18 @@ export function FloatingMessenger({ messenger, fullPage, pageSlot, onOpenFullPag
       setNotice("Перед сворачиванием отправьте или отмените голосовое сообщение.");
       return;
     }
-    setOpen(false); setNotice("");
-    requestAnimationFrame(() => launcher.current?.focus({ preventScroll: true }));
+    const complete = () => {
+      restoreFocus.current = true;
+      setOpen(false); setNotice("");
+    };
+    const element = panel.current;
+    if (!element?.animate || matchMedia("(prefers-reduced-motion: reduce), (forced-colors: active)").matches) { complete(); return; }
+    const currentClip = getComputedStyle(element).clipPath;
+    morph.current?.cancel();
+    const animation = element.animate([{ clipPath: currentClip === "none" ? "inset(0 round 22px)" : currentClip }, { clipPath: element.style.getPropertyValue("--messenger-origin-clip") }],
+      { duration: 260, easing: "cubic-bezier(.4, 0, 1, 1)", fill: "forwards" });
+    morph.current = animation;
+    animation.onfinish = complete;
   };
   const finishDrag = (event: PointerEvent<HTMLButtonElement>, cancelled = false) => {
     const current = drag.current;
@@ -113,9 +156,10 @@ export function FloatingMessenger({ messenger, fullPage, pageSlot, onOpenFullPag
   return <Portal>
     <div className="floating-messenger-root">
       <span className="sr-only" id={helpId}>Перетащите кнопку мышью или удерживайте Alt и нажимайте стрелки. Alt+Home вернёт её в правый нижний угол.</span>
-      <Tooltip content={unread ? `Мессенджер: непрочитанных ${unread}` : "Мессенджер"} relationship="description">
+        {/* Native title cannot retain a Tooltip's Escape/focus handlers after the trigger disappears. */}
         <button ref={launcher} type="button" className="floating-messenger-launcher"
-          style={{ transform: `translate3d(${point.x}px, ${point.y}px, 0)` }}
+          title={unread ? `Мессенджер: непрочитанных ${unread}` : "Мессенджер"}
+          style={{ transform: `translate3d(${point.x}px, ${point.y}px, 0)` }} hidden={miniOpen}
           aria-label="Открыть мини-мессенджер" aria-description={unread ? `Непрочитанных сообщений: ${unread}` : "Нет непрочитанных сообщений"}
           aria-describedby={helpId} aria-expanded={visible} aria-controls={panelId} disabled={blocking}
           data-unread={unread > 0 ? "true" : undefined}
@@ -167,9 +211,10 @@ export function FloatingMessenger({ messenger, fullPage, pageSlot, onOpenFullPag
           <span className="floating-messenger-icon" aria-hidden="true"><MessageCircle size={23} strokeWidth={1.8} /></span>
           {unread > 0 ? <span className="floating-messenger-badge" aria-hidden="true">{unread > 99 ? "99+" : unread}</span> : null}
         </button>
-      </Tooltip>
       {visited ? <section ref={panel} id={panelId} className={`floating-messenger-panel${fullPage ? " is-full-page" : ""}`}
-        style={fullPage ? pageBounds : bounds} hidden={!visible} inert={!visible}
+        style={fullPage ? pageBounds : { ...bounds,
+          "--messenger-origin-clip": `inset(${point.y - bounds.top}px ${bounds.left + bounds.width - point.x - 48}px ${bounds.top + bounds.height - point.y - 48}px ${point.x - bounds.left}px round 16px)`,
+        } as CSSProperties} hidden={!visible} inert={!visible}
         role={fullPage ? "region" : "dialog"} aria-modal={fullPage ? undefined : false} aria-label={fullPage ? "Раздел мессенджера" : "Мини-мессенджер"}
         onKeyDown={event => { if (event.key === "Escape" && !event.defaultPrevented && !fullPage && !hasBlockingDialog()) { event.stopPropagation(); close(); } }}>
         <header className="floating-messenger-toolbar" hidden={fullPage}>

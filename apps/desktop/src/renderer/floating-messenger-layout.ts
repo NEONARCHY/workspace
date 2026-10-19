@@ -34,12 +34,11 @@ export function normalizedPosition(x: number, y: number, viewport: MessengerView
 export function miniMessengerBounds(position: MessengerPosition, viewport: MessengerViewport) {
   const anchor = launcherCoordinates(position, viewport);
   const width = Math.min(520, Math.max(0, viewport.width - EDGE * 2));
-  const height = Math.min(680, Math.max(0, viewport.height - EDGE * 2 - MESSENGER_LAUNCHER_SIZE - 12));
-  const above = anchor.y - height - 12;
+  const height = Math.min(680, Math.max(0, viewport.height - EDGE * 2));
   return {
     width, height,
     left: clamp(anchor.x + MESSENGER_LAUNCHER_SIZE - width, viewport.left + EDGE, viewport.left + viewport.width - width - EDGE),
-    top: clamp(above >= viewport.top + EDGE ? above : anchor.y + MESSENGER_LAUNCHER_SIZE + 12,
+    top: clamp(anchor.y + MESSENGER_LAUNCHER_SIZE - height,
       viewport.top + EDGE, viewport.top + viewport.height - height - EDGE),
   };
 }

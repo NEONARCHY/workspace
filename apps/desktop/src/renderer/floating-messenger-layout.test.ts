@@ -24,6 +24,13 @@ describe("floating messenger geometry", () => {
     expect(normalizedPosition(point.x, point.y, viewport).x).toBeCloseTo(.3);
     expect(normalizedPosition(point.x, point.y, viewport).y).toBeCloseTo(.7);
   });
+  it("replaces the launcher footprint instead of leaving a gap above it", () => {
+    const viewport = { width: 1440, height: 900, top: 0, left: 0, zoom: 1 };
+    const point = launcherCoordinates({ x: 1, y: 1 }, viewport);
+    const box = miniMessengerBounds({ x: 1, y: 1 }, viewport);
+    expect(box.left + box.width).toBe(point.x + 48);
+    expect(box.top + box.height).toBe(point.y + 48);
+  });
   it("rejects malformed preferences and isolates users", () => {
     localStorage.setItem("first", '{"x":0.1,"y":0.2}');
     localStorage.setItem("second", '{"x":"oops","y":0}');
