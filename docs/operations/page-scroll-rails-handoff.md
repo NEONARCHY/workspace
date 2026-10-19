@@ -30,3 +30,17 @@ mouse/touch100/200% zoom and forced colors;6 full messenger portal/navigation/mi
 cases.21 unit tests, changed-source ESLint, release notes and15 workflow tests
 passed. Dark Home and Team fixture screenshots visually reviewed. These are
 synthetic fixtures, not a manual check of a live employee account.
+
+## Delivered TEST
+
+Web2.0.066 / `localtest-20261019-symmetric-scroll-d1e1bc7b`, built
+2026-10-19T09:47:14.065Z from compatibility3cf7b445 (source d1e1bc7b + f08c6257).
+Root/version/API readiness returned200. Only web changed (40172e19fcc5); all nine
+non-web container IDs unchanged. Schema0102_merge_leave_task; users3/tasks1/messages133.
+Rollback: `yuksalish-localtest-web:pre-symmetric-scroll-20261019` (2.0.065).
+
+On compatibility,8 Home geometry cases and6 full messenger cases passed again.
+Vite5178 helper stopped. No office/EXE update, push, PR, merge or CI. Preview note
+numbers remain provisional: the unmerged190000 note appears in history as2.0.057
+while the latest summary is the arrow note; the actual web build/version is2.0.066.
+Numbering metadata was generated normally, not manually reordered.
