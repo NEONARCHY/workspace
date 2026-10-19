@@ -32,3 +32,16 @@ host identity, quick/full reactions, Shift+F10, Escape, no runtime errors/overfl
 Final sample35.1ms to mount,32.2ms context-to-mount,47.6ms to second RAF; style6ms.
 Paint suite passed1440/640/320px plus mini light/dark; forwarding suite passed8
 theme/viewport cases. Changed-source lint, TypeScript, release/workflow checks passed.
+
+## Delivered TEST
+
+Web2.0.071 / `localtest-20261019-context-menu-4afca6de`, built
+2026-10-19T10:50:08.106Z from compatibilitya52cdf3e (source4afca6de).
+Root/version/API readiness returned200. Only web changed(3c3b5ab92568);
+all nine non-web IDs unchanged. Schema0102_merge_leave_task and
+users3/tasks1/messages133 unchanged. Rollback image:
+`yuksalish-localtest-web:pre-context-menu-latency-20261019` (2.0.070).
+Vite5178 stopped. No office/EXE update, push, PR, merge or CI.
+Continue source `fix/messenger-context-menu-latency`; never merge TEST
+compatibility into main. Measurements/checks used synthetic fixtures; no real
+account messages or decisions were sent.
