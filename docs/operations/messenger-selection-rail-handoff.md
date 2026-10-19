@@ -22,3 +22,16 @@ workflow tests. Rail browser suite passed6 full-page cases plus mini light/dark
 with a long outgoing bubble; screenshot visually reviewed. Existing paint suite
 passed1440/640/320px plus mini light/dark; forwarding suite passed8 theme/width
 cases. All112 MessengerView, selection shell and paint-hook unit tests passed.
+
+## Delivered TEST
+
+Web2.0.068 / `localtest-20261019-selection-rail-633e437a`, built
+2026-10-19T10:01:49.295Z from compatibility00ce22a3 (source633e437a).
+Root/version/API readiness returned200. Only web changed(f3c72899e7fc);
+all nine non-web IDs unchanged. Schema0102_merge_leave_task and
+users3/tasks1/messages133 unchanged. Rollback image:
+`yuksalish-localtest-web:pre-animated-selection-rail-20261019` (2.0.067).
+Vite5178 stopped. No office/EXE update, push, PR, merge or CI.
+Continue source branch `fix/messenger-animated-selection-rail`; do not merge
+the TEST compatibility branch into main. Browser evidence uses synthetic
+fixtures, not a live account sending real messages.
