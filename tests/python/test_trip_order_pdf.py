@@ -15,6 +15,7 @@ from yuksalish_api import repository, trip_document_service
 from yuksalish_api.auth import AuthenticatedUser
 from yuksalish_api.errors import WorkspaceRepositoryError
 from yuksalish_api.repository import (
+    _can_delete_trip,
     _trip_allowed_actions,
     _trip_deputy_user_id,
     act_on_trip_request,
@@ -160,6 +161,35 @@ def test_requester_and_superadmin_can_withdraw_or_annul_but_others_cannot() -> N
     assert _trip_allowed_actions(approved, superadmin) == ["annul"]
     assert _trip_allowed_actions(approved, stranger) == []
     assert _trip_allowed_actions(approved | {"status": "annulled"}, superadmin) == []
+    assert _trip_allowed_actions(row | {"order_pdf_key": "orders/signed.pdf"}, requester) == []
+    legacy = row | {"workflow_version": 1}
+    assert _trip_allowed_actions(legacy, requester) == []
+    assert _trip_allowed_actions(legacy, superadmin) == ["withdraw"]
+
+
+def test_superadmin_can_archive_rejected_or_annulled_trip_after_the_decision() -> None:
+    request_id, requester_id, superadmin_id = uuid4(), uuid4(), uuid4()
+    requester = AuthenticatedUser(requester_id, "requester", "Requester", None, None, "employee")
+    superadmin = AuthenticatedUser(
+        superadmin_id, "root", "Root", None, None, "superadmin",
+    )
+    for status, stage in (("rejected", "rejected"), ("annulled", "approved")):
+        row = {
+            "id": request_id, "requester_user_id": requester_id,
+            "stage": stage, "status": status,
+        }
+        assert _can_delete_trip(row, superadmin)
+        assert not _can_delete_trip(row, requester)
+        connection = AsyncMock()
+        result = MagicMock()
+        result.mappings.return_value.first.return_value = row
+        connection.execute.return_value = result
+        asyncio.run(delete_trip_request(connection, superadmin, request_id))
+        assert connection.execute.await_count == 4
+    assert not _can_delete_trip(
+        {"requester_user_id": requester_id, "stage": "approved", "status": "approved"},
+        superadmin,
+    )
 
 
 def test_delete_trip_is_soft_and_requires_editable_stage() -> None:

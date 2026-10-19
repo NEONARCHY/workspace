@@ -761,6 +761,16 @@ def _can_manage_trip(row: Record, current_user: AuthenticatedUser) -> bool:
     return current_user.role == "superadmin" or row["requester_user_id"] == current_user.id
 
 
+def _can_delete_trip(row: Record, current_user: AuthenticatedUser) -> bool:
+    if not _can_manage_trip(row, current_user):
+        return False
+    editable = row["stage"] == "launch" and row["status"] in {"draft", "needs_revision"}
+    archived_decision = current_user.role == "superadmin" and row["status"] in {
+        "rejected", "annulled",
+    }
+    return editable or archived_decision
+
+
 def _trip_allowed_actions(
     row: Record, current_user: AuthenticatedUser, chair_user_id: UUID | None = None,
     deputy_user_id: UUID | None = None,
@@ -772,7 +782,8 @@ def _trip_allowed_actions(
     if status == "approved":
         return ["annul"] if _can_manage_trip(row, current_user) else []
     management_actions: list[TripAction] = (
-        ["withdraw"] if status == "running" and row["workflow_version"] >= 2
+        ["withdraw"] if status == "running" and not row.get("order_pdf_key")
+        and (row["workflow_version"] >= 2 or current_user.role == "superadmin")
         and _can_manage_trip(row, current_user) else []
     )
     if stage == "launch" and row["requester_user_id"] == current_user.id:
@@ -835,8 +846,7 @@ def _trip_request(
         status_label=TRIP_STATUS_LABELS[row["status"]],
         can_edit=_can_manage_trip(row, current_user) and row["stage"] == "launch"
         and row["status"] in {"draft", "needs_revision"},
-        can_delete=_can_manage_trip(row, current_user) and row["stage"] == "launch"
-        and row["status"] in {"draft", "needs_revision"},
+        can_delete=_can_delete_trip(row, current_user),
         allowed_actions=_trip_allowed_actions(row, current_user, chair_user_id, deputy_user_id),
         chat_id=str(chat_id) if chat_id else None,
         actions=list(actions),
@@ -7633,7 +7643,7 @@ async def delete_trip_request(
     current_user: AuthenticatedUser,
     request_id: UUID,
 ) -> None:
-    """Hide an editable trip and its managed chat; retain documents and decision history."""
+    """Archive an eligible trip and chat while retaining documents and decision history."""
     row = (await connection.execute(select(trip_requests).where(
         trip_requests.c.id == request_id,
         trip_requests.c.deleted_at.is_(None),
@@ -7642,8 +7652,10 @@ async def delete_trip_request(
         raise WorkspaceRepositoryError(404, "Trip request was not found")
     if not _can_manage_trip(row, current_user):
         raise WorkspaceRepositoryError(403, "Only the requester or superadmin can delete this trip")
-    if row["stage"] != "launch" or row["status"] not in {"draft", "needs_revision"}:
-        raise WorkspaceRepositoryError(409, "Withdraw the trip before deleting it")
+    if not _can_delete_trip(row, current_user):
+        raise WorkspaceRepositoryError(
+            409, "Withdraw the trip or annul its signed order before deleting it",
+        )
     now = datetime.now(UTC)
     await connection.execute(update(trip_requests).where(
         trip_requests.c.id == request_id,
