@@ -24,3 +24,13 @@ this scoped patch; never deploy main API/schema or merge TEST compatibility into
 main. Update web only at https://192.168.0.127:8443/, verify root/version/readiness
 and unchanged non-web IDs/schema0102; keep the previous web rollback image.
 Before this patch TEST is2.0.059 / localtest-20261019-morph-shadow-30fc3568.
+
+## Delivered TEST
+
+Web2.0.060 / `localtest-20261019-messenger-canvas-45c3dbc2`, built
+2026-10-19T08:56:06.461Z. Root/version/API readiness returned200.
+Only web changed (b3c27f6df0e6); all nine non-web IDs unchanged.
+Schema0102_merge_leave_task; users3/tasks1/messages133.
+Rollback: `yuksalish-localtest-web:pre-messenger-canvas-20261019` (2.0.059).
+Compatibility browser matrix,13 CSS contracts and15 workflow tests passed.
+Scoped main-based patch1721db37; TEST patch45c3dbc2. No push/PR/CI/office/EXE update.
