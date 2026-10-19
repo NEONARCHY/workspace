@@ -1,0 +1,88 @@
+const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+let browser, page;
+(async () => {
+  browser = await chromium.launch({ channel: 'msedge', headless: true });
+  page = await browser.newPage();
+  const errors = []; page.on('pageerror', error => errors.push(error.message));
+  await page.route('**/api/**', route => route.fulfill({ status: 503, json: { detail: 'Synthetic QA' } }));
+  fs.mkdirSync('tmp/messenger-jump-latest', { recursive: true });
+  for (const theme of process.env.QA_QUICK ? ['light'] : ['light', 'dark']) for (const width of process.env.QA_QUICK ? [1440] : [1440, 390, 320]) for (const mini of [true, false]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`http://127.0.0.1:5178/qa/detail-layout.html?view=floating-messenger&theme=${theme}&history=100&unread=20&jumpqa=1`);
+    await page.evaluate(() => document.documentElement.classList.add('web-platform'));
+    if (mini) await page.locator('.floating-messenger-launcher').click();
+    else await page.getByRole('button', { name: 'Мессенджер', exact: true }).click();
+    const chat = page.getByRole('button', { name: /^Финансы и закупки/ }); if (await chat.isVisible()) await chat.click();
+    const pane = page.getByLabel('Переписка', { exact: true });
+    const jump = page.getByRole('button', { name: /^К последним сообщениям/ });
+    await jump.waitFor();
+    await page.waitForFunction(() => {
+      const p = document.querySelector('.message-scroll'), badge = document.querySelector('.message-jump-unread');
+      if (!p || !badge) return false;
+      const b = p.getBoundingClientRect();
+      const candidates = [...p.querySelectorAll('[data-message-id]')].filter(row => {
+        const id = row.dataset.messageId;
+        return id === 'qa-original' || (id.startsWith('qa-history-') && Number(id.slice(11)) >= 63 && Number(id.slice(11)) % 2 === 1);
+      });
+      const expected = candidates.filter(row => { const r = row.getBoundingClientRect(); const seen = Math.min(r.bottom, b.bottom) - Math.max(r.top, b.top); return r.bottom > b.top && seen < Math.min(r.height, b.height) / 2; }).length;
+      return expected > 0 && Number(badge.textContent) === expected;
+    });
+    const circle = await jump.boundingBox(); assert.ok(Math.abs(circle.width - circle.height) <= 1);
+    assert.equal(await jump.evaluate(node => getComputedStyle(node).borderRadius), '50%');
+    const historyBox = await page.locator('.message-history').boundingBox();
+    assert.ok(circle.y + circle.height < historyBox.y + historyBox.height, 'button floats above composer');
+    await page.locator('.floating-messenger-panel').screenshot({ path: `tmp/messenger-jump-latest/${theme}-${width}-${mini ? 'mini' : 'full'}.png` });
+    await jump.click();
+    await page.waitForFunction(() => { const p = document.querySelector('.message-scroll'); return p && p.scrollHeight - p.clientHeight - p.scrollTop < 2; });
+    await jump.waitFor({ state: 'hidden' });
+    assert.equal(await page.locator('.message-jump-unread').count(), 0);
+    await pane.evaluate(node => { node.scrollTop = 0; node.dispatchEvent(new Event('scroll')); });
+    await jump.waitFor(); assert.equal(await page.locator('.message-jump-unread').count(), 0, 'read history gets no fake badge');
+    await page.getByRole('button', { name: 'Входящее сообщение в тесте', exact: true }).click();
+    await page.locator('.message-jump-unread').filter({ hasText: /^1$/ }).waitFor();
+    await page.getByRole('button', { name: 'Входящее сообщение в тесте', exact: true }).click();
+    await page.locator('.message-jump-unread').filter({ hasText: /^2$/ }).waitFor();
+    assert.equal(await pane.evaluate(node => node.scrollTop), 0, 'incoming must not pull reader from history');
+    await page.getByRole('textbox', { name: 'Новое сообщение', exact: true }).fill('Своё сообщение в тесте');
+    await page.getByRole('button', { name: 'Отправить сообщение', exact: true }).click();
+    await jump.waitFor({ state: 'hidden' });
+    assert.equal(await page.locator('.message-jump-unread').count(), 0, 'own send follows latest without unread increment');
+    if (mini) {
+      await pane.evaluate(node => { node.scrollTop = 0; node.dispatchEvent(new Event('scroll')); });
+      await jump.waitFor();
+      await page.getByRole('button', { name: 'Входящее сообщение в тесте', exact: true }).click();
+      await page.locator('.message-jump-unread').filter({ hasText: /^1$/ }).waitFor();
+      await page.getByRole('button', { name: 'Открыть полный мессенджер', exact: true }).click();
+      await jump.waitFor();
+      assert.equal(await page.locator('.message-jump-unread').textContent(), '1', 'handoff must not consume unread through transient reflow');
+      await jump.click(); await jump.waitFor({ state: 'hidden' });
+      await page.getByRole('button', { name: 'Задачи', exact: true }).click();
+      await page.locator('.floating-messenger-launcher').click();
+    }
+    await pane.evaluate(node => { node.scrollTop = 0; node.dispatchEvent(new Event('scroll')); });
+    await jump.waitFor();
+    await page.emulateMedia({ reducedMotion: 'reduce', forcedColors: 'active' });
+    await jump.focus(); await page.keyboard.press('Enter');
+    await jump.waitFor({ state: 'hidden' });
+    assert.equal(await pane.evaluate(node => node === document.activeElement), true);
+    await page.emulateMedia({ reducedMotion: 'no-preference', forcedColors: 'none' });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    console.log(`PASS jump latest ${theme} ${width} ${mini ? 'mini' : 'full'}: unread, incoming, own send, handoff, round control, keyboard/reduced/forced`);
+  }
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.goto('http://127.0.0.1:5178/qa/detail-layout.html?view=floating-messenger&theme=dark&history=400&unread=160&jumpqa=1');
+  await page.locator('.floating-messenger-launcher').click();
+  await page.getByRole('button', { name: /^Финансы и закупки/ }).click();
+  const jump = page.getByRole('button', { name: /^К последним сообщениям/ });
+  await jump.waitFor();
+  assert.equal(await page.locator('.message-jump-unread').textContent(), '99+');
+  await page.setViewportSize({ width: 320, height: 300 });
+  await jump.waitFor({ state: 'hidden' });
+  await page.setViewportSize({ width: 320, height: 640 });
+  await jump.waitFor();
+  assert.equal(await page.locator('.message-jump-unread').textContent(), '99+');
+  console.log('PASS 99+ badge and collapsed/resized mini viewport without consuming unread');
+  assert.deepEqual(errors, []); await browser.close();
+})().catch(async error => { console.error(error); await page?.screenshot({ path: 'tmp/messenger-jump-latest/failure.png' }).catch(() => {}); await browser?.close(); process.exitCode = 1; });

@@ -2,15 +2,19 @@ import { describe, expect, it } from "vitest";
 import { crossedMessageBands, shouldStartMessagePaint } from "./useMessagePaintSelection";
 
 describe("paint selection activation", () => {
-  it("starts at the first mouse pixel, not after a drag-distance delay", () => {
+  it("ignores small pointer motion and starts at 20px without a hold timer", () => {
     expect(shouldStartMessagePaint(0, 0, false)).toBe(false);
-    expect(shouldStartMessagePaint(1, 0, false)).toBe(true);
-    expect(shouldStartMessagePaint(0, 1, false)).toBe(true);
+    expect(shouldStartMessagePaint(19, 0, false)).toBe(false);
+    expect(shouldStartMessagePaint(0, 19, false)).toBe(false);
+    expect(shouldStartMessagePaint(20, 0, false)).toBe(true);
+    expect(shouldStartMessagePaint(0, 20, false)).toBe(true);
+    expect(shouldStartMessagePaint(12, 16, false)).toBe(true);
   });
   it("preserves native horizontal text selection and starts vertical painting promptly", () => {
     expect(shouldStartMessagePaint(100, 0, true)).toBe(false);
     expect(shouldStartMessagePaint(3, 1, true)).toBe(false);
-    expect(shouldStartMessagePaint(0, 2, true)).toBe(true);
+    expect(shouldStartMessagePaint(100, 19, true)).toBe(false);
+    expect(shouldStartMessagePaint(0, 20, true)).toBe(true);
   });
 });
 

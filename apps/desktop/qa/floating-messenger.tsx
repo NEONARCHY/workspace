@@ -53,6 +53,10 @@ export function FloatingMessengerFixture() {
     <nav aria-label="Тестовые страницы" style={{ display: "flex", gap: 12, padding: 12, ...(rail ? { height: 70, boxSizing: "border-box", flexWrap: "wrap" } : {}) }}>
       {["Задачи", "Проекты", "Мессенджер"].map(name => <button key={name} onClick={() => setSection(name)}>{name}</button>)}
       <button onClick={() => setChats(current => current.map(chat => ({ ...chat, unread: 0 })))}>Прочитать все в тесте</button>
+      {params.has("jumpqa") ? <button onClick={() => {
+        setMessages(current => [...current, { id: crypto.randomUUID(), chatId: "finance", authorId: "baxtiyor", body: "Новое входящее сообщение в тесте", time: "12:02" }]);
+        setChats(current => current.map(chat => chat.id === "finance" ? { ...chat, unread: chat.unread + 1 } : chat));
+      }}>Входящее сообщение в тесте</button> : null}
     </nav>
     {rail ? <div className={`app-shell${compact ? " browser-compact" : ""}`} style={{ gridTemplateColumns: "minmax(0, 1fr)", height: "calc(100dvh - 70px)", paddingTop: 0 }}>
       <div className="app-stage"><WorkspaceSectionContent authorityKey="qa" section={section}>

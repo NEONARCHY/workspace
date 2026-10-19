@@ -4,8 +4,9 @@ import type { MouseEvent, PointerEvent, RefObject } from "react";
 export type MessageBand = { id: string; top: number; bottom: number };
 
 export function shouldStartMessagePaint(dx: number, dy: number, text: boolean) {
-  // Start on the first real mouse movement; keep horizontal text selection native.
-  return text ? Math.abs(dy) >= 2 : Math.hypot(dx, dy) >= 1;
+  // A deliberate 20px drag starts painting immediately; no hold timer. Keep
+  // horizontal text selection native even beyond that distance.
+  return text ? Math.abs(dy) >= 20 : Math.hypot(dx, dy) >= 20;
 }
 
 export function crossedMessageBands(bands: readonly MessageBand[], from: number, to: number, previous?: string) {

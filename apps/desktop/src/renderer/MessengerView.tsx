@@ -9,8 +9,9 @@ import { MessageSelectionContext, SelectableMessage, useMessageSelectionVisibili
 import { useMessagePaintSelection } from "./useMessagePaintSelection";
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { RefObject, SetStateAction } from "react";
-import { CheckSquare, Copy, Forward, ListTodo, Pencil, Pin, PinOff, Reply, Smile, Trash2, UserRound, UsersRound, WandSparkles } from "lucide-react";
+import { ArrowDown, CheckSquare, Copy, Forward, ListTodo, Pencil, Pin, PinOff, Reply, Smile, Trash2, UserRound, UsersRound, WandSparkles } from "lucide-react";
 import { useMessageArrivalMotion } from "./useMessageArrivalMotion";
+import { useMessageScrollNavigation } from "./useMessageScrollNavigation";
 import { ComposerSendTransition, MessageTextAnimate } from "./MessageTextAnimate";
 import type {
   AssistantActionDraft,
@@ -450,6 +451,8 @@ function Conversation({
     paneRef: scrollRef, messages: renderedMessages, scope: `${chat.id}:${query}`,
     followLatest, currentUserId, active: visible, opened, ready: layoutReady, unread: chat.unread,
   });
+  const scrollNavigation = useMessageScrollNavigation({ paneRef: scrollRef, messages: activeMessages,
+    currentUserId, initialUnreadMessageId: unreadMessageId, opened, active: visible && layoutReady && !query });
   useLayoutEffect(() => {
     const pane = scrollRef.current;
     const currentRows = new Map<string, { message: ChatMessage; index: number; height: number }>();
@@ -1018,6 +1021,7 @@ function Conversation({
           </div>
         </div>
       ) : null}
+        <div className="message-history">
         <div className="message-scroll" data-message-selection={selectionMode ? "" : undefined} data-chat-background={chatBackground} aria-label="Переписка" aria-live="polite" ref={bindScrollPane}
         tabIndex={-1} onPointerDownCapture={event => {
           window.clearTimeout(reactionHoverTimer.current);
@@ -1030,7 +1034,8 @@ function Conversation({
         onPointerUp={paint.onPointerUp} onPointerCancel={paint.stop} onLostPointerCapture={paint.stop} onClickCapture={paint.onClickCapture}
         onKeyDown={event => { if (selectionMode && event.key === "Escape" && !event.defaultPrevented) { event.preventDefault(); paint.stop(); cancelSelection(); } }}
         onWheel={cancelArrivalMotion} onPointerDown={cancelArrivalMotion}
-        onScroll={(event) => { const pane = event.currentTarget; followLatest.current = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 80; paint.onScroll(); }}>
+        onLoadCapture={scrollNavigation.onScroll}
+        onScroll={(event) => { const pane = event.currentTarget; followLatest.current = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 80; paint.onScroll(); scrollNavigation.onScroll(); }}>
         {!renderedMessages.length && (
           <div className="empty-compact">
             {query
@@ -1039,6 +1044,14 @@ function Conversation({
           </div>
         )}
         <MessageSelectionContext.Provider value={selection}>{messageRows}</MessageSelectionContext.Provider>
+      </div>
+      <div className={`message-jump-latest${scrollNavigation.visible ? " is-visible" : ""}`} aria-hidden={!scrollNavigation.visible} inert={!scrollNavigation.visible}>
+        <Button shape="circular" className="ws-navigation-arrow" icon={<ArrowDown size={21} />}
+          aria-label={`К последним сообщениям${scrollNavigation.unread ? ` · непрочитанных: ${scrollNavigation.unread}` : ""}`}
+          title="К последним сообщениям" onClick={() => { cancelArrivalMotion(); scrollNavigation.jumpToLatest(!motionDisabled); }}>
+          {scrollNavigation.unread > 0 ? <span className="message-jump-unread" aria-hidden="true">{scrollNavigation.unread > 99 ? "99+" : scrollNavigation.unread}</span> : null}
+        </Button>
+      </div>
       </div>
       {(() => {
         if (!contextMenu) return <MessageContextMenu open={false} x={0} y={0}

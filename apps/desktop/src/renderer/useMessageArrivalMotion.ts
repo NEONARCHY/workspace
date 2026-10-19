@@ -39,6 +39,11 @@ export function useMessageArrivalMotion({ paneRef, messages, scope, followLatest
   const [disabled, setDisabled] = useState(() => document.hidden || Boolean(window.matchMedia?.(preferences).matches));
   const [arrivingIds, setArrivingIds] = useState<ReadonlySet<string>>(new Set());
   const [unreadMessageId, setUnreadMessageId] = useState<string>();
+  const [previousOpened, setPreviousOpened] = useState(opened);
+  if (previousOpened !== opened) {
+    setPreviousOpened(opened);
+    if (!opened) setUnreadMessageId(undefined);
+  }
   const previous = useRef<{ scope: string; ids: string[]; tops: Map<string, number>; scrollTop: number } | undefined>(undefined);
   const animations = useRef(new Map<HTMLElement, Animation>());
   const entry = useRef<{ scope: string; unread: number; anchorId?: string; positioned: boolean } | undefined>(undefined);

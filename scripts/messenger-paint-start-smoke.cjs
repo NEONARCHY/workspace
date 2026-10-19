@@ -18,6 +18,8 @@ let browser;
     document.addEventListener('pointerdown', () => { window.paintStart.downHandlerMs = performance.now() - window.paintStart.down; }, { once: true });
   });
   await page.mouse.down();
+  await page.mouse.move(box.x + 10, box.y + 24);
+  assert.equal(await page.getByLabel('Переписка', { exact: true }).getAttribute('data-paint-selecting'), null, '19px must not start message painting');
   assert.equal(await own.locator('.message-reaction-trigger').evaluate(node => node.classList.contains('is-visible')), false, 'pointer focus must not prepare reactions/rebuild history');
   await page.evaluate(() => {
     window.paintReady = new Promise(resolve => {
@@ -30,7 +32,7 @@ let browser;
       observer.observe(pane, { attributes: true, attributeFilter: ['data-message-selection'] });
     });
   });
-  await page.mouse.move(box.x + 10, box.y + 7); // First 2px vertical movement inside native text.
+  await page.mouse.move(box.x + 10, box.y + 25); // Cross the deliberate 20px threshold.
   assert.equal(await page.getByLabel('Переписка', { exact: true }).getAttribute('data-paint-selecting'), 'true');
   const timing = await page.evaluate(() => window.paintReady);
   const metricsAfter = await cdp.send('Performance.getMetrics');
@@ -63,12 +65,12 @@ let browser;
       observer.observe(pane, { attributes: true, attributeFilter: ['data-message-selection'] });
     });
   });
-  await page.mouse.move(hovered.x + 10, hovered.y + 7);
+  await page.mouse.move(hovered.x + 10, hovered.y + 25);
   const hoveredMs = await page.evaluate(() => window.hoverPaintReady);
   assert.ok(hoveredMs < 500, `starting after reaction hover took ${hoveredMs}ms`);
   await page.mouse.up();
   await page.getByRole('button', { name: 'Отменить выделение', exact: true }).click();
-  console.log(`502 messages, first 2px movement: pointerdown ${timing.downHandlerMs.toFixed(1)}ms, move→selection ${timing.moveToSelectionMs.toFixed(1)}ms; no reaction preparation.`);
+  console.log(`502 messages, 20px threshold: pointerdown ${timing.downHandlerMs.toFixed(1)}ms, move→selection ${timing.moveToSelectionMs.toFixed(1)}ms; no hold timer/reaction preparation.`);
   console.log(`Starting after reactions already opened: ${hoveredMs.toFixed(1)}ms.`);
   await browser.close();
 })().catch(async error => { console.error(error); await browser?.close(); process.exit(1); });
