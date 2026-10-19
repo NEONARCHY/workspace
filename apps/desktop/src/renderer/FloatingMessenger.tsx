@@ -160,7 +160,7 @@ export function FloatingMessenger({ messenger, fullPage, pageSlot, onOpenFullPag
         {/* Native title cannot retain a Tooltip's Escape/focus handlers after the trigger disappears. */}
         <button ref={launcher} type="button" className="floating-messenger-launcher"
           title={unread ? `Мессенджер: непрочитанных ${unread}` : "Мессенджер"}
-          style={{ transform: `translate3d(${point.x}px, ${point.y}px, 0)` }} hidden={miniOpen}
+          style={{ transform: `translate3d(${point.x}px, ${point.y}px, 0)` }} hidden={miniOpen || fullPage}
           aria-label="Открыть мини-мессенджер" aria-description={unread ? `Непрочитанных сообщений: ${unread}` : "Нет непрочитанных сообщений"}
           aria-describedby={helpId} aria-expanded={visible} aria-controls={panelId} disabled={blocking}
           data-unread={unread > 0 ? "true" : undefined}

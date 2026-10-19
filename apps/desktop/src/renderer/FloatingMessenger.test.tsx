@@ -46,9 +46,22 @@ it("opens a modeless panel, retains its draft on minimize and expands without an
   fireEvent.click(screen.getByRole("button", { name: "Открыть полный мессенджер" }));
   expect(expand).toHaveBeenCalledWith("finance");
   rendered.rerender(view(true, expand));
+  expect(launcher).toHaveAttribute("hidden");
+  expect(screen.queryByRole("button", { name: "Открыть мини-мессенджер" })).not.toBeInTheDocument();
   expect(screen.getAllByTestId("shared-messenger")).toHaveLength(1);
   expect(screen.getByLabelText("Test draft")).toHaveValue("Не потерять");
   expect(screen.getByTestId("shared-messenger")).toHaveAttribute("data-compact", "false");
+});
+it("hides the launcher on direct full-page entry and restores it on another page", () => {
+  const rendered = render(view(true));
+  expect(screen.getByRole("region", { name: "Раздел мессенджера" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Открыть мини-мессенджер" })).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("Test draft"), { target: { value: "Сохранить при выходе" } });
+  rendered.rerender(view(false));
+  const launcher = screen.getByRole("button", { name: "Открыть мини-мессенджер" });
+  expect(launcher).not.toHaveAttribute("hidden");
+  fireEvent.click(launcher);
+  expect(screen.getByLabelText("Test draft")).toHaveValue("Сохранить при выходе");
 });
 it("supports keyboard repositioning, reset and Escape without changing unread messages", () => {
   render(view());

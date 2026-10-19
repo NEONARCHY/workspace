@@ -56,6 +56,7 @@ let browser;
     await panel.getByRole('button', { name: 'Открыть полный мессенджер' }).click();
     const full = page.getByRole('region', { name: 'Раздел мессенджера', exact: true });
     await full.waitFor();
+    assert.equal(await launcher.isVisible(), false, 'launcher must not cover the full messenger');
     assert.equal(await full.evaluate(element => getComputedStyle(element.parentElement).filter), 'none');
     assert.equal(await node.evaluate(element => element.isConnected), true);
     assert.equal(await full.locator('.messenger-view').count(), 1);
@@ -67,7 +68,9 @@ let browser;
       await page.waitForFunction(() => JSON.parse(document.querySelector('[data-sent]').getAttribute('data-sent')).length === 1);
       const sent = JSON.parse(await page.locator('[data-sent]').getAttribute('data-sent'));
       assert.deepEqual(sent[0], { body: 'Черновик мини-окна', files: ['qa-note.txt'] });
-      // The global launcher also turns the full section back into a mini window.
+      // The launcher returns only after leaving the full messenger section.
+      await page.getByRole('button', { name: 'Проекты', exact: true }).click();
+      await launcher.waitFor({ state: 'visible' });
       await launcher.click();
       await panel.waitFor();
       await editor.fill('Ошибка сети'); await editor.press('Enter');

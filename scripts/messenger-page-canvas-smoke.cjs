@@ -37,7 +37,9 @@ let browser;
     assert.ok(geometry.panes.every(pane => Math.abs(pane.rect.top - geometry.bounds.top) < 1
       && Math.abs(pane.rect.bottom - geometry.bounds.bottom) < 1), JSON.stringify(geometry));
     await page.screenshot({ path: `tmp/messenger-page-canvas/${theme}-${width}.png` });
-    // The same mounted messenger still returns to the rounded mini window.
+    // The launcher is absent in full mode; the same messenger returns on another page.
+    assert.equal(await page.locator('.floating-messenger-launcher').isVisible(), false);
+    await page.getByRole('button', { name: 'Проекты', exact: true }).click();
     await page.locator('.floating-messenger-launcher').click();
     const mini = page.getByRole('dialog', { name: 'Мини-мессенджер', exact: true });
     await mini.waitFor();
