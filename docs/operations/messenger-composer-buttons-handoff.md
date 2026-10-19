@@ -18,3 +18,14 @@ For TEST continue compatibility13dc9467, cherry-pick only this patch, and update
 web only. Prior TEST2.0.063; retain rollback, verify root/version/API readiness and
 unchanged non-web container IDs. Never merge compatibility into main or update
 office server/EXE as part of this task.
+
+## Delivered TEST
+
+Web2.0.064 / `localtest-20261019-composer-buttons-7e2ab381`, built
+2026-10-19T09:25:44.590Z from compatibility6e97c52d (source7e2ab381).
+Root/version/API readiness returned200. Only web changed (c553f940e393);
+all nine non-web IDs unchanged. Schema0102_merge_leave_task; users3/tasks1/messages133.
+Rollback: `yuksalish-localtest-web:pre-composer-buttons-20261019` (2.0.063).
+All8 floating browser cases passed, including actual equal-width/full-row
+measurements, preserved drafts/files/navigation and previous back-arrow checks.
+Vite5178 helper stopped. No office/EXE update, push, PR, merge or CI.
