@@ -44,7 +44,18 @@ Final hook/shell unit run:15/15 passed (10 entry/arrival,5 floating shell), plus
 the final3/3 MessengerView regression tests described above. Local checks only;
 no push/PR/merge/CI or installed EXE validation is implied.
 
-Next: preserve unrelated
-changes, cherry-pick only this patch onto TEST compatibilityd318a02e, build and
-replace web only, verify version/readiness/non-web IDs/data counts. Never merge
-the TEST compatibility branch into main. Office server and installed EXE out of scope.
+## Delivered TEST
+
+Web2.0.072 / `localtest-20261019-unread-entry-8a373dc0`, built
+2026-10-19T11:11:38.123Z from compatibilityaf610f52 (source8a373dc0).
+At `https://192.168.0.127:8443/`, root/version/API readiness returned200;
+web is healthy. Only web changed toe196c73aa474; all nine non-web IDs unchanged.
+Schema0102_merge_leave_task, users3/tasks1/messages133 unchanged. Rollback image:
+`yuksalish-localtest-web:pre-unread-entry-20261019` (2.0.071).
+Vite5178 stopped. No office/EXE update, API/DB change, real-account test messages,
+push, PR, merge or CI. Browser checks used synthetic fixtures, not real accounts.
+
+Continue source `fix/messenger-unread-entry-composer`. Never merge TEST branch
+`fix/messenger-unread-entry-test` into main. If changing receipt semantics or adding
+history pagination, first replace the incoming-suffix calculation with an explicit
+server first-unread cursor and add the corresponding contract/API coverage.
