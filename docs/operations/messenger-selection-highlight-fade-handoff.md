@@ -36,3 +36,17 @@ screenshots visually reviewed. Final guard/re-entry checks passed, including
 native horizontal text copy. Final502-message sample: pointerdown2.7ms,
 first2px vertical movement to selection30.5ms; already-open reactions30.7ms.
 All117 unit tests passed again after the final guards; lint clean.
+
+## Delivered TEST
+
+Web2.0.070 / `localtest-20261019-selection-polish-b59fe316`, built
+2026-10-19T10:27:45.351Z from compatibility3eac224b (sourceb59fe316).
+Root/version/API readiness returned200. Only web changed(7fa4967bff44);
+all nine non-web container IDs unchanged. Schema0102_merge_leave_task and
+users3/tasks1/messages133 unchanged. Rollback image:
+`yuksalish-localtest-web:pre-selection-highlight-20261019` (2.0.069).
+Vite5178 stopped. No office/EXE update, push, PR, merge or CI.
+Continue source branch `fix/messenger-selection-highlight-fade`; never merge
+TEST compatibility into main. Browser checks use synthetic fixtures, not a live
+account sending real messages. Final benchmark30.5/30.7ms is dev-host evidence,
+not a promise of fixed latency on every user's device.
