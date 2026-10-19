@@ -147,14 +147,15 @@ describe("TeamDashboardView", () => {
     }
   });
 
-  it("filters the attention queue by employee and exposes an explicit reset", () => {
+  it("opens a dedicated workload dialog with that employee's tasks and deadlines", () => {
     renderDashboard();
     fireEvent.click(screen.getByRole("button", { name: /Азиза Каримова.*1 активная задача/i }));
-
-    const attention = screen.getByRole("region", { name: "Требует внимания" });
-    expect(within(attention).getByText("Проверить бюджет")).toBeInTheDocument();
-    expect(within(attention).queryByText("Подготовить договор")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Показать все задачи" })).toBeInTheDocument();
+    const dialog = screen.getByRole("dialog", { name: "Нагрузка: Азиза Каримова" });
+    expect(within(dialog).getByText("Проверить бюджет")).toBeInTheDocument();
+    expect(within(dialog).queryByText("Подготовить договор")).not.toBeInTheDocument();
+    expect(within(dialog).getByText(/10\.09\.2026/)).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Закрыть" }));
+    expect(screen.queryByRole("dialog", { name: "Нагрузка: Азиза Каримова" })).not.toBeInTheDocument();
   });
 
   it("keeps EFF-1 optional when its API is unavailable", () => {
@@ -164,18 +165,31 @@ describe("TeamDashboardView", () => {
     expect(screen.getByText(/Показана нагрузка по задачам/)).toHaveTextContent("Сервис недоступен");
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
   });
-  it("filters operational attention using the metric objects and resets the filter", () => {
+  it("opens each decision metric in a separate dialog without changing the attention queue", () => {
     renderDashboard();
     const attention = screen.getByRole("region", { name: "Требует внимания" });
     fireEvent.click(screen.getByText("Нужна помощь").closest("button")!);
-    expect(within(attention).getByText("Подготовить договор")).toBeInTheDocument();
-    expect(within(attention).queryByText("Проверить бюджет")).not.toBeInTheDocument();
+    expect(within(screen.getByRole("dialog", { name: "Задачи, которым нужна помощь" })).getByText("Подготовить договор")).toBeInTheDocument();
+    expect(within(attention).getByText("Проверить бюджет")).toBeInTheDocument();
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Закрыть" }));
     fireEvent.click(screen.getByText("Ждут решения").closest("button")!);
-    expect(within(attention).getByText("Проверить бюджет")).toBeInTheDocument();
-    expect(within(attention).queryByText("Подготовить договор")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Показать все задачи" }));
+    expect(within(screen.getByRole("dialog", { name: "Результаты на вашей проверке" })).getByText("Проверить бюджет")).toBeInTheDocument();
     expect(within(attention).getByText("Подготовить договор")).toBeInTheDocument();
-    expect(within(attention).getByText("Проверить бюджет")).toBeInTheDocument();
+  });
+
+  it("shows only the current author's results awaiting review, while team flow stays team-wide", () => {
+    const tasks = [
+      task({ id: "own", title: "Моя проверка", assigneeId: "employee", authorId: "manager", status: "awaiting_review" }),
+      task({ id: "other", title: "Чужая проверка", assigneeId: "employee", authorId: "calm", status: "awaiting_review" }),
+    ];
+    render(<FluentProvider theme={workspaceTheme}><TeamDashboardView token="test-token" tasks={tasks} people={people} currentUserId="manager" efficiencyLoading={false} onSelectTask={vi.fn()} /></FluentProvider>);
+    expect(within(screen.getByText("Ждут решения").closest("button")!).getByText("1")).toBeInTheDocument();
+    expect(within(screen.getByRole("group", { name: "Задачи по статусам" })).getByRole("button", { name: "На проверке в команде 2" })).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Требует внимания" })).queryByText("Чужая проверка")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText("Ждут решения").closest("button")!);
+    const dialog = screen.getByRole("dialog", { name: "Результаты на вашей проверке" });
+    expect(within(dialog).getByText("Моя проверка")).toBeInTheDocument();
+    expect(within(dialog).queryByText("Чужая проверка")).not.toBeInTheDocument();
   });
 
   it("places the presence overview immediately before workload, after the action blocks", () => {
@@ -252,7 +266,7 @@ describe("TeamDashboardView", () => {
     const statuses = screen.getByRole("group", { name: "Задачи по статусам" });
     expect(within(statuses).getAllByRole("button")).toHaveLength(4);
     expect(document.querySelector(".team-dash-flow-bar")).toBeNull();
-    for (const [label, count] of [["Новые", 1], ["В работе", 0], ["На проверке", 1], ["Срок истёк", 1]] as const) {
+    for (const [label, count] of [["Новые", 1], ["В работе", 0], ["На проверке в команде", 1], ["Срок истёк", 1]] as const) {
       const tile = within(statuses).getByRole("button", { name: `${label} ${count}` });
       fireEvent.click(tile);
       expect(tile).toHaveAttribute("aria-pressed", "true");

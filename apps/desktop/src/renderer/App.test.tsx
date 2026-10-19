@@ -1747,14 +1747,14 @@ describe("corporate workspace authentication alpha", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Заявки на оплату" })).toHaveAttribute("aria-current", "page"));
   });
 
-  it("opens the chairman's signature letter from the sixth team metric", async () => {
+  it("opens the chairman's signature letter from the team metrics", async () => {
     mockServer({ chairmanLogin: true });
     render(<App />);
     await loginToWorkspace("malika", "home");
     const metrics = screen.getByRole("region", { name: "Ключевые показатели команды" });
     const signatures = within(metrics).getByRole("button", { name: /Письма на подпись/ });
     await waitFor(() => expect(signatures).toHaveTextContent("1"));
-    expect(within(metrics).getAllByRole("button")).toHaveLength(6);
+    expect(within(metrics).getAllByRole("button")).toHaveLength(7);
     fireEvent.click(signatures);
     fireEvent.click(within(screen.getByRole("region", { name: "Письма, ожидающие вашей подписи" })).getByRole("button", { name: /Письмо из обзора команды/ }));
     expect(await screen.findByRole("dialog", { name: /Письмо из обзора команды/ })).toBeInTheDocument();
