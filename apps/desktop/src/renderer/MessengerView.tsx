@@ -999,7 +999,7 @@ function Conversation({
           </div>
         </div>
       ) : null}
-      <div className="message-scroll" data-chat-background={chatBackground} aria-label="Переписка" aria-live="polite" ref={scrollRef}
+        <div className="message-scroll" data-message-selection={selectionMode ? "" : undefined} data-chat-background={chatBackground} aria-label="Переписка" aria-live="polite" ref={scrollRef}
         tabIndex={-1} onPointerDownCapture={paint.onPointerDown} onPointerMove={paint.onPointerMove}
         onPointerUp={paint.onPointerUp} onPointerCancel={paint.stop} onLostPointerCapture={paint.stop} onClickCapture={paint.onClickCapture}
         onKeyDown={event => { if (selectionMode && event.key === "Escape" && !event.defaultPrevented) { event.preventDefault(); paint.stop(); cancelSelection(); } }}
