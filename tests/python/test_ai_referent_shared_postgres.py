@@ -362,6 +362,41 @@ async def test_shared_workflow_round_trip_and_uncertain_delivery():
             "GET", "/agent/letters/progress/" + letter["id"], telegram("910004")
         )
         assert admin_final_progress["status"] == "awaiting_final_send"
+        # Final PDF review holds no Exat compose window. Another approved letter
+        # can use the same agent lane without deciding or duplicating this letter.
+        next_letter = await call("POST", "/letters", author, expected=201, json={
+            **payload,
+            "subject": "Next letter while final review is pending",
+            "finalReviewerUserId": None,
+            "operationId": str(uuid4()),
+        })
+        next_path = "/letters/" + next_letter["id"]
+        await call(
+            "PUT", "/agent" + next_path + "/attachment?fileName=next.docx&role=primary",
+            telegram("910003"), content=data,
+        )
+        await pass_preflight(client, engine, next_letter["id"], author, "shared-test-agent")
+        next_letter = await call("GET", next_path, author)
+        next_letter = await call("POST", next_path + "/actions", author, json={
+            "action": "submit", "expectedRevision": next_letter["revision"],
+            "operationId": str(uuid4()),
+        })
+        next_letter = await call(
+            "POST", "/agent" + next_path + "/actions", telegram("910001"), json={
+                "action": "approve", "expectedRevision": next_letter["revision"],
+                "operationId": str(uuid4()),
+            },
+        )
+        assert next_letter["status"] == "queued"
+        next_job = (await call("POST", "/agent/jobs/claim?agentId=referent-test"))["job"]
+        assert next_job["letterId"] == next_letter["id"]
+        assert next_job["kind"] == "prepare"
+        assert (await call("POST", "/agent/jobs/claim?agentId=referent-test"))["job"] is None
+        await call("POST", f"/agent/jobs/{next_job['id']}/result", expected=204, json={
+            "agentId": "referent-test", "leaseToken": next_job["leaseToken"],
+            "outcome": "failed", "detail": "Test-only preparation failure",
+        })
+        assert (await call("GET", path, author))["status"] == "awaiting_final_send"
         await action("release_delivery", telegram("910004"), 403)
         await action("send", admin, 409)
         await action("release_delivery", telegram("910001"), 403)
