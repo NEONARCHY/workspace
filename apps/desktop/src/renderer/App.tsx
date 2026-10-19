@@ -2145,6 +2145,7 @@ export function App() {
     onOpenPersonProfile: setProfileUserId,
     focusChatId: focusTarget?.section === "messenger" ? focusTarget.entityId : undefined,
     focusMessageId: focusTarget?.section === "messenger" ? focusTarget.messageId : undefined,
+    focusRevision: focusTarget?.section === "messenger" ? focusTarget.revision : undefined,
   };
   return (
     <FluentProvider theme={fluentTheme} className="app-provider">
@@ -2699,7 +2700,7 @@ export function App() {
         </div>
       </div>
       {canView("messenger") ? <FloatingMessenger key={workspace.currentUser.id} messenger={messengerProps}
-        fullPage={displayedSection === "messenger"} pageSlot={messengerPageSlot}
+        fullPage={displayedSection === "messenger" || messengerPageSlot !== null} pageSlot={messengerPageSlot}
         onMinimizeFullPage={() => setActiveSection(lastMessengerBackground.current)}
         onOpenFullPage={(chatId) => {
           setFocusTarget((current) => ({ section: "messenger", entityId: chatId, revision: (current?.revision ?? 0) + 1 }));

@@ -79,3 +79,15 @@ it("does not hide an active voice draft and yields to real modal dialogs", async
   fireEvent.click(screen.getByRole("button", { name: "Свернуть мини-мессенджер" }));
   expect(launcher).toHaveAttribute("aria-expanded", "false");
 });
+it("suspends reading when the application tab is hidden", () => {
+  const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+  render(view());
+  fireEvent.click(screen.getByRole("button", { name: "Открыть мини-мессенджер" }));
+  expect(screen.getByTestId("shared-messenger")).toHaveAttribute("data-visible", "true");
+  visibility.mockReturnValue("hidden");
+  fireEvent(document, new Event("visibilitychange"));
+  expect(screen.getByTestId("shared-messenger")).toHaveAttribute("data-visible", "false");
+  visibility.mockReturnValue("visible");
+  fireEvent(document, new Event("visibilitychange"));
+  expect(screen.getByTestId("shared-messenger")).toHaveAttribute("data-visible", "true");
+});

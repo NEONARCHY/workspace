@@ -89,6 +89,18 @@ it("does not read chats in a closed mini messenger or merely in its list", async
   expect(onMarkRead).not.toHaveBeenCalled();
   result.unmount();
 });
+it("reopens the same focused chat on a new navigation request without remounting its draft", () => {
+  const result = renderMessenger({ compact: true, focusChatId: "finance", focusRevision: 1 });
+  const editor = screen.getByRole("textbox", { name: "Новое сообщение" });
+  changeField(editor, { target: { value: "Повторный переход" } });
+  fireEvent.click(screen.getByRole("button", { name: "К списку чатов" }));
+  expect(document.querySelector(".messenger-view")).not.toHaveClass("conversation-open");
+  result.rerender(<FluentProvider theme={webLightTheme}><MessengerView {...result.props} focusRevision={2} /></FluentProvider>);
+  expect(document.querySelector(".messenger-view")).toHaveClass("conversation-open");
+  expect(screen.getByRole("textbox", { name: "Новое сообщение" })).toBe(editor);
+  expect(editor).toHaveTextContent("Повторный переход");
+  result.unmount();
+});
 
 describe("rich messenger integration", () => {
   afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); window.getSelection()?.removeAllRanges(); });

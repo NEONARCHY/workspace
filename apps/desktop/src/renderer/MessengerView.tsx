@@ -136,6 +136,7 @@ export interface MessengerViewProps {
   readonly onPinnedOrder?: (order: readonly string[]) => Promise<void>;
   readonly focusChatId?: string;
   readonly focusMessageId?: string;
+  readonly focusRevision?: number;
   readonly currentUserId: string;
   readonly currentUserRole: string;
   readonly chats: readonly ChatSummary[];
@@ -258,6 +259,7 @@ function Conversation({
   canUseAssistant = false,
   fileDropDisabledReason,
   focusMessageId,
+  focusRevision,
   compact = false,
 }: Omit<MessengerViewProps, "chats" | "onMarkRead"> & {
   readonly chat: ChatSummary;
@@ -498,7 +500,7 @@ function Conversation({
     if (!focusMessageId) return;
     const frame = requestAnimationFrame(() => scrollRef.current?.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(focusMessageId)}"]`)?.scrollIntoView({ block: "center", behavior: "instant" }));
     return () => cancelAnimationFrame(frame);
-  }, [focusMessageId]);
+  }, [focusMessageId, focusRevision]);
   useEffect(() => {
     if (editing) {
       const input = composerInputRef.current;
@@ -1451,7 +1453,7 @@ export function EmbeddedConversation(props: MessengerViewProps & {
 export function MessengerView(props: MessengerViewProps) {
   useMessengerFileNavigationGuard(props.visible !== false);
   const listPaneRef = useRef<HTMLElement>(null);
-  const { chats, messages, focusChatId, onMarkRead, visible = true, compact = false, onActiveChatChange } = props;
+  const { chats, messages, focusChatId, focusRevision, onMarkRead, visible = true, compact = false, onActiveChatChange } = props;
   const undo = useUndoActions();
   const [deletionChoice, setDeletionChoice] = useState<ChatSummary>();
   const [deletionChoiceOpen, setDeletionChoiceOpen] = useState(false);
@@ -1465,9 +1467,9 @@ export function MessengerView(props: MessengerViewProps) {
   const [listRevision, setListRevision] = useState(0);
   const [panel, setPanel] = useState<"create" | "manage">();
   const [conversationOpen, setConversationOpen] = useState(Boolean(focusChatId));
-  const [previousFocusChatId, setPreviousFocusChatId] = useState(focusChatId);
-  if (previousFocusChatId !== focusChatId) {
-    setPreviousFocusChatId(focusChatId);
+  const [previousFocus, setPreviousFocus] = useState({ chatId: focusChatId, revision: focusRevision });
+  if (previousFocus.chatId !== focusChatId || previousFocus.revision !== focusRevision) {
+    setPreviousFocus({ chatId: focusChatId, revision: focusRevision });
     if (focusChatId) { setActiveChatId(focusChatId); setConversationOpen(true); }
   }
   const [assistantChat, setAssistantChat] = useState<ChatSummary>();

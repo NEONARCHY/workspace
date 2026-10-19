@@ -17,6 +17,7 @@ export function FloatingMessenger({ messenger, fullPage, pageSlot, onOpenFullPag
   const storageKey = `ws:mini-messenger-position:${messenger.currentUserId}`;
   const [position, setPosition] = useState(() => readMessengerPosition(storageKey));
   const [viewport, setViewport] = useState(readMessengerViewport);
+  const [documentVisible, setDocumentVisible] = useState(() => document.visibilityState !== "hidden");
   const [open, setOpen] = useState(false);
   const [visited, setVisited] = useState(fullPage);
   const [activeChatId, setActiveChatId] = useState<string>();
@@ -40,16 +41,21 @@ export function FloatingMessenger({ messenger, fullPage, pageSlot, onOpenFullPag
     // after the full page has been left. Keep the same recorder visible in mini.
     if (!visible && !fullPage && panel.current?.querySelector(".has-voice-draft")) { setOpen(true); return; }
     if (!visible || fullPage) return;
-    panel.current?.querySelector<HTMLInputElement>(".pane-search input")?.focus({ preventScroll: true });
+    const target = panel.current?.querySelector<HTMLElement>(".conversation-open .composer-input [contenteditable]")
+      ?? panel.current?.querySelector<HTMLElement>(".pane-search input");
+    target?.focus({ preventScroll: true });
   }, [visible, fullPage]);
 
   useEffect(() => {
     const update = () => setViewport(readMessengerViewport());
+    const visibility = () => setDocumentVisible(document.visibilityState !== "hidden");
     window.addEventListener("resize", update);
+    document.addEventListener("visibilitychange", visibility);
     window.visualViewport?.addEventListener("resize", update);
     window.visualViewport?.addEventListener("scroll", update);
     return () => {
       window.removeEventListener("resize", update);
+      document.removeEventListener("visibilitychange", visibility);
       window.visualViewport?.removeEventListener("resize", update);
       window.visualViewport?.removeEventListener("scroll", update);
       if (frame.current !== undefined) cancelAnimationFrame(frame.current);
@@ -175,7 +181,7 @@ export function FloatingMessenger({ messenger, fullPage, pageSlot, onOpenFullPag
           </div>
         </header>
         {notice ? <p className="floating-messenger-notice" role="status">{notice}</p> : null}
-        <MessengerView {...messenger} compact={!fullPage} visible={visible && !blocking} onActiveChatChange={setActiveChatId} />
+        <MessengerView {...messenger} compact={!fullPage} visible={visible && !blocking && documentVisible} onActiveChatChange={setActiveChatId} />
       </section> : null}
     </div>
   </Portal>;

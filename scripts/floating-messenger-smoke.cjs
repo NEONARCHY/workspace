@@ -94,4 +94,9 @@ let browser;
   assert.deepEqual(errors, []);
   await browser.close();
   console.log('Floating messenger: 8 theme/viewport cases passed; unread, drag, persisted position, shared editor/files, navigation, full page and reduced motion.');
-})().catch(async error => { console.error(error); await browser?.close(); process.exit(1); });
+})().catch(async error => {
+  console.error(error);
+  const page = browser?.contexts()[0]?.pages()[0];
+  if (page) await page.screenshot({ path: 'tmp/floating-messenger-qa/failure.png' }).catch(() => undefined);
+  await browser?.close(); process.exit(1);
+});

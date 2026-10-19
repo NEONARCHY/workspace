@@ -1149,7 +1149,7 @@ describe("corporate workspace authentication alpha", () => {
     mockServer();
     render(<App />);
     await loginToWorkspace("aziza", "home");
-    fireEvent.click(screen.getByRole("button", { name: "Открыть мини-мессенджер", exact: true }));
+    fireEvent.click(screen.getByRole("button", { name: "Открыть мини-мессенджер" }));
     const mini = await screen.findByRole("dialog", { name: "Мини-мессенджер" });
     fireEvent.click(within(mini).getByRole("button", { name: /^Финансы и закупки/ }));
     const editor = await within(mini).findByRole("textbox", { name: "Новое сообщение" });
@@ -1157,10 +1157,10 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.click(within(screen.getByRole("navigation")).getByRole("button", { name: /^Задачи/ }));
     expect(editor).toBeInTheDocument();
     expect(editor).toHaveTextContent("Общий черновик");
-    fireEvent.click(screen.getByRole("button", { name: "Открыть полный мессенджер", exact: true }));
+    fireEvent.click(screen.getByRole("button", { name: "Открыть полный мессенджер" }));
     await screen.findByRole("region", { name: "Раздел мессенджера" });
     expect(screen.getByRole("textbox", { name: "Новое сообщение" })).toBe(editor);
-    fireEvent.click(screen.getByRole("button", { name: "Открыть мини-мессенджер", exact: true }));
+    fireEvent.click(screen.getByRole("button", { name: "Открыть мини-мессенджер" }));
     await screen.findByRole("dialog", { name: "Мини-мессенджер" });
     expect(screen.getByRole("textbox", { name: "Новое сообщение" })).toBe(editor);
   });
