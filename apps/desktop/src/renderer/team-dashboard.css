@@ -191,6 +191,12 @@
 .team-dash-decisions { display: grid; gap: 12px; margin-top: 12px; padding: 18px; border: 1px solid var(--ws-theme-line); border-radius: 18px; background: var(--ws-theme-surface); }
 .team-dash-decisions > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .team-dash-decisions h3 { margin: 0; font-size: 17px; }
+.team-dash-payment-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: center; width: 100%; padding: 14px; border: 1px solid var(--ws-theme-line); border-radius: 14px; background: var(--ws-theme-surface-soft); color: var(--ws-text); font: inherit; text-align: left; cursor: pointer; }
+.team-dash-payment-item strong, .team-dash-payment-item span { grid-column: 1; min-width: 0; overflow-wrap: anywhere; }
+.team-dash-payment-item span { color: var(--ws-muted); font-size: 12px; }
+.team-dash-payment-item svg { grid-column: 2; grid-row: 1 / 3; }
+.team-dash-payment-item:hover { border-color: var(--ws-link); }
+.team-dash-payment-item:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 2px; }
 .team-dash-decision-item { display: grid; gap: 9px; padding: 14px; border: 1px solid var(--ws-theme-line); border-radius: 14px; background: var(--ws-theme-surface-soft); }
 .team-dash-decision-item > button:first-child { display: grid; gap: 5px; border: 0; background: transparent; color: var(--ws-text); font: inherit; text-align: left; cursor: pointer; }
 .team-dash-decision-item > button:first-child:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 2px; }
@@ -1379,18 +1385,21 @@
 
 @media (forced-colors: active) {
   .team-dash-flow, .team-dash-flow-total, .team-dash-flow-overview,
-  .team-dash-week, .team-dash-flow-legend > button, .team-dash-week-bars > button {
+  .team-dash-week, .team-dash-flow-legend > button, .team-dash-week-bars > button,
+  .team-dash-payment-item {
     background: Canvas;
     border-color: CanvasText;
     box-shadow: none;
     color: CanvasText;
   }
   .team-dash-flow-legend > button[aria-pressed="true"],
-  .team-dash-week-bars > button:is(.is-today, [aria-pressed="true"]) {
+  .team-dash-week-bars > button:is(.is-today, [aria-pressed="true"]),
+  .team-dash-payment-item:focus-visible {
     outline: 2px solid Highlight;
     outline-offset: -2px;
   }
   .team-dash-week-bars > button > span { background: Canvas; border: 1px solid CanvasText; }
+  .team-dash-payment-item span { color: CanvasText; }
   .team-dash-week-bars :is(button, .is-today) i { background: Highlight; box-shadow: none; }
 }
 

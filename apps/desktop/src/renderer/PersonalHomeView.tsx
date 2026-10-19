@@ -17,6 +17,7 @@ import "./personal-home.css";
 import { personalGreetingName } from "./personal-greeting-name";
 
 interface Props {
+  readonly variant?: "home" | "team-supplement";
   readonly token: string;
   readonly workspace: HomeWorkspace;
   readonly canView: (key: NavigationKey) => boolean;
@@ -67,7 +68,10 @@ function SignalNote({ note }: { readonly note: string }) {
   return separator < 0 ? <>{note}</> : <>{note.slice(0, separator + 2)} {note.slice(separator + 3)}</>;
 }
 
-export function PersonalHomeView({ token, workspace, canView, zoomMeetings = [], zoomError, zoomLoading = false, onOpen, onOpenNotification, onRefresh }: Props) {
+const teamSupplementPanels = new Set<HomePanelKey>(["attention", "notifications", "messages", "schedule", "mail", "feed"]);
+
+export function PersonalHomeView({ variant = "home", token, workspace, canView, zoomMeetings = [], zoomError, zoomLoading = false, onOpen, onOpenNotification, onRefresh }: Props) {
+  const teamSupplement = variant === "team-supplement";
   const user = workspace.currentUser;
   // Credential renewal reloads the same employee's resources without clearing
   // already visible cards. The loader cleanup still fences late token requests.
@@ -84,9 +88,9 @@ export function PersonalHomeView({ token, workspace, canView, zoomMeetings = [],
   const referentLoader = useCallback(() => loadAIReferentIncomingRegistry(token), [token]);
   const edoLoader = useCallback(() => loadEdoIncomingLetters(token, { personal: true }), [token]);
   const projectLoader = useCallback(() => loadProjectHub(token), [token]);
-  const efficiency = useResource(identity + ":" + period, true, efficiencyLoader, revision);
-  const recognition = useResource(identity, true, recognitionLoader, revision);
-  const reactions = useResource(identity, canView("messenger"), reactionLoader, revision);
+  const efficiency = useResource(identity + ":" + period, !teamSupplement, efficiencyLoader, revision);
+  const recognition = useResource(identity, !teamSupplement, recognitionLoader, revision);
+  const reactions = useResource(identity, !teamSupplement && canView("messenger"), reactionLoader, revision);
   const referent = useResource(identity, canView("ai_referent"), referentLoader, revision);
   const edo = useResource(identity, canView("incoming_letters"), edoLoader, revision);
   const projects = useResource(identity, canView("project_hub"), projectLoader, revision);
@@ -95,7 +99,9 @@ export function PersonalHomeView({ token, workspace, canView, zoomMeetings = [],
   const [order, setOrder] = useState(() => rankHomePanels(data, now));
   const [layoutRevision, setLayoutRevision] = useState(0);
   const recommendedOrder = rankHomePanels(data, now);
-  const orderChanged = order.join() !== recommendedOrder.join();
+  const visibleOrder = teamSupplement ? order.filter((key) => teamSupplementPanels.has(key)) : order;
+  const visibleRecommendedOrder = teamSupplement ? recommendedOrder.filter((key) => teamSupplementPanels.has(key)) : recommendedOrder;
+  const orderChanged = visibleOrder.join() !== visibleRecommendedOrder.join();
   const motionRef = useContextMotion(String(layoutRevision), { enter: true, rows: ":scope > .home-panel-slot" });
   const retry = () => setRevision(value => value + 1);
   useEffect(() => {
@@ -194,13 +200,14 @@ export function PersonalHomeView({ token, workspace, canView, zoomMeetings = [],
       {reactions?.data ? <><div className="home-reaction-total"><strong>{reactions.data.totalCount}</strong><span>полученных реакций</span></div>{reactions.data.reactions.length ? <ul className="home-reactions">{reactions.data.reactions.slice(0, 5).map(r => <li key={r.emoji}><span aria-label={r.emoji}><ReactionEmoji emoji={r.emoji} /></span><strong>{r.count}</strong></li>)}</ul> : <Empty>Когда коллеги отреагируют на ваши сообщения, здесь появится сводка.</Empty>}</> : null}
     </Panel> : null,
   };
-  return <div className="workspace-view personal-home" aria-label="Персональная Главная">
-    <WorkspaceSectionHeader motif="team" className="home-hero"><div><span>Главная · ваше рабочее пространство</span><h2>Добрый день, {personalGreetingName(user.name)}</h2><p>{next ? <>В фокусе: {next.title}</> : "Всё важное — рядом. Спокойный день начинается с ясного плана."}</p></div><Button icon={<ArrowSync20Regular />} disabled={refreshing} onClick={() => void refresh()}>{refreshing ? "Обновляем…" : "Обновить"}</Button></WorkspaceSectionHeader>
+  return <div className={teamSupplement ? "personal-home personal-home-embedded" : "workspace-view personal-home"} aria-label={teamSupplement ? "Личные блоки председателя" : "Персональная Главная"}>
+    {teamSupplement ? <header className="home-embedded-heading"><div><span>Личный контекст</span><h2>Ваше рабочее пространство</h2></div><Button icon={<ArrowSync20Regular />} disabled={refreshing} onClick={() => void refresh()}>{refreshing ? "Обновляем…" : "Обновить"}</Button></header>
+      : <WorkspaceSectionHeader motif="team" className="home-hero"><div><span>Главная · ваше рабочее пространство</span><h2>Добрый день, {personalGreetingName(user.name)}</h2><p>{next ? <>В фокусе: {next.title}</> : "Всё важное — рядом. Спокойный день начинается с ясного плана."}</p></div><Button icon={<ArrowSync20Regular />} disabled={refreshing} onClick={() => void refresh()}>{refreshing ? "Обновляем…" : "Обновить"}</Button></WorkspaceSectionHeader>}
     <div className="home-ready-content">
     {refreshError ? <WorkspaceNotice tone="warning" className="home-notice" role="alert">{refreshError}</WorkspaceNotice> : null}
-    <div className="home-overview" aria-label="Мой день"><article><strong>{projectsLoading ? <SkeletonBlock width="32px" height="28px" /> : data.signals.length + important}</strong><span>сигналов внимания</span></article><article><strong>{canView("tasks") ? data.tasks.length : "—"}</strong><span>моих активных задач</span></article><article><strong>{canView("messenger") ? data.chats.reduce((sum, c) => sum + c.chat.unread, 0) : "—"}</strong><span>непрочитанных сообщений</span></article><article><strong>{unread}</strong><span>новых уведомлений</span></article></div>
+    {!teamSupplement ? <div className="home-overview" aria-label="Мой день"><article><strong>{projectsLoading ? <SkeletonBlock width="32px" height="28px" /> : data.signals.length + important}</strong><span>сигналов внимания</span></article><article><strong>{canView("tasks") ? data.tasks.length : "—"}</strong><span>моих активных задач</span></article><article><strong>{canView("messenger") ? data.chats.reduce((sum, c) => sum + c.chat.unread, 0) : "—"}</strong><span>непрочитанных сообщений</span></article><article><strong>{unread}</strong><span>новых уведомлений</span></article></div> : null}
     {orderChanged ? <div className="home-priority-update" role="status"><span>Приоритеты изменились. Обновить порядок блоков?</span><Button size="small" onClick={() => { setOrder(recommendedOrder); setLayoutRevision(value => value + 1); }}>Обновить фокус дня</Button></div> : null}
-    <div className="home-grid" ref={motionRef}>{order.map(key => panels[key] ? <div key={key} className="home-panel-slot">{panels[key]}</div> : null)}</div>
+    <div className="home-grid" ref={motionRef}>{visibleOrder.map(key => panels[key] ? <div key={key} className="home-panel-slot">{panels[key]}</div> : null)}</div>
     </div>
   </div>;
 }
