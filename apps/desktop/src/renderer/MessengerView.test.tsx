@@ -1636,6 +1636,23 @@ describe("Private messenger", () => {
     expect(onSendMessage).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Переслать сообщение" })).not.toBeInTheDocument());
   });
+  it.each(["checkbox", "bubble", "keyboard"])("exits selection when the last message is cleared via %s", method => {
+    const messages: ChatMessage[] = [{ id: "last-selection", chatId: "finance", authorId: "aziza", body: "Последнее выбранное", time: "12:00" }];
+    renderMessenger({ messages, onForwardContent: vi.fn() });
+    openMessageMenu(messages[0]!.body);
+    fireEvent.click(screen.getByRole("button", { name: "Выделить" }));
+    expect(screen.getByRole("region", { name: "Выделенные сообщения" })).toHaveTextContent("Выбрано: 1");
+    const bubble = document.querySelector('[data-message-id="last-selection"]')!;
+    if (method === "checkbox") fireEvent.click(screen.getByRole("checkbox", { name: "Выделить сообщение: Последнее выбранное" }));
+    else if (method === "keyboard") fireEvent.keyDown(bubble, { key: " " });
+    else fireEvent.click(bubble);
+    expect(screen.queryByRole("region", { name: "Выделенные сообщения" })).not.toBeInTheDocument();
+    expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
+    expect(document.querySelector(".has-message-selection, .message.is-selecting, .message.is-selected")).toBeNull();
+    openMessageMenu(messages[0]!.body);
+    fireEvent.click(screen.getByRole("button", { name: "Выделить" }));
+    expect(screen.getByRole("region", { name: "Выделенные сообщения" })).toHaveTextContent("Выбрано: 1");
+  });
   it("selects several messages, keeps them on dialog cancellation and forwards in chat order", async () => {
     const onForwardContent = vi.fn().mockResolvedValue({ id: "forwarded" });
     const messages: ChatMessage[] = [

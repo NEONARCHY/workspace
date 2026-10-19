@@ -42,9 +42,18 @@ let browser;
     // A fresh pass through the already selected third row removes it.
     await page.mouse.move(x, centers[2]); await page.mouse.down();
     await page.mouse.move(x + 7, centers[2]); await page.mouse.up();
-    await page.waitForFunction(() => document.querySelector('.message-selection-toolbar')?.textContent.includes('Выбрано: 0'));
+    await toolbar.waitFor({ state: 'hidden' });
+    assert.equal(await page.getByRole('checkbox').count(), 0, 'last painted deselection exits the mode');
+    await first.click({ button: 'right' });
+    await page.getByRole('button', { name: 'Выделить', exact: true }).click();
     const mark = page.getByRole('checkbox').first();
-    await mark.check(); assert.equal(await mark.isChecked(), true, 'checkbox click toggles only once');
+    await mark.uncheck();
+    await toolbar.waitFor({ state: 'hidden' });
+    assert.equal(await page.getByRole('checkbox').count(), 0, 'last checkbox deselection exits the mode');
+    await first.click({ button: 'right' });
+    await page.getByRole('button', { name: 'Выделить', exact: true }).click();
+    const secondMark = page.getByRole('checkbox').nth(1);
+    await secondMark.check(); assert.equal(await secondMark.isChecked(), true, 'checkbox click toggles only once');
     await pane.focus(); await page.keyboard.press('Escape');
     assert.equal(await toolbar.isVisible(), false);
     // A click in blank space does not start selection.
@@ -83,6 +92,13 @@ let browser;
       const rect = await button.boundingBox();
       assert.ok(rect.x >= box.x && rect.x + rect.width <= box.x + box.width + 1, 'mini controls fit');
     }
+    const selected = panel.getByRole('checkbox', { checked: true });
+    if (theme === 'light') await selected.press('Space'); else await selected.uncheck();
+    await region.waitFor({ state: 'hidden' });
+    assert.equal(await panel.getByRole('checkbox').count(), 0, 'last mini selection clears its controls');
+    assert.deepEqual(await pane.boundingBox(), before, 'leaving mini selection retains geometry');
+    await panel.locator('.message[data-message-id]').first().click({ button: 'right' });
+    await page.getByRole('button', { name: 'Выделить', exact: true }).click();
     await pane.focus(); await page.keyboard.press('Escape');
     assert.equal(await region.isVisible(), false);
     await page.close();

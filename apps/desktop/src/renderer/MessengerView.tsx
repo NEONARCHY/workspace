@@ -284,9 +284,8 @@ function Conversation({
   const [attachmentReviewOpen, setAttachmentReviewOpen] = useState(false);
   const [taskSource, setTaskSource] = useState<ChatMessage>();
   const [forwarding, setForwarding] = useState<readonly ChatMessage[]>();
-  const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
-  const cancelSelection = useCallback(() => { setSelectionMode(false); setSelectedIds(new Set()); }, []);
+  const cancelSelection = useCallback(() => setSelectedIds(new Set()), []);
   const toggleSelection = useCallback((id: string) => setSelectedIds(current => {
     const next = new Set(current);
     if (next.has(id)) next.delete(id); else next.add(id);
@@ -310,7 +309,6 @@ function Conversation({
   const reactionHoverTimer = useRef<number | undefined>(undefined);
   const paintSelection = useCallback((ids: readonly string[]) => {
     window.clearTimeout(reactionHoverTimer.current);
-    setSelectionMode(true);
     setSelectedIds(current => {
       const next = new Set(current);
       for (const id of ids) { if (next.has(id)) next.delete(id); else next.add(id); }
@@ -424,6 +422,7 @@ function Conversation({
       || message.body.toLowerCase().includes(query.toLowerCase()),
   ), [activeMessages, editing?.id, query]);
   const selectedMessages = activeMessages.filter(message => selectedIds.has(message.id) && !message.systemKind);
+  const selectionMode = selectedMessages.length > 0;
   const renderedMessages = useMemo(() => {
     const rows = visibleMessages.filter((message) => message.id !== removingMessage?.message.id);
     if (removingMessage && removingMessage.phase !== "done") {
@@ -1038,7 +1037,7 @@ function Conversation({
           {onForwardContent && <Button appearance="subtle" icon={<Forward size={20} />} onClick={() => { setForwarding([message]); setContextMenu(undefined); }}>Переслать</Button>}
           {onForwardContent && <Button appearance="subtle" icon={<CheckSquare size={20} />} onClick={() => {
             window.clearTimeout(reactionHoverTimer.current);
-            setSelectionMode(true); setSelectedIds(new Set([message.id])); setContextMenu(undefined);
+            setSelectedIds(new Set([message.id])); setContextMenu(undefined);
             window.requestAnimationFrame(() => scrollRef.current?.querySelector<HTMLInputElement>(".message-select:checked")?.focus({ preventScroll: true }));
           }}>Выделить</Button>}
           <Button appearance="subtle" icon={<ListTodo size={20} />} onClick={() => { setTaskSource(message); setContextMenu(undefined); }}>В задачу</Button>
