@@ -38,3 +38,15 @@ the user's browser/device or prove an absence of all frame stalls.
 
 Release only web on TEST after checks. Keep API schema0102 and all non-web
 containers unchanged. Record version/readiness and rollback image after release.
+
+## Delivered TEST
+
+Web 2.0.058 / `localtest-20261019-selection-fbb39c27`, built
+2026-10-19T08:42:51.214Z. Root, version and API readiness returned 200 at
+https://192.168.0.127:8443/. Only web was recreated (12700e6e83d1); all nine
+non-web IDs unchanged. Schema 0102_merge_leave_task; users=3/tasks=1/messages=133.
+Rollback image: `yuksalish-localtest-web:pre-selection-20261019` (2.0.057).
+Compatibility typecheck, both new unit regressions and all eight forwarding UI
+cases passed again before replacement. No API/worker/office/EXE update, real
+messages, push, PR or CI run. Main-based scoped change is cf37ea03; keep the TEST
+compatibility branch out of main. Scroll-rail WIP remains separate and undeployed.
