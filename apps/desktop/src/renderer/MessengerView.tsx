@@ -354,6 +354,11 @@ function Conversation({
   const restoreFocusTarget = useRestoreFocusTarget();
   const avatarRestoreFocusTarget = useRestoreFocusTarget();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [menuPortalContainer, setMenuPortalContainer] = useState<HTMLElement>(document.body);
+  const bindScrollPane = useCallback((node: HTMLDivElement | null) => {
+    scrollRef.current = node;
+    if (node) setMenuPortalContainer(menuPortalContainerFor(node));
+  }, []);
   useEffect(() => {
     if (deleting || busy || !deleteReturnFocus.current) return;
     const frame = requestAnimationFrame(() => {
@@ -1003,8 +1008,15 @@ function Conversation({
           </div>
         </div>
       ) : null}
-        <div className="message-scroll" data-message-selection={selectionMode ? "" : undefined} data-chat-background={chatBackground} aria-label="Переписка" aria-live="polite" ref={scrollRef}
-        tabIndex={-1} onPointerDownCapture={event => { window.clearTimeout(reactionHoverTimer.current); paint.onPointerDown(event); }} onPointerMove={paint.onPointerMove}
+        <div className="message-scroll" data-message-selection={selectionMode ? "" : undefined} data-chat-background={chatBackground} aria-label="Переписка" aria-live="polite" ref={bindScrollPane}
+        tabIndex={-1} onPointerDownCapture={event => {
+          window.clearTimeout(reactionHoverTimer.current);
+          // Keep secondary click from focusing a row and rebuilding the history
+          // for hover reactions before its native contextmenu event is delivered.
+          if (event.pointerType === "mouse" && event.button === 2
+            && (event.target as HTMLElement).closest(".message[data-message-id]")) event.preventDefault();
+          paint.onPointerDown(event);
+        }} onPointerMove={paint.onPointerMove}
         onPointerUp={paint.onPointerUp} onPointerCancel={paint.stop} onLostPointerCapture={paint.stop} onClickCapture={paint.onClickCapture}
         onKeyDown={event => { if (selectionMode && event.key === "Escape" && !event.defaultPrevented) { event.preventDefault(); paint.stop(); cancelSelection(); } }}
         onWheel={cancelArrivalMotion} onPointerDown={cancelArrivalMotion}
@@ -1018,7 +1030,9 @@ function Conversation({
         )}
         <MessageSelectionContext.Provider value={selection}>{messageRows}</MessageSelectionContext.Provider>
       </div>
-      {contextMenu ? (() => {
+      {(() => {
+        if (!contextMenu) return <MessageContextMenu open={false} x={0} y={0}
+          portalContainer={menuPortalContainer} onPointerDown={(event) => event.stopPropagation()}>{null}</MessageContextMenu>;
         const message = contextMenu.message;
         const own = message.authorId === currentUserId;
         const hasVoice = attachments.some((attachment) => attachment.ownerType === "message" && attachment.ownerId === message.id && attachment.mediaKind === "voice");
@@ -1054,7 +1068,7 @@ function Conversation({
             </div> : null}
           </div> : null}
         </MessageContextMenu>;
-      })() : null}
+      })()}
       {reactionQuick ? <ReactionDetailsMenu target={reactionQuick} reactions={reactionQuick.message.reactions ?? []}
         people={people} token={token} onClose={() => setReactionQuick(undefined)} onOpenPersonProfile={onOpenPersonProfile} /> : null}
       {reactionDialog && <Dialog open onOpenChange={(_, data) => { if (!data.open) setReactionDialog(undefined); }}><DialogSurface className="message-reaction-dialog" aria-label="Реакции на сообщение">

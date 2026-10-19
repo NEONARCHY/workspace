@@ -6,6 +6,26 @@ import { MessageContextMenu } from "./MessageContextMenu";
 describe("MessageContextMenu layout", () => {
   afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
+  it("keeps an empty themed host warm and reuses it without hidden menu controls", () => {
+    const props = { x: 20, y: 30, portalContainer: document.body, onPointerDown: vi.fn() };
+    const { rerender } = render(<MessageContextMenu {...props} open={false}>{null}</MessageContextMenu>);
+    const host = document.querySelector('[data-portal-node="true"]');
+    expect(host).toBeInTheDocument();
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(host?.querySelector("button,input,[role=menu]")).toBeNull();
+    rerender(<MessageContextMenu {...props} autoFocus><button>Reply</button></MessageContextMenu>);
+    expect(screen.getByRole("menu").closest('[data-portal-node="true"]')).toBe(host);
+    expect(screen.getByRole("button", { name: "Reply" })).toHaveFocus();
+    rerender(<MessageContextMenu {...props} open={false}>{null}</MessageContextMenu>);
+    expect(host).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reply" })).not.toBeInTheDocument();
+    const modalLayer = document.createElement("div"); document.body.append(modalLayer);
+    rerender(<MessageContextMenu {...props} portalContainer={modalLayer}><button>Reply</button></MessageContextMenu>);
+    expect(host).not.toBeInTheDocument();
+    expect(modalLayer.contains(screen.getByRole("menu"))).toBe(true);
+    modalLayer.remove();
+  });
+
   it("clamps the combined reaction strip and actions, then repositions on resize", () => {
     vi.stubGlobal("innerWidth", 320);
     vi.stubGlobal("innerHeight", 480);
