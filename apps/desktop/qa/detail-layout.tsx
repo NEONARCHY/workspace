@@ -14,6 +14,7 @@ import { MessageFileControls } from "./message-file-controls";
 import { ApprovalsView } from "../src/renderer/ApprovalsView";
 import { TripApprovalsView } from "../src/renderer/TripApprovalsView";
 import { MessengerForwardFixture } from "./messenger-forward";
+import { FloatingMessengerFixture } from "./floating-messenger";
 import { TeamDashboardView } from "../src/renderer/TeamDashboardView";
 import "../src/renderer/styles.css";
 import "../src/renderer/responsive.css";
@@ -90,6 +91,7 @@ import "../src/renderer/workspace-select-motion.css";
 import "../src/renderer/workspace-modal-backdrops.css";
 import "../src/renderer/notification-bell.css";
 import "../src/renderer/topbar-insights.css";
+import "../src/renderer/floating-messenger.css";
 import "../src/renderer/mobile-density.css";
 const noop = () => undefined;
 const task = { ...initialTasks[0]!, title: "Проверка геометрии задачи", authorId: "baxtiyor", assigneeId: "baxtiyor" };
@@ -114,6 +116,7 @@ function Fixture() {
       {view === "payments" ? <ApprovalsView token="qa-only" canManage={false} canCreateRequest={false} isSuperadmin={false} currentUserId="qa" people={[]} positions={[]} requests={[]} calendarEvents={[]} attachments={[]} onSaveWorkflow={noop} onPublishWorkflow={noop} onCreateRequest={noop} onAction={noop} onDeleteRequest={noop} onReviseRequest={noop} onUploadAttachments={noop} onDownloadAttachment={noop} /> :
       view === "trips" ? <TripApprovalsView requests={[]} people={people} currentUser={people[0]!} onCreate={async () => undefined} onUpdate={async () => undefined} onAction={async () => undefined} /> :
       view === "messenger-forward" ? <MessengerForwardFixture /> :
+      view === "floating-messenger" ? <FloatingMessengerFixture /> :
       view === "team-flow" ? <TeamDashboardView token="qa-only" currentUserId="baxtiyor" people={people}
         tasks={Array.from({ length: 188 }, (_, index) => ({ ...task, id: `qa-flow-${index}` }))}
         efficiencyLoading={false} onSelectTask={noop} /> :

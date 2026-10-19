@@ -6,12 +6,13 @@ import "./messenger-file-drop.css";
 const isFileDrag = (event: DragEvent) => Array.from(event.dataTransfer?.types ?? []).includes("Files");
 
 /** Keep outside drops inert even when no conversation is selected. */
-export function useMessengerFileNavigationGuard() {
+export function useMessengerFileNavigationGuard(enabled = true) {
   useEffect(() => {
+    if (!enabled) return;
     const preventNavigation = (event: DragEvent) => { if (isFileDrag(event)) event.preventDefault(); };
     window.addEventListener("drop", preventNavigation);
     return () => window.removeEventListener("drop", preventNavigation);
-  }, []);
+  }, [enabled]);
 }
 
 /** The shared conversation is the only target, including embedded object chats. */

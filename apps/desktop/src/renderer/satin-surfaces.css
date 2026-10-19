@@ -64,7 +64,7 @@
     .notification-progress-card, .calendar-board, .calendar-side, .record-table-frame, .task-proposals,
     .record-table-shell, .employee-records, .task-records, .task-focus-object,
     .messenger-view > .list-pane, .messenger-view > .conversation-pane,
-    .assistant-panel, .account-panel, .fui-DialogSurface, .fui-PopoverSurface,
+    .assistant-panel, .floating-messenger-panel:not(.is-full-page), .floating-messenger-launcher, .account-panel, .fui-DialogSurface, .fui-PopoverSurface,
     .fui-MenuPopover:not(.reaction-picker-popover), .fui-Listbox,
     .edo-incoming-list, .edo-incoming-detail, .edo-incoming-summary > span, .edo-incoming-error,
     .edo-incoming-secondary, .edo-incoming-error button, .edo-access-card,

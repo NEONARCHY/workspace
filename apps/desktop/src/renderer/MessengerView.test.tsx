@@ -76,6 +76,20 @@ function openMessageMenu(text: string) {
   fireEvent.contextMenu(message);
 }
 
+it("does not read chats in a closed mini messenger or merely in its list", async () => {
+  const onMarkRead = vi.fn();
+  const result = renderMessenger({ compact: true, visible: false, onMarkRead });
+  expect(onMarkRead).not.toHaveBeenCalled();
+  result.rerender(<FluentProvider theme={webLightTheme}><MessengerView {...result.props} visible /></FluentProvider>);
+  expect(onMarkRead).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: /^Финансы и закупки/ }));
+  await waitFor(() => expect(onMarkRead).toHaveBeenCalledWith("finance"));
+  onMarkRead.mockClear();
+  result.rerender(<FluentProvider theme={webLightTheme}><MessengerView {...result.props} visible={false} /></FluentProvider>);
+  expect(onMarkRead).not.toHaveBeenCalled();
+  result.unmount();
+});
+
 describe("rich messenger integration", () => {
   afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); window.getSelection()?.removeAllRanges(); });
   const quoted: ChatMessage = { id: "quote-source", chatId: "finance", authorId: "baxtiyor", body: "Альфа 😀 бета гамма", time: "12:00", canPin: true };

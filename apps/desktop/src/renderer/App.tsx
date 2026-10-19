@@ -105,7 +105,8 @@ import { NavigationEditor } from "./NavigationEditor";
 import { defaultPersonalPreferences, latestPreferences, visibleNavigation } from "./personal-organization";
 import type { ChatActions } from "./ChatManagement";
 import { LoginView } from "./LoginView";
-import { EmbeddedConversation, MessengerView } from "./MessengerView";
+import { EmbeddedConversation, type MessengerViewProps } from "./MessengerView";
+import { FloatingMessenger } from "./FloatingMessenger";
 import { NotificationCenter } from "./NotificationCenter";
 import { WorkdayControl } from "./WorkdayControl";
 import { TopbarInsights } from "./TopbarInsights";
@@ -473,6 +474,9 @@ export function App() {
   const [updateStatus, setUpdateStatus] = useState<DesktopUpdateStatus>({ phase: "idle" });
   const [webUpdateAvailable, setWebUpdateAvailable] = useState(false);
   const [profileUserId, setProfileUserId] = useState<string>();
+  const [messengerPageSlot, setMessengerPageSlot] = useState<HTMLDivElement | null>(null);
+  const lastMessengerBackground = useRef<WorkspaceSection | "notifications">("home");
+  useEffect(() => { if (activeSection !== "messenger") lastMessengerBackground.current = activeSection; }, [activeSection]);
   const [supportRegistry, setSupportRegistry] = useState<SupportRegistry>();
   const [supportOpen, setSupportOpen] = useState(false);
   const [supportFocusRequestId, setSupportFocusRequestId] = useState<string>();
@@ -2111,6 +2115,37 @@ export function App() {
     onOpenPersonProfile={setProfileUserId}
   />;
 
+  const messengerProps: MessengerViewProps = {
+    canUseAssistant,
+    assistantDraft: canUseAssistant && preparedAction?.kind === "message" ? preparedAction : undefined,
+    assistantRecipientId: canUseAssistant && preparedAction?.kind === "message" ? assistantRecipientId : undefined,
+    token: session.accessToken, chats: displayChats, personalPreferences: workspace.personalPreferences,
+    onPersonalChat: (chatId, action) => personalMutation((token) => changePersonalChat(token, chatId, action)),
+    onPinnedOrder: (order) => personalMutation((token) => reorderPinnedChats(token, order, workspace.personalPreferences.revision)),
+    messages: workspace.messages, tasks: workspace.tasks, attachments: workspace.attachments,
+    people: displayPeople, departments: workspace.departments, currentUserId: workspace.currentUser.id,
+    currentUserRole: workspace.currentUser.role, chatActions,
+    onSendMessage: handleSendMessage, onForwardContent: handleForwardContent, onOpenFeedPost: openFeedPost,
+    onSendVoiceMessage: handleSendVoiceMessage, onReactMessage: handleMessageReaction, onPinMessage: handleMessagePin,
+    onEditMessage: async (message, body, mentionUserIds, entities) => { await messengerMutation((token) => editWorkspaceMessage(token, message, body, mentionUserIds, entities)); },
+    onDeleteMessage: async (message) => { await messengerMutation((token) => deleteWorkspaceMessage(token, message)); },
+    onCreateTaskFromMessage: handleCreateTaskFromMessage,
+    onRequestTaskDeadline: handleRequestTaskDeadline, onDecideTaskDeadline: handleDecideTaskDeadline,
+    onCreateCalendarEventFromChat: (chat) => {
+      setCalendarChatDraft({ key: `${chat.id}:${Date.now()}`, title: `Встреча: ${chat.title}`, attendeeIds: chat.members.map((member) => member.userId) });
+      setActiveSection("calendar");
+    },
+    onDownloadAttachment: handleDownloadAttachment, onLoadAttachment: handleLoadAttachment,
+    onMarkRead: handleMarkChatRead,
+    onOpenContext: (contextType, contextId) => {
+      const section = contextType === "task" ? "tasks" : contextType === "project" ? "projects" : contextType === "project_hub" ? "project_hub" : "trip_approvals";
+      setFocusTarget((current) => ({ section, entityId: contextId, revision: (current?.revision ?? 0) + 1 }));
+      setActiveSection(section);
+    },
+    onOpenPersonProfile: setProfileUserId,
+    focusChatId: focusTarget?.section === "messenger" ? focusTarget.entityId : undefined,
+    focusMessageId: focusTarget?.section === "messenger" ? focusTarget.messageId : undefined,
+  };
   return (
     <FluentProvider theme={fluentTheme} className="app-provider">
       <UndoActionsProvider key={workspace.currentUser.id}>
@@ -2291,55 +2326,7 @@ export function App() {
               />
             ) : null}
             {displayedSection === "messenger" ? (
-              <MessengerView
-                canUseAssistant={canUseAssistant}
-                key={focusTarget?.revision}
-                assistantDraft={canUseAssistant && preparedAction?.kind === "message" ? preparedAction : undefined}
-                assistantRecipientId={canUseAssistant && preparedAction?.kind === "message" ? assistantRecipientId : undefined}
-                token={session.accessToken}
-                chats={displayChats}
-                personalPreferences={workspace.personalPreferences}
-                onPersonalChat={(chatId, action) => personalMutation((token) => changePersonalChat(token, chatId, action))}
-                onPinnedOrder={(order) => personalMutation((token) => reorderPinnedChats(token, order, workspace.personalPreferences.revision))}
-                messages={workspace.messages}
-                tasks={workspace.tasks}
-                attachments={workspace.attachments}
-                people={displayPeople}
-                departments={workspace.departments}
-                onSendMessage={handleSendMessage}
-                onForwardContent={handleForwardContent}
-                onOpenFeedPost={openFeedPost}
-                onSendVoiceMessage={handleSendVoiceMessage}
-                onReactMessage={handleMessageReaction}
-                onPinMessage={handleMessagePin}
-                currentUserId={workspace.currentUser.id}
-                currentUserRole={workspace.currentUser.role}
-                chatActions={chatActions}
-                onEditMessage={async (message, body, mentionUserIds, entities) => { await messengerMutation((token) => editWorkspaceMessage(token, message, body, mentionUserIds, entities)); }}
-                onDeleteMessage={async (message) => { await messengerMutation((token) => deleteWorkspaceMessage(token, message)); }}
-                onCreateTaskFromMessage={handleCreateTaskFromMessage}
-                onRequestTaskDeadline={handleRequestTaskDeadline}
-                onDecideTaskDeadline={handleDecideTaskDeadline}
-                onCreateCalendarEventFromChat={(chat) => {
-                  setCalendarChatDraft({
-                    key: `${chat.id}:${Date.now()}`,
-                    title: `Встреча: ${chat.title}`,
-                    attendeeIds: chat.members.map((member) => member.userId),
-                  });
-                  setActiveSection("calendar");
-                }}
-                onDownloadAttachment={handleDownloadAttachment}
-                onLoadAttachment={handleLoadAttachment}
-                onMarkRead={handleMarkChatRead}
-                onOpenContext={(contextType, contextId) => {
-                  const section = contextType === "task" ? "tasks" : contextType === "project" ? "projects" : contextType === "project_hub" ? "project_hub" : "trip_approvals";
-                  setFocusTarget((current) => ({ section, entityId: contextId, revision: (current?.revision ?? 0) + 1 }));
-                  setActiveSection(section);
-                }}
-                onOpenPersonProfile={setProfileUserId}
-                focusChatId={focusTarget?.section === "messenger" ? focusTarget.entityId : undefined}
-                focusMessageId={focusTarget?.section === "messenger" ? focusTarget.messageId : undefined}
-              />
+              <div className="messenger-page-slot" ref={setMessengerPageSlot} />
             ) : null}
             {displayedSection === "tasks" ? (
               <WorkingUserIdsContext.Provider value={workspace.workingUserIds ?? []}>
@@ -2711,6 +2698,13 @@ export function App() {
           </WorkspaceSectionContent>
         </div>
       </div>
+      {canView("messenger") ? <FloatingMessenger key={workspace.currentUser.id} messenger={messengerProps}
+        fullPage={displayedSection === "messenger"} pageSlot={messengerPageSlot}
+        onMinimizeFullPage={() => setActiveSection(lastMessengerBackground.current)}
+        onOpenFullPage={(chatId) => {
+          setFocusTarget((current) => ({ section: "messenger", entityId: chatId, revision: (current?.revision ?? 0) + 1 }));
+          setActiveSection("messenger");
+        }} /> : null}
       {accountOpen ? (
         <Suspense fallback={null}>
         <RecoveryBoundary overlay onHome={closeAccount}>

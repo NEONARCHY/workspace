@@ -122,6 +122,9 @@ interface OutgoingDraft {
 }
 
 export interface MessengerViewProps {
+  readonly compact?: boolean;
+  readonly visible?: boolean;
+  readonly onActiveChatChange?: (chatId: string | undefined) => void;
   readonly onForwardContent?: ForwardContentAction;
   readonly onOpenFeedPost?: (id: string) => void | Promise<void>;
   readonly canUseAssistant?: boolean;
@@ -255,6 +258,7 @@ function Conversation({
   canUseAssistant = false,
   fileDropDisabledReason,
   focusMessageId,
+  compact = false,
 }: Omit<MessengerViewProps, "chats" | "onMarkRead"> & {
   readonly chat: ChatSummary;
   readonly availableChats: readonly ChatSummary[];
@@ -305,7 +309,8 @@ function Conversation({
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
   const [avatarDraft, setAvatarDraft] = useState<ChatAvatarIconKey>(chat.avatarIconKey ?? defaultChatIcon(chat));
   const [query, setQuery] = useState("");
-  const compactBrowser = useBrowserCompactLayout(workspacePlatform.kind === "web", "(max-width: 800px)");
+  const compactViewport = useBrowserCompactLayout(workspacePlatform.kind === "web", "(max-width: 800px)");
+  const compactBrowser = compact || compactViewport;
   const [searchOpen, setSearchOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -851,7 +856,7 @@ function Conversation({
           );
         }), [renderedMessages, activeMessages, taskForChat, people, canDecideDeadline, onDecideTaskDeadline, deadlineDecisionId, decideDeadline, arrivingIds, motionDisabled, currentUserId, query, attachments, onLoadAttachment, removingMessage, personName, personById, token, onOpenFeedPost, onDownloadAttachment, reactionTargetId, canSend, busy, run, onReactMessage, selectionMode, selectedIds, toggleSelection, cancelSelection]);
   return (
-    <MessengerFileDropSurface className={`conversation-pane${embedded ? " embedded-conversation" : ""}`}
+    <MessengerFileDropSurface className={`conversation-pane${embedded ? " embedded-conversation" : ""}${voiceOpen ? " has-voice-draft" : ""}`}
       title={chat.title} blockedReason={fileDropBlocked} receive={acceptFiles} reject={setError}>
       <header className="conversation-header">
         {!embedded ? <Button className="compact-back" appearance="subtle" icon={<ChevronLeft20Regular />} onClick={onBack}>К списку чатов</Button> : null}
@@ -859,7 +864,7 @@ function Conversation({
           {chat.canEditAvatar && chatActions.setAvatar ? <Dialog open={avatarPickerOpen}
             onOpenChange={(_, data) => { if (data.open) setAvatarDraft(chat.avatarIconKey ?? defaultChatIcon(chat)); setAvatarPickerOpen(data.open); }}>
             <DialogTrigger disableButtonEnhancement><button {...avatarRestoreFocusTarget} type="button" className="chat-avatar-edit-trigger" aria-label="Изменить иконку чата" title="Изменить иконку чата">
-              <ChatAvatar chat={chat} currentUserId={currentUserId} people={people} token={token} size={56} />
+              <ChatAvatar chat={chat} currentUserId={currentUserId} people={people} token={token} size={compact ? 40 : 56} />
             </button></DialogTrigger>
             <DialogSurface className="chat-avatar-picker" aria-label="Иконка чата"><DialogBody>
               <DialogTitle>Иконка чата</DialogTitle>
@@ -874,7 +879,7 @@ function Conversation({
                 <Button appearance="primary" aria-disabled={busy} onClick={() => { if (!busy) void run(async () => { await chatActions.setAvatar!(chat.id, avatarDraft); setAvatarPickerOpen(false); }); }}>{busy ? "Сохраняем…" : "Сохранить иконку"}</Button>
               </DialogActions>
             </DialogBody></DialogSurface>
-          </Dialog> : <ChatAvatar chat={chat} currentUserId={currentUserId} people={people} token={token} size={56} />}
+          </Dialog> : <ChatAvatar chat={chat} currentUserId={currentUserId} people={people} token={token} size={compact ? 40 : 56} />}
           <div>
           <h2>{chat.title}</h2>
           <p>
@@ -1444,9 +1449,9 @@ export function EmbeddedConversation(props: MessengerViewProps & {
 }
 
 export function MessengerView(props: MessengerViewProps) {
-  useMessengerFileNavigationGuard();
+  useMessengerFileNavigationGuard(props.visible !== false);
   const listPaneRef = useRef<HTMLElement>(null);
-  const { chats, messages, focusChatId, onMarkRead } = props;
+  const { chats, messages, focusChatId, onMarkRead, visible = true, compact = false, onActiveChatChange } = props;
   const undo = useUndoActions();
   const [deletionChoice, setDeletionChoice] = useState<ChatSummary>();
   const [deletionChoiceOpen, setDeletionChoiceOpen] = useState(false);
@@ -1460,6 +1465,11 @@ export function MessengerView(props: MessengerViewProps) {
   const [listRevision, setListRevision] = useState(0);
   const [panel, setPanel] = useState<"create" | "manage">();
   const [conversationOpen, setConversationOpen] = useState(Boolean(focusChatId));
+  const [previousFocusChatId, setPreviousFocusChatId] = useState(focusChatId);
+  if (previousFocusChatId !== focusChatId) {
+    setPreviousFocusChatId(focusChatId);
+    if (focusChatId) { setActiveChatId(focusChatId); setConversationOpen(true); }
+  }
   const [assistantChat, setAssistantChat] = useState<ChatSummary>();
   const [assistantChatBusy, setAssistantChatBusy] = useState(false);
   const [assistantChatError, setAssistantChatError] = useState("");
@@ -1524,10 +1534,13 @@ export function MessengerView(props: MessengerViewProps) {
     setListRevision((revision) => revision + 1);
   };
   useEffect(() => {
-    if (activeChat?.unread) void onMarkRead(activeChat.id);
-  }, [activeChat?.id, activeChat?.unread, onMarkRead]);
+    if (visible && (!compact || conversationOpen) && activeChat?.unread) void onMarkRead(activeChat.id);
+  }, [activeChat?.id, activeChat?.unread, onMarkRead, visible, compact, conversationOpen]);
+  useEffect(() => {
+    onActiveChatChange?.(conversationOpen || !compact ? activeChat?.id : undefined);
+  }, [activeChat?.id, conversationOpen, compact, onActiveChatChange]);
   return (
-    <section className={`workspace-view messenger-view ${(conversationOpen && activeChat) || pendingAssistantChat ? "conversation-open" : ""}`} aria-label="Мессенджер">
+    <section className={`workspace-view messenger-view ${props.compact ? "messenger-mini" : ""} ${(conversationOpen && activeChat) || pendingAssistantChat ? "conversation-open" : ""}`} aria-label="Мессенджер">
       <aside className="list-pane" ref={listPaneRef}>
           <OrganizedChatList key={listRevision} token={props.token} chats={visibleChats} messages={messages} people={props.people} departments={props.departments} currentUserId={props.currentUserId} activeChatId={activeChat?.id} focusChatId={focusChatId}
           preferences={preferences} onChange={props.onPersonalChat} onReorder={props.onPinnedOrder}
