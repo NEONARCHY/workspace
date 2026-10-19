@@ -365,14 +365,16 @@
   position: relative;
   z-index: 1;
   margin-bottom: 0;
+  flex-wrap: wrap;
 }
 
 .team-dash-flow-total {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: max-content max-content;
   align-items: center;
   gap: 9px;
   min-width: 112px;
+  flex-shrink: 0;
   padding: 9px 11px;
   border: 1px solid rgb(var(--ws-theme-line-teal-rgb, 149 190 196) / 0.46);
   border-radius: 14px 14px 16px 8px;
@@ -388,8 +390,9 @@
   line-height: 1;
 }
 
-.team-dash-flow-total span {
-  max-width: 54px;
+.team-dash-flow-heading > .team-dash-flow-total > span {
+  width: min-content;
+  max-width: none;
   margin: 0;
   color: var(--ws-theme-ink-teal, #60798a);
   font-size: 10px;
@@ -397,6 +400,7 @@
   letter-spacing: normal;
   line-height: 1.15;
   text-transform: none;
+  white-space: normal;
 }
 
 .team-dash-attention-list {

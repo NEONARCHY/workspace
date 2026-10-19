@@ -5,10 +5,9 @@ import { decodeRichDraft, encodeRichDraft, useRichComposer } from "./useRichComp
 import "./message-rich-text.css";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { ReactionEmoji } from "./ReactionEmoji";
-import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { RefObject, SetStateAction } from "react";
-import { Copy, Forward, ListTodo, Pencil, Pin, PinOff, Reply, Smile, Trash2, UserRound, UsersRound, WandSparkles } from "lucide-react";
+import { CheckSquare, Copy, Forward, ListTodo, Pencil, Pin, PinOff, Reply, Smile, Trash2, UserRound, UsersRound, WandSparkles } from "lucide-react";
 import { useMessageArrivalMotion } from "./useMessageArrivalMotion";
 import { ComposerSendTransition, MessageTextAnimate } from "./MessageTextAnimate";
 import type {
@@ -47,7 +46,6 @@ import {
 } from "@fluentui/react-components";
 import { Input } from "./WorkspaceInput";
 import {
-  Add24Regular,
   Attach24Regular,
   CalendarLtr24Regular,
   ChevronLeft20Regular,
@@ -124,6 +122,9 @@ interface OutgoingDraft {
 }
 
 export interface MessengerViewProps {
+  readonly compact?: boolean;
+  readonly visible?: boolean;
+  readonly onActiveChatChange?: (chatId: string | undefined) => void;
   readonly onForwardContent?: ForwardContentAction;
   readonly onOpenFeedPost?: (id: string) => void | Promise<void>;
   readonly canUseAssistant?: boolean;
@@ -135,6 +136,7 @@ export interface MessengerViewProps {
   readonly onPinnedOrder?: (order: readonly string[]) => Promise<void>;
   readonly focusChatId?: string;
   readonly focusMessageId?: string;
+  readonly focusRevision?: number;
   readonly currentUserId: string;
   readonly currentUserRole: string;
   readonly chats: readonly ChatSummary[];
@@ -257,6 +259,8 @@ function Conversation({
   canUseAssistant = false,
   fileDropDisabledReason,
   focusMessageId,
+  focusRevision,
+  compact = false,
 }: Omit<MessengerViewProps, "chats" | "onMarkRead"> & {
   readonly chat: ChatSummary;
   readonly availableChats: readonly ChatSummary[];
@@ -277,7 +281,15 @@ function Conversation({
   const [pendingFiles, setPendingFiles] = useComposerState<readonly File[]>([], composerRevision);
   const [attachmentReviewOpen, setAttachmentReviewOpen] = useState(false);
   const [taskSource, setTaskSource] = useState<ChatMessage>();
-  const [forwarding, setForwarding] = useState<ChatMessage>();
+  const [forwarding, setForwarding] = useState<readonly ChatMessage[]>();
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
+  const cancelSelection = useCallback(() => { setSelectionMode(false); setSelectedIds(new Set()); }, []);
+  const toggleSelection = useCallback((id: string) => setSelectedIds(current => {
+    const next = new Set(current);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  }), []);
   const [editing, setEditing] = useComposerState<ChatMessage | undefined>(undefined, composerRevision);
   const [editBody, setEditBody, editEntities, setEditDocument] = useRichComposer("", composerRevision);
   const [editMentions, setEditMentions] = useState<readonly string[]>([]);
@@ -299,7 +311,8 @@ function Conversation({
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
   const [avatarDraft, setAvatarDraft] = useState<ChatAvatarIconKey>(chat.avatarIconKey ?? defaultChatIcon(chat));
   const [query, setQuery] = useState("");
-  const compactBrowser = useBrowserCompactLayout(workspacePlatform.kind === "web", "(max-width: 800px)");
+  const compactViewport = useBrowserCompactLayout(workspacePlatform.kind === "web", "(max-width: 800px)");
+  const compactBrowser = compact || compactViewport;
   const [searchOpen, setSearchOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -399,6 +412,7 @@ function Conversation({
     (message) => message.id === editing?.id || !query
       || message.body.toLowerCase().includes(query.toLowerCase()),
   ), [activeMessages, editing?.id, query]);
+  const selectedMessages = activeMessages.filter(message => selectedIds.has(message.id) && !message.systemKind);
   const renderedMessages = useMemo(() => {
     const rows = visibleMessages.filter((message) => message.id !== removingMessage?.message.id);
     if (removingMessage && removingMessage.phase !== "done") {
@@ -486,7 +500,7 @@ function Conversation({
     if (!focusMessageId) return;
     const frame = requestAnimationFrame(() => scrollRef.current?.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(focusMessageId)}"]`)?.scrollIntoView({ block: "center", behavior: "instant" }));
     return () => cancelAnimationFrame(frame);
-  }, [focusMessageId]);
+  }, [focusMessageId, focusRevision]);
   useEffect(() => {
     if (editing) {
       const input = composerInputRef.current;
@@ -714,7 +728,11 @@ function Conversation({
               )}
               <div
                 data-message-id={message.id}
-                className={`message ${own ? "own" : ""} ${message.isPinned ? "message-pinned" : ""} ${message.mentionUserIds?.includes(currentUserId) ? "message-mentioned" : ""}`}
+                className={`message ${own ? "own" : ""} ${message.isPinned ? "message-pinned" : ""} ${message.mentionUserIds?.includes(currentUserId) ? "message-mentioned" : ""}${selectionMode ? " is-selecting" : ""}${selectionMode && selectedIds.has(message.id) ? " is-selected" : ""}`}
+                onClickCapture={event => {
+                  if (!selectionMode || (event.target as HTMLElement).closest(".message-select")) return;
+                  event.preventDefault(); event.stopPropagation(); toggleSelection(message.id);
+                }}
                 onContextMenu={(event) => {
                   event.preventDefault();
                   const textRoot = event.currentTarget.querySelector<HTMLElement>("[data-message-text]");
@@ -722,6 +740,10 @@ function Conversation({
                   setContextMenu({ message, selectedQuote, x: event.clientX, y: event.clientY, portalContainer: menuPortalContainerFor(event.currentTarget) });
                 }}
                 onKeyDown={(event) => {
+                  if (selectionMode && event.key === "Escape") { event.preventDefault(); cancelSelection(); return; }
+                  if (selectionMode && event.target === event.currentTarget && [" ", "Enter"].includes(event.key)) {
+                    event.preventDefault(); toggleSelection(message.id); return;
+                  }
                   if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
                     event.preventDefault();
                     const rect = event.currentTarget.getBoundingClientRect();
@@ -748,6 +770,8 @@ function Conversation({
                   if (!event.currentTarget.contains(event.relatedTarget)) setReactionTargetId((current) => current === message.id ? undefined : current);
                 }}
               >
+                {selectionMode ? <input className="message-select" type="checkbox" checked={selectedIds.has(message.id)}
+                  aria-label={`Выделить сообщение: ${message.body.slice(0, 80) || "Файл"}`} onChange={() => toggleSelection(message.id)} /> : null}
                 {!own && (groupedWithNext ? <span className="message-avatar-spacer" aria-hidden="true" /> :
                   <EmployeeProfileLink className="message-sender-avatar" userId={message.authorId} personName={personName(message.authorId)}>
                     {personById(message.authorId) ? <ProfileAvatar person={personById(message.authorId)!} token={token} size={32} /> : <Avatar name={personName(message.authorId)} size={32} color="colorful" />}
@@ -832,9 +856,9 @@ function Conversation({
               </div>
             </div>
           );
-        }), [renderedMessages, activeMessages, taskForChat, people, canDecideDeadline, onDecideTaskDeadline, deadlineDecisionId, decideDeadline, arrivingIds, motionDisabled, currentUserId, query, attachments, onLoadAttachment, removingMessage, personName, personById, token, onOpenFeedPost, onDownloadAttachment, reactionTargetId, canSend, busy, run, onReactMessage]);
+        }), [renderedMessages, activeMessages, taskForChat, people, canDecideDeadline, onDecideTaskDeadline, deadlineDecisionId, decideDeadline, arrivingIds, motionDisabled, currentUserId, query, attachments, onLoadAttachment, removingMessage, personName, personById, token, onOpenFeedPost, onDownloadAttachment, reactionTargetId, canSend, busy, run, onReactMessage, selectionMode, selectedIds, toggleSelection, cancelSelection]);
   return (
-    <MessengerFileDropSurface className={`conversation-pane${embedded ? " embedded-conversation" : ""}`}
+    <MessengerFileDropSurface className={`conversation-pane${embedded ? " embedded-conversation" : ""}${voiceOpen ? " has-voice-draft" : ""}`}
       title={chat.title} blockedReason={fileDropBlocked} receive={acceptFiles} reject={setError}>
       <header className="conversation-header">
         {!embedded ? <Button className="compact-back" appearance="subtle" icon={<ChevronLeft20Regular />} onClick={onBack}>К списку чатов</Button> : null}
@@ -842,7 +866,7 @@ function Conversation({
           {chat.canEditAvatar && chatActions.setAvatar ? <Dialog open={avatarPickerOpen}
             onOpenChange={(_, data) => { if (data.open) setAvatarDraft(chat.avatarIconKey ?? defaultChatIcon(chat)); setAvatarPickerOpen(data.open); }}>
             <DialogTrigger disableButtonEnhancement><button {...avatarRestoreFocusTarget} type="button" className="chat-avatar-edit-trigger" aria-label="Изменить иконку чата" title="Изменить иконку чата">
-              <ChatAvatar chat={chat} currentUserId={currentUserId} people={people} token={token} size={56} />
+              <ChatAvatar chat={chat} currentUserId={currentUserId} people={people} token={token} size={compact ? 40 : 56} />
             </button></DialogTrigger>
             <DialogSurface className="chat-avatar-picker" aria-label="Иконка чата"><DialogBody>
               <DialogTitle>Иконка чата</DialogTitle>
@@ -857,7 +881,7 @@ function Conversation({
                 <Button appearance="primary" aria-disabled={busy} onClick={() => { if (!busy) void run(async () => { await chatActions.setAvatar!(chat.id, avatarDraft); setAvatarPickerOpen(false); }); }}>{busy ? "Сохраняем…" : "Сохранить иконку"}</Button>
               </DialogActions>
             </DialogBody></DialogSurface>
-          </Dialog> : <ChatAvatar chat={chat} currentUserId={currentUserId} people={people} token={token} size={56} />}
+          </Dialog> : <ChatAvatar chat={chat} currentUserId={currentUserId} people={people} token={token} size={compact ? 40 : 56} />}
           <div>
           <h2>{chat.title}</h2>
           <p>
@@ -961,6 +985,13 @@ function Conversation({
           </div>
         </div>
       ) : null}
+      {selectionMode ? <div className="message-selection-toolbar" role="region" aria-label="Выделенные сообщения"
+        onKeyDown={event => { if (event.key === "Escape") { event.preventDefault(); cancelSelection(); } }}>
+        <span role="status">Выбрано: {selectedMessages.length}</span>
+        <Button appearance="primary" disabled={!selectedMessages.length} icon={<Forward size={20} />}
+          onClick={() => setForwarding(selectedMessages)}>Переслать выбранные</Button>
+        <Button onClick={cancelSelection}>Отменить выделение</Button>
+      </div> : null}
       <div className="message-scroll" data-chat-background={chatBackground} aria-label="Переписка" aria-live="polite" ref={scrollRef}
         onWheel={cancelArrivalMotion} onPointerDown={cancelArrivalMotion}
         onScroll={(event) => { const pane = event.currentTarget; followLatest.current = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 80; }}>
@@ -993,7 +1024,11 @@ function Conversation({
               catch { throw new Error("Не удалось скопировать. Выделите текст и нажмите Ctrl+C."); }
             });
           }}>{contextMenu.selectedQuote ? "Копировать выделенное" : "Копировать"}</Button> : null}
-          {onForwardContent && <Button appearance="subtle" icon={<Forward size={20} />} onClick={() => { setForwarding(message); setContextMenu(undefined); }}>Переслать</Button>}
+          {onForwardContent && <Button appearance="subtle" icon={<Forward size={20} />} onClick={() => { setForwarding([message]); setContextMenu(undefined); }}>Переслать</Button>}
+          {onForwardContent && <Button appearance="subtle" icon={<CheckSquare size={20} />} onClick={() => {
+            setSelectionMode(true); setSelectedIds(new Set([message.id])); setContextMenu(undefined); setReactionTargetId(undefined);
+            window.requestAnimationFrame(() => scrollRef.current?.querySelector<HTMLInputElement>(".message-select:checked")?.focus());
+          }}>Выделить</Button>}
           <Button appearance="subtle" icon={<ListTodo size={20} />} onClick={() => { setTaskSource(message); setContextMenu(undefined); }}>В задачу</Button>
           {own && message.canEdit && !hasVoice ? <Button appearance="subtle" icon={<Pencil size={20} />} onClick={() => { startEditing(message); setContextMenu(undefined); }}>Изменить</Button> : null}
           {mayDelete ? <Button className="message-context-delete" appearance="subtle" icon={<Trash2 size={20} />} onClick={() => requestMessageDelete(message, contextMenu.trigger)}>Удалить</Button> : null}
@@ -1081,9 +1116,10 @@ function Conversation({
           return task;
         }}
       /> : null}
-      {forwarding && onForwardContent ? <ForwardDialog source={{ kind: "message", id: forwarding.id }}
-        preview={forwarding.body} chats={availableChats} excludeChatId={chat.id}
-        onForward={onForwardContent} onClose={() => setForwarding(undefined)} /> : null}
+      {forwarding?.length && onForwardContent ? <ForwardDialog source={{ kind: "message", id: forwarding[0]!.id }}
+        sources={forwarding.map(message => ({ kind: "message", id: message.id }))}
+        preview={forwarding.length > 1 ? `Сообщений: ${forwarding.length}` : forwarding[0]!.body} chats={availableChats} excludeChatId={chat.id}
+        onForward={onForwardContent} onForwarded={cancelSelection} onClose={() => setForwarding(undefined)} /> : null}
       {!canSend ? (
         <WorkspaceNotice tone="info" className="chat-read-only">
           Вам доступно только чтение. Право отправлять сообщения меняет владелец
@@ -1415,10 +1451,9 @@ export function EmbeddedConversation(props: MessengerViewProps & {
 }
 
 export function MessengerView(props: MessengerViewProps) {
-  useMessengerFileNavigationGuard();
+  useMessengerFileNavigationGuard(props.visible !== false);
   const listPaneRef = useRef<HTMLElement>(null);
-  const restoreFocusTarget = useRestoreFocusTarget();
-  const { chats, messages, focusChatId, onMarkRead } = props;
+  const { chats, messages, focusChatId, focusRevision, onMarkRead, visible = true, compact = false, onActiveChatChange } = props;
   const undo = useUndoActions();
   const [deletionChoice, setDeletionChoice] = useState<ChatSummary>();
   const [deletionChoiceOpen, setDeletionChoiceOpen] = useState(false);
@@ -1432,6 +1467,11 @@ export function MessengerView(props: MessengerViewProps) {
   const [listRevision, setListRevision] = useState(0);
   const [panel, setPanel] = useState<"create" | "manage">();
   const [conversationOpen, setConversationOpen] = useState(Boolean(focusChatId));
+  const [previousFocus, setPreviousFocus] = useState({ chatId: focusChatId, revision: focusRevision });
+  if (previousFocus.chatId !== focusChatId || previousFocus.revision !== focusRevision) {
+    setPreviousFocus({ chatId: focusChatId, revision: focusRevision });
+    if (focusChatId) { setActiveChatId(focusChatId); setConversationOpen(true); }
+  }
   const [assistantChat, setAssistantChat] = useState<ChatSummary>();
   const [assistantChatBusy, setAssistantChatBusy] = useState(false);
   const [assistantChatError, setAssistantChatError] = useState("");
@@ -1496,29 +1536,17 @@ export function MessengerView(props: MessengerViewProps) {
     setListRevision((revision) => revision + 1);
   };
   useEffect(() => {
-    if (activeChat?.unread) void onMarkRead(activeChat.id);
-  }, [activeChat?.id, activeChat?.unread, onMarkRead]);
+    if (visible && (!compact || conversationOpen) && activeChat?.unread) void onMarkRead(activeChat.id);
+  }, [activeChat?.id, activeChat?.unread, onMarkRead, visible, compact, conversationOpen]);
+  useEffect(() => {
+    onActiveChatChange?.(conversationOpen || !compact ? activeChat?.id : undefined);
+  }, [activeChat?.id, conversationOpen, compact, onActiveChatChange]);
   return (
-    <section className={`workspace-view messenger-view ${(conversationOpen && activeChat) || pendingAssistantChat ? "conversation-open" : ""}`} aria-label="Мессенджер">
+    <section className={`workspace-view messenger-view ${props.compact ? "messenger-mini" : ""} ${(conversationOpen && activeChat) || pendingAssistantChat ? "conversation-open" : ""}`} aria-label="Мессенджер">
       <aside className="list-pane" ref={listPaneRef}>
-        <WorkspaceSectionHeader motif="messages" className="pane-heading messenger-pane-heading ws-section-header-compact">
-          <div>
-            <span className="messenger-eyebrow">Рабочее пространство</span>
-            <h1>Сообщения</h1>
-            <p>Диалоги, группы и обсуждения задач</p>
-          </div>
-          <Tooltip content="Создать группу" relationship="label">
-            <Button
-              appearance="subtle"
-              icon={<Add24Regular />}
-              aria-label="Создать группу"
-              {...restoreFocusTarget}
-              onClick={() => setPanel("create")}
-            />
-          </Tooltip>
-        </WorkspaceSectionHeader>
           <OrganizedChatList key={listRevision} token={props.token} chats={visibleChats} messages={messages} people={props.people} departments={props.departments} currentUserId={props.currentUserId} activeChatId={activeChat?.id} focusChatId={focusChatId}
           preferences={preferences} onChange={props.onPersonalChat} onReorder={props.onPinnedOrder}
+          onCreateGroup={() => setPanel("create")}
           onDelete={requestChatDeletion} onLeave={setPendingLeave} onOpenDirect={openDirectChat}
           onSelect={(id) => { setActiveChatId(id); setAssistantPreparationDismissed(true); setConversationOpen(true); setPanel(undefined); }} />
       </aside>

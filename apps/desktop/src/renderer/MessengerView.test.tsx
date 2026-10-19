@@ -76,6 +76,32 @@ function openMessageMenu(text: string) {
   fireEvent.contextMenu(message);
 }
 
+it("does not read chats in a closed mini messenger or merely in its list", async () => {
+  const onMarkRead = vi.fn();
+  const result = renderMessenger({ compact: true, visible: false, onMarkRead });
+  expect(onMarkRead).not.toHaveBeenCalled();
+  result.rerender(<FluentProvider theme={webLightTheme}><MessengerView {...result.props} visible /></FluentProvider>);
+  expect(onMarkRead).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: /^Финансы и закупки/ }));
+  await waitFor(() => expect(onMarkRead).toHaveBeenCalledWith("finance"));
+  onMarkRead.mockClear();
+  result.rerender(<FluentProvider theme={webLightTheme}><MessengerView {...result.props} visible={false} /></FluentProvider>);
+  expect(onMarkRead).not.toHaveBeenCalled();
+  result.unmount();
+});
+it("reopens the same focused chat on a new navigation request without remounting its draft", () => {
+  const result = renderMessenger({ compact: true, focusChatId: "finance", focusRevision: 1 });
+  const editor = screen.getByRole("textbox", { name: "Новое сообщение" });
+  changeField(editor, { target: { value: "Повторный переход" } });
+  fireEvent.click(screen.getByRole("button", { name: "К списку чатов" }));
+  expect(document.querySelector(".messenger-view")).not.toHaveClass("conversation-open");
+  result.rerender(<FluentProvider theme={webLightTheme}><MessengerView {...result.props} focusRevision={2} /></FluentProvider>);
+  expect(document.querySelector(".messenger-view")).toHaveClass("conversation-open");
+  expect(screen.getByRole("textbox", { name: "Новое сообщение" })).toBe(editor);
+  expect(editor).toHaveTextContent("Повторный переход");
+  result.unmount();
+});
+
 describe("rich messenger integration", () => {
   afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); window.getSelection()?.removeAllRanges(); });
   const quoted: ChatMessage = { id: "quote-source", chatId: "finance", authorId: "baxtiyor", body: "Альфа 😀 бета гамма", time: "12:00", canPin: true };
@@ -1609,6 +1635,28 @@ describe("Private messenger", () => {
     ));
     expect(onSendMessage).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Переслать сообщение" })).not.toBeInTheDocument());
+  });
+  it("selects several messages, keeps them on dialog cancellation and forwards in chat order", async () => {
+    const onForwardContent = vi.fn().mockResolvedValue({ id: "forwarded" });
+    const messages: ChatMessage[] = [
+      { id: "first", chatId: "finance", authorId: "dilshod", body: "Первое с фото", time: "12:00" },
+      { id: "second", chatId: "finance", authorId: "aziza", body: "Второе сообщение", time: "12:01" },
+    ];
+    renderMessenger({ messages, onForwardContent });
+    expect(screen.queryByRole("heading", { name: "Сообщения" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Создать группу" })).toBeInTheDocument();
+    openMessageMenu(messages[1]!.body);
+    fireEvent.click(screen.getByRole("button", { name: "Выделить" }));
+    expect(screen.getByRole("checkbox", { name: "Выделить сообщение: Второе сообщение" })).toBeChecked();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Выделить сообщение: Первое с фото" }));
+    fireEvent.click(screen.getByRole("button", { name: "Переслать выбранные" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Переслать сообщения" })).getByRole("button", { name: "Отмена" }));
+    expect(screen.getByRole("region", { name: "Выделенные сообщения" })).toHaveTextContent("Выбрано: 2");
+    fireEvent.click(screen.getByRole("button", { name: "Переслать выбранные" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Переслать сообщения" })).getByRole("button", { name: /Бахтиёр Самугов/ }));
+    await waitFor(() => expect(onForwardContent).toHaveBeenCalledTimes(2));
+    expect(onForwardContent.mock.calls.map(call => call[1].id)).toEqual(["first", "second"]);
+    await waitFor(() => expect(screen.queryByRole("region", { name: "Выделенные сообщения" })).not.toBeInTheDocument());
   });
 
   it.each(["voice", "forwarded", "text"])("keeps the %s timestamp separate from content and compact for voice", kind => {

@@ -12,6 +12,7 @@ from yuksalish_api.errors import WorkspaceRepositoryError
 from yuksalish_api.events import WorkspaceEventBus
 from yuksalish_api.forward_service import forward_message
 from yuksalish_api.link_preview import UnsafePreviewUrl, load_link_preview
+from yuksalish_api.object_storage import ObjectStorage, ObjectStorageError
 from yuksalish_api.workspace_schemas import (
     AddChatMembersRequest,
     ChatMessageResponse,
@@ -84,9 +85,14 @@ async def forward(
     connection: Connection, request: Request,
 ) -> ChatMessageResponse:
     try:
-        result = await forward_message(connection, user, chat_id, payload)
+        result = await forward_message(
+            connection, user, chat_id, payload,
+            cast(ObjectStorage, request.app.state.object_storage),
+        )
     except WorkspaceRepositoryError as error:
         raise HTTPException(error.status_code, error.detail) from error
+    except ObjectStorageError as error:
+        raise HTTPException(503, "Ошибка копирования вложений. Повторите пересылку.") from error
     await changed(connection, request)
     return result
 

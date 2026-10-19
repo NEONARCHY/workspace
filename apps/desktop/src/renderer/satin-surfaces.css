@@ -2,6 +2,19 @@
    Opaque padding-box fill prevents the border gradient entering the content.
    No pseudo-element, mask, positioning, z-index or extra DOM layer is used. */
 @media (forced-colors: none) {
+  /* A local light satin edge for the task-proposal disclosure, not a global
+     surface change. Keep the opaque fill inside the real one-pixel border. */
+  html[data-color-theme="light"] body .task-proposals {
+    border-color: transparent;
+    background-image: linear-gradient(var(--ws-surface), var(--ws-surface)),
+      linear-gradient(90deg, transparent, rgb(0 103 121 / 26%) 22%, rgb(0 103 121 / 10%) 78%, transparent),
+      conic-gradient(from 0deg, rgb(0 103 121 / 34%), rgb(0 103 121 / 8%) 27%, rgb(0 103 121 / 3%) 50%, rgb(0 103 121 / 8%) 73%, rgb(0 103 121 / 34%));
+    background-origin: border-box, border-box, border-box;
+    background-clip: padding-box, border-box, border-box;
+    background-size: auto, 80% 1px, auto;
+    background-position: center, top center, center;
+    background-repeat: no-repeat;
+  }
   /* Explicit light-theme exception: only the selected incoming filter.
      Same tapered sweep as dark, with light surface/teal ink instead of white. */
   html[data-color-theme="light"] body .ai-incoming-register .ai-referent-summary > button[aria-pressed="true"] {
@@ -48,10 +61,10 @@
     .workspace-view .ws-section-header, .team-dashboard .ws-section-header, .telegram-access-view .ws-section-header,
     .project-hub-header, .home-panel, .home-overview article, .kanban-card, .project-card,
     .approval-board-card, .feed-card, .team-dash-metric, .team-dash-panel,
-    .notification-progress-card, .calendar-board, .calendar-side, .record-table-frame,
+    .notification-progress-card, .calendar-board, .calendar-side, .record-table-frame, .task-proposals,
     .record-table-shell, .employee-records, .task-records, .task-focus-object,
     .messenger-view > .list-pane, .messenger-view > .conversation-pane,
-    .assistant-panel, .account-panel, .fui-DialogSurface, .fui-PopoverSurface,
+    .assistant-panel, .floating-messenger-panel:not(.is-full-page), .floating-messenger-launcher, .account-panel, .fui-DialogSurface, .fui-PopoverSurface,
     .fui-MenuPopover:not(.reaction-picker-popover), .fui-Listbox,
     .edo-incoming-list, .edo-incoming-detail, .edo-incoming-summary > span, .edo-incoming-error,
     .edo-incoming-secondary, .edo-incoming-error button, .edo-access-card,
