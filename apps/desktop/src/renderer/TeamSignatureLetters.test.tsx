@@ -42,9 +42,11 @@ describe("team signature inbox", () => {
     expect(panel()).not.toHaveTextContent("Баходировна");
     fireEvent.click(within(panel()).getByRole("button", { name: /Письмо партнёру/ }));
     expect(onSelect).toHaveBeenLastCalledWith("letter");
+    fireEvent.click(tile());
     fireEvent.click(within(panel()).getByRole("button", { name: /Пакет документов/ }));
     expect(onSelect).toHaveBeenLastCalledWith("packet");
-    fireEvent.click(within(panel()).getByRole("button", { name: "Скрыть" }));
+    fireEvent.click(tile());
+    await act(async () => { fireEvent.click(within(panel()).getByRole("button", { name: "Закрыть" })); await vi.advanceTimersByTimeAsync(300); });
     expect(tile()).toHaveAttribute("aria-pressed", "false");
   });
 
@@ -78,6 +80,7 @@ describe("team signature inbox", () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(15000); });
     expect(loadSignatureInbox).toHaveBeenLastCalledWith("token", 0);
     expect(panel()).toHaveTextContent("Писем, ожидающих вашей подписи, нет.");
+    await act(async () => { fireEvent.click(within(panel()).getByRole("button", { name: "Закрыть" })); await vi.advanceTimersByTimeAsync(300); });
     expect(tile()).toHaveTextContent("0");
   });
 
@@ -90,7 +93,9 @@ describe("team signature inbox", () => {
     vi.mocked(loadSignatureInbox).mockResolvedValue(registry(0, []));
     await act(async () => { view.rerender(dashboard(vi.fn(), "new-token", "another")); });
     await act(async () => { resolveOld(registry(99)); });
+    fireEvent.click(within(panel()).getByRole("button", { name: "Закрыть" }));
     expect(tile()).toHaveTextContent("0");
+    fireEvent.click(tile());
     expect(panel()).not.toHaveTextContent("Письмо партнёру");
   });
 

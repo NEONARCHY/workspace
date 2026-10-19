@@ -2393,6 +2393,10 @@ export function App() {
                     setFocusTarget((current) => ({ section: "tasks", entityId: taskId, revision: (current?.revision ?? 0) + 1 }));
                     setActiveSection("tasks");
                   }}
+                  onSelectTaskProposal={(proposalId) => {
+                    setFocusTarget((current) => ({ section: "tasks", entityId: proposalId, revision: (current?.revision ?? 0) + 1 }));
+                    setActiveSection("tasks");
+                  }}
                   paymentRequests={canView("payment_requests") && workspace.workflow ? workspace.requests : []}
                   onSelectSignatureLetter={canView("ai_referent") ? (letterId) => {
                     setFocusTarget((current) => ({ section: "ai_referent", entityId: letterId, revision: (current?.revision ?? 0) + 1 }));

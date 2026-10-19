@@ -10,7 +10,7 @@ import type {
   WorkspacePerson,
   WorkspaceTask,
 } from "@yuksalish/contracts";
-import { Button } from "@fluentui/react-components";
+import { Button, DialogSurface } from "@fluentui/react-components";
 import { EmployeeAvatar as Avatar } from "./EmployeeAvatar";
 import {
   ArrowRight20Regular,
@@ -22,6 +22,7 @@ import {
   Mail24Regular,
   PeopleTeam24Regular,
   Warning24Regular,
+  ClipboardTask24Regular,
 } from "@fluentui/react-icons";
 
 import { TeamPresencePanel } from "./TeamPresencePanel";
@@ -34,6 +35,8 @@ import { useContextMotion } from "./useContextMotion";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { SlidingSegmented } from "./SlidingSegmented";
 import { isTaskOverdue as deadlineIsOverdue } from "./task-deadline";
+import { WorkspaceDialog } from "./WorkspaceDialog";
+import { useTeamTaskProposals } from "./useTeamTaskProposals";
 
 interface TeamDashboardViewProps {
   readonly children?: ReactNode;
@@ -48,12 +51,14 @@ interface TeamDashboardViewProps {
   readonly paymentRequests?: readonly ApprovalRequestSummary[];
   readonly onSelectPaymentRequest?: (requestId: string) => void;
   readonly onSelectSignatureLetter?: (letterId: string) => void;
+  readonly onSelectTaskProposal?: (proposalId: string) => void;
   readonly calendarEvents?: readonly CalendarEvent[];
   readonly onCalendarResponse?: (event: CalendarEvent, status: "accepted" | "declined") => Promise<CalendarEvent | undefined>;
   readonly onDecideDeadline?: (task: WorkspaceTask, requestId: string, approved: boolean) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
 }
 
 type TeamFilter = "all" | "risk" | "review";
+type DecisionPanel = "overdue" | "review" | "payments" | "extensions" | "invitations" | "signatures" | "proposals";
 type AttentionTone = "danger" | "review" | "today" | "priority" | "soon";
 type FlowStatusKey = "new" | "progress" | "review" | "overdue";
 type FlowSelection =
@@ -154,7 +159,7 @@ function MetricCard({ icon, label, value, note, tone, active, onSelect, loading 
   readonly active: boolean;
   readonly onSelect: () => void;
 }) {
-  return <button type="button" onClick={onSelect} aria-pressed={active} aria-busy={loading || undefined} className={`team-dash-metric tone-${tone}`}>
+  return <button type="button" onClick={onSelect} aria-haspopup="dialog" aria-pressed={active} aria-busy={loading || undefined} className={`team-dash-metric tone-${tone}`}>
     <div className="team-dash-metric-icon" aria-hidden="true">{icon}</div>
     <div className="team-dash-metric-copy"><span>{label}</span><small>{note}</small></div>
     <strong>{loading ? <SkeletonBlock width="32px" height="1em" /> : value?.toLocaleString("ru-RU") ?? "—"}</strong>
@@ -174,21 +179,22 @@ export function TeamDashboardView({
   paymentRequests = [],
   onSelectPaymentRequest,
   onSelectSignatureLetter,
+  onSelectTaskProposal,
   calendarEvents = [],
   onCalendarResponse,
   onDecideDeadline,
 }: TeamDashboardViewProps) {
   const [teamFilter, setTeamFilter] = useState<TeamFilter>("all");
-  const [decisionPanel, setDecisionPanel] = useState<"extensions" | "invitations" | "payments" | "signatures">();
+  const [decisionPanel, setDecisionPanel] = useState<DecisionPanel>();
   const signatureInbox = useSignatureInbox(token, currentUserId, Boolean(onSelectSignatureLetter));
+  const proposalInbox = useTeamTaskProposals(token, currentUserId, Boolean(onSelectTaskProposal));
   const [selectedDeadlineTaskId, setSelectedDeadlineTaskId] = useState<string>();
   const [invitationBusyId, setInvitationBusyId] = useState<string>();
   const [invitationError, setInvitationError] = useState("");
   const [selectedPersonId, setSelectedPersonId] = useState<string>();
-  const [attentionFilter, setAttentionFilter] = useState<"all" | "overdue" | "review">("all");
   const [flowSelection, setFlowSelection] = useState<FlowSelection>();
   const [drawerTaskId, setDrawerTaskId] = useState<string>();
-  const attentionMotion = useContextMotion(`${selectedPersonId}:${attentionFilter}`);
+  const attentionMotion = useContextMotion("team-attention");
   const workloadMotion = useContextMotion(teamFilter);
   const now = new Date();
   const todayStart = startOfDay(now);
@@ -197,7 +203,8 @@ export function TeamDashboardView({
   const visiblePeople = people;
   const activeTasks = tasks.filter((task) => activeStatuses.has(task.status));
   const overdueTasks = activeTasks.filter((task) => isTaskOverdue(task, now));
-  const reviewTasks = activeTasks.filter((task) => task.status === "awaiting_review");
+  const teamReviewTasks = activeTasks.filter((task) => task.status === "awaiting_review");
+  const reviewTasks = teamReviewTasks.filter((task) => task.authorId === currentUserId);
   const dueThisWeek = activeTasks.filter((task) => {
     const due = validDueDate(task);
     return Boolean(due && due > now && due <= weekEnd);
@@ -226,8 +233,7 @@ export function TeamDashboardView({
   const attentionTasks = tasks
     .map((task) => ({ task, attention: taskAttention(task, now) }))
     .filter((item): item is { task: WorkspaceTask; attention: NonNullable<ReturnType<typeof taskAttention>> } => item.attention !== undefined)
-    .filter((item) => !selectedPersonId || item.task.assigneeId === selectedPersonId)
-    .filter(({ task }) => attentionFilter === "all" || attentionFilter === "overdue" && isTaskOverdue(task, now) || attentionFilter === "review" && task.status === "awaiting_review")
+    .filter(({ task }) => task.status !== "awaiting_review" || task.authorId === currentUserId)
     .sort((left, right) => right.attention.score - left.attention.score)
     .slice(0, 8);
 
@@ -263,7 +269,7 @@ export function TeamDashboardView({
   const flowParts: readonly { readonly key: FlowStatusKey; readonly label: string; readonly value: number }[] = [
     { key: "new", label: "Новые", value: activeTasks.filter((task) => task.status === "new" && !isTaskOverdue(task, now)).length },
     { key: "progress", label: "В работе", value: activeTasks.filter((task) => ["in_progress", "overdue"].includes(task.status) && !isTaskOverdue(task, now)).length },
-    { key: "review", label: "На проверке", value: reviewTasks.filter(task => !isTaskOverdue(task, now)).length },
+    { key: "review", label: "На проверке в команде", value: teamReviewTasks.filter(task => !isTaskOverdue(task, now)).length },
     { key: "overdue", label: "Срок истёк", value: overdueTasks.length },
   ];
   const firstName = currentUser?.name.split(" ")[0] ?? "руководитель";
@@ -292,6 +298,21 @@ export function TeamDashboardView({
     return leftDue - rightDue || left.title.localeCompare(right.title, "ru");
   });
   const drawerTask = sortedFlowSelectionTasks.find((task) => task.id === drawerTaskId);
+  const selectedPerson = people.find((person) => person.id === selectedPersonId);
+  const selectedPersonTasks = activeTasks
+    .filter((task) => task.assigneeId === selectedPersonId)
+    .sort((left, right) => (validDueDate(left)?.getTime() ?? Number.POSITIVE_INFINITY)
+      - (validDueDate(right)?.getTime() ?? Number.POSITIVE_INFINITY));
+  const decisionTitles: Readonly<Record<DecisionPanel, string>> = {
+    overdue: "Задачи, которым нужна помощь",
+    review: "Результаты на вашей проверке",
+    payments: "Заявки на оплату, ожидающие решения",
+    extensions: "Запросы на перенос срока",
+    invitations: "Приглашения на мероприятия и встречи",
+    signatures: "Письма, ожидающие вашей подписи",
+    proposals: "Запросы на постановку задач",
+  };
+  const openTask = (taskId: string) => { setDecisionPanel(undefined); setSelectedPersonId(undefined); onSelectTask(taskId); };
 
   const selectFlow = (selection: FlowSelection) => {
     setFlowSelection(selection);
@@ -316,7 +337,7 @@ export function TeamDashboardView({
         <span>Обзор команды · сегодня</span>
         <h2 id="team-dashboard-title">Добрый день, {firstName}</h2>
         <p>{overdueTasks.length || reviewTasks.length
-          ? `В фокусе ${plural(overdueTasks.length + reviewTasks.length, ["задача", "задачи", "задач"])}: истёкшие сроки и результаты, ожидающие решения.`
+          ? `В фокусе ${plural(overdueTasks.length + reviewTasks.length, ["задача", "задачи", "задач"])}: истёкшие сроки команды и результаты на вашей проверке.`
           : "Срочных блокеров нет. Можно сосредоточиться на задачах ближайших семи дней."}</p>
       </div>
       <div className="team-dash-hero-summary" aria-label="Краткая сводка команды">
@@ -326,39 +347,51 @@ export function TeamDashboardView({
     </WorkspaceSectionHeader>
 
     <section className="team-dash-metrics" aria-label="Ключевые показатели команды">
-      <MetricCard active={attentionFilter === "overdue"} onSelect={() => setAttentionFilter((current) => current === "overdue" ? "all" : "overdue")} icon={<Warning24Regular />} label="Нужна помощь" value={overdueTasks.length} note={overdueTasks.length ? "истёк текущий срок" : "истёкших сроков нет"} tone="danger" />
-      <MetricCard active={attentionFilter === "review"} onSelect={() => setAttentionFilter((current) => current === "review" ? "all" : "review")} icon={<CheckmarkCircle24Regular />} label="Ждут решения" value={reviewTasks.length} note="результаты задач на проверке" tone="review" />
-      {onSelectPaymentRequest ? <MetricCard active={decisionPanel === "payments"} onSelect={() => setDecisionPanel((current) => current === "payments" ? undefined : "payments")} icon={<CheckmarkCircle24Regular />} label="Заявки на оплату" value={pendingPayments.length} note="ждут вашего решения" tone="brand" /> : null}
-      <MetricCard active={decisionPanel === "extensions"} onSelect={() => setDecisionPanel((current) => current === "extensions" ? undefined : "extensions")} icon={<Clock24Regular />} label="Перенос срока" value={deadlineTasks.length} note="запросы на ваше решение" tone="review" />
-      <MetricCard active={decisionPanel === "invitations"} onSelect={() => setDecisionPanel((current) => current === "invitations" ? undefined : "invitations")} icon={<CalendarClock24Regular />} label="Приглашения" value={pendingInvitations.length} note="ожидают вашего ответа" tone="brand" />
-      {onSelectSignatureLetter ? <MetricCard active={decisionPanel === "signatures"} onSelect={() => setDecisionPanel((current) => current === "signatures" ? undefined : "signatures")} icon={<Mail24Regular />} label="Письма на подпись" value={signatureInbox.registry?.totalCount} loading={signatureInbox.loading} note={signatureInbox.error ? "не удалось загрузить · подробнее" : signatureInbox.loading ? "загружаем письма…" : "ждут вашей подписи"} tone="review" /> : null}
+      <MetricCard active={decisionPanel === "overdue"} onSelect={() => setDecisionPanel("overdue")} icon={<Warning24Regular />} label="Нужна помощь" value={overdueTasks.length} note={overdueTasks.length ? "истёк текущий срок" : "истёкших сроков нет"} tone="danger" />
+      <MetricCard active={decisionPanel === "review"} onSelect={() => setDecisionPanel("review")} icon={<CheckmarkCircle24Regular />} label="Ждут решения" value={reviewTasks.length} note="задачи, где вы постановщик" tone="review" />
+      {onSelectPaymentRequest ? <MetricCard active={decisionPanel === "payments"} onSelect={() => setDecisionPanel("payments")} icon={<CheckmarkCircle24Regular />} label="Заявки на оплату" value={pendingPayments.length} note="ждут вашего решения" tone="brand" /> : null}
+      <MetricCard active={decisionPanel === "extensions"} onSelect={() => setDecisionPanel("extensions")} icon={<Clock24Regular />} label="Перенос срока" value={deadlineTasks.length} note="запросы на ваше решение" tone="review" />
+      <MetricCard active={decisionPanel === "invitations"} onSelect={() => setDecisionPanel("invitations")} icon={<CalendarClock24Regular />} label="Приглашения" value={pendingInvitations.length} note="ожидают вашего ответа" tone="brand" />
+      {onSelectSignatureLetter ? <MetricCard active={decisionPanel === "signatures"} onSelect={() => setDecisionPanel("signatures")} icon={<Mail24Regular />} label="Письма на подпись" value={signatureInbox.registry?.totalCount} loading={signatureInbox.loading} note={signatureInbox.error ? "не удалось загрузить · подробнее" : signatureInbox.loading ? "загружаем письма…" : "ждут вашей подписи"} tone="review" /> : null}
+      {onSelectTaskProposal ? <MetricCard active={decisionPanel === "proposals"} onSelect={() => setDecisionPanel("proposals")} icon={<ClipboardTask24Regular />} label="Постановка задач" value={proposalInbox.proposals?.length} loading={proposalInbox.loading} note={proposalInbox.error ? "не удалось загрузить · подробнее" : "запросы сотрудников на ваше решение"} tone="brand" /> : null}
     </section>
-    {decisionPanel === "signatures" && onSelectSignatureLetter ? <section className="team-dash-decisions" aria-label="Письма, ожидающие вашей подписи">
-      <header><h3>Письма на подпись</h3><Button appearance="subtle" onClick={() => setDecisionPanel(undefined)}>Скрыть</Button></header>
-      <TeamSignatureLetters inbox={signatureInbox} onSelect={onSelectSignatureLetter} />
-    </section> : null}
-    {decisionPanel && decisionPanel !== "signatures" ? <section className="team-dash-decisions" aria-label={decisionPanel === "extensions" ? "Запросы на перенос срока" : decisionPanel === "payments" ? "Заявки на оплату, ожидающие решения" : "Приглашения на мероприятия и встречи"}>
-      <header><h3>{decisionPanel === "extensions" ? "Запросы на перенос срока" : decisionPanel === "payments" ? "Заявки на оплату, ожидающие решения" : "Приглашения на мероприятия и встречи"}</h3><Button appearance="subtle" onClick={() => setDecisionPanel(undefined)}>Скрыть</Button></header>
+    <WorkspaceDialog open={Boolean(decisionPanel)} onOpenChange={(_, data) => { if (!data.open) setDecisionPanel(undefined); }}>
+      <DialogSurface className="team-dash-dialog" aria-label={decisionPanel ? decisionTitles[decisionPanel] : "Решения команды"}>
+      {decisionPanel ? <section className="team-dash-decisions" role="region" aria-label={decisionTitles[decisionPanel]}>
+      <header><div><span>Входящие решения</span><h3>{decisionTitles[decisionPanel]}</h3></div><Button appearance="subtle" onClick={() => setDecisionPanel(undefined)}>Закрыть</Button></header>
+      {decisionPanel === "overdue" || decisionPanel === "review" ? (decisionPanel === "overdue" ? overdueTasks : reviewTasks).length ? (decisionPanel === "overdue" ? overdueTasks : reviewTasks).map((task) => <button type="button" className="team-dash-payment-item" key={task.id} onClick={() => openTask(task.id)}><strong>{task.title}</strong><span>{personById.get(task.assigneeId)?.name ?? "Сотрудник"} · {task.dueLabel} · {decisionPanel === "overdue" ? overdueLabel(task, now) : "Вы постановщик"}</span><ArrowRight20Regular aria-hidden="true" /></button>) : <p>{decisionPanel === "overdue" ? "Задач с истёкшим сроком нет." : "Ваших задач, ожидающих проверки, нет."}</p> : null}
+      {decisionPanel === "signatures" && onSelectSignatureLetter ? <TeamSignatureLetters inbox={signatureInbox} onSelect={(id) => { setDecisionPanel(undefined); onSelectSignatureLetter(id); }} /> : null}
       {decisionPanel === "payments" ? pendingPayments.length ? pendingPayments.map((request) => <button type="button" className="team-dash-payment-item" key={request.id} onClick={() => onSelectPaymentRequest?.(request.id)}><strong>{request.title}</strong><span>№ {request.number} · {request.stageLabel}</span><ArrowRight20Regular aria-hidden="true" /></button>) : <p>Заявок на оплату, ожидающих вашего решения, нет.</p>
-      : decisionPanel === "extensions" ? deadlineTasks.length ? deadlineTasks.map((task) => {
+      : null}
+      {decisionPanel === "extensions" ? deadlineTasks.length ? deadlineTasks.map((task) => {
         const request = pendingTaskDeadlineRequest(task);
         return request ? <div className="team-dash-decision-item" key={request.id}>
           <button type="button" aria-expanded={selectedDeadlineTaskId === task.id} onClick={() => setSelectedDeadlineTaskId((current) => current === task.id ? undefined : task.id)}><strong>{task.title}</strong><span>Предлагаемый срок: {new Date(request.proposedDueAt).toLocaleString("ru-RU")}</span></button>
-          {selectedDeadlineTaskId === task.id ? <><TaskDeadlineDecision task={task} request={request} people={people} canDecide={Boolean(onDecideDeadline)} onDecide={onDecideDeadline} onResolved={() => setSelectedDeadlineTaskId(undefined)} /><Button appearance="subtle" onClick={() => onSelectTask(task.id)}>Открыть задачу</Button></> : null}
+          {selectedDeadlineTaskId === task.id ? <><TaskDeadlineDecision task={task} request={request} people={people} canDecide={Boolean(onDecideDeadline)} onDecide={onDecideDeadline} onResolved={() => setSelectedDeadlineTaskId(undefined)} /><Button appearance="subtle" onClick={() => openTask(task.id)}>Открыть задачу</Button></> : null}
         </div> : null;
-      }) : <p>Запросов на перенос срока нет.</p> : pendingInvitations.length ? pendingInvitations.map((event) => <article className="team-dash-decision-item" key={event.id}>
+      }) : <p>Запросов на перенос срока нет.</p> : null}
+      {decisionPanel === "invitations" ? pendingInvitations.length ? pendingInvitations.map((event) => <article className="team-dash-decision-item" key={event.id}>
         <strong>{event.title}</strong><span>{new Date(event.startsAt).toLocaleString("ru-RU")}{event.location ? ` · ${event.location}` : ""}</span>
         {event.description ? <p>{event.description}</p> : null}
         <div><Button appearance="primary" disabled={Boolean(invitationBusyId) || !onCalendarResponse} onClick={() => void respondToInvitation(event, "accepted")}>Подтвердить участие</Button><Button disabled={Boolean(invitationBusyId) || !onCalendarResponse} onClick={() => void respondToInvitation(event, "declined")}>Отказаться</Button></div>
-      </article>) : <p>Приглашений, ожидающих ответа, нет.</p>}
+      </article>) : <p>Приглашений, ожидающих ответа, нет.</p> : null}
+      {decisionPanel === "proposals" && onSelectTaskProposal ? <>
+        <p>Сотрудник предлагает задачу от вашего имени. До вашего подтверждения она не становится рабочей задачей.</p>
+        {proposalInbox.error ? <WorkspaceNotice tone="error" role="alert" actions={<Button onClick={proposalInbox.refresh}>Повторить загрузку</Button>}>{proposalInbox.error}</WorkspaceNotice> : null}
+        {proposalInbox.loading ? <p role="status">Загружаем запросы…</p> : null}
+        {proposalInbox.proposals?.map((proposal) => <button type="button" className="team-dash-payment-item" key={proposal.id} onClick={() => { setDecisionPanel(undefined); onSelectTaskProposal(proposal.id); }}><strong>{proposal.task.title}</strong><span>{personById.get(proposal.creatorUserId)?.name ?? "Сотрудник"} · {proposal.task.dueAt ? new Date(proposal.task.dueAt).toLocaleString("ru-RU") : "Без срока"}</span><ArrowRight20Regular aria-hidden="true" /></button>)}
+        {proposalInbox.proposals?.length === 0 ? <p>Запросов на постановку задач, ожидающих вашего решения, нет.</p> : null}
+      </> : null}
       {invitationError && decisionPanel === "invitations" ? <WorkspaceNotice tone="error" role="alert">{invitationError}</WorkspaceNotice> : null}
     </section> : null}
+      </DialogSurface>
+    </WorkspaceDialog>
 
     <div className="team-dash-main-grid">
       <section className="team-dash-panel team-dash-attention" aria-labelledby="attention-title">
         <header className="team-dash-panel-heading">
           <div><span>Следующее действие</span><h3 id="attention-title">Требует внимания</h3></div>
-          {selectedPersonId || attentionFilter !== "all" ? <Button appearance="subtle" onClick={() => { setSelectedPersonId(undefined); setAttentionFilter("all"); }}>Показать все задачи</Button> : <small>сначала самое срочное</small>}
+          <small>сначала самое срочное</small>
         </header>
         <div className="team-dash-attention-list" ref={attentionMotion}>
           {attentionTasks.map(({ task, attention }) => {
@@ -370,7 +403,7 @@ export function TeamDashboardView({
               <ArrowRight20Regular aria-hidden="true" />
             </button>;
           })}
-          {!attentionTasks.length ? <div className="team-dash-empty"><CheckmarkCircle24Regular /><div><strong>Всё спокойно</strong><span>{selectedPersonId ? "У сотрудника нет срочных задач." : "Задач с истёкшим или срочным сроком и результатов на проверке сейчас нет."}</span></div></div> : null}
+          {!attentionTasks.length ? <div className="team-dash-empty"><CheckmarkCircle24Regular /><div><strong>Всё спокойно</strong><span>Задач с истёкшим или срочным сроком и ваших результатов на проверке сейчас нет.</span></div></div> : null}
         </div>
       </section>
 
@@ -476,9 +509,9 @@ export function TeamDashboardView({
       <EfficiencyDeadlineExplanation />
       {efficiencyError ? <WorkspaceNotice tone="warning" className="team-dash-data-note" role="status">Показана нагрузка по задачам. Данные эффективности временно недоступны: {efficiencyError}</WorkspaceNotice> : null}
       <div className="team-dash-people" ref={workloadMotion} role="region" aria-label="Нагрузка сотрудников" tabIndex={0}>
-        {teamRows.map((row) => <button className={`team-dash-person ${selectedPersonId === row.person.id ? "selected" : ""}`} key={row.person.id} type="button" onClick={() => setSelectedPersonId((current) => current === row.person.id ? undefined : row.person.id)}>
-          <EmployeeProfileLink userId={row.person.id} personName={row.person.name}><Avatar name={row.person.name} size={40} color="colorful" /></EmployeeProfileLink>
-          <EmployeeProfileLink userId={row.person.id} personName={row.person.name} className="team-dash-person-name"><strong>{row.person.name}</strong><small>{row.person.jobTitle || "Должность не указана"}</small></EmployeeProfileLink>
+        {teamRows.map((row) => <button className="team-dash-person" key={row.person.id} type="button" aria-haspopup="dialog" aria-label={`Посмотреть нагрузку: ${row.person.name}, ${plural(row.active, ["активная задача", "активные задачи", "активных задач"])}`} onClick={() => setSelectedPersonId(row.person.id)}>
+          <span><Avatar name={row.person.name} size={40} color="colorful" /></span>
+          <span className="team-dash-person-name"><strong>{row.person.name}</strong><small>{row.person.jobTitle || "Должность не указана"}</small></span>
           <span className="team-dash-load"><span><i style={{ width: `${row.active / maximumActive * 100}%` }} /></span><small>{plural(row.active, ["активная задача", "активные задачи", "активных задач"])}</small></span>
           <span className="team-dash-person-facts">
             {row.overdue ? <><b className="is-soon">Истёк срок: {row.overdue}</b><small>Счётчик сроков, не нарушений исполнителя</small>{row.excludedExpired ? <b className="is-calm">Из них не снижают процент: {row.excludedExpired} · исключены</b> : null}</> : null}
@@ -492,6 +525,22 @@ export function TeamDashboardView({
         {!teamRows.length ? <div className="team-dash-empty compact"><PeopleTeam24Regular /><div><strong>Нет сотрудников по этому фильтру</strong><span>Выберите другой срез команды.</span></div></div> : null}
       </div>
     </section>
+    <WorkspaceDialog open={Boolean(selectedPerson)} onOpenChange={(_, data) => { if (!data.open) setSelectedPersonId(undefined); }}>
+      <DialogSurface className="team-dash-dialog team-dash-workload-dialog" aria-label={selectedPerson ? `Нагрузка: ${selectedPerson.name}` : "Нагрузка сотрудника"}>
+        {selectedPerson ? <section className="team-dash-decisions" role="region" aria-label={`Задачи и сроки: ${selectedPerson.name}`}>
+          <header><div><span>Нагрузка сотрудника</span><h3>{selectedPerson.name}</h3><p>{selectedPerson.jobTitle || "Должность не указана"} · {plural(selectedPersonTasks.length, ["активная задача", "активные задачи", "активных задач"])}</p></div><Button appearance="subtle" onClick={() => setSelectedPersonId(undefined)}>Закрыть</Button></header>
+          <p>Показаны текущие задачи и сроки. Истёкший срок не означает автоматически нарушение исполнителя — смотрите историю в карточке.</p>
+          <div className="team-dash-workload-list" role="list" aria-label="Задачи сотрудника">
+            {selectedPersonTasks.map((task) => <div role="listitem" key={task.id}><button type="button" className="team-dash-payment-item" onClick={() => openTask(task.id)}>
+              <strong>{task.title}</strong>
+              <span>{task.project || "Без проекта"} · {isTaskOverdue(task, now) ? "Истёк срок" : taskStatusLabels[task.status]} · {validDueDate(task)?.toLocaleString("ru-RU") ?? "Без срока"}</span>
+              <ArrowRight20Regular aria-hidden="true" />
+            </button>{deadlineContext(task, now) ? <small>{deadlineContext(task, now)}</small> : null}</div>)}
+            {!selectedPersonTasks.length ? <p>У сотрудника сейчас нет активных задач.</p> : null}
+          </div>
+        </section> : null}
+      </DialogSurface>
+    </WorkspaceDialog>
     {children}
   </div>;
 }
