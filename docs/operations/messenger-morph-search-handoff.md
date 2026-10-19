@@ -35,3 +35,24 @@ root/version/readiness plus unchanged non-web container IDs after replacement.
 Full lint on the older TEST line has the already documented unrelated
 TripApprovalsView.tsx:92 immutability issue. Do not weaken rules to hide it.
 No push, PR, merge or office update is part of this follow-up.
+
+## Delivered TEST
+
+Code/build revision: 773545ca (compatibility branch fix/messenger-morph-search-test).
+Web 2.0.056, build localtest-20261019-morph-search-773545ca,
+builtAt 2026-10-19T08:01:10.526Z. Root, version.json and API readiness returned
+200 at https://192.168.0.127:8443/ after replacement.
+
+Only web was recreated: container 3da7cc8cb3e3. API remains 60a24a287228;
+worker/scheduler/gateway/HTTPS/office-preview/Postgres/Redis/MinIO IDs unchanged.
+Schema remains 0102_merge_leave_task; users=3, tasks=1, messages=133.
+Rollback image: yuksalish-localtest-web:pre-morph-search-20261019 (2.0.055).
+
+Compatibility source passed typecheck, 15 unit tests and all four browser
+scripts (search, messenger flow, morph, accessibility). Full lint passed on
+main-based source; changed-source lint passed after the final lifecycle fixes.
+The earlier TEST-wide lint limitation remains separate from this change.
+
+Next: publish/review the main-based fix/messenger-launcher-morph branch when
+authorized. Never merge the TEST compatibility branch into main. This final
+handoff/release-note clarification has no runtime changes after the built revision.
