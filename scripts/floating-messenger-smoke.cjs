@@ -56,6 +56,7 @@ let browser;
     await panel.getByRole('button', { name: 'Открыть полный мессенджер' }).click();
     const full = page.getByRole('region', { name: 'Раздел мессенджера', exact: true });
     await full.waitFor();
+    assert.equal(await full.evaluate(element => getComputedStyle(element.parentElement).filter), 'none');
     assert.equal(await node.evaluate(element => element.isConnected), true);
     assert.equal(await full.locator('.messenger-view').count(), 1);
     assert.equal(await full.getByRole('textbox', { name: 'Новое сообщение' }).textContent(), 'Черновик мини-окна');

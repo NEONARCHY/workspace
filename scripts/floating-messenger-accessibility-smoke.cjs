@@ -19,6 +19,7 @@ let browser;
     assert.ok(bounds.x >= 0 && bounds.y >= 0 && bounds.x + bounds.width <= width + 1 && bounds.y + bounds.height <= height + 1, JSON.stringify({ width, height, zoom, bounds }));
     await page.emulateMedia({ forcedColors: 'active' });
     assert.equal(await panel.evaluate(node => getComputedStyle(node).borderTopStyle), 'solid');
+    assert.equal(await panel.evaluate(node => getComputedStyle(node.parentElement).filter), 'none');
     assert.equal(await launcher.locator('.floating-messenger-icon').evaluate(node => getComputedStyle(node).animationName), 'none');
     await page.emulateMedia({ forcedColors: 'none', reducedMotion: 'reduce' });
     assert.equal(await launcher.locator('.floating-messenger-icon').evaluate(node => getComputedStyle(node).animationName), 'none');

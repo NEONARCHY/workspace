@@ -25,6 +25,7 @@ export function FloatingMessenger({ messenger, fullPage, pageSlot, onOpenFullPag
   const [pageBounds, setPageBounds] = useState<CSSProperties>({});
   const launcher = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLElement>(null);
+  const elevation = useRef<HTMLDivElement>(null);
   const drag = useRef<{ id: number; x: number; y: number; start: MessengerPosition; next: MessengerPosition; moved: boolean } | undefined>(undefined);
   const frame = useRef<number | undefined>(undefined);
   const suppressClick = useRef(false);
@@ -143,9 +144,9 @@ export function FloatingMessenger({ messenger, fullPage, pageSlot, onOpenFullPag
     const next = cancelled ? current.start : current.next;
     const coordinates = launcherCoordinates(next, viewport);
     event.currentTarget.style.transform = `translate3d(${coordinates.x}px, ${coordinates.y}px, 0)`;
-    if (miniOpen && panel.current) {
+    if (miniOpen && elevation.current) {
       const nextBounds = miniMessengerBounds(next, viewport);
-      panel.current.style.left = `${nextBounds.left}px`; panel.current.style.top = `${nextBounds.top}px`;
+      elevation.current.style.left = `${nextBounds.left}px`; elevation.current.style.top = `${nextBounds.top}px`;
     }
     savePosition(next);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
@@ -183,9 +184,9 @@ export function FloatingMessenger({ messenger, fullPage, pageSlot, onOpenFullPag
               frame.current = undefined;
               const next = launcherCoordinates(current.next, viewport);
               if (launcher.current) launcher.current.style.transform = `translate3d(${next.x}px, ${next.y}px, 0)`;
-              if (miniOpen && panel.current) {
+              if (miniOpen && elevation.current) {
                 const nextBounds = miniMessengerBounds(current.next, viewport);
-                panel.current.style.left = `${nextBounds.left}px`; panel.current.style.top = `${nextBounds.top}px`;
+                elevation.current.style.left = `${nextBounds.left}px`; elevation.current.style.top = `${nextBounds.top}px`;
               }
             });
           }}
@@ -211,8 +212,10 @@ export function FloatingMessenger({ messenger, fullPage, pageSlot, onOpenFullPag
           <span className="floating-messenger-icon" aria-hidden="true"><MessageCircle size={23} strokeWidth={1.8} /></span>
           {unread > 0 ? <span className="floating-messenger-badge" aria-hidden="true">{unread > 99 ? "99+" : unread}</span> : null}
         </button>
-      {visited ? <section ref={panel} id={panelId} className={`floating-messenger-panel${fullPage ? " is-full-page" : ""}`}
-        style={fullPage ? pageBounds : { ...bounds,
+      {visited ? <div ref={elevation} className={`floating-messenger-elevation${fullPage ? " is-full-page" : ""}`}
+        style={fullPage ? pageBounds : bounds} hidden={!visible}>
+        <section ref={panel} id={panelId} className={`floating-messenger-panel${fullPage ? " is-full-page" : ""}`}
+        style={fullPage ? undefined : {
           "--messenger-origin-clip": `inset(${point.y - bounds.top}px ${bounds.left + bounds.width - point.x - 48}px ${bounds.top + bounds.height - point.y - 48}px ${point.x - bounds.left}px round 16px)`,
         } as CSSProperties} hidden={!visible} inert={!visible}
         role={fullPage ? "region" : "dialog"} aria-modal={fullPage ? undefined : false} aria-label={fullPage ? "Раздел мессенджера" : "Мини-мессенджер"}
@@ -227,7 +230,7 @@ export function FloatingMessenger({ messenger, fullPage, pageSlot, onOpenFullPag
         </header>
         {notice ? <p className="floating-messenger-notice" role="status">{notice}</p> : null}
         <MessengerView {...messenger} compact={!fullPage} visible={visible && !blocking && documentVisible} onActiveChatChange={setActiveChatId} />
-      </section> : null}
+      </section></div> : null}
     </div>
   </Portal>;
 }

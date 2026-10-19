@@ -16,10 +16,15 @@
   border: 2px solid var(--ws-surface); border-radius: 12px; color: white; background: var(--ws-danger, #b64352);
   font-size: 10px; font-weight: 700; line-height: 14px; font-variant-numeric: tabular-nums; pointer-events: none;
 }
+/* Shadow is computed after the child's reveal mask, so it follows every frame.
+   Only the bounded window is filtered; blur strength is static, not animated. */
+.floating-messenger-elevation { position: fixed; z-index: 45; filter: drop-shadow(0 20px 30px rgb(25 65 77 / 22%)); }
+.floating-messenger-elevation[hidden] { display: none; }
+.floating-messenger-elevation.is-full-page { z-index: 1; filter: none; }
 .floating-messenger-panel {
-  position: fixed; z-index: 45; display: flex; flex-direction: column; min-width: 0; min-height: 0;
+  position: absolute; inset: 0; display: flex; flex-direction: column; min-width: 0; min-height: 0;
   overflow: hidden; border: 1px solid var(--ws-line); border-radius: 22px;
-  color: var(--ws-text); background: var(--ws-surface); box-shadow: 0 20px 60px rgb(25 65 77 / 22%);
+  color: var(--ws-text); background: var(--ws-surface); box-shadow: none;
 }
 .floating-messenger-panel[hidden], .floating-messenger-toolbar[hidden] { display: none; }
 .floating-messenger-panel.is-full-page { z-index: 1; border: 0; border-radius: 0; background: transparent; box-shadow: none; animation: none; }
@@ -63,6 +68,7 @@
   .floating-messenger-launcher[data-unread="true"] .floating-messenger-icon { animation: none; }
 }
 @media (forced-colors: active) {
+  .floating-messenger-elevation { filter: none; }
   .floating-messenger-launcher, .floating-messenger-panel { border: 1px solid ButtonText; background: Canvas; box-shadow: none; }
   .floating-messenger-badge { color: HighlightText; background: Highlight; }
 }
