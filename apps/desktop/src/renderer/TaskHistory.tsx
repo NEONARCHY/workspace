@@ -26,6 +26,7 @@ const reasons: Readonly<Record<string, string>> = {
   requirements_not_met: "Требования не выполнены", other: "Другая причина",
   external_dependency: "Внешняя зависимость", requirements_changed: "Требования изменились",
   cancelled: "Задача отменена", duplicate: "Дубликат", historical_import: "Исторический импорт",
+  author_review_required: "Отменено утверждение без постановщика",
 };
 function date(value?: string | null) {
   return value ? new Date(value).toLocaleString("ru-RU") : "Без срока";
