@@ -117,7 +117,7 @@ export function PersonalHomeView({ variant = "home", token, workspace, canView, 
     catch (error) { setRefreshError(error instanceof Error ? error.message : "Не удалось обновить Главную"); }
     finally { setRefreshing(false); }
   };
-  const allLink = (section: NavigationKey, label: string) => <Button size="small" appearance="subtle" aria-label={label} icon={<ArrowRight20Regular />} onClick={() => onOpen({ section })} />;
+  const allLink = (section: NavigationKey, label: string) => <Button className="ws-navigation-arrow" shape="circular" size="small" appearance="subtle" aria-label={label} icon={<ArrowRight20Regular />} onClick={() => onOpen({ section })} />;
   const myReferent = referent?.data?.letters.filter(l => l.responsibleUserId === user.id).sort((a, b) => timestamp(b.receivedAt) - timestamp(a.receivedAt)) ?? [];
   // personal=true is applied by the server before pagination. Compact EDO
   // list rows omit assignments, so filtering them again would hide real mail.
