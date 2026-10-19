@@ -10,6 +10,10 @@
   background: transparent; padding: 0 8px 20px 0; overflow-y: auto; overflow-x: hidden;
   color: var(--ws-text); container: personal-home / inline-size;
 }
+.personal-home-embedded { display: flex; flex-direction: column; gap: 16px; min-width: 0; padding: 0 8px 24px 0; color: var(--ws-text); container: personal-home / inline-size; }
+.home-embedded-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 4px 2px; }
+.home-embedded-heading span { color: var(--ws-muted); font-size: 12px; }
+.home-embedded-heading h2 { margin: 4px 0 0; font-size: 22px; line-height: 1.3; }
 .personal-home .home-hero { flex: none; min-height: 148px; gap: 20px; }
 .personal-home .home-hero > div:first-child { min-width: 0; max-width: 880px; }
 .personal-home .home-hero h2 { font-size: clamp(23px, 2.3vw, 32px); line-height: 1.25; overflow-wrap: anywhere; }
