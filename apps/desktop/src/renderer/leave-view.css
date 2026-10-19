@@ -46,12 +46,12 @@
   color: var(--ws-text); cursor: pointer;
 }
 .leave-list-item:hover, .leave-list-item.is-selected { border-color: var(--ws-turquoise); background: var(--ws-selected); }
-.leave-list-top { display: flex; justify-content: space-between; align-items: start; gap: 8px; }
+.leave-list-top { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: start; gap: 8px; }
 .leave-list-item small, .leave-list-item > span:not(.leave-list-top) { color: var(--ws-muted); }
-.leave-status { border-radius: 999px; padding: 3px 8px; font-size: 11px; font-weight: 700; white-space: nowrap; background: #edf3f5; }
+.leave-status { border-radius: 999px; padding: 3px 8px; font-size: 12px; font-weight: 700; white-space: normal; background: var(--ws-muted-surface); }
 .leave-status.status-approved { background: #e2f5ec; color: #216b4a; }
-.leave-status.status-needs_revision, .leave-status.status-rejected { background: #fff0e8; color: #8c4631; }
-.leave-status.status-pending_hr, .leave-status.status-pending_deputy { background: #fff4dc; color: #795b21; }
+.leave-status.status-needs_revision, .leave-status.status-rejected { background: var(--ws-theme-wash-warning, #fff0e8); color: var(--ws-theme-ink-warning, #8c4631); }
+.leave-status.status-pending_hr, .leave-status.status-pending_deputy { background: var(--ws-theme-wash-warning, #fff4dc); color: var(--ws-theme-ink-warning, #795b21); }
 .leave-card { display: grid; gap: 16px; max-width: 900px; background: var(--ws-surface); padding: clamp(18px, 3vw, 30px); border-radius: 18px; }
 .leave-card h2, .leave-card h3, .leave-card p { margin: 0; }
 .leave-card h2 { font-size: 22px; }

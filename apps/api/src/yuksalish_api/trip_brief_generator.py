@@ -65,7 +65,7 @@ def generate_trip_brief(
         raise ValueError("Дата окончания не может быть раньше даты начала")
     return "\n\n".join((
         f"{trip_date_phrase(start, end)} {place} hududiga xizmat safari rejalashtirilgan. "
-        f"Safar davomida {activity.rstrip('.!?')}.",
+        f"Safarning maqsadi: {activity.rstrip('.!?')}.",
         "Shu munosabat bilan mazkur xizmat safariga ruxsat berishingizni soʻrayman.",  # noqa: RUF001
         f"Safar xarajatlarini qoplash manbai: {funding}.",
     ))

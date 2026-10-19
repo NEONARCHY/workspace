@@ -722,12 +722,14 @@ export interface LeaveTenureRule {
 }
 
 export interface LeaveRequestInput {
+  readonly expectedUpdatedAt?: string;
   readonly applicationText: string;
   readonly startsOn: string;
   readonly endsOn?: string | null;
 }
 
 export interface LeaveHrDecisionInput {
+  readonly expectedUpdatedAt?: string;
   readonly action: LeaveDecision;
   readonly startsOn?: string;
   readonly endsOn?: string;
@@ -749,6 +751,7 @@ export interface LeaveHrDecisionInput {
 }
 
 export interface LeaveDeputyDecisionInput {
+  readonly expectedUpdatedAt?: string;
   readonly action: LeaveDecision;
   readonly comment?: string;
 }

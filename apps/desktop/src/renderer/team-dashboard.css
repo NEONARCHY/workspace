@@ -1093,7 +1093,18 @@
 
 .team-dash-people {
   display: grid;
+  align-content: start;
   gap: 6px;
+  max-height: 330px;
+  padding: 3px;
+  overflow: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+}
+
+.team-dash-people:focus-visible {
+  outline: 2px solid var(--ws-link);
+  outline-offset: 2px;
 }
 
 .team-dash-person {

@@ -7,9 +7,8 @@ import type { HrOverview, HrProfile, HrRegister, HrWorkbookPreview, WorkspaceDep
 import { Badge, Button, Portal, Tab, TabList } from "@fluentui/react-components";
 import { Input } from "./WorkspaceInput";
 import { Add20Regular, ArrowClockwise20Regular, Checkmark20Regular, Dismiss20Regular, DocumentArrowDown20Regular, DocumentArrowUp20Regular, PersonEdit20Regular } from "@fluentui/react-icons";
-import { actHrRegister, createHrProfile, generateHrRegister, importHrProfiles, loadHrOverview, previewHrWorkbook, saveHrSettings, terminateHrProfile } from "./workspace-api";
+import { actHrRegister, createHrProfile, generateHrRegister, importHrProfiles, loadHrOverview, previewHrWorkbook, saveHrProfile, saveHrSettings, terminateHrProfile } from "./workspace-api";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
-import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
 import { PersonPicker } from "./PersonPicker";
 import { HrHiringView } from "./HrHiringView";
 import { employeeDisplayName } from "./employee-display-name";
@@ -34,6 +33,7 @@ export function HrView({ token, people, departments, currentUser }: Props) {
   const [data, setData] = useState<HrOverview>(); const [tab, setTab] = useState<TabKey>("staff");
   const [error, setError] = useState<string>(); const [busy, setBusy] = useState(false); const [query, setQuery] = useState("");
   const [editorOpen, setEditorOpen] = useState(false); const [fullName, setFullName] = useState(""); const [jobTitle, setJobTitle] = useState(""); const [employmentDate, setEmploymentDate] = useState(today()); const [anchorDate, setAnchorDate] = useState(today());
+  const [profileUserId, setProfileUserId] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [workbookPreview, setWorkbookPreview] = useState<HrWorkbookPreview>();
   const workbookInput = useRef<HTMLInputElement>(null);
@@ -46,7 +46,32 @@ export function HrView({ token, people, departments, currentUser }: Props) {
   const profiles = useMemo(() => (data?.profiles ?? [])
     .filter((item) => `${item.fullName} ${item.jobTitle ?? ""}`.toLocaleLowerCase("ru").includes(query.toLocaleLowerCase("ru")))
     .map((item) => ({ ...item, fullName: employeeDisplayName(item.fullName) })), [data, query]);
-  const save = async () => { if (!fullName.trim() || !reason.trim()) return; setBusy(true); try { await createHrProfile(token, { fullName: fullName.trim(), jobTitle: jobTitle.trim() || null, employmentDate, serviceAnchorDate: anchorDate, serviceYears: Number(years), serviceMonths: Number(months), serviceDays: Number(days), serviceReason: reason.trim() }); setEditorOpen(false); setFullName(""); setJobTitle(""); setReason(""); await load(); } catch (value) { setError(value instanceof Error ? value.message : "Не удалось сохранить стаж"); setBusy(false); } };
+  const profilePeople = people.filter((person) => (!person.status || person.status === "active")
+    && !data?.profiles.some((profile) => profile.userId === person.id && profile.employmentStatus === "terminated"));
+  const selectProfileUser = (userId: string) => {
+    const person = profilePeople.find((item) => item.id === userId);
+    const profile = data?.profiles.find((item) => item.userId === userId);
+    setProfileUserId(userId); setFullName(person?.name ?? ""); setJobTitle(person?.jobTitle ?? "");
+    setEmploymentDate(profile?.employmentDate ?? (userId ? "" : today()));
+    // Overview tenure is calculated at calculatedAt, not at the original anchor.
+    setAnchorDate(data?.calculatedAt ?? today());
+    setYears(String(profile?.serviceYears ?? 0)); setMonths(String(profile?.serviceMonths ?? 0));
+    setDays(String(profile?.serviceDays ?? 0)); setReason(""); setError(undefined);
+  };
+  const canSave = fullName.trim().length >= 3 && reason.trim().length >= 3 && employmentDate && anchorDate
+    && [[years, 100], [months, 11], [days, 30]].every(([value, max]) =>
+      String(value).trim() !== "" && Number.isInteger(Number(value)) && Number(value) >= 0 && Number(value) <= Number(max));
+  const save = async () => {
+    if (!canSave || busy) return;
+    setBusy(true); setError(undefined);
+    const payload = { employmentDate, serviceAnchorDate: anchorDate, serviceYears: Number(years),
+      serviceMonths: Number(months), serviceDays: Number(days), serviceReason: reason.trim() };
+    try {
+      if (profileUserId) await saveHrProfile(token, profileUserId, payload);
+      else await createHrProfile(token, { ...payload, fullName: fullName.trim(), jobTitle: jobTitle.trim() || null });
+      setEditorOpen(false); selectProfileUser(""); await load();
+    } catch (value) { setError(value instanceof Error ? value.message : "Не удалось сохранить стаж"); setBusy(false); }
+  };
   const previewImport = async (file: File) => { setBusy(true); setError(undefined); try { setWorkbookPreview(await previewHrWorkbook(token, file)); } catch (value) { setError(value instanceof Error ? value.message : "Не удалось прочитать файл Excel"); } finally { setBusy(false); } };
   const confirmImport = async () => { if (!workbookPreview) return; setBusy(true); try { const result = await importHrProfiles(token, { sourceLabel: workbookPreview.sourceLabel, rows: workbookPreview.rows }); setWorkbookPreview(undefined); setError(`Импорт завершён: создано ${result.created}, уже было в списке ${result.alreadyImported}.`); await load(); } catch (value) { setError(value instanceof Error ? value.message : "Не удалось импортировать карточки"); setBusy(false); } };
   const action = async (register: HrRegister, type: "submit" | "approve" | "return" | "account") => { const comment = type === "return" ? window.prompt("Причина возврата обязательна:") ?? undefined : undefined; if (type === "return" && !comment) return; setBusy(true); try { await actHrRegister(token, register.id, type, comment); await load(); } catch (value) { setError(value instanceof Error ? value.message : "Не удалось изменить реестр"); setBusy(false); } };
@@ -60,7 +85,7 @@ export function HrView({ token, people, departments, currentUser }: Props) {
       {isHr ? <div className="hr-command-actions">
         <input ref={workbookInput} className="hr-file-input" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={(event) => { const [file] = Array.from(event.target.files ?? []); event.currentTarget.value = ""; if (file) void previewImport(file); }} />
         <Button icon={<DocumentArrowUp20Regular />} disabled={busy} onClick={() => workbookInput.current?.click()}>Импорт Excel</Button>
-        <Button appearance="primary" icon={<Add20Regular />} disabled={busy} onClick={() => setEditorOpen(true)}>Добавить сотрудника</Button>
+        <Button appearance="primary" icon={<Add20Regular />} disabled={busy} onClick={() => { selectProfileUser(""); setEditorOpen(true); }}>Кадровая карточка</Button>
         {currentUser.role === "superadmin" && isConfigured ? <Button onClick={() => setSettingsOpen(true)}>Настроить маршрут</Button> : null}
       </div> : null}
     </div>
@@ -69,7 +94,24 @@ export function HrView({ token, people, departments, currentUser }: Props) {
     <TabList className="hr-tabs" aria-label="Разделы HR" selectedValue={tab} onTabSelect={(_, value) => { setTab(value.value as TabKey); if (value.value === "hiring") setHiringOpened(true); }}><Tab value="staff">Сотрудники</Tab><Tab value="tenure">Иш стажи</Tab><Tab value="registers">Месячные реестры</Tab><Tab value="hiring">Приём на работу</Tab></TabList>
     {hiringOpened ? <div hidden={tab !== "hiring"}><HrHiringView key={currentUser.id} token={token} /></div> : null}
     {tab === "hiring" ? null : tab !== "registers" ? <><div className="hr-summary"><div><strong>{data?.profiles.filter((item) => item.employmentStatus === "active").length ?? <SkeletonBlock width="48px" height="28px" />}</strong><span>активных карточек</span></div><div><strong>{data?.profiles.filter((item) => item.allowancePercent > 0).length ?? <SkeletonBlock width="48px" height="28px" />}</strong><span>с надбавкой</span></div><div><strong>{data?.profiles.filter((item) => item.employmentStatus === "terminated").length ?? <SkeletonBlock width="48px" height="28px" />}</strong><span>уволенных в истории</span></div></div><div className="hr-controls"><Input value={query} onChange={(_, value) => setQuery(value.value)} placeholder="Поиск по сотруднику или должности" aria-label="Поиск кадровой карточки" /></div><div className="hr-table-wrap"><table className="hr-table"><thead><tr><th>Сотрудник</th><th>Должность</th><th>Дата приёма</th><th>Стаж</th><th>Надбавка</th><th>Статус</th><th /></tr></thead>{!data && !error ? <SkeletonTableRows columns={7} rows={7} label="Загружаем HR…" /> : <tbody>{profiles.map((item) => <tr key={item.id}><td><EmployeeProfileLink userId={item.userId ?? undefined} personName={item.fullName}><strong>{item.fullName}</strong></EmployeeProfileLink></td><td>{item.jobTitle ?? "—"}</td><td>{item.employmentDate}</td><td>{tenure(item)}</td><td><Badge color={item.allowancePercent ? "success" : "subtle"}>{item.allowancePercent}%</Badge></td><td>{item.employmentStatus === "active" ? "Активен" : `Уволен ${item.terminatedOn}`}</td><td>{isHr && item.employmentStatus === "active" ? <Button appearance="subtle" onClick={() => { const terminationReason = window.prompt("Основание увольнения (не менее 3 символов):"); if (terminationReason && terminationReason.length >= 3) void terminateHrProfile(token, item.id, { terminatedOn: today(), terminationReason }).then(load).catch((value: unknown) => setError(value instanceof Error ? value.message : "Ошибка")); }}>Уволить</Button> : null}</td></tr>)}</tbody>}</table>{data && !profiles.length ? <p className="hr-empty">Пока нет кадровых карточек. HR добавляет сотрудника и подтверждённый стаж на контрольную дату.</p> : null}</div></> : <section className="hr-registers"><div className="hr-register-actions">{isHr ? <Button appearance="primary" disabled={busy} onClick={() => void generateHrRegister(token, month()).then(load).catch((value: unknown) => setError(value instanceof Error ? value.message : "Ошибка"))}>Создать реестр за {month()}</Button> : null}<span>Черновик создаётся один раз для периода и фиксирует стаж на последний день месяца.</span></div>{data?.registers.map((register) => <article key={register.id} className="hr-register-card"><header><div><h2>{register.period} · версия {register.version}</h2><p>{register.items.length} сотрудников · {statusLabel[register.status] ?? register.status}</p></div><Badge appearance="tint" color={register.status === "closed" ? "success" : register.status === "returned" ? "danger" : "brand"}>{statusLabel[register.status] ?? register.status}</Badge></header>{register.returnComment ? <p className="hr-return">Возврат: {register.returnComment}</p> : null}<div className="hr-register-footer"><Button icon={<DocumentArrowDown20Regular />} onClick={() => exportCsv(register)}>CSV для бухгалтерии</Button>{isHr && ["draft", "returned"].includes(register.status) ? <Button appearance="primary" icon={<Checkmark20Regular />} onClick={() => void action(register, "submit")}>Отправить председателю</Button> : null}{isChair && register.status === "pending_chair" ? <><Button appearance="primary" onClick={() => void action(register, "approve")}>Подписать</Button><Button onClick={() => void action(register, "return")}>Вернуть HR</Button></> : null}{isAccountant && register.status === "approved" ? <Button appearance="primary" onClick={() => void action(register, "account")}>Подтвердить расчёт</Button> : null}</div></article>)}</section>}
-    {editorOpen ? <HrEditor label="Новая кадровая карточка" busy={busy} error={error} onClose={() => setEditorOpen(false)}><div><span className="hr-kicker">НОВЫЙ СОТРУДНИК</span><h2>Кадровая карточка</h2><p>Карточка создаётся отдельно от учётной записи Workspace.</p></div><div className="hr-form-grid"><label>ФИО<input value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder="Фамилия Имя Отчество" /></label><label>Должность<input value={jobTitle} onChange={(event) => setJobTitle(event.target.value)} placeholder="Например: специалист" /></label><label>Дата приёма<WorkspaceDateTimePicker mode="date" ariaLabel="Дата приёма" value={employmentDate} onChange={setEmploymentDate} /></label><label>Дата подтверждения стажа<WorkspaceDateTimePicker mode="date" ariaLabel="Дата подтверждения стажа" value={anchorDate} onChange={setAnchorDate} /></label><label>Лет<input type="number" min="0" value={years} onChange={(event) => setYears(event.target.value)} /></label><label>Месяцев<input type="number" min="0" max="11" value={months} onChange={(event) => setMonths(event.target.value)} /></label><label>Дней<input type="number" min="0" max="30" value={days} onChange={(event) => setDays(event.target.value)} /></label><label className="hr-reason">Основание<textarea value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Например: подтверждено трудовой книжкой" /></label></div><footer><Button disabled={busy} onClick={() => setEditorOpen(false)}>Отмена</Button><Button appearance="primary" icon={<PersonEdit20Regular />} disabled={!fullName.trim() || !reason.trim() || busy} onClick={() => void save()}>Сохранить карточку</Button></footer></HrEditor> : null}
+    {editorOpen ? <HrEditor label="Кадровая карточка" busy={busy} error={error} onClose={() => setEditorOpen(false)}>
+      <div><span className="hr-kicker">КАДРОВЫЕ ДАННЫЕ</span><h2>Кадровая карточка</h2>
+        <p>Выберите сотрудника Workspace, чтобы дата приёма учитывалась в отпусках. Его существующая карточка откроется для изменения. Без выбора создаётся отдельная карточка, не связанная с аккаунтом.</p></div>
+      <PersonPicker label="Сотрудник кадровой карточки" people={profilePeople} departments={departments}
+        value={profileUserId} onChange={selectProfileUser} disabled={busy} />
+      <div className="hr-form-grid">
+        <label>ФИО<input value={fullName} readOnly={Boolean(profileUserId)} disabled={busy} onChange={(event) => setFullName(event.target.value)} placeholder="Фамилия Имя Отчество" /></label>
+        <label>Должность<input value={jobTitle} readOnly={Boolean(profileUserId)} disabled={busy} onChange={(event) => setJobTitle(event.target.value)} placeholder="Например: специалист" /></label>
+        <label>Дата приёма в организацию<input type="date" aria-label="Дата приёма" value={employmentDate} onChange={(event) => setEmploymentDate(event.target.value)} disabled={busy} /></label>
+        <label>Дата подтверждения стажа<input type="date" value={anchorDate} onChange={(event) => setAnchorDate(event.target.value)} disabled={busy} /></label>
+        <label>Лет<input type="number" min="0" max="100" disabled={busy} value={years} onChange={(event) => setYears(event.target.value)} /></label>
+        <label>Месяцев<input type="number" min="0" max="11" disabled={busy} value={months} onChange={(event) => setMonths(event.target.value)} /></label>
+        <label>Дней<input type="number" min="0" max="30" disabled={busy} value={days} onChange={(event) => setDays(event.target.value)} /></label>
+        <label className="hr-reason">Основание<textarea maxLength={2000} disabled={busy} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Например: подтверждено трудовой книжкой" /></label>
+      </div>
+      <footer><Button disabled={busy} onClick={() => setEditorOpen(false)}>Отмена</Button>
+        <Button appearance="primary" icon={<PersonEdit20Regular />} disabled={!canSave || busy} onClick={() => void save()}>Сохранить карточку</Button></footer>
+    </HrEditor> : null}
     {workbookPreview ? <HrEditor label="Проверка импорта Excel" busy={busy} error={error} onClose={() => setWorkbookPreview(undefined)}><div><span className="hr-kicker">ПРОВЕРКА ИМПОРТА</span><h2>Карточки из Excel</h2><p>Найдено {workbookPreview.rows.length} сотрудников. Контрольная дата стажа: {workbookPreview.controlDate}.</p></div><div className="hr-preview-list">{workbookPreview.rows.slice(0, 8).map((item) => <div key={item.sourceRow}><strong>{item.fullName}</strong><span>{item.jobTitle ?? "Должность не указана"} · {item.serviceYears} г. {item.serviceMonths} мес. {item.serviceDays} дн.</span></div>)}{workbookPreview.rows.length > 8 ? <p>…и ещё {workbookPreview.rows.length - 8} сотрудников.</p> : null}</div><p>После подтверждения будут созданы только новые карточки. Повторный импорт этого же файла не создаст дубликаты.</p><footer><Button disabled={busy} onClick={() => setWorkbookPreview(undefined)}>Отмена</Button><Button appearance="primary" icon={<Checkmark20Regular />} disabled={busy} onClick={() => void confirmImport()}>Подтвердить импорт</Button></footer></HrEditor> : null}
     {settingsOpen && data ? <HrSettingsDialog people={people} departments={departments} settings={data.settings} busy={busy} error={error} onClose={() => setSettingsOpen(false)} onSave={async (settings) => { setBusy(true); try { await saveHrSettings(token, settings); setSettingsOpen(false); await load(); } catch (value) { setError(value instanceof Error ? value.message : "Не удалось сохранить маршрут"); setBusy(false); } }} /> : null}
   </section>;

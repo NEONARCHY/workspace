@@ -19,6 +19,7 @@ from starlette.concurrency import run_in_threadpool
 
 from .ai_referent_docx_safety import has_disallowed_external_relationships
 from .auth import AuthenticatedUser
+from .employee_availability import ensure_trip_available
 from .errors import WorkspaceRepositoryError as Error
 from .hr_hiring_pdf import application_pdf, validate_signature
 from .hr_hiring_tables import hiring_signatures
@@ -268,7 +269,9 @@ async def prepare_signed_brief(
         if deputy_id is None or deputy_id == chair_id:
             raise Error(409, "Проверьте должность первого заместителя и председателя")
     names = await _people(connection, request_id)
-    requester = await connection.scalar(select(users.c.full_name).where(users.c.id == user.id))
+    requester = await connection.scalar(select(users.c.full_name).where(
+        users.c.id == row["requester_user_id"],
+    ))
     chair = await connection.scalar(select(users.c.full_name).where(
         users.c.id == chair_id, users.c.status == "active",
     ))
@@ -316,6 +319,9 @@ async def issue_order(
     chair_id = await _appointed_chair(connection)
     if user.id != chair_id:
         raise Error(403, "Приказ может подписать только назначенный председатель")
+    if (row["stage"] == "approved" and row["status"] == "approved"
+            and row["order_pdf_key"] and row["order_signer_user_id"] == user.id):
+        return
     if row["workflow_version"] < 2 or row["stage"] != "manager_approval":
         raise Error(409, "Поездка не ожидает приказа председателя")
     await _verified(storage, row["signed_brief_key"], row["signed_brief_sha256"])
@@ -335,6 +341,7 @@ async def issue_order(
     if not requester or not chair:
         raise Error(409, "Инициатор или председатель не найден")
     issued = datetime.now(_LOCAL)
+    await ensure_trip_available(connection, request_id, row["start_date"], row["end_date"])
     sequence = await connection.scalar(
         pg_insert(trip_order_counters)
         .values(year=issued.year, last_sequence=1)
