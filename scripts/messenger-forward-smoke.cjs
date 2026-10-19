@@ -7,7 +7,7 @@ let browser;
   const page = await browser.newPage();
   const errors = []; page.on('pageerror', error => errors.push(error.message));
   const dir = 'tmp/messenger-forward-qa'; fs.mkdirSync(dir, { recursive: true });
-  for (const theme of ['light', 'dark']) for (const width of [1440, 1024, 640]) {
+  for (const theme of ['light', 'dark']) for (const width of [1440, 1024, 640, 320]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`http://127.0.0.1:5178/qa/detail-layout.html?view=messenger-forward&theme=${theme}`);
     await page.evaluate(() => document.documentElement.classList.add('web-platform'));
@@ -17,6 +17,24 @@ let browser;
     await source.click({ button: 'right' });
     await page.getByRole('button', { name: 'Выделить', exact: true }).click();
     await page.getByRole('checkbox', { name: 'Выделить сообщение: Второе сообщение', exact: true }).check();
+    const geometry = await page.locator('.message.is-selecting').evaluateAll(rows => rows.map(row => {
+      const box = row.parentElement.querySelector('.message-select'), content = row.querySelector('.message-content');
+      const rect = box.getBoundingClientRect(), bubble = content.getBoundingClientRect(), style = getComputedStyle(box);
+      return { x: rect.x, right: rect.right, width: rect.width, height: rect.height, radius: style.borderRadius,
+        contentRight: bubble.right, checked: box.checked, appearance: style.appearance };
+    }));
+    assert.ok(geometry.length >= 2 && geometry.every(box => box.radius === '50%' && box.appearance === 'none'
+      && box.width === box.height && box.x > box.contentRight && box.right <= width), JSON.stringify(geometry));
+    assert.ok(geometry.every(box => Math.abs(box.right - geometry[0].right) < 1), JSON.stringify(geometry));
+    await page.locator('.conversation-pane').screenshot({ path: `${dir}/${theme}-${width}-selection.png` });
+    if (theme === 'dark' && width === 320) {
+      await page.emulateMedia({ forcedColors: 'active', reducedMotion: 'reduce' });
+      const mark = page.getByRole('checkbox', { name: 'Выделить сообщение: Второе сообщение', exact: true });
+      await mark.focus(); await mark.press('Space'); assert.equal(await mark.isChecked(), false);
+      await mark.press('Space'); assert.equal(await mark.isChecked(), true);
+      assert.equal(await mark.evaluate(node => getComputedStyle(node).forcedColorAdjust), 'none');
+      await page.emulateMedia({ forcedColors: 'none', reducedMotion: 'no-preference' });
+    }
     await page.getByRole('button', { name: 'Переслать выбранные', exact: true }).click();
     let dialog = page.getByRole('dialog', { name: 'Переслать сообщения', exact: true });
     await dialog.waitFor();
@@ -42,5 +60,5 @@ let browser;
   }
   assert.deepEqual(errors, []);
   await browser.close();
-  console.log('Forwarding UI: 6 theme/viewport cases, 40px avatars, dividers, selection, cancellation, ordered retry and no duplicate successful sends passed.');
+  console.log('Forwarding UI: 8 theme/viewport cases, circular right-side marks, 40px avatars, dividers, selection, cancellation, ordered retry and no duplicate successful sends passed.');
 })().catch(async error => { console.error(error); await browser?.close(); process.exit(1); });

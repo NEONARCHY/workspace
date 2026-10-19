@@ -5,6 +5,7 @@ import { decodeRichDraft, encodeRichDraft, useRichComposer } from "./useRichComp
 import "./message-rich-text.css";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { ReactionEmoji } from "./ReactionEmoji";
+import { MessageSelectionContext, SelectableMessage, useMessageSelectionVisibility } from "./SelectableMessage";
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { RefObject, SetStateAction } from "react";
 import { CheckSquare, Copy, Forward, ListTodo, Pencil, Pin, PinOff, Reply, Smile, Trash2, UserRound, UsersRound, WandSparkles } from "lucide-react";
@@ -420,6 +421,9 @@ function Conversation({
     }
     return rows;
   }, [visibleMessages, removingMessage]);
+  const visibleSelectionIds = useMessageSelectionVisibility(scrollRef, renderedMessages);
+  const selection = useMemo(() => ({ active: selectionMode, ids: selectedIds, visibleIds: visibleSelectionIds, toggle: toggleSelection, cancel: cancelSelection }),
+    [selectionMode, selectedIds, visibleSelectionIds, toggleSelection, cancelSelection]);
   const { arrivingIds, motionDisabled, cancelArrivalMotion } = useMessageArrivalMotion({
     paneRef: scrollRef, messages: renderedMessages, scope: `${chat.id}:${query}`,
     followLatest, currentUserId,
@@ -726,13 +730,11 @@ function Conversation({
               {(index === 0 || date !== previousDate) && (
                 <div className="date-separator">{date}</div>
               )}
-              <div
+              <SelectableMessage
+                messageId={message.id}
+                label={`Выделить сообщение: ${message.body.slice(0, 80) || "Файл"}`}
                 data-message-id={message.id}
-                className={`message ${own ? "own" : ""} ${message.isPinned ? "message-pinned" : ""} ${message.mentionUserIds?.includes(currentUserId) ? "message-mentioned" : ""}${selectionMode ? " is-selecting" : ""}${selectionMode && selectedIds.has(message.id) ? " is-selected" : ""}`}
-                onClickCapture={event => {
-                  if (!selectionMode || (event.target as HTMLElement).closest(".message-select")) return;
-                  event.preventDefault(); event.stopPropagation(); toggleSelection(message.id);
-                }}
+                className={`message ${own ? "own" : ""} ${message.isPinned ? "message-pinned" : ""} ${message.mentionUserIds?.includes(currentUserId) ? "message-mentioned" : ""}`}
                 onContextMenu={(event) => {
                   event.preventDefault();
                   const textRoot = event.currentTarget.querySelector<HTMLElement>("[data-message-text]");
@@ -740,10 +742,6 @@ function Conversation({
                   setContextMenu({ message, selectedQuote, x: event.clientX, y: event.clientY, portalContainer: menuPortalContainerFor(event.currentTarget) });
                 }}
                 onKeyDown={(event) => {
-                  if (selectionMode && event.key === "Escape") { event.preventDefault(); cancelSelection(); return; }
-                  if (selectionMode && event.target === event.currentTarget && [" ", "Enter"].includes(event.key)) {
-                    event.preventDefault(); toggleSelection(message.id); return;
-                  }
                   if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
                     event.preventDefault();
                     const rect = event.currentTarget.getBoundingClientRect();
@@ -770,8 +768,6 @@ function Conversation({
                   if (!event.currentTarget.contains(event.relatedTarget)) setReactionTargetId((current) => current === message.id ? undefined : current);
                 }}
               >
-                {selectionMode ? <input className="message-select" type="checkbox" checked={selectedIds.has(message.id)}
-                  aria-label={`Выделить сообщение: ${message.body.slice(0, 80) || "Файл"}`} onChange={() => toggleSelection(message.id)} /> : null}
                 {!own && (groupedWithNext ? <span className="message-avatar-spacer" aria-hidden="true" /> :
                   <EmployeeProfileLink className="message-sender-avatar" userId={message.authorId} personName={personName(message.authorId)}>
                     {personById(message.authorId) ? <ProfileAvatar person={personById(message.authorId)!} token={token} size={32} /> : <Avatar name={personName(message.authorId)} size={32} color="colorful" />}
@@ -853,10 +849,10 @@ function Conversation({
                     </div>
                   )}
                 </div>
-              </div>
+              </SelectableMessage>
             </div>
           );
-        }), [renderedMessages, activeMessages, taskForChat, people, canDecideDeadline, onDecideTaskDeadline, deadlineDecisionId, decideDeadline, arrivingIds, motionDisabled, currentUserId, query, attachments, onLoadAttachment, removingMessage, personName, personById, token, onOpenFeedPost, onDownloadAttachment, reactionTargetId, canSend, busy, run, onReactMessage, selectionMode, selectedIds, toggleSelection, cancelSelection]);
+        }), [renderedMessages, activeMessages, taskForChat, people, canDecideDeadline, onDecideTaskDeadline, deadlineDecisionId, decideDeadline, arrivingIds, motionDisabled, currentUserId, query, attachments, onLoadAttachment, removingMessage, personName, personById, token, onOpenFeedPost, onDownloadAttachment, reactionTargetId, canSend, busy, run, onReactMessage]);
   return (
     <MessengerFileDropSurface className={`conversation-pane${embedded ? " embedded-conversation" : ""}${voiceOpen ? " has-voice-draft" : ""}`}
       title={chat.title} blockedReason={fileDropBlocked} receive={acceptFiles} reject={setError}>
@@ -985,13 +981,13 @@ function Conversation({
           </div>
         </div>
       ) : null}
-      {selectionMode ? <div className="message-selection-toolbar" role="region" aria-label="Выделенные сообщения"
+      <div className="message-selection-toolbar" hidden={!selectionMode} role="region" aria-label="Выделенные сообщения"
         onKeyDown={event => { if (event.key === "Escape") { event.preventDefault(); cancelSelection(); } }}>
         <span role="status">Выбрано: {selectedMessages.length}</span>
         <Button appearance="primary" disabled={!selectedMessages.length} icon={<Forward size={20} />}
           onClick={() => setForwarding(selectedMessages)}>Переслать выбранные</Button>
         <Button onClick={cancelSelection}>Отменить выделение</Button>
-      </div> : null}
+      </div>
       <div className="message-scroll" data-chat-background={chatBackground} aria-label="Переписка" aria-live="polite" ref={scrollRef}
         onWheel={cancelArrivalMotion} onPointerDown={cancelArrivalMotion}
         onScroll={(event) => { const pane = event.currentTarget; followLatest.current = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 80; }}>
@@ -1002,7 +998,7 @@ function Conversation({
               : "Начните разговор — отправьте первое сообщение"}
           </div>
         )}
-        {messageRows}
+        <MessageSelectionContext.Provider value={selection}>{messageRows}</MessageSelectionContext.Provider>
       </div>
       {contextMenu ? (() => {
         const message = contextMenu.message;
@@ -1026,8 +1022,9 @@ function Conversation({
           }}>{contextMenu.selectedQuote ? "Копировать выделенное" : "Копировать"}</Button> : null}
           {onForwardContent && <Button appearance="subtle" icon={<Forward size={20} />} onClick={() => { setForwarding([message]); setContextMenu(undefined); }}>Переслать</Button>}
           {onForwardContent && <Button appearance="subtle" icon={<CheckSquare size={20} />} onClick={() => {
-            setSelectionMode(true); setSelectedIds(new Set([message.id])); setContextMenu(undefined); setReactionTargetId(undefined);
-            window.requestAnimationFrame(() => scrollRef.current?.querySelector<HTMLInputElement>(".message-select:checked")?.focus());
+            window.clearTimeout(reactionHoverTimer.current);
+            setSelectionMode(true); setSelectedIds(new Set([message.id])); setContextMenu(undefined);
+            window.requestAnimationFrame(() => scrollRef.current?.querySelector<HTMLInputElement>(".message-select:checked")?.focus({ preventScroll: true }));
           }}>Выделить</Button>}
           <Button appearance="subtle" icon={<ListTodo size={20} />} onClick={() => { setTaskSource(message); setContextMenu(undefined); }}>В задачу</Button>
           {own && message.canEdit && !hasVoice ? <Button appearance="subtle" icon={<Pencil size={20} />} onClick={() => { startEditing(message); setContextMenu(undefined); }}>Изменить</Button> : null}

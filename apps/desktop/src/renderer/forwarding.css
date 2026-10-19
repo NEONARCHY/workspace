@@ -23,10 +23,15 @@
 .forward-dialog-chats button + button::before { content: ""; position: absolute; top: -2px; left: 62px; right: 10px; height: 1px; background: linear-gradient(90deg, transparent, var(--ws-line) 15%, var(--ws-line) 85%, transparent); }
 .forward-dialog-chats button > .fui-Avatar { flex: none; }
 .message-selection-toolbar { display: flex; flex: none; align-items: center; flex-wrap: wrap; gap: 8px; padding: 10px 16px; border-block: 1px solid var(--ws-line); background: var(--ws-muted-surface); }
+.message-selection-toolbar[hidden] { display: none; }
 .message-selection-toolbar > span { margin-inline-end: auto; font-size: 13px; }
-.message-select { flex: none; align-self: center; width: 20px; height: 20px; margin: 4px; accent-color: var(--ws-link); cursor: pointer; }
-.message-select:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 3px; }
-.message.is-selecting { cursor: pointer; padding-inline: 4px; }
+.messenger-view .message-row { position: relative; padding-right: 36px; }
+.messenger-view .message-row > .date-separator { position: relative; left: 18px; }
+.messenger-view .message-row > .message-select { appearance: none; box-sizing: border-box; position: absolute; right: 4px; bottom: 8px; width: 20px; height: 20px; margin: 0; padding: 0; border: 2px solid var(--ws-muted); border-radius: 50%; background: var(--ws-surface); cursor: pointer; }
+.messenger-view .message-row > .message-select:checked { border-color: var(--ws-link); background: var(--ws-link); }
+.messenger-view .message-row > .message-select:checked::after { content: ""; position: absolute; left: 5px; top: 2px; width: 4px; height: 8px; border: solid var(--ws-theme-surface, white); border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.messenger-view .message-row > .message-select:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 3px; }
+.messenger-view .message.is-selecting { cursor: pointer; }
 .message.is-selected { border-radius: 14px; background: color-mix(in srgb, var(--ws-link) 12%, transparent); }
 .message.is-selecting .message-actions, .message.is-selecting .message-reactions { pointer-events: none; visibility: hidden; }
 .messenger-view .chat-list-searchbar { display: flex; align-items: center; gap: 8px; flex: none; }
@@ -35,6 +40,9 @@
 @media (forced-colors: active) {
   .forward-dialog-chats button + button::before { background: CanvasText; }
   .message.is-selected { outline: 1px solid Highlight; }
+  .messenger-view .message-row > .message-select { border-color: CanvasText; background: Canvas; forced-color-adjust: none; }
+  .messenger-view .message-row > .message-select:checked { border-color: Highlight; background: Highlight; }
+  .messenger-view .message-row > .message-select:checked::after { border-color: HighlightText; }
 }
 .forward-dialog-chats button > span:last-child { display: grid; gap: 4px; min-width: 0; }
 .forward-dialog-chats strong { overflow-wrap: anywhere; font-size: 14px; }

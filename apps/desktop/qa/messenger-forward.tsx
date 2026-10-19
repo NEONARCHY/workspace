@@ -15,7 +15,13 @@ const photo: WorkspaceAttachment = { id: "qa-photo-file", ownerType: "message", 
   createdAt: "2026-10-19T07:00:00Z" };
 const noop = () => undefined;
 export function MessengerForwardFixture() {
-  const [messages, setMessages] = useState(originals);
+  const [messages, setMessages] = useState(() => {
+    const count = Math.min(1000, Math.max(0, Number(new URLSearchParams(location.search).get("history")) || 0));
+    return [...Array.from({ length: count }, (_, index): ChatMessage => ({
+      id: `qa-history-${index}`, chatId: "finance", authorId: index % 2 ? "aziza" : "baxtiyor",
+      body: `Сообщение истории ${index}: проверка выделения без перестроения текста и вложений.`, time: "11:00",
+    })), ...originals];
+  });
   const [files, setFiles] = useState([photo]);
   const [attempts, setAttempts] = useState<readonly { source: string; request: string }[]>([]);
   const failed = useRef(false);
