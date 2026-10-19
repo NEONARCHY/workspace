@@ -3,7 +3,7 @@ from typing import Any, Literal
 from urllib.parse import urlsplit
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 def to_camel(value: str) -> str:
@@ -1239,6 +1239,7 @@ class LeaveTenureRulesWrite(ApiModel):
 
 
 class LeaveWriteRequest(ApiModel):
+    expected_updated_at: AwareDatetime | None = None
     application_text: str = Field(min_length=1, max_length=12000)
     starts_on: date
     ends_on: date | None = None
@@ -1254,6 +1255,7 @@ class LeaveWriteRequest(ApiModel):
 
 
 class LeaveHrDecisionRequest(ApiModel):
+    expected_updated_at: AwareDatetime | None = None
     action: LeaveDecision
     starts_on: date | None = None
     ends_on: date | None = None
@@ -1273,8 +1275,21 @@ class LeaveHrDecisionRequest(ApiModel):
     order_clause_3: str = Field(default="", max_length=3000)
     comment: str = Field(default="", max_length=4000)
 
+    @model_validator(mode="after")
+    def valid_day_counts(self) -> "LeaveHrDecisionRequest":
+        if self.action == "approve":
+            if (self.paid_days is not None and self.calendar_days is not None
+                    and self.paid_days > self.calendar_days):
+                raise ValueError("Дней для расчёта не может быть больше дней отпуска")
+            if (self.starts_on is not None and self.ends_on is not None
+                    and self.calendar_days is not None
+                    and self.calendar_days > (self.ends_on - self.starts_on).days + 1):
+                raise ValueError("Количество дней превышает указанный период отпуска")
+        return self
+
 
 class LeaveDeputyDecisionRequest(ApiModel):
+    expected_updated_at: AwareDatetime | None = None
     action: LeaveDecision
     comment: str = Field(default="", max_length=4000)
 

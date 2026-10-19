@@ -135,6 +135,31 @@ describe("LeaveView", () => {
     view("deputy");
     fireEvent.click(await screen.findByRole("button", { name: /Тестова Зебо.*На утверждении/ }));
     fireEvent.click(screen.getByRole("button", { name: "Утвердить и подписать приказ" }));
-    await waitFor(() => expect(api.reviewDeputy).toHaveBeenCalledWith("test-token", "leave-1", { action: "approve", comment: "" }));
+    await waitFor(() => expect(api.reviewDeputy).toHaveBeenCalledWith("test-token", "leave-1", { action: "approve", comment: "", expectedUpdatedAt: request.updatedAt }));
+  });
+
+  it("opens the current application text for editing when reached from a notification", async () => {
+    api.loadLeaves.mockResolvedValue([{ ...request, canRevise: true }]);
+    render(<FluentProvider theme={webLightTheme}><LeaveView token="test-token" people={[employee, deputy]}
+      currentUserId="hr" canCreate focusRequestId={request.id} /></FluentProvider>);
+    fireEvent.click(await screen.findByRole("button", { name: "Исправить заявление" }));
+    expect(screen.getByRole("textbox", { name: "Текст заявления" })).toHaveValue(request.applicationText);
+    expect(screen.getByLabelText(/Предполагаемое начало/)).toHaveValue(request.requestedStartsOn);
+  });
+
+  it("does not give an old HR form a new revision after refreshing the list", async () => {
+    api.loadLeaves.mockResolvedValue([request]);
+    api.previewHrOrder.mockRejectedValue(new Error("Заявление уже изменилось"));
+    view("hr");
+    fireEvent.click(await screen.findByRole("button", { name: /Тестова Зебо.*На проверке/ }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Пункт 2 (необязательно)" }), { target: { value: "Моя правка" } });
+    api.loadLeaves.mockResolvedValue([{ ...request, updatedAt: "2026-10-17T10:00:00Z" }]);
+    fireEvent.click(screen.getByRole("button", { name: "Обновить" }));
+    expect(await screen.findByText(/Заявление изменилось после открытия формы/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Посмотреть проект приказа PDF" }));
+    await waitFor(() => expect(api.previewHrOrder).toHaveBeenCalledWith("test-token", request.id,
+      expect.objectContaining({ expectedUpdatedAt: request.updatedAt, orderClause2: "Моя правка" })));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Заявление уже изменилось");
+    expect(screen.getByRole("textbox", { name: "Пункт 2 (необязательно)" })).toHaveValue("Моя правка");
   });
 });

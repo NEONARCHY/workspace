@@ -463,7 +463,7 @@ export function TeamDashboardView({
       </header>
       <EfficiencyDeadlineExplanation />
       {efficiencyError ? <WorkspaceNotice tone="warning" className="team-dash-data-note" role="status">Показана нагрузка по задачам. Данные эффективности временно недоступны: {efficiencyError}</WorkspaceNotice> : null}
-      <div className="team-dash-people" ref={workloadMotion}>
+      <div className="team-dash-people" ref={workloadMotion} role="region" aria-label="Нагрузка сотрудников" tabIndex={0}>
         {teamRows.map((row) => <button className={`team-dash-person ${selectedPersonId === row.person.id ? "selected" : ""}`} key={row.person.id} type="button" onClick={() => setSelectedPersonId((current) => current === row.person.id ? undefined : row.person.id)}>
           <EmployeeProfileLink userId={row.person.id} personName={row.person.name}><Avatar name={row.person.name} size={40} color="colorful" /></EmployeeProfileLink>
           <EmployeeProfileLink userId={row.person.id} personName={row.person.name} className="team-dash-person-name"><strong>{row.person.name}</strong><small>{row.person.jobTitle || "Должность не указана"}</small></EmployeeProfileLink>

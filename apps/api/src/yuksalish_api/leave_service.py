@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import hashlib
+from calendar import monthrange
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Any, cast
 from uuid import UUID, uuid4
@@ -19,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from starlette.concurrency import run_in_threadpool
 
 from .auth import AuthenticatedUser
+from .employee_availability import lock_employee_schedules
 from .hr_hiring_pdf import validate_signature
 from .hr_hiring_tables import hiring_signatures
 from .leave_pdf import application_pdf, order_pdf
@@ -69,18 +71,16 @@ def _eligible_days(employment_date: date | None, starts_on: date,
                    rules: list[LeaveTenureRule]) -> int:
     if employment_date is None or employment_date > starts_on:
         return 0
-    years = starts_on.year - employment_date.year - (
-        (starts_on.month, starts_on.day) < (employment_date.month, employment_date.day)
-    )
-    anniversary_day = (
-        min(employment_date.day, 28) if employment_date.month == 2 else employment_date.day
-    )
-    anniversary = date(employment_date.year + years, employment_date.month, anniversary_day)
     return max(
         (
             rule.extra_days for rule in rules
-            if years > rule.after_years
-            or (years == rule.after_years and starts_on > anniversary)
+            if starts_on > date(
+                employment_date.year + rule.after_years,
+                employment_date.month,
+                min(employment_date.day, monthrange(
+                    employment_date.year + rule.after_years, employment_date.month,
+                )[1]),
+            )
         ),
         default=0,
     )
@@ -305,6 +305,7 @@ async def _ensure_period(
 ) -> None:
     if ends_on < starts_on:
         raise LeaveError(422, "Конец отпуска не может быть раньше начала")
+    await lock_employee_schedules(connection, [user_id])
     filters = [
         leave_requests.c.requester_user_id == user_id,
         leave_requests.c.status.in_(_ACTIVE),
@@ -605,13 +606,14 @@ async def revise_leave(
     is_owner = row["requester_user_id"] == user.id
     if not is_owner and user.id != hr_id:
         raise LeaveError(403, "Изменить заявление может только автор или назначенный кадровик")
+    _check_revision(row, payload.expected_updated_at)
     if not is_owner and row["status"] != "pending_hr":
         raise LeaveError(409, "Кадровая правка доступна только на этапе проверки")
     if row["status"] not in {"pending_hr", "needs_revision"}:
         raise LeaveError(409, "Заявление уже находится на следующем этапе")
     await _ensure_period(
         connection,
-        user.id,
+        row["requester_user_id"],
         payload.starts_on,
         payload.ends_on or payload.starts_on,
         excluded=request_id,
@@ -668,10 +670,14 @@ async def revise_leave(
     event_id = await _audit(connection, row, user.id, "pending_hr",
                             "revised" if is_owner else "hr_corrected", None)
     await _notify(
-        connection, hr_id if is_owner else row["requester_user_id"], request_id, event_id,
-        "Заявление на отпуск дополнено" if is_owner else "Кадры уточнили заявление",
-        "Проверьте обновлённое заявление", action=is_owner,
+        connection, hr_id, request_id, event_id, "Заявление на отпуск дополнено",
+        "Проверьте обновлённое заявление", action=True,
     )
+    if not is_owner:
+        await _notify(
+            connection, row["requester_user_id"], request_id, event_id,
+            "Кадры уточнили заявление", "Проверьте обновлённое заявление", action=False,
+        )
     return await _response(connection, user, {**row, **values}, hr_id, deputy_id)
 
 
@@ -680,6 +686,11 @@ def _require_comment(action: LeaveDecision, comment: str) -> str | None:
     if action in {"return", "reject"} and not cleaned:
         raise LeaveError(422, "Укажите причину возврата или отказа")
     return cleaned or None
+
+
+def _check_revision(row: RowMapping, expected: datetime | None) -> None:
+    if expected is not None and expected != row["updated_at"]:
+        raise LeaveError(409, "Заявление уже изменилось. Обновите список и проверьте новую версию")
 
 
 async def review_hr(
@@ -692,6 +703,7 @@ async def review_hr(
     if user.id != hr_id:
         raise LeaveError(403, "Решение может принять только назначенный кадровик")
     row = await _row(connection, request_id, lock=True)
+    _check_revision(row, payload.expected_updated_at)
     if row["status"] != "pending_hr":
         raise LeaveError(409, "Заявление не ожидает кадровой проверки")
     comment = _require_comment(payload.action, payload.comment)
@@ -827,6 +839,7 @@ async def preview_hr_order(
     if user.id != hr_id:
         raise LeaveError(403, "Проект приказа может подготовить только назначенный кадровик")
     row = await _row(connection, request_id)
+    _check_revision(row, payload.expected_updated_at)
     if row["status"] != "pending_hr":
         raise LeaveError(409, "Проект приказа уже передан на следующий этап")
     if (
@@ -939,6 +952,7 @@ async def review_deputy(
     if user.id != deputy_id:
         raise LeaveError(403, "Решение может принять только первый заместитель")
     row = await _row(connection, request_id, lock=True)
+    _check_revision(row, payload.expected_updated_at)
     if row["status"] != "pending_deputy":
         raise LeaveError(409, "Заявление не ожидает решения первого заместителя")
     comment = _require_comment(payload.action, payload.comment)

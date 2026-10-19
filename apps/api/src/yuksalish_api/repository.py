@@ -18,6 +18,7 @@ from .ai_referent_visibility import OPERATOR_VISIBLE_STATUSES, may_view_letter
 from .auth import AuthenticatedUser, load_authenticated_user
 from .calendar_audience import calendar_audience_ids, can_invite_calendar_audience
 from .efficiency_service import METHODOLOGY_VERSION, record_task_event
+from .employee_availability import ensure_trip_available
 from .errors import WorkspaceRepositoryError as WorkspaceRepositoryError
 from .personal_preferences import get_preferences as get_personal_preferences
 from .position_policy import is_calendar_chairman, is_executive_leader
@@ -761,6 +762,16 @@ def _can_manage_trip(row: Record, current_user: AuthenticatedUser) -> bool:
     return current_user.role == "superadmin" or row["requester_user_id"] == current_user.id
 
 
+def _can_delete_trip(row: Record, current_user: AuthenticatedUser) -> bool:
+    if not _can_manage_trip(row, current_user):
+        return False
+    editable = row["stage"] == "launch" and row["status"] in {"draft", "needs_revision"}
+    archived_decision = current_user.role == "superadmin" and row["status"] in {
+        "rejected", "annulled",
+    }
+    return editable or archived_decision
+
+
 def _trip_allowed_actions(
     row: Record, current_user: AuthenticatedUser, chair_user_id: UUID | None = None,
     deputy_user_id: UUID | None = None,
@@ -772,7 +783,8 @@ def _trip_allowed_actions(
     if status == "approved":
         return ["annul"] if _can_manage_trip(row, current_user) else []
     management_actions: list[TripAction] = (
-        ["withdraw"] if status == "running" and row["workflow_version"] >= 2
+        ["withdraw"] if status == "running" and not row.get("order_pdf_key")
+        and (row["workflow_version"] >= 2 or current_user.role == "superadmin")
         and _can_manage_trip(row, current_user) else []
     )
     if stage == "launch" and row["requester_user_id"] == current_user.id:
@@ -835,8 +847,7 @@ def _trip_request(
         status_label=TRIP_STATUS_LABELS[row["status"]],
         can_edit=_can_manage_trip(row, current_user) and row["stage"] == "launch"
         and row["status"] in {"draft", "needs_revision"},
-        can_delete=_can_manage_trip(row, current_user) and row["stage"] == "launch"
-        and row["status"] in {"draft", "needs_revision"},
+        can_delete=_can_delete_trip(row, current_user),
         allowed_actions=_trip_allowed_actions(row, current_user, chair_user_id, deputy_user_id),
         chat_id=str(chat_id) if chat_id else None,
         actions=list(actions),
@@ -7403,6 +7414,8 @@ async def _trip_response(
     connection: AsyncConnection,
     current_user: AuthenticatedUser,
     request_id: UUID,
+    *,
+    after_authorized_action: bool = False,
 ) -> TripRequestResponse:
     row = (
         (await connection.execute(select(trip_requests).where(
@@ -7425,7 +7438,8 @@ async def _trip_response(
     )
     effective_deputy_id = _trip_row_deputy_id(row, deputy_user_id, legacy_deputy_id)
     if (
-        current_user.role == "employee"
+        not after_authorized_action
+        and current_user.role == "employee"
         and row["requester_user_id"] != current_user.id
         and current_user.id not in employees.get(request_id, [])
         and not (
@@ -7656,7 +7670,7 @@ async def delete_trip_request(
     current_user: AuthenticatedUser,
     request_id: UUID,
 ) -> None:
-    """Hide an editable trip and its managed chat; retain documents and decision history."""
+    """Archive an eligible trip and chat while retaining documents and decision history."""
     row = (await connection.execute(select(trip_requests).where(
         trip_requests.c.id == request_id,
         trip_requests.c.deleted_at.is_(None),
@@ -7665,8 +7679,10 @@ async def delete_trip_request(
         raise WorkspaceRepositoryError(404, "Trip request was not found")
     if not _can_manage_trip(row, current_user):
         raise WorkspaceRepositoryError(403, "Only the requester or superadmin can delete this trip")
-    if row["stage"] != "launch" or row["status"] not in {"draft", "needs_revision"}:
-        raise WorkspaceRepositoryError(409, "Withdraw the trip before deleting it")
+    if not _can_delete_trip(row, current_user):
+        raise WorkspaceRepositoryError(
+            409, "Withdraw the trip or annul its signed order before deleting it",
+        )
     now = datetime.now(UTC)
     await connection.execute(update(trip_requests).where(
         trip_requests.c.id == request_id,
@@ -7808,6 +7824,10 @@ async def act_on_trip_request(
             target_status = "approved" if payload.target_stage == "approved" else "rejected"
         now = datetime.now(UTC)
         finished_at = now if payload.target_stage in {"approved", "rejected"} else None
+        if target_status == "approved":
+            await ensure_trip_available(
+                connection, request_id, row["start_date"], row["end_date"],
+            )
         await connection.execute(
             update(trip_requests)
             .where(trip_requests.c.id == request_id)
@@ -7885,6 +7905,8 @@ async def act_on_trip_request(
         "stage": to_stage, "status": status, "updated_at": now,
         "finished_at": finished_at,
     }
+    if status == "approved":
+        await ensure_trip_available(connection, request_id, row["start_date"], row["end_date"])
     if row["workflow_version"] >= 2 and payload.action in {"return", "withdraw"}:
         changed.update(
             employee_signature_key=None,
@@ -7951,7 +7973,12 @@ async def act_on_trip_request(
                 )
                 .on_conflict_do_nothing()
             )
-    return await _trip_response(connection, current_user, request_id)
+    # A reviewer who returns the request loses draft access at this transition.
+    # Return the just-authorized decision receipt without failing/rolling it back;
+    # subsequent reads still enforce the normal private-draft visibility.
+    return await _trip_response(
+        connection, current_user, request_id, after_authorized_action=True,
+    )
 
 
 def _condition_outcome(condition: Mapping[str, Any], request_payload: Mapping[str, Any]) -> bool:

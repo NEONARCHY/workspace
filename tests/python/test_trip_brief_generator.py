@@ -89,7 +89,7 @@ def test_cross_month_range_has_both_dates() -> None:
 
 def test_edited_brief_preserves_paragraphs_and_rejects_placeholders() -> None:
     original = generate_trip_brief(**_facts())
-    edited = original.replace("Safar davomida", "Safar doirasida")
+    edited = original.replace("Safarning maqsadi:", "Safar maqsadi:")
     assert validate_edited_trip_brief(edited) == edited
     assert "\n\n" in validate_edited_trip_brief(edited)
     with pytest.raises(ValueError, match="Текст билдирги"):
@@ -108,7 +108,7 @@ def test_server_saves_reviewed_brief_instead_of_regenerating_it(
     monkeypatch.setattr(repository, "_sync_context_chat", AsyncMock())
     monkeypatch.setattr(repository, "_trip_response", AsyncMock(return_value="saved"))
     facts = _facts()
-    edited = generate_trip_brief(**facts).replace("Safar davomida", "Safar doirasida")
+    edited = generate_trip_brief(**facts).replace("Safarning maqsadi:", "Safar maqsadi:")
     payload = CreateTripRequest(
         purpose=facts["purpose"], destination=facts["destination"],
         start_date=facts["start"], end_date=facts["end"],
@@ -176,7 +176,7 @@ def test_edit_regenerates_brief_and_invalidates_prepared_pdf(
     assert values["brief_text"] == generate_trip_brief(**facts)
     assert values["signed_brief_key"] is None
     assert values["signed_brief_sha256"] is None
-    edited = values["brief_text"].replace("Safar davomida", "Safar doirasida")
+    edited = values["brief_text"].replace("Safarning maqsadi:", "Safar maqsadi:")
     calls_before_edit = connection.execute.await_count
     assert asyncio.run(repository.update_trip_request(
         connection, user, request_id,
