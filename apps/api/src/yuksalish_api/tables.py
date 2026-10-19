@@ -3,6 +3,64 @@ from sqlalchemy.dialects import postgresql
 
 metadata = sa.MetaData()
 
+reference_profile = sa.Table(
+    "reference_profile", metadata,
+    sa.Column("id", sa.SmallInteger(), primary_key=True),
+    sa.Column("legal_name", sa.String(240)), sa.Column("short_name", sa.String(160)),
+    sa.Column("tin", sa.String(24)), sa.Column("registered_address", sa.Text()),
+    sa.Column("postal_address", sa.Text()), sa.Column("bank_name", sa.String(240)),
+    sa.Column("bank_code", sa.String(40)), sa.Column("bank_account", sa.String(64)),
+    sa.Column("phone", sa.String(80)), sa.Column("email", sa.String(240)),
+    sa.Column("website", sa.String(240)), sa.Column("revision", sa.Integer()),
+    sa.Column("updated_by_user_id", postgresql.UUID(as_uuid=True)),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
+reference_partners = sa.Table(
+    "reference_partners", metadata,
+    sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
+    sa.Column("name", sa.String(240)), sa.Column("kind", sa.String(32)),
+    sa.Column("tin", sa.String(24)), sa.Column("address", sa.Text()),
+    sa.Column("contact_person", sa.String(160)), sa.Column("phone", sa.String(80)),
+    sa.Column("email", sa.String(240)), sa.Column("website", sa.String(240)),
+    sa.Column("notes", sa.Text()), sa.Column("archived", sa.Boolean()),
+    sa.Column("revision", sa.Integer()),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+    sa.Column("updated_by_user_id", postgresql.UUID(as_uuid=True)),
+)
+reference_experts = sa.Table(
+    "reference_experts", metadata,
+    sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
+    sa.Column("name", sa.String(160)), sa.Column("specialization", sa.String(240)),
+    sa.Column("partner_id", postgresql.UUID(as_uuid=True)),
+    sa.Column("phone", sa.String(80)), sa.Column("email", sa.String(240)),
+    sa.Column("notes", sa.Text()), sa.Column("archived", sa.Boolean()),
+    sa.Column("revision", sa.Integer()),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+    sa.Column("updated_by_user_id", postgresql.UUID(as_uuid=True)),
+)
+reference_templates = sa.Table(
+    "reference_templates", metadata,
+    sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
+    sa.Column("title", sa.String(240)), sa.Column("kind", sa.String(32)),
+    sa.Column("locale", sa.String(16)), sa.Column("description", sa.Text()),
+    sa.Column("archived", sa.Boolean()), sa.Column("revision", sa.Integer()),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+    sa.Column("updated_by_user_id", postgresql.UUID(as_uuid=True)),
+)
+reference_template_versions = sa.Table(
+    "reference_template_versions", metadata,
+    sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
+    sa.Column("template_id", postgresql.UUID(as_uuid=True)),
+    sa.Column("version", sa.Integer()), sa.Column("file_name", sa.String(240)),
+    sa.Column("content_type", sa.String(160)), sa.Column("storage_key", sa.String(240)),
+    sa.Column("byte_size", sa.Integer()),
+    sa.Column("uploaded_by_user_id", postgresql.UUID(as_uuid=True)),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+)
+
 edo_incoming_access = sa.Table(
     "edo_incoming_access", metadata,
     sa.Column("user_id", postgresql.UUID(as_uuid=True), primary_key=True),

@@ -69,6 +69,12 @@ export const fallbackModules: readonly ModuleDescriptor[] = [
     status: "available",
   },
   {
+    key: "reference",
+    label: { ru: "Справочник", uz_cyrl: "Маълумотнома", uz_latn: "Ma’lumotnoma" },
+    route: "/reference",
+    status: "available",
+  },
+  {
     key: "project_funding",
     label: { ru: "Проектные заявки", uz_cyrl: "Лойиҳа аризалари", uz_latn: "Loyiha arizalari" },
     route: "/project-funding",

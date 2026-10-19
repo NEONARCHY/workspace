@@ -1,6 +1,7 @@
 export * from "./project-imports";
 export * from "./file-preview";
 export * from "./project-budget";
+export * from "./reference";
 import type { ProjectBudgetArticle } from "./project-budget";
 
 export const moduleKeys = [
@@ -16,6 +17,7 @@ export const moduleKeys = [
   "feed",
   "projects",
   "project_hub",
+  "reference",
   "project_funding",
   "trip_approvals",
   "leave_approvals",
