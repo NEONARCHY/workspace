@@ -8,6 +8,7 @@ afterEach(() => {
   cleanup(); localStorage.clear(); vi.restoreAllMocks(); vi.unstubAllGlobals();
   window.dispatchEvent(new StorageEvent("storage", { key: null }));
   delete document.documentElement.dataset.colorTheme;
+  delete document.documentElement.dataset.themeTransition;
   document.documentElement.style.removeProperty("color-scheme");
   document.documentElement.style.removeProperty("background-color");
   if (originalAnimate) Object.defineProperty(document.body, "animate", originalAnimate);

@@ -32,7 +32,7 @@ function systemChanged() {
 function storageChanged(event: StorageEvent) {
   if (event.key !== null && !event.key.startsWith(prefix)) return;
   if (event.key === null) temporaryChoices.clear(); else temporaryChoices.delete(event.key);
-  notify();
+  void transitionColorTheme(notify);
 }
 function subscribe(listener: () => void) {
   if (!listeners.size) {
@@ -65,62 +65,63 @@ export function applyColorTheme(theme: ColorTheme) {
 }
 export function initializeColorTheme() { applyColorTheme(resolveColorTheme(readPreference(undefined))); }
 
-// Native document snapshots reveal the new theme without cloning/remounting UI.
-let transition: ViewTransition | undefined;
-let reveal: Animation | undefined;
+// Apply theme changes in place; do not snapshot or animate the whole document.
 let revision = 0;
-export async function transitionColorTheme(update: () => void, origin?: { readonly x: number; readonly y: number }): Promise<void> {
+export async function transitionColorTheme(update: () => void): Promise<void> {
   const current = ++revision;
-  reveal?.cancel(); reveal = undefined;
-  transition?.skipTransition();
-  transition = undefined;
-  const accessibility = typeof window.matchMedia === "function" ? window.matchMedia("(prefers-reduced-motion: reduce), (forced-colors: active)") : undefined;
-  let updated = false;
-  const apply = () => { if (!updated && revision === current) { updated = true; update(); } };
   const root = document.documentElement;
-  if (accessibility?.matches || !document.startViewTransition || !root.animate || document.hidden) {
-    delete root.dataset.themeTransition;
-    apply(); return;
+  const accessibility = typeof window.matchMedia === "function"
+    ? window.matchMedia("(prefers-reduced-motion: reduce), (forced-colors: active)")
+    : undefined;
+  if (document.hidden || accessibility?.matches) {
+    try { update(); }
+    finally { if (revision === current) delete root.dataset.themeTransition; }
+    return;
   }
-  const width = window.innerWidth, height = window.innerHeight;
-  const x = Math.max(0, Math.min(width, origin?.x ?? width / 2));
-  const y = Math.max(0, Math.min(height, origin?.y ?? height / 2));
-  const radius = Math.ceil(Math.hypot(Math.max(x, width - x), Math.max(y, height - y))) + 2;
   root.dataset.themeTransition = "true";
-  const interrupt = () => {
-    if (revision !== current || (!document.hidden && !accessibility?.matches)) return;
-    reveal?.cancel();
-    transition?.skipTransition();
-    apply();
-  };
-  document.addEventListener("visibilitychange", interrupt);
-  accessibility?.addEventListener("change", interrupt);
   try {
-    const view = document.startViewTransition(apply);
-    transition = view;
-    void view.finished.catch(() => undefined);
-    try { await view.ready; } catch { apply(); return; }
-    if (revision !== current) return;
-    if (document.hidden || accessibility?.matches) return;
-    const animation = root.animate([
-      { clipPath: `circle(0px at ${x}px ${y}px)` },
-      { clipPath: `circle(${radius}px at ${x}px ${y}px)` },
-    ], { duration: 680, easing: "cubic-bezier(.2,.65,.25,1)", fill: "forwards", pseudoElement: "::view-transition-new(root)" });
-    reveal = animation;
-    try { await animation.finished; } catch { /* A new choice owns the next wave. */ }
-    await view.finished;
-  } catch {
-    // Unsupported snapshots/animations must never prevent applying the choice.
-    apply();
-  } finally {
-    document.removeEventListener("visibilitychange", interrupt);
-    accessibility?.removeEventListener("change", interrupt);
-    if (revision === current) {
-      reveal?.cancel(); reveal = undefined;
-      transition?.skipTransition(); transition = undefined;
-      delete root.dataset.themeTransition;
-    }
+    update();
+  } catch (error) {
+    if (revision === current) delete root.dataset.themeTransition;
+    throw error;
   }
+
+  if (document.hidden || typeof window.requestAnimationFrame !== "function") {
+    if (revision === current) delete root.dataset.themeTransition;
+    return;
+  }
+
+  await new Promise<void>((resolve) => {
+    let frame: number | undefined;
+    let suppressionPainted = false;
+    const finish = () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      if (frame !== undefined) window.cancelAnimationFrame(frame);
+      if (revision === current) delete root.dataset.themeTransition;
+      resolve();
+    };
+    const schedule = () => {
+      if (frame === undefined && !document.hidden) frame = window.requestAnimationFrame(() => {
+        frame = undefined;
+        if (!suppressionPainted) {
+          suppressionPainted = true;
+          schedule();
+        } else {
+          finish();
+        }
+      });
+    };
+    const onVisibilityChange = () => {
+      if (document.hidden && frame !== undefined) {
+        window.cancelAnimationFrame(frame);
+        frame = undefined;
+      } else {
+        schedule();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    schedule();
+  });
 }
 
 export function useColorTheme(userId: string | undefined) {

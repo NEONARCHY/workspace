@@ -124,7 +124,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
     }
   }, [mapOpen]);
   const [section, setSection] = useState<"requests" | "designer">("requests");
-  const [filter, setFilter] = useState<"running" | "approved" | "all" | "finished">("running");
+  const [filter, setFilter] = useState<"actionable" | "running" | "revision" | "approved" | "all" | "finished">("running");
   const [query, setQuery] = useState("");
   const [employeeQuery, setEmployeeQuery] = useState("");
   const [busy, setBusy] = useState(false);
@@ -158,9 +158,18 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
     (action) => !["withdraw", "annul"].includes(action),
   )).length;
   const revisionCount = requests.filter((request) => request.status === "needs_revision").length;
-  const filterCounts = { running: runningCount, approved: requests.filter((request) => request.status === "approved").length, all: requests.length, finished: finishedCount };
+  const filterCounts = {
+    actionable: actionableCount,
+    running: runningCount,
+    revision: revisionCount,
+    approved: requests.filter((request) => request.status === "approved").length,
+    all: requests.length,
+    finished: finishedCount,
+  };
   const visibleRequests = requests.filter((request) => {
+    if (filter === "actionable" && !request.allowedActions.some((action) => !["withdraw", "annul"].includes(action))) return false;
     if (filter === "running" && isFinished(request)) return false;
+    if (filter === "revision" && request.status !== "needs_revision") return false;
     if (filter === "approved" && request.status !== "approved") return false;
     if (filter === "finished" && !isFinished(request)) return false;
     return [request.number, request.purpose, request.destination, request.stageLabel, ...request.employeeIds.map(personName)]
@@ -285,18 +294,6 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
 
       {mapOpen ? <Suspense fallback={<LoadingSkeleton layout="map" label="Загружаем карту поездок…" />}><TripWorldMap requests={requests} people={people} onOpenRequest={openRequest} onClose={() => { restoreMapFocus.current = true; setMapOpen(false); }} /></Suspense>
         : section === "designer" && workflow && onSaveWorkflow && onPublishWorkflow ? <><WorkspaceNotice tone="warning" className="trip-document-reminder">Для этапа «Согласование первого заместителя» выберите должность или конкретного сотрудника, затем сохраните и опубликуйте маршрут. Новые отправки закрепляют выбранного согласующего; уже отправленные заявки сохраняют прежнее назначение. Председатель и подпись приказа по-прежнему определяются настройками HR.</WorkspaceNotice><ProcessWorkflowDesigner workflow={currentTripWorkflow(workflow, positions)} processName="Маршрут поездок" accent="trip" people={people} departments={departments} positions={positions} onSave={onSaveWorkflow} onPublish={onPublishWorkflow} /></> : <>
-      <section className="ws2-process-overview trip-overview" aria-label="Сводка по командировкам">
-        <button type="button" className="ws2-process-focus" onClick={() => setFilter("running")}>
-          <strong>{actionableCount}</strong>
-          <span>Ожидают действий</span>
-        </button>
-        <div className="ws2-process-metrics">
-          <div><strong>{runningCount}</strong><span>в работе</span></div>
-          <div className={revisionCount ? "attention" : ""}><strong>{revisionCount}</strong><span>на доработке</span></div>
-          <div><strong>{finishedCount}</strong><span>завершено</span></div>
-        </div>
-      </section>
-
       <div className="trip-commandbar ws2-process-toolbar">
         <SlidingSegmented className="ws2-segmented" role="group" aria-label="Вид поездок">
           <button type="button" className={view === "kanban" ? "active" : ""} aria-pressed={view === "kanban"} onClick={() => setView("kanban")}>Канбан</button>
@@ -304,7 +301,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
         </SlidingSegmented>
         <Input contentBefore={<Search20Regular />} className="trip-search" aria-label="Поиск поездок" placeholder="Цель, город, сотрудник или номер" value={query} onChange={(_, data) => setQuery(data.value)} />
         <SlidingSegmented className="ws2-segmented" role="group" aria-label="Фильтр поездок">
-          {([["running", "В работе"], ["approved", "Утверждено"], ["all", "Все"], ["finished", "Завершённые"]] as const).map(([key, label]) => <button type="button" key={key} className={filter === key ? "active" : ""} aria-pressed={filter === key} onClick={() => setFilter(key)}>{label}<span className="approval-filter-count">{filterCounts[key]}</span></button>)}
+          {([["all", "Все"], ["actionable", "Нужно моё решение"], ["running", "В работе"], ["revision", "На доработке"], ["approved", "Утверждено"], ["finished", "Завершённые"]] as const).map(([key, label]) => <button type="button" key={key} className={filter === key ? "active" : ""} aria-pressed={filter === key} onClick={() => setFilter(key)}>{label}<span className="approval-filter-count">{filterCounts[key]}</span></button>)}
         </SlidingSegmented>
       </div>
       {feedback}
