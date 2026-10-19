@@ -22,7 +22,11 @@
 .forward-dialog-chats button { position: relative; }
 .forward-dialog-chats button + button::before { content: ""; position: absolute; top: -2px; left: 62px; right: 10px; height: 1px; background: linear-gradient(90deg, transparent, var(--ws-line) 15%, var(--ws-line) 85%, transparent); }
 .forward-dialog-chats button > .fui-Avatar { flex: none; }
-.message-selection-toolbar { display: flex; flex: none; align-items: center; flex-wrap: wrap; gap: 8px; padding: 10px 16px; border-block: 1px solid var(--ws-line); background: var(--ws-muted-surface); }
+.conversation-header { position: relative; }
+.conversation-header.has-message-selection > :not(.message-selection-toolbar) { visibility: hidden; pointer-events: none; }
+.message-selection-toolbar { position: absolute; inset: 0; z-index: 3; display: flex; align-items: center; gap: 8px; padding: 10px 16px; box-sizing: border-box; background: var(--ws-surface); }
+.message-selection-toolbar .message-selection-cancel { width: 32px; min-width: 32px; padding: 4px; }
+.message-scroll[data-paint-selecting] { user-select: none; }
 .message-selection-toolbar[hidden] { display: none; }
 .message-selection-toolbar > span { margin-inline-end: auto; font-size: 13px; }
 .messenger-view .message-row { position: relative; padding-right: 36px; }

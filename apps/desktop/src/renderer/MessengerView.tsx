@@ -6,6 +6,7 @@ import "./message-rich-text.css";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { ReactionEmoji } from "./ReactionEmoji";
 import { MessageSelectionContext, SelectableMessage, useMessageSelectionVisibility } from "./SelectableMessage";
+import { useMessagePaintSelection } from "./useMessagePaintSelection";
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { RefObject, SetStateAction } from "react";
 import { CheckSquare, Copy, Forward, ListTodo, Pencil, Pin, PinOff, Reply, Smile, Trash2, UserRound, UsersRound, WandSparkles } from "lucide-react";
@@ -307,6 +308,15 @@ function Conversation({
   const [reactionPreview, setReactionPreview] = useState(false);
   const [reactionTargetId, setReactionTargetId] = useState<string>();
   const reactionHoverTimer = useRef<number | undefined>(undefined);
+  const paintSelection = useCallback((ids: readonly string[]) => {
+    window.clearTimeout(reactionHoverTimer.current);
+    setSelectionMode(true);
+    setSelectedIds(current => {
+      const next = new Set(current);
+      for (const id of ids) { if (next.has(id)) next.delete(id); else next.add(id); }
+      return next;
+    });
+  }, []);
   useEffect(() => () => window.clearTimeout(reactionHoverTimer.current), []);
   const [chatBackground, setChatBackground] = useState(() => readChatBackground(currentUserId));
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
@@ -422,6 +432,7 @@ function Conversation({
     return rows;
   }, [visibleMessages, removingMessage]);
   const visibleSelectionIds = useMessageSelectionVisibility(scrollRef, renderedMessages);
+  const paint = useMessagePaintSelection({ paneRef: scrollRef, messages: renderedMessages, enabled: !!onForwardContent, onPaint: paintSelection });
   const selection = useMemo(() => ({ active: selectionMode, ids: selectedIds, visibleIds: visibleSelectionIds, toggle: toggleSelection, cancel: cancelSelection }),
     [selectionMode, selectedIds, visibleSelectionIds, toggleSelection, cancelSelection]);
   const { arrivingIds, motionDisabled, cancelArrivalMotion } = useMessageArrivalMotion({
@@ -856,7 +867,7 @@ function Conversation({
   return (
     <MessengerFileDropSurface className={`conversation-pane${embedded ? " embedded-conversation" : ""}${voiceOpen ? " has-voice-draft" : ""}`}
       title={chat.title} blockedReason={fileDropBlocked} receive={acceptFiles} reject={setError}>
-      <header className="conversation-header">
+      <header className={`conversation-header${selectionMode ? " has-message-selection" : ""}`}>
         {!embedded ? <Button className="compact-back" appearance="subtle" icon={<ChevronLeft20Regular />} onClick={onBack}>К списку чатов</Button> : null}
         <div className="conversation-identity">
           {chat.canEditAvatar && chatActions.setAvatar ? <Dialog open={avatarPickerOpen}
@@ -929,6 +940,14 @@ function Conversation({
           </Button>
           </> : null}
         </BrowserChatActions>
+        <div className="message-selection-toolbar" hidden={!selectionMode} role="region" aria-label="Выделенные сообщения"
+          onKeyDown={event => { if (event.key === "Escape") { event.preventDefault(); paint.stop(); cancelSelection(); } }}>
+          <span role="status">Выбрано: {selectedMessages.length}</span>
+          <Button appearance="primary" aria-label="Переслать выбранные" disabled={!selectedMessages.length} icon={<Forward size={20} />}
+            onClick={() => setForwarding(selectedMessages)}>Переслать</Button>
+          <Button aria-label="Отменить выделение" title="Отменить выделение" className="message-selection-cancel"
+            icon={<Dismiss24Regular />} onClick={() => { paint.stop(); cancelSelection(); }} />
+        </div>
       </header>
       {deadlineOpen && canRequestDeadline ? <div className="task-deadline-request-popover" role="region" aria-label="Запрос переноса срока">
         <strong>Новый срок задачи</strong>
@@ -981,16 +1000,12 @@ function Conversation({
           </div>
         </div>
       ) : null}
-      <div className="message-selection-toolbar" hidden={!selectionMode} role="region" aria-label="Выделенные сообщения"
-        onKeyDown={event => { if (event.key === "Escape") { event.preventDefault(); cancelSelection(); } }}>
-        <span role="status">Выбрано: {selectedMessages.length}</span>
-        <Button appearance="primary" disabled={!selectedMessages.length} icon={<Forward size={20} />}
-          onClick={() => setForwarding(selectedMessages)}>Переслать выбранные</Button>
-        <Button onClick={cancelSelection}>Отменить выделение</Button>
-      </div>
       <div className="message-scroll" data-chat-background={chatBackground} aria-label="Переписка" aria-live="polite" ref={scrollRef}
+        tabIndex={-1} onPointerDownCapture={paint.onPointerDown} onPointerMove={paint.onPointerMove}
+        onPointerUp={paint.onPointerUp} onPointerCancel={paint.stop} onLostPointerCapture={paint.stop} onClickCapture={paint.onClickCapture}
+        onKeyDown={event => { if (selectionMode && event.key === "Escape" && !event.defaultPrevented) { event.preventDefault(); paint.stop(); cancelSelection(); } }}
         onWheel={cancelArrivalMotion} onPointerDown={cancelArrivalMotion}
-        onScroll={(event) => { const pane = event.currentTarget; followLatest.current = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 80; }}>
+        onScroll={(event) => { const pane = event.currentTarget; followLatest.current = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 80; paint.onScroll(); }}>
         {!renderedMessages.length && (
           <div className="empty-compact">
             {query
