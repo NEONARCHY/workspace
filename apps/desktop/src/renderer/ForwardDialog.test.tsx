@@ -31,3 +31,21 @@ it("never offers read-only chats or the source chat", () => {
   expect(screen.getByRole("status")).toHaveTextContent("Нет доступных чатов");
   expect(screen.queryByRole("button", { name: /Только чтение/ })).not.toBeInTheDocument();
 });
+it("preserves order and retries only the unfinished part of a batch with the same ID", async () => {
+  const sources = [{ kind: "message", id: "photo" }, { kind: "message", id: "caption" }] as const;
+  const onForward = vi.fn().mockResolvedValueOnce({ id: "one" }).mockRejectedValueOnce(new Error("Сеть"))
+    .mockResolvedValueOnce({ id: "two" });
+  const close = vi.fn(), success = vi.fn();
+  render(<FluentProvider theme={webLightTheme}><ForwardDialog source={sources[0]} sources={sources}
+    preview="Сообщений: 2" chats={initialChats} onForward={onForward} onClose={close} onForwarded={success} /></FluentProvider>);
+  const target = screen.getByRole("button", { name: /Бахтиёр Самугов/ });
+  fireEvent.click(target);
+  await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Переслано 1 из 2"));
+  expect(close).not.toHaveBeenCalled(); expect(success).not.toHaveBeenCalled();
+  expect(onForward.mock.calls.map(call => call[1])).toEqual(sources);
+  fireEvent.click(target);
+  await waitFor(() => expect(close).toHaveBeenCalledOnce());
+  expect(onForward).toHaveBeenCalledTimes(3);
+  expect(onForward.mock.calls[2]).toEqual(onForward.mock.calls[1]);
+  expect(success).toHaveBeenCalledOnce();
+});

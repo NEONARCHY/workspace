@@ -16,7 +16,13 @@ import { TaskRecords } from "../src/renderer/TaskRecords";
 import { ScrollbarEdges } from "../src/renderer/ScrollbarEdges";
 import { UndoActionsProvider } from "../src/renderer/UndoActions";
 import { WorkspaceSectionHeader } from "../src/renderer/WorkspaceSectionHeader";
-import { workspaceTheme } from "../src/renderer/workspace-theme";
+import { WorkspaceSectionContent } from "../src/renderer/WorkspaceSectionContent";
+import { useQaTheme } from "./color-theme";
+import { useBrowserCompactLayout, observeBrowserViewport } from "../src/renderer/browser-layout";
+import { TeamDashboardView } from "../src/renderer/TeamDashboardView";
+import { PersonalHomeView } from "../src/renderer/PersonalHomeView";
+import { SurveyAnalyticsView } from "../src/renderer/SurveyAnalyticsView";
+import { homeFixture } from "../src/renderer/test-fixtures/personal-home-fixture";
 import { initialChats, initialMessages, initialTasks, people } from "../src/renderer/test-fixtures/demo-data";
 import "../src/renderer/styles.css";
 import "../src/renderer/responsive.css";
@@ -74,6 +80,16 @@ import "../src/renderer/navigation-sliding.css";
 import "../src/renderer/section-headers.css";
 import "../src/renderer/sidebar-theme.css";
 import "../src/renderer/page-canvas.css";
+import "../src/renderer/browser-responsive.css";
+import "../src/renderer/browser-secondary.css";
+import "../src/renderer/dark-theme.css";
+import "../src/renderer/satin-surfaces.css";
+import "../src/renderer/workspace-search.css";
+import "../src/renderer/workspace-popups.css";
+import "../src/renderer/workspace-field-borders.css";
+import "../src/renderer/mobile-density.css";
+import "../src/renderer/personal-home.css";
+import "../src/renderer/page-scroll-layout.css";
 import "./page-canvas.css";
 
 const nothing = async () => undefined;
@@ -130,6 +146,7 @@ const requests: ApprovalRequestSummary[] = Array.from({ length: 14 }, (_, i) => 
   createdAt: "2026-10-07T10:00:00Z", updatedAt: "2026-10-07T10:00:00Z", revision: 1, versions: [], actions: [],
 }));
 const roots = [
+  ["Главная", "workspace-view personal-home"],
   ["Задачи", "workspace-view tasks-view bp5-tasks"], ["Обзор команды", "team-dashboard"],
   ["Сотрудники", "workspace-view employees-view"], ["Отсутствия", "workspace-view absences-view"],
   ["Календарь", "workspace-view calendar-view"], ["HR", "workspace-view hr-view"],
@@ -171,8 +188,11 @@ function QaIncomingLetters() {
 }
 
 function Preview() {
-  const [section, setSection] = useState("notifications");
-  const [sample, setSample] = useState(0);
+  const workspaceTheme = useQaTheme();
+  const compact = useBrowserCompactLayout(true);
+  useEffect(() => { document.documentElement.classList.add("web-platform"); return observeBrowserViewport(); }, []);
+  const [section, setSection] = useState(new URLSearchParams(location.search).get("section") ?? "notifications");
+  const [sample, setSample] = useState(Number(new URLSearchParams(location.search).get("sample") ?? 0));
   const [selectedTask, setSelectedTask] = useState<string>();
   const [previewFile, setPreviewFile] = useState<WorkspaceAttachment>();
   const [scheduleEvents, setScheduleEvents] = useState<readonly CalendarEvent[]>(calendarEvents);
@@ -241,8 +261,8 @@ function Preview() {
   ];
   return <FluentProvider theme={workspaceTheme} className="app-provider">
     <UndoActionsProvider><ScrollbarEdges />
-      <div className="app-shell">
-        <aside className="app-rail sidebar-palette" data-sidebar-theme="gradient">
+      <div className={`app-shell${compact ? " browser-compact" : ""}`}>
+        <aside className="app-rail sidebar-palette" data-sidebar-theme="gradient" style={compact ? { display: "none" } : undefined}>
           <div className="workspace-logo"><strong>YUKSALISH</strong></div>
           <div className="rail-customize">Тестовый стенд</div>
           <nav className="rail-nav" aria-label="Разделы стенда">{nav.map(item => <button key={item.id} aria-label={item.label} className={`rail-action ${section === item.id ? "active" : ""}`} onClick={() => setSection(item.id)}><span className="rail-icon">{item.icon}</span><span className="rail-label">{item.label}</span></button>)}</nav>
@@ -258,23 +278,26 @@ function Preview() {
               <button type="button" onClick={showGroupedPreview}>QA: группа и длинный текст</button>
             </div>}
           </header>
-          <main className="app-content" id="workspace-content">
+          <WorkspaceSectionContent authorityKey="qa-layout" section={`${section}:${sample}`}>
             {section === "notifications" ? <NotificationCenter notifications={notifications} preferences={{ desktopEnabled: true, messagesEnabled: true, tasksEnabled: true, approvalsEnabled: true, tripsEnabled: true, calendarEnabled: true, absencesEnabled: true, zoomEnabled: true, remindersEnabled: true }} onOpen={nothing} onMarkRead={nothing} onMarkAllRead={nothing} onUpdatePreferences={nothing} />
             : section === "calendar" ? <CalendarView events={scheduleEvents} people={zoomPeople} departments={zoomDepartments} canInviteCalendarAudience currentUserId={people[0]!.id} onCreate={createPreviewEvent} onUpdate={nothing} onCancel={nothing} />
-            : section === "payments" ? <ApprovalsView token="qa-only" canManage={false} canCreateRequest={false} currentUserId={people[0]!.id} people={people} positions={[]} requests={requests} calendarEvents={[]} attachments={[]} onSaveWorkflow={nothing} onPublishWorkflow={nothing} onCreateRequest={nothing} onAction={nothing} onDeleteRequest={nothing} onReviseRequest={nothing} onUploadAttachments={nothing} onDownloadAttachment={nothing} />
+            : section === "payments" ? <ApprovalsView token="qa-only" canManage={false} canCreateRequest={false} isSuperadmin={false} currentUserId={people[0]!.id} people={people} positions={[]} requests={requests} calendarEvents={[]} attachments={[]} onSaveWorkflow={nothing} onPublishWorkflow={nothing} onCreateRequest={nothing} onAction={nothing} onDeleteRequest={nothing} onReviseRequest={nothing} onUploadAttachments={nothing} onDownloadAttachment={nothing} />
             : section === "messenger" ? <MessengerView token="qa-only" currentUserId="aziza" currentUserRole="employee" chats={initialChats} messages={messages} tasks={[]} attachments={[]} people={people}
               chatActions={{ create: async () => initialChats[0]!, update: async () => initialChats[0]!, add: async () => initialChats[0]!, setMember: async () => initialChats[0]!, transfer: async () => initialChats[0]!, remove: nothing, delete: nothing }}
               onSendMessage={sendPreviewMessage} onSendVoiceMessage={nothing} onReactMessage={nothing} onPinMessage={nothing} onEditMessage={nothing} onDeleteMessage={nothing} onCreateTaskFromMessage={nothing} onDownloadAttachment={nothing} onLoadAttachment={async () => new Blob()} onMarkRead={nothing} />
             : section === "zoom" ? <ZoomView token="qa-only" people={zoomPeople} departments={zoomDepartments} currentUserId={people[0]!.id} registry={{ configured: true, timezone: "Asia/Tashkent", reminderMinutes: 30, bookingHorizonDays: 180, slotMinutes: 15, meetings: [] }} loading={false} onRefresh={nothing} />
              : section === "trips" ? <TripApprovalsView requests={[]} people={people} currentUser={people[0]!} onCreate={nothing} onUpdate={nothing} onAction={nothing} />
+              : section === "team" ? <section className="workspace-view tasks-view bp5-tasks dashboard-mode"><TeamDashboardView token="qa-only" currentUserId={people[0]!.id} people={people} tasks={initialTasks} efficiencyLoading={false} onSelectTask={nothing} /></section>
               : section === "tasks" ? <section className="workspace-view tasks-view bp5-tasks"><TaskRecords tasks={taskSamples} people={people} filterKey="qa" selectedId={selectedTask} onSelect={setSelectedTask} /></section>
+              : section === "home" ? <PersonalHomeView token="qa-only" workspace={homeFixture("aziza")} canView={() => true} onOpen={() => undefined} onOpenNotification={() => undefined} onRefresh={nothing} />
+              : section === "survey" ? <div style={{ display: "contents" }}><SurveyAnalyticsView token="qa-only" canCreate={false} canEdit={false} /></div>
               : section === "letters" ? <QaIncomingLetters />
               : section === "files" ? <section className="qa-canvas-sample-card"><h2>Встроенный просмотрщик · тестовые данные</h2>{previewSamples.map(file => <button key={file.id} onClick={() => setPreviewFile(file)}>{file.fileName}</button>)}</section>
             : <section className={roots[sample]![1]} aria-label={`Макет: ${roots[sample]![0]}`}>
               <WorkspaceSectionHeader motif="tasks"><div><h1>{roots[sample]![0]}</h1><p>Проверка внешнего контейнера, не рабочая страница раздела.</p></div></WorkspaceSectionHeader>
               <div className="qa-canvas-sample-card"><h2>Карточки остаются самостоятельными</h2><p>Корень страницы не перекрашивается. Только существующие белые рабочие панели расширяются вместо внешней стеклянной рамки.</p></div>
             </section>}
-          </main>
+          </WorkspaceSectionContent>
         </div>
       </div>
       {previewFile && <FileViewer key={previewFile.id} attachment={previewFile} onClose={() => setPreviewFile(undefined)} onDownload={nothing} onLoadOffice={previewOffice} onLoad={loadPreviewBlob} />}

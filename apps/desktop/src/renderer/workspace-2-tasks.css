@@ -12,6 +12,13 @@
   background: transparent;
 }
 
+/* The disclosure owns equal outer gaps, including when its content is open. */
+.tasks-view .tasks-main > .task-proposals {
+  flex: none;
+  margin-block: 14px;
+  border: 1px solid var(--ws-line);
+}
+
 /* Selection changes the surface, not the labels' width or the group's position. */
 .tasks-view .view-switch > button { font-weight: 600; }
 .tasks-view .task-calendar-navigation-slot { flex: 0 0 auto; min-height: 36px; }

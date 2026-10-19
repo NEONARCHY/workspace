@@ -1159,6 +1159,28 @@ async function selectPaymentDirection() {
 }
 
 describe("corporate workspace authentication alpha", () => {
+  it("keeps the floating messenger and draft across pages and its full-section handoff", async () => {
+    mockServer();
+    render(<App />);
+    await loginToWorkspace("aziza", "home");
+    fireEvent.click(screen.getByRole("button", { name: "Открыть мини-мессенджер" }));
+    const mini = await screen.findByRole("dialog", { name: "Мини-мессенджер" });
+    fireEvent.click(within(mini).getByRole("button", { name: /^Финансы и закупки/ }));
+    const editor = await within(mini).findByRole("textbox", { name: "Новое сообщение" });
+    changeField(editor, { target: { value: "Общий черновик" } });
+    fireEvent.click(within(screen.getByRole("navigation")).getByRole("button", { name: /^Задачи/ }));
+    expect(editor).toBeInTheDocument();
+    expect(editor).toHaveTextContent("Общий черновик");
+    fireEvent.click(screen.getByRole("button", { name: "Открыть полный мессенджер" }));
+    await screen.findByRole("region", { name: "Раздел мессенджера" });
+    expect(screen.getByRole("textbox", { name: "Новое сообщение" })).toBe(editor);
+    expect(screen.queryByRole("button", { name: "Открыть мини-мессенджер" })).not.toBeInTheDocument();
+    fireEvent.click(within(screen.getByRole("navigation")).getByRole("button", { name: /^Задачи/ }));
+    await screen.findByRole("button", { name: "Открыть мини-мессенджер" });
+    fireEvent.click(screen.getByRole("button", { name: "Открыть мини-мессенджер" }));
+    await screen.findByRole("dialog", { name: "Мини-мессенджер" });
+    expect(screen.getByRole("textbox", { name: "Новое сообщение" })).toBe(editor);
+  });
   it("uses the real mobile web menu without losing the current section", async () => {
     const server = mockServer();
     const original = server.getMockImplementation()!;

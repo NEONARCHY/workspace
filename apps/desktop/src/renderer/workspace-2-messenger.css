@@ -286,6 +286,29 @@
   line-height: 20px;
 }
 
+.messenger-view .conversation-pane > .message-history {
+  position: relative; display: flex; flex: 1; flex-shrink: 1; min-height: 0; min-width: 0;
+}
+.messenger-view .message-history > .message-scroll { width: 100%; box-sizing: border-box; }
+.messenger-view .message-jump-latest {
+  position: absolute; inset-inline-end: 20px; bottom: 16px; z-index: 3;
+  opacity: 0; transform: translateY(8px); pointer-events: none;
+  transition: opacity 180ms var(--ws-ease-out, ease), transform 180ms var(--ws-ease-out, ease);
+}
+.messenger-view .message-jump-latest.is-visible { opacity: 1; transform: translateY(0); pointer-events: auto; }
+.messenger-view .message-jump-unread {
+  position: absolute; top: -10px; left: 50%; transform: translateX(-50%);
+  min-width: 20px; padding: 1px 5px; border: 2px solid var(--ws-surface); border-radius: 999px;
+  color: var(--ws-surface); background: var(--ws-link); font-size: 11px; font-weight: 600; line-height: 16px;
+  font-variant-numeric: tabular-nums; pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce), (forced-colors: active) {
+  .messenger-view .message-jump-latest { transition: none; }
+}
+@media (forced-colors: active) {
+  .messenger-view .message-jump-unread { color: HighlightText; background: Highlight; border-color: Canvas; forced-color-adjust: none; }
+}
+
 .messenger-view .message-scroll {
   overflow-anchor: none;
   overflow-x: hidden;
@@ -391,6 +414,22 @@
   background: rgb(var(--ws-theme-surface-soft-rgb, 231 239 238) / 0.88);
   font-size: 10px;
   font-variant-numeric: tabular-nums;
+}
+
+.messenger-view .message-unread-divider {
+  display: flex; align-items: center; gap: 12px; margin: 10px 0 14px;
+  color: var(--ws-link); font-size: 12px; font-weight: 600; line-height: 20px;
+  text-align: center;
+}
+.messenger-view .message-unread-divider::before,
+.messenger-view .message-unread-divider::after {
+  content: ""; flex: 1; min-width: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--ws-link) 35%, transparent);
+}
+@media (forced-colors: active) {
+  .messenger-view .message-unread-divider { color: CanvasText; }
+  .messenger-view .message-unread-divider::before,
+  .messenger-view .message-unread-divider::after { border-color: CanvasText; }
 }
 
 .messenger-view .message { position: relative; margin-bottom: 7px; }

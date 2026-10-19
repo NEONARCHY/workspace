@@ -1,0 +1,61 @@
+/* One page scroll owner and one trailing rail. Nested tables, lanes, messages
+   and portal dialogs keep their own native scroll regions. */
+.app-shell {
+  --ws-page-scrollbar-fallback: 6px;
+  --ws-page-scrollbar-width: var(--ws-page-scrollbar-fallback);
+  --ws-page-scrollbar-inset: var(--ws-page-scrollbar-width);
+  --ws-page-scroll-outer-inset: 0px;
+}
+.app-shell .app-stage > .app-content {
+  --ws-page-scroll-edge: max(0px, calc((var(--ws-page-trailing-gutter) - var(--ws-page-scrollbar-width)) / 2));
+  margin-inline-end: var(--ws-page-scroll-edge);
+  padding-inline-end: max(0px, calc(var(--ws-page-scroll-outer-inset) + var(--ws-page-scroll-edge) + var(--ws-page-scrollbar-width) - var(--ws-page-scrollbar-inset)));
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  overscroll-behavior-y: contain;
+}
+html body .app-provider .app-shell .app-stage > .app-content > :is(.workspace-view, .team-dashboard, .telegram-access-view),
+html body .app-provider .app-shell .app-stage > .app-content > div > .survey-analytics {
+  width: auto;
+  margin-inline-end: 0;
+  padding-inline-end: 0;
+  overflow: visible;
+  scrollbar-gutter: auto;
+}
+.app-shell .app-content > :is(.workspace-view, .team-dashboard, .telegram-access-view) > *,
+.app-shell .app-content > div > .survey-analytics > * {
+  margin-inline-end: 0;
+}
+/* These are page composition wrappers, not independent lists. */
+.app-shell .app-content > .tasks-view > :is(.tasks-main, .team-dashboard) {
+  padding-inline-end: 0;
+  overflow: visible;
+  scrollbar-gutter: auto;
+}
+.app-shell .app-content > .tasks-view > .tasks-main > * {
+  margin-inline-end: 0;
+}
+.app-shell .app-content .personal-home-embedded { padding-inline-end: 0; }
+.app-shell .app-content > .members-view .member-inspector { margin-inline-end: 0; }
+.app-shell .app-content > .feed-view { justify-content: end; }
+/* The full messenger may live in a persistent portal; its slot already owns
+   the page rail. Never apply page geometry to the floating mini window. */
+.floating-messenger-panel.is-full-page > .messenger-view { padding-inline-end: 0; }
+/* Use the real work-area width as well as viewport breakpoints. Otherwise a
+   zoomed page can paint fixed metric tracks past the shared content rail. */
+@container workspace (max-width: 720px) {
+  .app-content > .notifications-view .notification-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .app-content > .notifications-view .notification-progress-card { grid-column: auto; }
+  .app-content > .notifications-view .notification-layout { grid-template-columns: minmax(0, 1fr); }
+}
+@media (pointer: coarse) {
+  .app-shell { --ws-page-scrollbar-fallback: 8px; }
+}
+@media (max-width: 1023px), (max-width: 1366px) and (any-pointer: coarse) {
+  .web-platform .app-shell.browser-compact {
+    /* The compact shell already reserves 12px outside the scroll owner. */
+    --ws-page-scroll-outer-inset: max(12px, env(safe-area-inset-right));
+  }
+  .web-platform .app-shell.browser-compact .app-stage > .app-content { --ws-page-scroll-edge: 0px; }
+}

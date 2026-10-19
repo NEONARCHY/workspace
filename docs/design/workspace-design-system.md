@@ -85,6 +85,19 @@ Design read: light enterprise workspace for daily staff use, restrained Fluent U
 
 ## Tokens and components
 
+### Round navigation arrows — 19 October 2026
+
+Icon-only navigation arrows with a backing always use a true circle, not a pill
+or rounded rectangle. Reuse Fluent `Button shape="circular"` with
+`className="ws-navigation-arrow"`: equal36px sides, centered icon, semantic fill,
+native keyboard focus and48px sides for coarse pointers. The shared CSS overrides
+the small icon-only width limit so the global34px minimum height cannot stretch
+the circle into an oval. Home panel header arrows all use this pattern.
+
+Explicitly borderless/backing-free arrows (mini messenger Back), wide labelled
+actions and decorative arrows inside clickable rows are exceptions; do not add
+a second backing to them. This rule applies to new and edited navigation actions.
+
 ### Account settings — 2026-10-04
 
 Account settings deliberately opt out of the previous semantic section washes.

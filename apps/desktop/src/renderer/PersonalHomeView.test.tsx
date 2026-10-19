@@ -46,6 +46,16 @@ function view(userId = "aziza", canView: (key: NavigationKey) => boolean = all, 
   </EmployeeProfileProvider></FluentProvider>;
 }
 describe("Personal Home", () => {
+  it("uses the shared round navigation action for every panel header", async () => {
+    render(view());
+    const arrows = document.querySelectorAll(".home-panel-heading > button[aria-label]");
+    expect(arrows.length).toBeGreaterThanOrEqual(6);
+    for (const arrow of arrows) expect(arrow).toHaveClass("ws-navigation-arrow");
+    expect(screen.getByRole("button", { name: "Мой профиль" })).not.toHaveClass("ws-navigation-arrow");
+    fireEvent.click(screen.getByRole("button", { name: "Открыть центр уведомлений" }));
+    expect(onOpen).toHaveBeenCalledWith({ section: "notifications" });
+    await act(async () => {});
+  });
   it("keeps the page usable immediately even when one integration hangs", async () => {
     vi.useFakeTimers();
     vi.mocked(loadEdoIncomingLetters).mockImplementationOnce(() => new Promise(() => {}));

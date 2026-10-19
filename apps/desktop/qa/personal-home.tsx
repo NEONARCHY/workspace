@@ -6,7 +6,7 @@ import { PersonalHomeView } from "../src/renderer/PersonalHomeView";
 import { EmployeeProfileProvider } from "../src/renderer/EmployeeProfileLink";
 import { InterfaceLocalization } from "../src/renderer/InterfaceLocalization";
 import { ScrollbarEdges } from "../src/renderer/ScrollbarEdges";
-import { workspaceTheme } from "../src/renderer/workspace-theme";
+import { useQaTheme } from "./color-theme";
 import { homeEfficiency, homeFixture, homeRecognition } from "../src/renderer/test-fixtures/personal-home-fixture";
 import { people } from "../src/renderer/test-fixtures/demo-data";
 import { setInterfaceLocale, type Locale } from "@yuksalish/i18n";
@@ -18,6 +18,8 @@ import "../src/renderer/spatial-workspace.css";
 import "../src/renderer/scrollbars.css";
 import "../src/renderer/section-headers.css";
 import "../src/renderer/page-canvas.css";
+import "../src/renderer/dark-theme.css";
+import "../src/renderer/satin-surfaces.css";
 let employeeId = "aziza";
 const originalFetch = window.fetch.bind(window);
 window.fetch = async (input, options) => {
@@ -34,11 +36,12 @@ window.fetch = async (input, options) => {
   return json({ detail: "В тестовой среде этот переход только отмечается" }, 404);
 };
 function Demo() {
+  const theme = useQaTheme();
   const [userId, setUserId] = useState(employeeId), [target, setTarget] = useState("");
   const [restricted, setRestricted] = useState(false), [urgent, setUrgent] = useState(false);
   const base = homeFixture(userId);
   const workspace = urgent ? base : { ...base, tasks: [], notifications: [] };
-  return <FluentProvider theme={workspaceTheme} className="app-provider" style={{ height: "100dvh", display: "flex", flexDirection: "column", background: "transparent" }}>
+  return <FluentProvider theme={theme} className="app-provider" style={{ height: "100dvh", display: "flex", flexDirection: "column", background: "transparent" }}>
     <InterfaceLocalization /><ScrollbarEdges />
     <nav aria-label="Проверочные состояния Главной" style={{ display: "flex", flexWrap: "wrap", gap: 10, padding: "12px 20px", flex: "none" }}>
       <span style={{ alignSelf: "center", fontSize: 12 }}>Тестовые данные · записи в API отключены</span>

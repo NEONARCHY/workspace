@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 
-const selector = '[role="dialog"]:not(.assistant-panel), [role="alertdialog"], dialog[open], .account-scrim, .record-composer-backdrop, .fui-DialogSurface__backdrop';
+const selector = '[role="dialog"]:not(.assistant-panel):not(.floating-messenger-panel), [role="alertdialog"], dialog[open], .account-scrim, .record-composer-backdrop, .fui-DialogSurface__backdrop';
 
 export function hasBlockingDialog() {
   return Array.from(document.querySelectorAll<HTMLElement>(selector))

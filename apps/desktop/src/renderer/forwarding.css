@@ -19,6 +19,55 @@
 .forward-dialog-chats { display: grid; gap: 4px; max-height: 340px; overflow: auto; margin-top: 12px; }
 .forward-dialog-chats button { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px; border: 0; border-radius: 12px; background: transparent; font: inherit; color: inherit; text-align: left; cursor: pointer; }
 .forward-dialog-chats button:hover:not(:disabled) { background: var(--ws-hover, var(--ws-theme-surface-soft, #e9f5f6)); }
+.forward-dialog-chats button { position: relative; }
+.forward-dialog-chats button + button::before { content: ""; position: absolute; top: -2px; left: 62px; right: 10px; height: 1px; background: linear-gradient(90deg, transparent, var(--ws-line) 15%, var(--ws-line) 85%, transparent); }
+.forward-dialog-chats button > .fui-Avatar { flex: none; }
+.conversation-header { position: relative; }
+.conversation-header.has-message-selection > :not(.message-selection-toolbar) { visibility: hidden; pointer-events: none; }
+.message-selection-toolbar { position: absolute; inset: 0; z-index: 3; display: flex; align-items: center; gap: 8px; padding: 10px 16px; box-sizing: border-box; background: var(--ws-surface); }
+.message-selection-toolbar .message-selection-cancel { width: 32px; min-width: 32px; padding: 4px; }
+.message-selection-toolbar[hidden] { display: none; }
+.message-selection-toolbar > span { margin-inline-end: auto; font-size: 13px; }
+.messenger-view .message-row { position: relative; }
+/* Use the bubble's existing left-side clearance, not a permanent rail or a
+   width animation: text wrapping and paint-selection Y coordinates stay fixed. */
+.messenger-view .message.own > .message-content { translate: 0; transition: translate 220ms var(--ws-ease); }
+.messenger-view .message.own.is-selecting > .message-content { translate: -36px; }
+.messenger-view .message-row > .message-select { appearance: none; box-sizing: border-box; position: absolute; right: 4px; bottom: 8px; width: 20px; height: 20px; margin: 0; padding: 0; border: 2px solid var(--ws-muted); border-radius: 50%; background: var(--ws-surface); cursor: pointer; }
+/* Keep the mark painted during exit, but remove it from interaction immediately.
+   Match the bubble's 220ms easing in both directions; no timers or row reflow. */
+.messenger-view .message-row > .message-select { display: block; opacity: 1; visibility: visible; transition: opacity 220ms var(--ws-ease), visibility 0s; }
+.messenger-view .message-row > .message-select[hidden] { display: block; opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 220ms var(--ws-ease), visibility 0s 220ms; }
+@starting-style {
+  .messenger-view .message-row > .message-select:not([hidden]) { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .messenger-view .message.own > .message-content,
+  .messenger-view .message-row > .message-select,
+  .messenger-view .message-row > .message-select[hidden] { transition: none; }
+}
+.messenger-view .message-row > .message-select:checked { border-color: var(--ws-link); background: var(--ws-link); }
+.messenger-view .message-row > .message-select:checked::after { content: ""; position: absolute; left: 5px; top: 2px; width: 4px; height: 8px; border: solid var(--ws-theme-surface, white); border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.messenger-view .message-row > .message-select:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 3px; }
+.messenger-view .message.is-selecting { cursor: pointer; user-select: none; }
+/* Keep the wash mounted after deselection so its opacity can finish fading.
+   The positioned message content paints above it; the wash never takes input. */
+.messenger-view .message-row > .message::before { content: ""; position: absolute; inset: 0; border-radius: 14px; background: color-mix(in srgb, var(--ws-link) 12%, transparent); opacity: 0; pointer-events: none; transition: opacity 220ms var(--ws-ease); }
+.messenger-view .message-row > .message.is-selected::before { opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .messenger-view .message-row > .message::before { transition: none; }
+}
+.message.is-selecting .message-actions, .message.is-selecting .message-reactions { pointer-events: none; visibility: hidden; }
+.messenger-view .chat-list-searchbar { display: flex; align-items: center; gap: 8px; flex: none; }
+.messenger-view .chat-list-searchbar .pane-search { flex: 1; min-width: 0; margin: 0; }
+.chat-list-searchbar > .fui-Button { flex: none; width: 40px; min-width: 40px; height: 40px; padding: 8px; border-radius: 10px; }
+@media (forced-colors: active) {
+  .forward-dialog-chats button + button::before { background: CanvasText; }
+  .message.is-selected { outline: 1px solid Highlight; }
+  .messenger-view .message-row > .message-select { border-color: CanvasText; background: Canvas; forced-color-adjust: none; }
+  .messenger-view .message-row > .message-select:checked { border-color: Highlight; background: Highlight; }
+  .messenger-view .message-row > .message-select:checked::after { border-color: HighlightText; }
+}
 .forward-dialog-chats button > span:last-child { display: grid; gap: 4px; min-width: 0; }
 .forward-dialog-chats strong { overflow-wrap: anywhere; font-size: 14px; }
 .forward-dialog-chats small { color: var(--ws-text-secondary); font-size: 12px; }

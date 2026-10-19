@@ -31,6 +31,11 @@ button:focus-visible, a:focus-visible, select:focus-visible { outline: 2px solid
 .app-provider .fui-Button { font-weight: 600; }
 .app-provider .fui-Badge { font-size: 11px; }
 .app-provider .fui-Button:not(.message-actions .fui-Button):not(.chat-more) { min-height: 34px; }
+/* Icon-only navigation with a backing is always a circle, never a narrow pill. */
+.app-provider .fui-Button.ws-navigation-arrow { --ws-navigation-arrow-size: 36px; flex: none; width: var(--ws-navigation-arrow-size); height: var(--ws-navigation-arrow-size); min-width: var(--ws-navigation-arrow-size); max-width: var(--ws-navigation-arrow-size); padding: 0; border-radius: 50%; background: var(--ws-button-surface, var(--ws-muted-surface)); }
+.app-provider .fui-Button.ws-navigation-arrow:not(:disabled):hover { background: var(--ws-button-hover, var(--colorNeutralBackground3Hover)); }
+.app-provider .fui-Button.ws-navigation-arrow > .fui-Button__icon { margin: 0; }
+@media (any-pointer: coarse) { .app-provider .fui-Button.ws-navigation-arrow { --ws-navigation-arrow-size: 48px; } }
 .app-provider .fui-DialogSurface { border-color: var(--ws-line); border-radius: 20px; box-shadow: 0 20px 64px rgb(41 58 85 / 22%); }
 .app-provider .fui-DialogTitle { color: var(--ws-text); font-size: 22px; font-weight: 700; }
 .app-provider :is(.fui-Field__label, .fui-Label) { font-family: var(--ws-font); }

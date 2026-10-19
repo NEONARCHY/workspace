@@ -130,7 +130,10 @@ async def test_workspace_routes_delegate_to_services(monkeypatch: pytest.MonkeyP
 @pytest.mark.anyio
 async def test_other_routes_delegate_to_services(monkeypatch: pytest.MonkeyPatch) -> None:
     event_bus = SimpleNamespace(publish=AsyncMock())
-    state = SimpleNamespace(event_bus=event_bus, settings=MagicMock(), object_store=MagicMock())
+    state = SimpleNamespace(
+        event_bus=event_bus, settings=MagicMock(), object_store=MagicMock(),
+        object_storage=MagicMock(),
+    )
     request = Request({"type": "http", "app": SimpleNamespace(state=state)})
     user = MagicMock(spec=AuthenticatedUser)
     user.id = uuid4()
@@ -148,3 +151,4 @@ async def test_other_routes_delegate_to_services(monkeypatch: pytest.MonkeyPatch
         )
 
     assert exercised >= 25
+    assert messenger.forward_message.await_args.args[-1] is state.object_storage

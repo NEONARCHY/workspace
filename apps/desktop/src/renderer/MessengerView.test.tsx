@@ -76,6 +76,52 @@ function openMessageMenu(text: string) {
   fireEvent.contextMenu(message);
 }
 
+it.each([false, true])("keeps an unread divider before the captured first unread (system=%s) after mark-read", (system) => {
+  const rects = vi.spyOn(HTMLElement.prototype, "getClientRects").mockReturnValue({ length: 1 } as DOMRectList);
+  const height = vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(600);
+  const messages: ChatMessage[] = [
+    { id: "read-before", chatId: "finance", authorId: "baxtiyor", body: "Уже прочитано", time: "11:00" },
+    { id: "first-unread", chatId: "finance", authorId: "baxtiyor", body: "Новое сообщение", time: "11:01", ...(system ? { systemKind: "member_left" as const } : {}) },
+    { id: "own-between", chatId: "finance", authorId: "aziza", body: "Своё сообщение", time: "11:02" },
+    { id: "next-unread", chatId: "finance", authorId: "baxtiyor", body: "Ещё новое сообщение", time: "11:03" },
+  ];
+  const chats = initialChats.map(chat => ({ ...chat, unread: chat.id === "finance" ? 2 : 0 }));
+  const result = renderMessenger({ messages, chats });
+  const separator = screen.getByRole("separator", { name: "Непрочитанные сообщения" });
+  expect(separator.closest("[data-message-row-id]")).toHaveAttribute("data-message-row-id", "first-unread");
+  expect(separator.nextElementSibling).toHaveAttribute("data-message-id", "first-unread");
+  result.rerender(<FluentProvider theme={webLightTheme}><MessengerView {...result.props} chats={chats.map(chat => ({ ...chat, unread: 0 }))} /></FluentProvider>);
+  expect(screen.getAllByRole("separator", { name: "Непрочитанные сообщения" })).toHaveLength(1);
+  expect(screen.getByRole("separator", { name: "Непрочитанные сообщения" })).toBe(separator);
+  result.unmount(); rects.mockRestore(); height.mockRestore();
+});
+
+it("does not read chats in a closed mini messenger or merely in its list", async () => {
+  const onMarkRead = vi.fn();
+  const result = renderMessenger({ compact: true, visible: false, onMarkRead });
+  expect(onMarkRead).not.toHaveBeenCalled();
+  result.rerender(<FluentProvider theme={webLightTheme}><MessengerView {...result.props} visible /></FluentProvider>);
+  expect(onMarkRead).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: /^Финансы и закупки/ }));
+  await waitFor(() => expect(onMarkRead).toHaveBeenCalledWith("finance"));
+  onMarkRead.mockClear();
+  result.rerender(<FluentProvider theme={webLightTheme}><MessengerView {...result.props} visible={false} /></FluentProvider>);
+  expect(onMarkRead).not.toHaveBeenCalled();
+  result.unmount();
+});
+it("reopens the same focused chat on a new navigation request without remounting its draft", () => {
+  const result = renderMessenger({ compact: true, focusChatId: "finance", focusRevision: 1 });
+  const editor = screen.getByRole("textbox", { name: "Новое сообщение" });
+  changeField(editor, { target: { value: "Повторный переход" } });
+  fireEvent.click(screen.getByRole("button", { name: "К списку чатов" }));
+  expect(document.querySelector(".messenger-view")).not.toHaveClass("conversation-open");
+  result.rerender(<FluentProvider theme={webLightTheme}><MessengerView {...result.props} focusRevision={2} /></FluentProvider>);
+  expect(document.querySelector(".messenger-view")).toHaveClass("conversation-open");
+  expect(screen.getByRole("textbox", { name: "Новое сообщение" })).toBe(editor);
+  expect(editor).toHaveTextContent("Повторный переход");
+  result.unmount();
+});
+
 describe("rich messenger integration", () => {
   afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); window.getSelection()?.removeAllRanges(); });
   const quoted: ChatMessage = { id: "quote-source", chatId: "finance", authorId: "baxtiyor", body: "Альфа 😀 бета гамма", time: "12:00", canPin: true };
@@ -1206,6 +1252,7 @@ describe("Private messenger", () => {
 
   it("shows sent text with blur instead of hiding it behind a particle canvas", async () => {
     const visible = vi.spyOn(HTMLElement.prototype, "getClientRects").mockReturnValue({ length: 1 } as DOMRectList);
+    const height = vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(600);
     const defaults = renderMessenger().props;
     cleanup();
     function Harness() {
@@ -1230,10 +1277,12 @@ describe("Private messenger", () => {
     await waitFor(() => expect(document.querySelector(".composer-send-text")).toBeNull(), { timeout: 2500 });
     expect(message.querySelector(".message-text")).toHaveTextContent("Плавное появление");
     visible.mockRestore();
+    height.mockRestore();
   });
 
   it("reveals remote incoming text with the same blur without a local send or history replay", () => {
     const visible = vi.spyOn(HTMLElement.prototype, "getClientRects").mockReturnValue({ length: 1 } as DOMRectList);
+    const height = vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(600);
     const { props, rerender } = renderMessenger();
     expect(document.querySelector('[data-text-animation="enter"]')).toBeNull();
     const incoming: ChatMessage = { id: "remote-blur", chatId: initialMessages[0]!.chatId, authorId: "other", body: "Входящее сообщение", time: "12:00" };
@@ -1242,6 +1291,7 @@ describe("Private messenger", () => {
     expect(document.querySelector('[data-message-id="remote-blur"] [data-text-animation="enter"]')).not.toBeNull();
     expect(props.onSendMessage).not.toHaveBeenCalled();
     visible.mockRestore();
+    height.mockRestore();
   });
 
   it("restores the draft when an animated send fails", async () => {
@@ -1609,6 +1659,45 @@ describe("Private messenger", () => {
     ));
     expect(onSendMessage).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Переслать сообщение" })).not.toBeInTheDocument());
+  });
+  it.each(["checkbox", "bubble", "keyboard"])("exits selection when the last message is cleared via %s", method => {
+    const messages: ChatMessage[] = [{ id: "last-selection", chatId: "finance", authorId: "aziza", body: "Последнее выбранное", time: "12:00" }];
+    renderMessenger({ messages, onForwardContent: vi.fn() });
+    openMessageMenu(messages[0]!.body);
+    fireEvent.click(screen.getByRole("button", { name: "Выделить" }));
+    expect(screen.getByRole("region", { name: "Выделенные сообщения" })).toHaveTextContent("Выбрано: 1");
+    const bubble = document.querySelector('[data-message-id="last-selection"]')!;
+    if (method === "checkbox") fireEvent.click(screen.getByRole("checkbox", { name: "Выделить сообщение: Последнее выбранное" }));
+    else if (method === "keyboard") fireEvent.keyDown(bubble, { key: " " });
+    else fireEvent.click(bubble);
+    expect(screen.queryByRole("region", { name: "Выделенные сообщения" })).not.toBeInTheDocument();
+    expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
+    expect(document.querySelector(".has-message-selection, .message.is-selecting, .message.is-selected")).toBeNull();
+    openMessageMenu(messages[0]!.body);
+    fireEvent.click(screen.getByRole("button", { name: "Выделить" }));
+    expect(screen.getByRole("region", { name: "Выделенные сообщения" })).toHaveTextContent("Выбрано: 1");
+  });
+  it("selects several messages, keeps them on dialog cancellation and forwards in chat order", async () => {
+    const onForwardContent = vi.fn().mockResolvedValue({ id: "forwarded" });
+    const messages: ChatMessage[] = [
+      { id: "first", chatId: "finance", authorId: "dilshod", body: "Первое с фото", time: "12:00" },
+      { id: "second", chatId: "finance", authorId: "aziza", body: "Второе сообщение", time: "12:01" },
+    ];
+    renderMessenger({ messages, onForwardContent });
+    expect(screen.queryByRole("heading", { name: "Сообщения" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Создать группу" })).toBeInTheDocument();
+    openMessageMenu(messages[1]!.body);
+    fireEvent.click(screen.getByRole("button", { name: "Выделить" }));
+    expect(screen.getByRole("checkbox", { name: "Выделить сообщение: Второе сообщение" })).toBeChecked();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Выделить сообщение: Первое с фото" }));
+    fireEvent.click(screen.getByRole("button", { name: "Переслать выбранные" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Переслать сообщения" })).getByRole("button", { name: "Отмена" }));
+    expect(screen.getByRole("region", { name: "Выделенные сообщения" })).toHaveTextContent("Выбрано: 2");
+    fireEvent.click(screen.getByRole("button", { name: "Переслать выбранные" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Переслать сообщения" })).getByRole("button", { name: /Бахтиёр Самугов/ }));
+    await waitFor(() => expect(onForwardContent).toHaveBeenCalledTimes(2));
+    expect(onForwardContent.mock.calls.map(call => call[1].id)).toEqual(["first", "second"]);
+    await waitFor(() => expect(screen.queryByRole("region", { name: "Выделенные сообщения" })).not.toBeInTheDocument());
   });
 
   it.each(["voice", "forwarded", "text"])("keeps the %s timestamp separate from content and compact for voice", kind => {

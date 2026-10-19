@@ -14,6 +14,7 @@ const addWindow = (className: string) => {
 };
 it("ignores the assistant's own panel and pauses until all foreign windows close", async () => {
   const assistant = addWindow("assistant-panel");
+  const messenger = addWindow("floating-messenger-panel");
   render(<WindowState />);
   expect(screen.getByText("running")).toBeInTheDocument();
   const first = addWindow("fui-DialogSurface");
@@ -24,6 +25,7 @@ it("ignores the assistant's own panel and pauses until all foreign windows close
   second.remove();
   await screen.findByText("running");
   assistant.remove();
+  messenger.remove();
 });
 it("reacts to hidden state and custom composer backdrops", async () => {
   render(<WindowState />);
