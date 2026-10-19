@@ -29,3 +29,18 @@ TEST release: continue compatibility branch `fix/messenger-launcher-visibility-t
 schema0102 and all non-web containers. Do not merge compatibility into main.
 Prior TEST2.0.061 / localtest-20261019-launcher-visibility-d1c85c0b.
 Office server, API, database, EXE and real messages must remain untouched.
+
+## Delivered TEST
+
+Web2.0.062 / `localtest-20261019-paint-selection-3eaf3459`, built
+2026-10-19T09:13:51.569Z from compatibility3eaf3459 (source e8b03e1f).
+Root, version and API readiness returned200. Only web changed (4230e268b25e);
+all nine non-web container IDs remained unchanged. Schema0102_merge_leave_task;
+users3/tasks1/messages133 before and after. No migrations or office/EXE update.
+Rollback image: `yuksalish-localtest-web:pre-paint-selection-20261019` (2.0.061).
+
+The paint-selection browser suite passed again on compatibility before release;
+the floating messenger8-case matrix passed too. These are synthetic fixture tests,
+not a manual check of a real user's account. No push, PR, merge or CI was run.
+Vite helper on127.0.0.1:5178 stopped after checks. Continue main development on
+`fix/messenger-paint-selection`; do not merge the TEST compatibility branch.
