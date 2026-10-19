@@ -288,15 +288,26 @@ html[data-color-theme="dark"] .ai-referent-register-actions .ai-referent-registe
   padding: 2px 4px 8px 1px;
 }
 .ai-referent-view .ai-referent-row {
-  grid-template-columns: minmax(112px, .8fr) minmax(220px, 2.4fr) minmax(100px, .8fr) minmax(110px, .8fr) minmax(120px, .9fr) 18px;
-  gap: 12px;
-  min-height: 60px;
+  grid-template-columns: minmax(120px, .95fr) minmax(220px, 2.1fr) minmax(110px, 1fr) minmax(110px, 1fr) minmax(130px, .95fr) 18px;
+  align-items: center;
+  gap: 14px;
+  min-height: 64px;
   padding: 8px 14px;
   border-color: var(--ws-theme-line, #e6edef);
   border-radius: 16px;
   background: var(--ws-theme-surface, #fff);
   box-shadow: 0 6px 18px -18px rgb(28 65 76 / 42%);
 }
+.ai-referent-view .ai-referent-row-person { align-content: center; }
+.ai-referent-view .ai-referent-row-person > small,
+.ai-referent-view .ai-referent-row-person > .employee-profile-link {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ai-referent-view .ai-referent-row-person > .employee-profile-link { display: block; }
+.ai-referent-view .ai-referent-row > svg:last-child { justify-self: end; }
 .ai-referent-row-main strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
 .ai-referent-row-main small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ai-referent-view .ai-referent-row:hover,

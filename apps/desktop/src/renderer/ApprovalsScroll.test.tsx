@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApprovalsView } from "./ApprovalsView";
 
@@ -8,6 +8,18 @@ function Surface() {
 }
 afterEach(cleanup);
 describe("Payment board input integration", () => {
+  it("replaces the summary strip with status filters in the navigation row", () => {
+    render(<Surface />);
+    expect(document.querySelector(".approval-metrics")).toBeNull();
+    const filters = screen.getByRole("group", { name: "Фильтр заявок" });
+    for (const label of ["Все", "Нужно моё решение", "В работе", "Доработка", "Просрочено", "Завершённые"]) {
+      expect(within(filters).getByRole("button", { name: label })).toBeInTheDocument();
+    }
+    const overdue = within(filters).getByRole("button", { name: "Просрочено" });
+    fireEvent.click(overdue);
+    expect(overdue).toHaveAttribute("aria-pressed", "true");
+  });
+
   it("attaches wheel handling after switching list back to Kanban and leaves middle clicks native", () => {
     render(<Surface />);
     const board = screen.getByRole("region", { name: "Доска заявок по стадиям" });
