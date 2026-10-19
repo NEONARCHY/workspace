@@ -3,6 +3,19 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 describe("web API addresses and session restore", () => {
   const defaultBridge = window.yuksalish;
   const cookieDescriptor = Object.getOwnPropertyDescriptor(Document.prototype, "cookie");
+  it("loads the personal signature inbox and does not fall back to the general registry on an old server", async () => {
+    window.yuksalish = undefined;
+    const fetchMock = vi.fn().mockResolvedValueOnce(Response.json({ letters: [], totalCount: 0 }))
+      .mockResolvedValueOnce(Response.json({ detail: "Not Found" }, { status: 404 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const api = await import("./workspace-api");
+    await api.loadSignatureInbox("signature-token", 20);
+    const [url, options] = fetchMock.mock.calls[0]! as [string, RequestInit];
+    expect(url).toContain("/ai-referent/signature-inbox?offset=20");
+    expect(new Headers(options.headers).get("Authorization")).toBe("Bearer signature-token");
+    await expect(api.loadSignatureInbox("signature-token")).rejects.toThrow();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
   it("rejects a malformed proposal list instead of crashing the tasks screen", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ tasks: [] })));
     const api = await import("./workspace-api");

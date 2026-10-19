@@ -61,7 +61,7 @@ export function tripBriefPreview(facts: TripBriefFacts): string {
   const activity = toLatin(clean(facts.purpose)).replace(/[.!?]+$/u, "");
   const funding = toLatin(clean(facts.expenseSource));
   return [
-    `${datePhrase(facts.startDate, facts.endDate)} ${place} hududiga xizmat safari rejalashtirilgan. Safar davomida ${activity}.`,
+    `${datePhrase(facts.startDate, facts.endDate)} ${place} hududiga xizmat safari rejalashtirilgan. Safarning maqsadi: ${activity}.`,
     "Shu munosabat bilan mazkur xizmat safariga ruxsat berishingizni soʻrayman.",
     `Safar xarajatlarini qoplash manbai: ${funding}.`,
   ].join("\n\n");

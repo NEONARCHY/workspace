@@ -6,6 +6,7 @@ import { disposeTabster, getTabster } from "tabster";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type {
+  AIReferentLetter,
   SurveyAnalysisDetail,
   ApprovalRequestSummary,
   CalendarEvent,
@@ -37,6 +38,7 @@ import "./CalendarView";
 import "./SurveyAnalyticsView";
 import "./EmployeesView";
 import "./TasksView";
+import "./AIReferentView";
 
 function render(element: ReactElement) {
   // Each scenario models a new app session. A shared Griffel renderer retains
@@ -455,6 +457,18 @@ function mockServer(
     }
     if (url.endsWith("/home/reactions")) return response({ totalCount: 0, reactions: [] });
     if (url.endsWith("/project-hub")) return response({ projects: [], workstreams: [], items: [], requests: [] });
+    if (url.endsWith("/ai-referent/reviewers")) return response({ reviewers: [], revision: 1, runtimes: [], updatedAt: "2026-10-19T08:00:00Z" });
+    if (url.endsWith("/ai-referent/visibility")) return response({ incomingMode: "none", canViewJournals: false, canManageVisibility: false });
+    if (url.includes("/ai-referent/signature-inbox") || url.endsWith("/ai-referent/letters/qa-signature") || url.includes("/ai-referent/letters?")) {
+      const letter: AIReferentLetter = {
+        id: "qa-signature", subject: "Письмо из обзора команды", recipientOrganization: "Партнёр", recipientAddress: "partner@example.test",
+        route: "webmail", note: "", workflowKind: "delivery", status: "pending_review", source: "workspace",
+        createdByUserId: people[0]!.id, createdByName: people[0]!.name, reviewerUserId: currentUser.id,
+        revision: 1, createdAt: "2026-10-19T08:00:00Z", updatedAt: "2026-10-19T08:00:00Z",
+        attachments: [], events: [], availableActions: ["approve", "return_for_revision"], canEdit: false,
+      };
+      return response(url.endsWith("/qa-signature") ? letter : { letters: [letter], totalCount: 1, pendingReviewCount: 1, readyCount: 0, sentCount: 0, signedCount: 0 });
+    }
     if (url.includes("/ai-referent/incoming") || url.includes("/incoming-letters")) {
       return response({ detail: "Интеграция не подключена" }, 503);
     }
@@ -1728,6 +1742,19 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.click(paymentCard);
     fireEvent.click(within(screen.getByRole("region", { name: "Заявки на оплату, ожидающие решения" })).getByRole("button", { name: /Оплата по субсидии/ }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Заявки на оплату" })).toHaveAttribute("aria-current", "page"));
+  });
+
+  it("opens the chairman's signature letter from the sixth team metric", async () => {
+    mockServer({ chairmanLogin: true });
+    render(<App />);
+    await loginToWorkspace("malika", "home");
+    const metrics = screen.getByRole("region", { name: "Ключевые показатели команды" });
+    const signatures = within(metrics).getByRole("button", { name: /Письма на подпись/ });
+    await waitFor(() => expect(signatures).toHaveTextContent("1"));
+    expect(within(metrics).getAllByRole("button")).toHaveLength(6);
+    fireEvent.click(signatures);
+    fireEvent.click(within(screen.getByRole("region", { name: "Письма, ожидающие вашей подписи" })).getByRole("button", { name: /Письмо из обзора команды/ }));
+    expect(await screen.findByRole("dialog", { name: /Письмо из обзора команды/ })).toBeInTheDocument();
   });
 
   it("finds employees without changing their roles or selected record", async () => {

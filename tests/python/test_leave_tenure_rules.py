@@ -6,7 +6,11 @@ import pytest
 from pydantic import ValidationError
 
 from yuksalish_api.leave_service import _eligible_days
-from yuksalish_api.workspace_schemas import LeaveTenureRule, LeaveTenureRulesWrite
+from yuksalish_api.workspace_schemas import (
+    LeaveHrDecisionRequest,
+    LeaveTenureRule,
+    LeaveTenureRulesWrite,
+)
 
 
 def test_extra_days_start_only_after_each_organization_anniversary() -> None:
@@ -26,3 +30,21 @@ def test_hr_cannot_save_unsorted_or_nonincreasing_thresholds() -> None:
             LeaveTenureRule(after_years=10, extra_days=4),
             LeaveTenureRule(after_years=5, extra_days=2),
         ])
+
+
+def test_february_hire_uses_the_same_anniversary_in_leap_and_nonleap_years() -> None:
+    rules = [LeaveTenureRule(after_years=4, extra_days=2)]
+    assert _eligible_days(date(2020, 2, 29), date(2024, 2, 29), rules) == 0
+    assert _eligible_days(date(2020, 2, 29), date(2024, 3, 1), rules) == 2
+    rules = [LeaveTenureRule(after_years=5, extra_days=2)]
+    assert _eligible_days(date(2020, 2, 29), date(2025, 2, 28), rules) == 0
+    assert _eligible_days(date(2020, 2, 29), date(2025, 3, 1), rules) == 2
+
+
+@pytest.mark.parametrize(("calendar_days", "paid_days"), [(21, 22), (24, 18)])
+def test_hr_cannot_send_inconsistent_day_counts(calendar_days: int, paid_days: int) -> None:
+    with pytest.raises(ValidationError):
+        LeaveHrDecisionRequest(
+            action="approve", starts_on=date(2030, 1, 1), ends_on=date(2030, 1, 21),
+            calendar_days=calendar_days, paid_days=paid_days,
+        )

@@ -7,7 +7,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
-from sqlalchemy import String, and_, cast, func, insert, or_, select, update
+from sqlalchemy import String, and_, cast, false, func, insert, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncConnection
@@ -558,6 +558,7 @@ async def load_letters(
     workflow_kind: str | None = None,
     active_only: bool = False,
     history_only: bool = False,
+    awaiting_my_signature: bool = False,
     offset: int = 0,
     limit: int = 50,
 ) -> AIReferentRegistryResponse:
@@ -580,6 +581,15 @@ async def load_letters(
         )
     )
     permissions = await module_permissions_for_user(connection, current_user)
+    if awaiting_my_signature:
+        # Scope before counting/pagination, even for administrators. A future final
+        # reviewer is not the current reviewer until the previous step approves.
+        statement = statement.where(
+            ai_referent_letters.c.status == "pending_review",
+            ai_referent_letters.c.reviewer_user_id == current_user.id,
+        )
+        if not permissions.get("ai_referent", {}).get("approve", False):
+            statement = statement.where(false())
     if history_only:
         statement = statement.where(ai_referent_letters.c.status == "sent")
         if not (

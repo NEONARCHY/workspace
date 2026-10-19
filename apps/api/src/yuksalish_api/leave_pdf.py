@@ -46,8 +46,11 @@ def _text(value: str) -> str:
     return escape(" ".join(value.split()))
 
 
-def _date(value: date) -> str:
-    return f"{value.year} йил {value.day} {_MONTHS[value.month - 1]}"
+def _date(value: date, suffix: str = "") -> str:
+    month = _MONTHS[value.month - 1]
+    if suffix:
+        month = month.removesuffix("ь")
+    return f"{value.year} йил {value.day} {month}{suffix}"
 
 
 def _style(
@@ -111,7 +114,7 @@ def _application_page(canvas: Canvas, document: object) -> None:
     canvas.restoreState()
 
 
-def _build(story: list[object], title: str, *, order: bool) -> bytes:
+def _build(story: list[object], title: str, *, order: bool, draft: bool = False) -> bytes:
     _fonts()
     output = BytesIO()
     document = SimpleDocTemplate(
@@ -123,7 +126,13 @@ def _build(story: list[object], title: str, *, order: bool) -> bytes:
         bottomMargin=74,
         title=title,
     )
-    page = _order_page if order else _application_page
+    def page(canvas: Canvas, document: object) -> None:
+        (_order_page if order else _application_page)(canvas, document)
+        if draft:
+            canvas.saveState()
+            canvas.setFont("TripSerifBold", 9)
+            canvas.drawString(65, 50, "ЛОЙИҲА — ИМЗОЛАНМАГАН")
+            canvas.restoreState()
     document.build(story, onFirstPage=page, onLaterPages=page)
     return output.getvalue()
 
@@ -178,7 +187,7 @@ def application_pdf(
     if not lines:
         story.append(
             Paragraph(
-                f"Менга {_date(requested_start)}дан меҳнат таътилига чиқишга "
+                f"Менга {_date(requested_start, 'дан')} меҳнат таътилига чиқишга "
                 "рухсат беришингизни сўрайман.",
                 body,
             )
@@ -186,8 +195,8 @@ def application_pdf(
     story.extend(
         [
             Paragraph(
-                f"Сўралган муддат: {_date(requested_start)}дан "
-                + (f"{_date(requested_end)}гача." if requested_end else "бошлаб."),
+                f"Сўралган муддат: {_date(requested_start, 'дан')} "
+                + (f"{_date(requested_end, 'гача')}." if requested_end else "бошлаб."),
                 body,
             ),
             Spacer(1, 34),
@@ -259,7 +268,6 @@ def order_pdf(
         else "Бухгалтерия бўлими "
     )
     story: list[object] = [
-        *([Paragraph("ЛОЙИҲА — ИМЗОЛАНМАГАН", centered)] if signature is None else []),
         Paragraph("БУЙРУҚ", centered),
         Paragraph(f"{_text(number)}-сон а/ф", centered),
         Spacer(1, 8),
@@ -276,7 +284,7 @@ def order_pdf(
             f"учун {calendar_days} календарь кундан иборат меҳнат таътили "
             + (f"(шу жумладан ташкилотдаги иш стажи учун {tenure_additional_days} кун) "
                if tenure_additional_days else "")
-            + f"{_date(starts_on)}дан {_date(ends_on)}гача берилсин.", body,
+            + f"{_date(starts_on, 'дан')} {_date(ends_on, 'гача')} берилсин.", body,
         ),
         Paragraph("2. " + _text(order_clause_2) if order_clause_2 else
                   f"2. Ишга чиқиш санаси – {_date(return_on)} куни этиб белгилансин.", body),
@@ -298,11 +306,12 @@ def order_pdf(
                 Paragraph("Ижрочи директор", bold),
                 _signature_image(signature)
                 if signature is not None
-                else Paragraph("Имзо йўқ", bold),
+                else Spacer(1, 55),
                 Paragraph(_text(signer_name), right),
             ]
         ],
         colWidths=[145, 145, 175],
+        minRowHeights=[55],
         style=TableStyle(
             [
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
@@ -311,5 +320,6 @@ def order_pdf(
             ]
         ),
     )
-    story.append(KeepTogether([signature_row]))
-    return _build(story, "Меҳнат таътили ҳақида буйруқ", order=True)
+    # Keep the legal basis with its signature block even for long edited clauses.
+    story[-4:] = [KeepTogether([*story[-4:], signature_row])]
+    return _build(story, "Меҳнат таътили ҳақида буйруқ", order=True, draft=signature is None)

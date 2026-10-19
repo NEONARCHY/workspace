@@ -355,6 +355,10 @@ export function loadAIReferentRegistry(
   return apiRequest<AIReferentRegistry>(`/ai-referent/letters${suffix}`, {}, token);
 }
 
+export function loadSignatureInbox(token: string, offset = 0): Promise<AIReferentRegistry> {
+  return apiRequest<AIReferentRegistry>(`/ai-referent/signature-inbox?offset=${offset}`, {}, token);
+}
+
 export function loadAIReferentRecipients(
   token: string,
   filters: { readonly query?: string; readonly category?: string; readonly offset?: number; readonly limit?: number } = {},

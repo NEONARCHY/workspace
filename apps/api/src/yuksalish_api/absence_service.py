@@ -11,6 +11,7 @@ from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from .auth import AuthenticatedUser
+from .employee_availability import lock_employee_schedules
 from .tables import (
     absence_request_actions,
     absence_requests,
@@ -184,8 +185,9 @@ async def _ensure_no_conflict(
     excluded: UUID | None = None,
 ) -> None:
     local = ZoneInfo("Asia/Tashkent")
+    await lock_employee_schedules(connection, [user_id])
     starts_on = starts_at.astimezone(local).date()
-    ends_on = ends_at.astimezone(local).date()
+    ends_on = (ends_at - timedelta(microseconds=1)).astimezone(local).date()
     condition = [
         absence_requests.c.requester_user_id == user_id,
         absence_requests.c.status.in_(("pending", "approved", "acknowledged")),
@@ -207,7 +209,7 @@ async def _ensure_no_conflict(
         .where(
             trip_requests.c.id.in_(trip_ids),
             trip_requests.c.status == "approved",
-            trip_requests.c.start_date < ends_on,
+            trip_requests.c.start_date <= ends_on,
             trip_requests.c.end_date >= starts_on,
         )
         .limit(1)

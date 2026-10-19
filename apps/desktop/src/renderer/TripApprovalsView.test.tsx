@@ -176,7 +176,7 @@ describe("Trip approvals interaction", async () => {
     fireEvent.change(screen.getByRole("combobox", { name: "Куда едем" }), { target: { value: "Термиз" } });
     fireEvent.change(screen.getByRole("textbox", { name: "Основание и мероприятие" }), { target: { value: "Yuridik klinika ishtirokchilari sayyor qabul o'tkazadi" } });
     fireEvent.change(screen.getByRole("textbox", { name: "Источник покрытия расходов" }), { target: { value: "KAS loyihasi mablagʻlari" } });
-    expect(screen.getByText(/Safar davomida Yuridik klinika/)).toBeInTheDocument();
+    expect(screen.getByText(/Safarning maqsadi: Yuridik klinika/)).toBeInTheDocument();
     expect(onCreate).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
     await waitFor(() => expect(screen.getByText("bildirgi-preview.pdf")).toBeInTheDocument());
@@ -199,7 +199,7 @@ describe("Trip approvals interaction", async () => {
     fireEvent.change(screen.getByRole("textbox", { name: "Источник покрытия расходов" }), { target: { value: "KAS loyihasi mablagʻlari" } });
     fireEvent.click(screen.getByRole("button", { name: "Редактировать текст" }));
     const editor = screen.getByRole("textbox", { name: "Редактируемый текст билдирги" });
-    expect((editor as HTMLTextAreaElement).value).toContain("Safar davomida");
+    expect((editor as HTMLTextAreaElement).value).toContain("Safarning maqsadi:");
     fireEvent.change(editor, { target: { value: "test" } });
     fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
     expect(screen.getAllByText(/Проверьте текст билдирги/u).length).toBeGreaterThan(0);
@@ -208,7 +208,9 @@ describe("Trip approvals interaction", async () => {
     expect(screen.queryByRole("textbox", { name: "Редактируемый текст билдирги" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Редактировать текст" }));
     const reviewed = (screen.getByRole("textbox", { name: "Редактируемый текст билдирги" }) as HTMLTextAreaElement).value
-      .replace("Safar davomida", "Safar doirasida");
+      .replace("Safarning maqsadi:", "Safar maqsadi:");
+    expect(reviewed).toContain("Safar maqsadi:");
+    expect(reviewed).not.toContain("Safarning maqsadi:");
     fireEvent.change(screen.getByRole("textbox", { name: "Редактируемый текст билдирги" }), { target: { value: reviewed } });
     fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
     await waitFor(() => expect(onCreate).toHaveBeenCalledWith(expect.objectContaining({

@@ -9,7 +9,13 @@ from io import BytesIO
 from PIL import Image, ImageDraw
 from pypdf import PdfReader
 
-from yuksalish_api.leave_pdf import application_pdf, order_pdf
+from yuksalish_api.leave_pdf import _date, application_pdf, order_pdf
+
+
+def test_month_endings_follow_uzbek_suffixes() -> None:
+    assert _date(date(2026, 10, 19), "дан") == "2026 йил 19 октябрдан"
+    assert _date(date(2026, 11, 8), "гача") == "2026 йил 8 ноябргача"
+    assert _date(date(2026, 5, 1), "дан") == "2026 йил 1 майдан"
 
 
 def _signature() -> bytes:

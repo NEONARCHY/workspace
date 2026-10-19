@@ -15,13 +15,14 @@ from yuksalish_api import repository, trip_document_service
 from yuksalish_api.auth import AuthenticatedUser
 from yuksalish_api.errors import WorkspaceRepositoryError
 from yuksalish_api.repository import (
+    _can_delete_trip,
     _trip_allowed_actions,
     _trip_deputy_user_id,
     act_on_trip_request,
     delete_trip_request,
 )
 from yuksalish_api.trip_document_service import validate_attachment
-from yuksalish_api.trip_order_pdf import brief_pdf, order_pdf
+from yuksalish_api.trip_order_pdf import _signature_image, brief_pdf, order_pdf
 from yuksalish_api.workspace_schemas import CreateTripRequest, TripActionRequest
 
 
@@ -35,6 +36,21 @@ def signature() -> bytes:
 
 def text_of(content: bytes) -> str:
     return " ".join(page.extract_text() for page in PdfReader(BytesIO(content)).pages)
+
+
+@pytest.mark.parametrize("size", [(90, 240), (300, 90), (600, 40)])
+def test_signature_preserves_ink_proportions_inside_the_signature_cell(
+    size: tuple[int, int],
+) -> None:
+    image = Image.new("RGBA", size, (0, 0, 0, 0))
+    ImageDraw.Draw(image).rectangle((10, 10, size[0] - 11, size[1] - 11), fill="blue")
+    output = BytesIO()
+    image.save(output, "PNG")
+    placed = _signature_image(output.getvalue())
+    assert placed.drawWidth <= 122 and placed.drawHeight <= 55
+    assert placed.drawWidth / placed.drawHeight == pytest.approx(
+        (size[0] - 20) / (size[1] - 20),
+    )
 
 
 def test_employee_cover_and_chair_order_keep_separate_signatures() -> None:
@@ -160,6 +176,35 @@ def test_requester_and_superadmin_can_withdraw_or_annul_but_others_cannot() -> N
     assert _trip_allowed_actions(approved, superadmin) == ["annul"]
     assert _trip_allowed_actions(approved, stranger) == []
     assert _trip_allowed_actions(approved | {"status": "annulled"}, superadmin) == []
+    assert _trip_allowed_actions(row | {"order_pdf_key": "orders/signed.pdf"}, requester) == []
+    legacy = row | {"workflow_version": 1}
+    assert _trip_allowed_actions(legacy, requester) == []
+    assert _trip_allowed_actions(legacy, superadmin) == ["withdraw"]
+
+
+def test_superadmin_can_archive_rejected_or_annulled_trip_after_the_decision() -> None:
+    request_id, requester_id, superadmin_id = uuid4(), uuid4(), uuid4()
+    requester = AuthenticatedUser(requester_id, "requester", "Requester", None, None, "employee")
+    superadmin = AuthenticatedUser(
+        superadmin_id, "root", "Root", None, None, "superadmin",
+    )
+    for status, stage in (("rejected", "rejected"), ("annulled", "approved")):
+        row = {
+            "id": request_id, "requester_user_id": requester_id,
+            "stage": stage, "status": status,
+        }
+        assert _can_delete_trip(row, superadmin)
+        assert not _can_delete_trip(row, requester)
+        connection = AsyncMock()
+        result = MagicMock()
+        result.mappings.return_value.first.return_value = row
+        connection.execute.return_value = result
+        asyncio.run(delete_trip_request(connection, superadmin, request_id))
+        assert connection.execute.await_count == 4
+    assert not _can_delete_trip(
+        {"requester_user_id": requester_id, "stage": "approved", "status": "approved"},
+        superadmin,
+    )
 
 
 def test_delete_trip_is_soft_and_requires_editable_stage() -> None:
@@ -619,6 +664,7 @@ def test_order_is_not_generated_without_registered_number(
     user = AuthenticatedUser(chair_id, "chair", "Chair", None, None, "employee")
     monkeypatch.setattr(trip_document_service, "_row", AsyncMock(return_value={
         "workflow_version": 2,
+        "start_date": date(2026, 10, 22), "end_date": date(2026, 10, 23),
         "stage": "manager_approval",
         "signed_brief_key": "brief.pdf",
         "signed_brief_sha256": "brief-hash",
@@ -629,6 +675,7 @@ def test_order_is_not_generated_without_registered_number(
     ))
     monkeypatch.setattr(trip_document_service, "_verified", AsyncMock(return_value=b"image"))
     monkeypatch.setattr(trip_document_service, "_people", AsyncMock(return_value=[]))
+    monkeypatch.setattr(trip_document_service, "ensure_trip_available", AsyncMock())
     connection = AsyncMock()
     connection.execute.return_value = MagicMock()
     connection.execute.return_value.mappings.return_value.first.return_value = {

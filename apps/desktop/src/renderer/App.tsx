@@ -2394,6 +2394,10 @@ export function App() {
                     setActiveSection("tasks");
                   }}
                   paymentRequests={canView("payment_requests") && workspace.workflow ? workspace.requests : []}
+                  onSelectSignatureLetter={canView("ai_referent") ? (letterId) => {
+                    setFocusTarget((current) => ({ section: "ai_referent", entityId: letterId, revision: (current?.revision ?? 0) + 1 }));
+                    setActiveSection("ai_referent");
+                  } : undefined}
                   onSelectPaymentRequest={canView("payment_requests") && workspace.workflow ? (requestId) => {
                     setFocusTarget((current) => ({ section: "payment_requests", entityId: requestId, revision: (current?.revision ?? 0) + 1 }));
                     setActiveSection("payment_requests");

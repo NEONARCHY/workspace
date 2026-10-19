@@ -95,19 +95,27 @@ def _signature_image(content: bytes) -> Image:
     output = BytesIO()
     rgba.save(output, format="PNG")
     output.seek(0)
-    width = 122.0
-    height = min(55.0, width * rgba.height / rgba.width)
+    scale = min(122.0 / rgba.width, 55.0 / rgba.height)
+    width, height = rgba.width * scale, rgba.height * scale
     return Image(output, width=width, height=height, hAlign="LEFT")
 
 
-def _build(story: list[object]) -> bytes:
+def _build(story: list[object], *, draft: bool = False) -> bytes:
     _fonts()
     output = BytesIO()
     document = SimpleDocTemplate(
         output, pagesize=A4, leftMargin=58, rightMargin=58,
         topMargin=130, bottomMargin=62, title="Yuksalish xizmat safari",
     )
-    document.build(story, onFirstPage=_page, onLaterPages=_page)
+    def page(canvas: Canvas, document: object) -> None:
+        _page(canvas, document)
+        if draft:
+            canvas.saveState()
+            canvas.setFont("TripSerifBold", 9)
+            canvas.drawString(58, 35, "LOYIHA — IMZOLANMAGAN")
+            canvas.restoreState()
+
+    document.build(story, onFirstPage=page, onLaterPages=page)
     return output.getvalue()
 
 
@@ -181,8 +189,8 @@ def order_pdf(
     right.alignment = 2
     month = _MONTHS[issued.month - 1]
     period = (
-        f"{start.day} {_MONTHS[start.month - 1]} kuni" if start == end
-        else f"{start.day}-{end.day} {_MONTHS[start.month - 1]} kunlari"
+        f"{start.year}-yil {start.day} {_MONTHS[start.month - 1]} kuni" if start == end
+        else f"{start.year}-yil {start.day}-{end.day} {_MONTHS[start.month - 1]} kunlari"
         if start.month == end.month and start.year == end.year
         else f"{start:%d.%m.%Y} - {end:%d.%m.%Y} kunlari"
     )
@@ -209,12 +217,12 @@ def order_pdf(
         name, job_title = employees[0]
         person = f"{_text(job_title)} {_text(name)}" if job_title else _text(name)
         story.append(Paragraph(
-            f"1. Harakatning {person} joriy yilning {period} "
+            f"1. Harakatning {person} {period} "
             f"{_text(destination)}ga xizmat safariga yuborilsin.", body,
         ))
     else:
         story.append(Paragraph(
-            f"1. Harakatning quyidagi xodimlari joriy yilning {period} "
+            f"1. Harakatning quyidagi xodimlari {period} "
             f"{_text(destination)}ga xizmat safariga yuborilsin:", body,
         ))
         for index, (name, job_title) in enumerate(employees, start=1):
@@ -226,19 +234,18 @@ def order_pdf(
             f"{_text(expense_source)} hisobidan qoplanishi maʼlumot uchun qabul qilinsin.",  # noqa: RUF001
             body,
         ))
-    story.extend([
-        Spacer(1, 12),
-        Paragraph(f"Asos: {_text(requester)}ning bildirgisi.", body),
-        Spacer(1, 24),
-    ])
-    signature_cell: object = _signature_image(signature) if signature is not None else Spacer(1, 50)
+    signature_cell: object = _signature_image(signature) if signature is not None else Spacer(1, 55)
     signature_row = Table([[
         Paragraph("Rais", bold), signature_cell, Paragraph(_text(chair), right),
-    ]], colWidths=[150, 150, 178])
+    ]], colWidths=[150, 150, 178], minRowHeights=[55])
     signature_row.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("LEFTPADDING", (0, 0), (-1, -1), 0),
         ("RIGHTPADDING", (0, 0), (-1, -1), 0),
     ]))
-    story.append(KeepTogether([signature_row]))
-    return _build(story)
+    # A continuation page must contain a substantive clause, not only a signature.
+    story.append(KeepTogether([
+        story.pop(), Spacer(1, 12), Paragraph(f"Asos: {_text(requester)}ning bildirgisi.", body),
+        Spacer(1, 24), signature_row,
+    ]))
+    return _build(story, draft=signature is None)
