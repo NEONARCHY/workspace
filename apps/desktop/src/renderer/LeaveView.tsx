@@ -30,6 +30,7 @@ type HrForm = {
 };
 
 const example = "Менга йиллик меҳнат таътили беришингизни сўрайман.";
+const applicationAddressee = "«Юксалиш» ҳаракати раисининг биринчи ўринбосари — ижрочи директор";
 const initialHr: HrForm = {
   startsOn: "", endsOn: "", workYearStartsOn: "", workYearEndsOn: "",
   calendarDays: "", paidDays: "", returnOn: "", accountingOfficer: "",
@@ -142,6 +143,8 @@ export function LeaveView({ token, people, currentUserId, canCreate, focusReques
   const tenureRules = ruleDraft ?? context?.tenureRules ?? [];
   const eligibleDays = selected ? eligibleTenureDays(selected.organizationEmploymentDate, hrForm.startsOn, context?.tenureRules ?? []) : 0;
   const peopleById = useMemo(() => new Map(people.map((person) => [person.id, person])), [people]);
+  const exampleRequester = peopleById.get(editing && selected ? selected.requesterUserId : currentUserId);
+  const exampleDeputy = context?.deputyUserId ? peopleById.get(context.deputyUserId) : undefined;
   const visible = requests.filter((item) => filter === "all" ||
     filter === "mine" && item.requesterUserId === currentUserId ||
     filter === "action" && (item.canReviewHr || item.canReviewDeputy || item.status === "needs_revision" && item.requesterUserId === currentUserId) ||
@@ -297,11 +300,14 @@ export function LeaveView({ token, people, currentUserId, canCreate, focusReques
             <Button disabled={!applicationText.trim()} onClick={() => setPreviewText(!previewText)}>{previewText ? "Скрыть предпросмотр" : "Предпросмотр текста"}</Button></div>
           {showApplicationExample ? <div id="leave-application-example" className="leave-paper leave-example-paper" role="region" aria-label="Пример аризы на отпуск">
             <small>Пример для ориентира · даты и данные сотрудника в PDF подставляются из заявки и аккаунта</small>
-            <div className="leave-example-address">«Юксалиш» ҳаракати ижрочи директорига<br />[лавозим] [исм фамилия]дан</div>
+            <div className="leave-example-address">{applicationAddressee} {exampleDeputy?.name ?? "[биринчи ўринбосарнинг исм-фамилияси]"}га<br />
+              «Юксалиш» ҳаракати {exampleRequester?.jobTitle ?? "[лавозим]"} {exampleRequester?.name ?? "[исм фамилия]"}дан</div>
             <h3>АРИЗА</h3><p>{example}</p>
             <p className="leave-example-note">В электронном заявлении подпись от руки не нужна: отправка фиксируется из вашего аккаунта.</p>
           </div> : null}
-          {previewText ? <div className="leave-paper"><div>«Юксалиш» ҳаракати ижрочи директорига</div><h3>АРИЗА</h3><p>{applicationText}</p><small>После отправки будет создан PDF с датой и данными аккаунта.</small></div> : null}
+          {previewText ? <div className="leave-paper" role="region" aria-label="Предпросмотр заявления"><div className="leave-example-address">{applicationAddressee} {exampleDeputy?.name ?? "[биринчи ўринбосарнинг исм-фамилияси]"}га<br />
+            «Юксалиш» ҳаракати {exampleRequester?.jobTitle ?? "[лавозим]"} {exampleRequester?.name ?? "[исм фамилия]"}дан</div>
+            <h3>АРИЗА</h3><p>{applicationText}</p><small>После отправки будет создан PDF с датой и данными аккаунта.</small></div> : null}
           <div className="leave-actions"><Button appearance="primary" disabled={busy} onClick={submitApplication}>{editing ? selected?.requesterUserId === currentUserId ? "Сохранить и отправить кадрам" : "Сохранить исправления кадровика" : "Отправить кадрам"}</Button>
             <Button disabled={busy} onClick={() => { setShowCreate(false); setEditing(false); }}>Отмена</Button></div>
         </div> : selected ? <div className="leave-card">

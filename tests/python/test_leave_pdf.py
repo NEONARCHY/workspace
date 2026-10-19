@@ -33,7 +33,10 @@ def test_leave_application_has_no_handwritten_signature() -> None:
     reader = PdfReader(BytesIO(content))
     assert len(reader.pages) == 1
     assert "АРИЗА" in reader.pages[0].extract_text()
-    assert "Тестова Зебо" in reader.pages[0].extract_text()
+    text = " ".join(reader.pages[0].extract_text().split())
+    assert "Тестова Зебо" in text
+    assert "раисининг биринчи ўринбосари — ижрочи директор Тестов Алига" in text
+    assert "«Юксалиш» ҳаракати бош мутахассис Тестова Зебодан" in text
     assert not reader.pages[0].images
 
 
