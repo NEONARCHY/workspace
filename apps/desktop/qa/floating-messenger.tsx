@@ -17,7 +17,7 @@ export function FloatingMessengerFixture() {
   ]);
   const messenger: MessengerViewProps = {
     token: "", currentUserId: "aziza", currentUserRole: "employee", chats, messages, people,
-    focusChatId, tasks: [], attachments: [],
+    focusChatId, tasks: [], attachments: [], canUseAssistant: true,
     chatActions: { create: async () => initialChats[0]!, update: async () => initialChats[0]!, add: async () => initialChats[0]!, setMember: async () => initialChats[0]!, remove: async () => undefined, transfer: async () => initialChats[0]!, delete: async () => undefined },
     onSendMessage: async (chatId, body, files) => {
       if (body === "Ошибка сети") throw new Error("Тестовая ошибка отправки");

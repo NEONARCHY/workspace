@@ -62,6 +62,8 @@
 .floating-messenger-panel .messenger-mini .composer > .composer-input { grid-column: 1 / -2; grid-row: 1; }
 .floating-messenger-panel .messenger-mini .composer > .fui-Button:last-child { grid-column: -2 / -1; grid-row: 1; }
 .floating-messenger-panel .messenger-mini .composer > :not(.composer-input) { justify-self: center; }
+.floating-messenger-panel .messenger-mini .composer > :is(.composer-tool-button, .composer-rewrite-anchor) { justify-self: stretch; width: 100%; min-width: 0; }
+.floating-messenger-panel .messenger-mini .composer .composer-tool-button { width: 100%; min-width: 0; max-width: none; }
 .floating-messenger-panel .messenger-mini .composer .composer-field-shell { min-width: 0; width: 100%; }
 .floating-messenger-panel .messenger-mini .composer-input { min-width: 0; }
 .floating-messenger-panel .messenger-mini .chat-row { min-height: 66px; }
