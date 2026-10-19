@@ -152,14 +152,15 @@ def application_pdf(
                 [
                     Spacer(1, 90),
                     Paragraph(
-                        f"«Юксалиш» ҳаракати ижрочи директори {_text(deputy_name)}га<br/>"
+                        "«Юксалиш» ҳаракати раисининг биринчи ўринбосари — "
+                        f"ижрочи директор {_text(deputy_name)}га<br/>"
                         f"«Юксалиш» ҳаракати {_text(employee_job_title)} "
                         f"{_text(employee_name)}дан",
                         right,
                     ),
                 ]
             ],
-            colWidths=[222, 243],
+            colWidths=[170, 295],
             style=TableStyle(
                 [
                     ("VALIGN", (0, 0), (-1, -1), "TOP"),

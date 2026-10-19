@@ -23,7 +23,7 @@ vi.mock("./workspace-api", () => ({
 }));
 vi.mock("./FileViewer", () => ({ ExternalFileViewer: () => <div>Встроенный просмотр</div> }));
 
-const employee = { id: "employee", name: "Тестова Зебо", initials: "ТЗ", role: "employee", jobTitle: "Chief specialist", color: "#008fa0" };
+const employee = { id: "employee", name: "Тестова Зебо", initials: "ТЗ", role: "employee", jobTitle: "бош мутахассис", color: "#008fa0" };
 const deputy = { id: "deputy", name: "Тестов Али", initials: "ТА", role: "employee", color: "#008fa0" };
 const request: LeaveRequest = {
   id: "leave-1", requesterUserId: "employee", applicationText: "Менга меҳнат таътили беришингизни сўрайман.",
@@ -58,7 +58,15 @@ describe("LeaveView", () => {
     const editor = screen.getByRole("textbox", { name: "Текст заявления" });
     fireEvent.change(editor, { target: { value: "Мой текст заявления" } });
     fireEvent.click(screen.getByRole("button", { name: "Посмотреть пример аризы" }));
-    expect(screen.getByRole("region", { name: "Пример аризы на отпуск" })).toHaveTextContent("АРИЗА");
+    const example = screen.getByRole("region", { name: "Пример аризы на отпуск" });
+    expect(example).toHaveTextContent("АРИЗА");
+    expect(example).toHaveTextContent("раисининг биринчи ўринбосари — ижрочи директор Тестов Алига");
+    expect(example).toHaveTextContent("«Юксалиш» ҳаракати бош мутахассис Тестова Зебодан");
+    fireEvent.click(screen.getByRole("button", { name: "Предпросмотр текста" }));
+    const preview = screen.getByRole("region", { name: "Предпросмотр заявления" });
+    expect(preview).toHaveTextContent("раисининг биринчи ўринбосари — ижрочи директор Тестов Алига");
+    expect(preview).toHaveTextContent("«Юксалиш» ҳаракати бош мутахассис Тестова Зебодан");
+    expect(preview).toHaveTextContent("Мой текст заявления");
     expect(editor).toHaveValue("Мой текст заявления");
     expect(api.create).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Скрыть пример аризы" }));

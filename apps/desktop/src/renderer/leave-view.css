@@ -63,7 +63,7 @@
 .leave-paper small { display: block; margin-top: 20px; color: var(--ws-muted); }
 .leave-example-paper { max-width: 650px; }
 .leave-example-paper > small { margin: 0 0 20px; }
-.leave-example-address { margin-left: auto; max-width: 300px; text-align: right; }
+.leave-example-address { margin-left: auto; max-width: 350px; text-align: right; }
 .leave-example-paper h3 { margin: 20px 0; }
 .leave-example-paper p { color: var(--ws-text); }
 .leave-example-paper .leave-example-note { margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--ws-line); color: var(--ws-muted); font-size: 12px; }
