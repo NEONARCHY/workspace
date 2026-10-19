@@ -345,6 +345,19 @@ async def get_latest_journal(
     )
 
 
+@router.get("/signature-inbox", response_model=AIReferentRegistryResponse)
+async def get_signature_inbox(
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+    response: Response,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> AIReferentRegistryResponse:
+    response.headers["Cache-Control"] = "private, no-store"
+    return await load_letters(
+        connection, current_user, awaiting_my_signature=True, offset=offset, limit=20,
+    )
+
+
 @router.get("/letters", response_model=AIReferentRegistryResponse)
 async def get_letters(
     current_user: Annotated[AuthenticatedUser, Depends(require_user)],

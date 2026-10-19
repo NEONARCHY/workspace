@@ -19,11 +19,14 @@ import {
   CheckmarkCircle24Regular,
   Clock24Regular,
   Dismiss24Regular,
+  Mail24Regular,
   PeopleTeam24Regular,
   Warning24Regular,
 } from "@fluentui/react-icons";
 
 import { TeamPresencePanel } from "./TeamPresencePanel";
+import { TeamSignatureLetters, useSignatureInbox } from "./TeamSignatureLetters";
+import { SkeletonBlock } from "./LoadingSkeleton";
 import { TaskDeadlineDecision } from "./TaskDeadlineDecision";
 import { needsTaskDeadlineDecision, pendingTaskDeadlineRequest } from "./task-deadline-request";
 import { EfficiencyDeadlineExplanation } from "./EfficiencyDeadlineExplanation";
@@ -44,6 +47,7 @@ interface TeamDashboardViewProps {
   readonly onSelectTask: (taskId: string) => void;
   readonly paymentRequests?: readonly ApprovalRequestSummary[];
   readonly onSelectPaymentRequest?: (requestId: string) => void;
+  readonly onSelectSignatureLetter?: (letterId: string) => void;
   readonly calendarEvents?: readonly CalendarEvent[];
   readonly onCalendarResponse?: (event: CalendarEvent, status: "accepted" | "declined") => Promise<CalendarEvent | undefined>;
   readonly onDecideDeadline?: (task: WorkspaceTask, requestId: string, approved: boolean) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
@@ -140,19 +144,20 @@ function taskAttention(task: WorkspaceTask, now: Date): { readonly score: number
   return undefined;
 }
 
-function MetricCard({ icon, label, value, note, tone, active, onSelect }: {
+function MetricCard({ icon, label, value, note, tone, active, onSelect, loading = false }: {
   readonly icon: ReactNode;
   readonly label: string;
-  readonly value: number;
+  readonly value: number | undefined;
+  readonly loading?: boolean;
   readonly note: string;
   readonly tone: "brand" | "danger" | "review" | "calm";
   readonly active: boolean;
   readonly onSelect: () => void;
 }) {
-  return <button type="button" onClick={onSelect} aria-pressed={active} className={`team-dash-metric tone-${tone}`}>
+  return <button type="button" onClick={onSelect} aria-pressed={active} aria-busy={loading || undefined} className={`team-dash-metric tone-${tone}`}>
     <div className="team-dash-metric-icon" aria-hidden="true">{icon}</div>
     <div className="team-dash-metric-copy"><span>{label}</span><small>{note}</small></div>
-    <strong>{value.toLocaleString("ru-RU")}</strong>
+    <strong>{loading ? <SkeletonBlock width="32px" height="1em" /> : value?.toLocaleString("ru-RU") ?? "—"}</strong>
   </button>;
 }
 
@@ -168,12 +173,14 @@ export function TeamDashboardView({
   onSelectTask,
   paymentRequests = [],
   onSelectPaymentRequest,
+  onSelectSignatureLetter,
   calendarEvents = [],
   onCalendarResponse,
   onDecideDeadline,
 }: TeamDashboardViewProps) {
   const [teamFilter, setTeamFilter] = useState<TeamFilter>("all");
-  const [decisionPanel, setDecisionPanel] = useState<"extensions" | "invitations" | "payments">();
+  const [decisionPanel, setDecisionPanel] = useState<"extensions" | "invitations" | "payments" | "signatures">();
+  const signatureInbox = useSignatureInbox(token, currentUserId, Boolean(onSelectSignatureLetter));
   const [selectedDeadlineTaskId, setSelectedDeadlineTaskId] = useState<string>();
   const [invitationBusyId, setInvitationBusyId] = useState<string>();
   const [invitationError, setInvitationError] = useState("");
@@ -324,8 +331,13 @@ export function TeamDashboardView({
       {onSelectPaymentRequest ? <MetricCard active={decisionPanel === "payments"} onSelect={() => setDecisionPanel((current) => current === "payments" ? undefined : "payments")} icon={<CheckmarkCircle24Regular />} label="Заявки на оплату" value={pendingPayments.length} note="ждут вашего решения" tone="brand" /> : null}
       <MetricCard active={decisionPanel === "extensions"} onSelect={() => setDecisionPanel((current) => current === "extensions" ? undefined : "extensions")} icon={<Clock24Regular />} label="Перенос срока" value={deadlineTasks.length} note="запросы на ваше решение" tone="review" />
       <MetricCard active={decisionPanel === "invitations"} onSelect={() => setDecisionPanel((current) => current === "invitations" ? undefined : "invitations")} icon={<CalendarClock24Regular />} label="Приглашения" value={pendingInvitations.length} note="ожидают вашего ответа" tone="brand" />
+      {onSelectSignatureLetter ? <MetricCard active={decisionPanel === "signatures"} onSelect={() => setDecisionPanel((current) => current === "signatures" ? undefined : "signatures")} icon={<Mail24Regular />} label="Письма на подпись" value={signatureInbox.registry?.totalCount} loading={signatureInbox.loading} note={signatureInbox.error ? "не удалось загрузить · подробнее" : signatureInbox.loading ? "загружаем письма…" : "ждут вашей подписи"} tone="review" /> : null}
     </section>
-    {decisionPanel ? <section className="team-dash-decisions" aria-label={decisionPanel === "extensions" ? "Запросы на перенос срока" : decisionPanel === "payments" ? "Заявки на оплату, ожидающие решения" : "Приглашения на мероприятия и встречи"}>
+    {decisionPanel === "signatures" && onSelectSignatureLetter ? <section className="team-dash-decisions" aria-label="Письма, ожидающие вашей подписи">
+      <header><h3>Письма на подпись</h3><Button appearance="subtle" onClick={() => setDecisionPanel(undefined)}>Скрыть</Button></header>
+      <TeamSignatureLetters inbox={signatureInbox} onSelect={onSelectSignatureLetter} />
+    </section> : null}
+    {decisionPanel && decisionPanel !== "signatures" ? <section className="team-dash-decisions" aria-label={decisionPanel === "extensions" ? "Запросы на перенос срока" : decisionPanel === "payments" ? "Заявки на оплату, ожидающие решения" : "Приглашения на мероприятия и встречи"}>
       <header><h3>{decisionPanel === "extensions" ? "Запросы на перенос срока" : decisionPanel === "payments" ? "Заявки на оплату, ожидающие решения" : "Приглашения на мероприятия и встречи"}</h3><Button appearance="subtle" onClick={() => setDecisionPanel(undefined)}>Скрыть</Button></header>
       {decisionPanel === "payments" ? pendingPayments.length ? pendingPayments.map((request) => <button type="button" className="team-dash-payment-item" key={request.id} onClick={() => onSelectPaymentRequest?.(request.id)}><strong>{request.title}</strong><span>№ {request.number} · {request.stageLabel}</span><ArrowRight20Regular aria-hidden="true" /></button>) : <p>Заявок на оплату, ожидающих вашего решения, нет.</p>
       : decisionPanel === "extensions" ? deadlineTasks.length ? deadlineTasks.map((task) => {

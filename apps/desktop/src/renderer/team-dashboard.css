@@ -191,6 +191,8 @@
 .team-dash-decisions { display: grid; gap: 12px; margin-top: 12px; padding: 18px; border: 1px solid var(--ws-theme-line); border-radius: 18px; background: var(--ws-theme-surface); }
 .team-dash-decisions > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .team-dash-decisions h3 { margin: 0; font-size: 17px; }
+.team-dash-signature-list { display: grid; gap: 8px; min-height: 0; max-height: 330px; overflow-y: auto; scrollbar-width: thin; }
+.team-dash-signature-list:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 2px; }
 .team-dash-payment-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: center; width: 100%; padding: 14px; border: 1px solid var(--ws-theme-line); border-radius: 14px; background: var(--ws-theme-surface-soft); color: var(--ws-text); font: inherit; text-align: left; cursor: pointer; }
 .team-dash-payment-item strong, .team-dash-payment-item span { grid-column: 1; min-width: 0; overflow-wrap: anywhere; }
 .team-dash-payment-item span { color: var(--ws-muted); font-size: 12px; }
