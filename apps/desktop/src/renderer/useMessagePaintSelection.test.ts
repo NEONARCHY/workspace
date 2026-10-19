@@ -1,5 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { crossedMessageBands } from "./useMessagePaintSelection";
+import { crossedMessageBands, shouldStartMessagePaint } from "./useMessagePaintSelection";
+
+describe("paint selection activation", () => {
+  it("starts at the first mouse pixel, not after a drag-distance delay", () => {
+    expect(shouldStartMessagePaint(0, 0, false)).toBe(false);
+    expect(shouldStartMessagePaint(1, 0, false)).toBe(true);
+    expect(shouldStartMessagePaint(0, 1, false)).toBe(true);
+  });
+  it("preserves native horizontal text selection and starts vertical painting promptly", () => {
+    expect(shouldStartMessagePaint(100, 0, true)).toBe(false);
+    expect(shouldStartMessagePaint(3, 1, true)).toBe(false);
+    expect(shouldStartMessagePaint(0, 2, true)).toBe(true);
+  });
+});
 
 const bands = [
   { id: "a", top: 10, bottom: 30 },

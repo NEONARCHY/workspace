@@ -3,6 +3,11 @@ import type { MouseEvent, PointerEvent, RefObject } from "react";
 
 export type MessageBand = { id: string; top: number; bottom: number };
 
+export function shouldStartMessagePaint(dx: number, dy: number, text: boolean) {
+  // Start on the first real mouse movement; keep horizontal text selection native.
+  return text ? Math.abs(dy) >= 2 : Math.hypot(dx, dy) >= 1;
+}
+
 export function crossedMessageBands(bands: readonly MessageBand[], from: number, to: number, previous?: string) {
   const ordered = to >= from ? bands : [...bands].reverse();
   const crossed = ordered.filter(band => band.bottom > Math.min(from, to) && band.top <= Math.max(from, to));
@@ -23,6 +28,7 @@ export function useMessagePaintSelection({ paneRef, messages, enabled, onPaint }
   const stroke = useRef<Stroke | undefined>(undefined);
   const frame = useRef<number | undefined>(undefined);
   const suppressClick = useRef(false);
+  const isPending = useCallback(() => !!stroke.current, []);
   const stop = useCallback(() => {
     const previous = stroke.current;
     stroke.current = undefined;
@@ -89,8 +95,7 @@ export function useMessagePaintSelection({ paneRef, messages, enabled, onPaint }
     current.x = event.clientX; current.y = event.clientY;
     if (!current.started) {
       // Horizontal text selection/copy stays native; vertical painting selects rows.
-      if (Math.hypot(event.clientX - current.startX, event.clientY - current.startY) < 6
-        || current.text && Math.abs(event.clientY - current.startY) < 6) return;
+      if (!shouldStartMessagePaint(event.clientX - current.startX, event.clientY - current.startY, current.text)) return;
       current.started = true;
       event.currentTarget.setAttribute("data-paint-selecting", "true");
       event.currentTarget.setPointerCapture?.(event.pointerId);
@@ -109,5 +114,5 @@ export function useMessagePaintSelection({ paneRef, messages, enabled, onPaint }
     if (!suppressClick.current || event.detail === 0) return;
     suppressClick.current = false; event.preventDefault(); event.stopPropagation();
   }, []);
-  return { onPointerDown, onPointerMove, onPointerUp, onClickCapture, onScroll: paint, stop };
+  return { onPointerDown, onPointerMove, onPointerUp, onClickCapture, onScroll: paint, stop, isPending };
 }

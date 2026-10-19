@@ -432,6 +432,7 @@ function Conversation({
   }, [visibleMessages, removingMessage]);
   const visibleSelectionIds = useMessageSelectionVisibility(scrollRef, renderedMessages);
   const paint = useMessagePaintSelection({ paneRef: scrollRef, messages: renderedMessages, enabled: !!onForwardContent, onPaint: paintSelection });
+  const isPaintPending = paint.isPending;
   const selection = useMemo(() => ({ active: selectionMode, ids: selectedIds, visibleIds: visibleSelectionIds, toggle: toggleSelection, cancel: cancelSelection }),
     [selectionMode, selectedIds, visibleSelectionIds, toggleSelection, cancelSelection]);
   const { arrivingIds, motionDisabled, cancelArrivalMotion } = useMessageArrivalMotion({
@@ -761,20 +762,23 @@ function Conversation({
                 tabIndex={0}
                 onPointerEnter={(event) => {
                   window.clearTimeout(reactionHoverTimer.current);
-                  if (event.pointerType === "touch" || event.currentTarget.contains(document.activeElement)) return;
+                  if (event.pointerType === "touch" || event.buttons & 1 || event.currentTarget.contains(document.activeElement)) return;
                   setReactionTargetId(undefined);
                   reactionHoverTimer.current = window.setTimeout(() => setReactionTargetId(message.id), 500);
                 }}
                 onPointerLeave={(event) => {
                   window.clearTimeout(reactionHoverTimer.current);
+                  if (isPaintPending()) return;
                   if (event.currentTarget.contains(document.activeElement)) return;
                   setReactionTargetId((current) => current === message.id ? undefined : current);
                 }}
                 onFocus={() => {
                   window.clearTimeout(reactionHoverTimer.current);
+                  if (isPaintPending()) return;
                   setReactionTargetId(message.id);
                 }}
                 onBlur={(event) => {
+                  if (isPaintPending()) return;
                   if (!event.currentTarget.contains(event.relatedTarget)) setReactionTargetId((current) => current === message.id ? undefined : current);
                 }}
               >
@@ -862,7 +866,7 @@ function Conversation({
               </SelectableMessage>
             </div>
           );
-        }), [renderedMessages, activeMessages, taskForChat, people, canDecideDeadline, onDecideTaskDeadline, deadlineDecisionId, decideDeadline, arrivingIds, motionDisabled, currentUserId, query, attachments, onLoadAttachment, removingMessage, personName, personById, token, onOpenFeedPost, onDownloadAttachment, reactionTargetId, canSend, busy, run, onReactMessage]);
+        }), [renderedMessages, activeMessages, taskForChat, people, canDecideDeadline, onDecideTaskDeadline, deadlineDecisionId, decideDeadline, arrivingIds, motionDisabled, currentUserId, query, attachments, onLoadAttachment, removingMessage, personName, personById, token, onOpenFeedPost, onDownloadAttachment, reactionTargetId, canSend, busy, run, onReactMessage, isPaintPending]);
   return (
     <MessengerFileDropSurface className={`conversation-pane${embedded ? " embedded-conversation" : ""}${voiceOpen ? " has-voice-draft" : ""}`}
       title={chat.title} blockedReason={fileDropBlocked} receive={acceptFiles} reject={setError}>
@@ -1000,7 +1004,7 @@ function Conversation({
         </div>
       ) : null}
         <div className="message-scroll" data-message-selection={selectionMode ? "" : undefined} data-chat-background={chatBackground} aria-label="Переписка" aria-live="polite" ref={scrollRef}
-        tabIndex={-1} onPointerDownCapture={paint.onPointerDown} onPointerMove={paint.onPointerMove}
+        tabIndex={-1} onPointerDownCapture={event => { window.clearTimeout(reactionHoverTimer.current); paint.onPointerDown(event); }} onPointerMove={paint.onPointerMove}
         onPointerUp={paint.onPointerUp} onPointerCancel={paint.stop} onLostPointerCapture={paint.stop} onClickCapture={paint.onClickCapture}
         onKeyDown={event => { if (selectionMode && event.key === "Escape" && !event.defaultPrevented) { event.preventDefault(); paint.stop(); cancelSelection(); } }}
         onWheel={cancelArrivalMotion} onPointerDown={cancelArrivalMotion}

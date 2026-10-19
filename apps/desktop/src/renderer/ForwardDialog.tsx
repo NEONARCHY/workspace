@@ -2,6 +2,7 @@ import { WorkspaceNotice } from "./WorkspaceNotice";
 import { useEffect, useRef, useState } from "react";
 import { Avatar, Button, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle } from "@fluentui/react-components";
 import { Input } from "./WorkspaceInput";
+import { Search20Regular } from "@fluentui/react-icons";
 import type { ChatMessage, ChatSummary, ForwardSource } from "@yuksalish/contracts";
 import { WorkspaceDialog } from "./WorkspaceDialog";
 
@@ -50,7 +51,7 @@ export function ForwardDialog({ source, sources, preview, chats, excludeChatId, 
     <DialogSurface className="forward-dialog" aria-label={items.length > 1 ? "Переслать сообщения" : source.kind === "feed" ? "Переслать объявление" : "Переслать сообщение"}><DialogBody>
       <DialogTitle>Переслать в чат</DialogTitle>
       <DialogContent><p className="forward-dialog-preview">{preview.slice(0, 180)}</p>
-        <Input aria-label="Найти чат для пересылки" placeholder="Найти чат" value={query} onChange={(_, data) => setQuery(data.value)} />
+        <Input expandable={false} contentBefore={<Search20Regular aria-hidden="true" />} aria-label="Найти чат для пересылки" placeholder="Найти чат" value={query} onChange={(_, data) => setQuery(data.value)} />
         <div className="forward-dialog-chats">
           {targets.map(chat => <button type="button" key={chat.id} disabled={busy} onClick={() => void send(chat.id)}>
             <Avatar name={chat.title} size={40} color="colorful" /><span><strong>{chat.title}</strong><small>{chat.kind === "direct" ? "Личный диалог" : "Рабочий чат"}</small></span>

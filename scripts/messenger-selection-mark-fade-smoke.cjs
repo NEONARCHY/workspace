@@ -8,12 +8,14 @@ async function midpoint(button) {
     button.click();
     return new Promise(resolve => requestAnimationFrame(() => {
       const pane = document.querySelector('.message-scroll');
-      const content = pane.querySelector('.message.own > .message-content');
+      const content = [...pane.querySelectorAll('.message.own > .message-content')].at(-1);
       const mark = content.closest('.message-row').querySelector('.message-select');
-      const animations = [content, mark].flatMap(node => node.getAnimations());
+      const row = content.closest('.message');
+      getComputedStyle(row, '::before').opacity; // Resolve pseudo-element styles before inspecting its transition.
+      const animations = [...new Set([...row.getAnimations({ subtree: true }), ...mark.getAnimations()])];
       for (const animation of animations) { animation.pause(); animation.currentTime = 110; }
       const css = getComputedStyle(mark);
-      const result = { opacity: Number(css.opacity), translate: parseFloat(getComputedStyle(content).translate),
+      const result = { rowClass: row.className, washContent: getComputedStyle(row, '::before').content, opacity: Number(css.opacity), wash: Number(getComputedStyle(row, '::before').opacity), translate: parseFloat(getComputedStyle(content).translate),
         pointer: css.pointerEvents, hidden: mark.getAttribute('aria-hidden'), inert: mark.inert,
         transitions: animations.map(a => a.transitionProperty) };
       for (const animation of animations) animation.finish();
@@ -38,10 +40,19 @@ async function midpoint(button) {
     assert.ok(enter.transitions.includes('opacity') && enter.transitions.includes('translate'), JSON.stringify(enter));
     assert.ok(enter.opacity > 0 && enter.opacity < 1, 'mark fades in, not a sudden reveal');
     assert.ok(Math.abs(enter.opacity + enter.translate / 36) < .02, 'same timing and easing as opening rail');
+    assert.ok(Math.abs(enter.wash - enter.opacity) < .02 && enter.wash > 0 && enter.wash < 1, `wash fades in synchronously with marks: ${JSON.stringify(enter)}`);
     await settle(page);
+    const ownMark = own.locator('..').locator('.message-select');
+    const other = page.locator('.message:not(.own)').first().locator('..').locator('.message-select');
+    await other.check(); await settle(page);
+    const individual = await midpoint(ownMark);
+    assert.ok(individual.wash > 0 && individual.wash < 1 && individual.opacity === 1, 'individual deselection fades only its wash while selection mode stays open');
+    await settle(page);
+    await ownMark.check(); await settle(page);
     const leave = await midpoint(page.getByRole('button', { name: 'Отменить выделение', exact: true }));
     assert.ok(leave.opacity > 0 && leave.opacity < 1, 'mark remains painted while fading out');
     assert.ok(Math.abs(leave.opacity + leave.translate / 36) < .02, 'same timing and easing as closing rail');
+    assert.ok(Math.abs(leave.wash - leave.opacity) < .02 && leave.wash > 0 && leave.wash < 1, 'wash fades out synchronously with marks');
     assert.equal(leave.hidden, 'true'); assert.equal(leave.inert, true); assert.equal(leave.pointer, 'none');
     assert.equal(await page.getByRole('checkbox').count(), 0, 'exiting controls are immediately inaccessible');
     await settle(page);
@@ -53,6 +64,7 @@ async function midpoint(button) {
     await own.click({ button: 'right' }); await page.getByRole('button', { name: 'Выделить', exact: true }).click();
     const mark = own.locator('..').locator('.message-select');
     assert.equal(await mark.evaluate(node => getComputedStyle(node).transitionDuration), '0s');
+    assert.equal(await own.evaluate(node => getComputedStyle(node, '::before').transitionDuration), '0s');
     await page.getByLabel('Переписка', { exact: true }).focus(); await page.keyboard.press('Escape');
     assert.equal(await mark.evaluate(node => getComputedStyle(node).visibility), 'hidden');
     await page.close(); console.log(`${mini ? 'Mini' : 'Full'} ${theme}: synchronized opacity/translate midpoints, immediate inert exit, last removal and reduced motion passed`);
