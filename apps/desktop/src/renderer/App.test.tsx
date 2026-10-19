@@ -1907,13 +1907,25 @@ describe("corporate workspace authentication alpha", () => {
       target: { value: "Номер договора добавлен" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Завершить и отправить на проверку" }));
+    await waitFor(() => expect(screen.getByText("Ожидает решения")).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: "Утвердить результат" })).not.toBeInTheDocument();
+
+    cleanup();
+    localStorage.clear();
+    sessionStorage.clear();
+    render(<App />);
+    await loginToWorkspace("baxtiyor");
+    fireEvent.click(screen.getByRole("button", { name: "Задачи" }));
+    fireEvent.click(await screen.findByRole("button", {
+      name: `Открыть задачу: ${initialTasks[1]!.title}`,
+    }, { timeout: 10_000 }));
     fireEvent.click(await screen.findByRole("button", { name: "Утвердить результат" }, { timeout: 20_000 }));
     expect(await screen.findByText("Принято")).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/accept-result"),
       expect.objectContaining({ method: "POST" }),
     );
-  }, 30_000);
+  }, 60_000);
 
   it("does not offer result acceptance to a manager who is not the task author", async () => {
     mockServer();
