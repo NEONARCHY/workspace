@@ -194,13 +194,13 @@
   max-height: min(82dvh, 760px);
   padding: 0;
   overflow: hidden;
-  border: 1px solid var(--ws-theme-line);
+  border: 1px solid var(--ws-theme-line, #dfe7ed);
   border-radius: 22px;
-  background: var(--ws-theme-surface);
+  background: var(--ws-theme-surface, #fff);
   box-shadow: 0 24px 70px rgb(25 59 82 / 22%);
 }
 .team-dash-decisions { display: grid; align-content: start; gap: 12px; max-height: min(82dvh, 760px); padding: 22px; overflow-y: auto; scrollbar-width: thin; }
-.team-dash-decisions > header { position: sticky; top: -22px; z-index: 1; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 0 0 14px; border-bottom: 1px solid var(--ws-theme-line); background: var(--ws-theme-surface); }
+.team-dash-decisions > header { position: sticky; top: -22px; z-index: 1; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 0 0 14px; border-bottom: 1px solid var(--ws-theme-line, #dfe7ed); background: var(--ws-theme-surface, #fff); }
 .team-dash-decisions > header span { color: var(--ws-link); font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
 .team-dash-decisions h3 { margin: 4px 0 0; color: var(--ws-text); font-size: 22px; line-height: 1.2; }
 .team-dash-decisions p { margin: 0; color: var(--ws-muted); line-height: 1.5; }
@@ -211,13 +211,13 @@
 .team-dash-workload-list > div > small { padding: 0 12px; color: var(--ws-muted); line-height: 1.45; }
 .team-dash-signature-list { display: grid; gap: 8px; min-height: 0; max-height: 330px; overflow-y: auto; scrollbar-width: thin; }
 .team-dash-signature-list:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 2px; }
-.team-dash-payment-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: center; width: 100%; padding: 14px; border: 1px solid var(--ws-theme-line); border-radius: 14px; background: var(--ws-theme-surface-soft); color: var(--ws-text); font: inherit; text-align: left; cursor: pointer; }
+.team-dash-payment-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: center; width: 100%; padding: 14px; border: 1px solid var(--ws-theme-line, #dfe7ed); border-radius: 14px; background: var(--ws-theme-surface-soft, #f1f6f8); color: var(--ws-text); font: inherit; text-align: left; cursor: pointer; }
 .team-dash-payment-item strong, .team-dash-payment-item span { grid-column: 1; min-width: 0; overflow-wrap: anywhere; }
 .team-dash-payment-item span { color: var(--ws-muted); font-size: 12px; }
 .team-dash-payment-item svg { grid-column: 2; grid-row: 1 / 3; }
 .team-dash-payment-item:hover { border-color: var(--ws-link); }
 .team-dash-payment-item:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 2px; }
-.team-dash-decision-item { display: grid; gap: 9px; padding: 14px; border: 1px solid var(--ws-theme-line); border-radius: 14px; background: var(--ws-theme-surface-soft); }
+.team-dash-decision-item { display: grid; gap: 9px; padding: 14px; border: 1px solid var(--ws-theme-line, #dfe7ed); border-radius: 14px; background: var(--ws-theme-surface-soft, #f1f6f8); }
 .team-dash-decision-item > button:first-child { display: grid; gap: 5px; border: 0; background: transparent; color: var(--ws-text); font: inherit; text-align: left; cursor: pointer; }
 .team-dash-decision-item > button:first-child:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 2px; }
 .team-dash-decision-item > span, .team-dash-decision-item > button span { color: var(--ws-muted); font-size: 12px; }
