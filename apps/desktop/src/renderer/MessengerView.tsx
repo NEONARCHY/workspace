@@ -868,7 +868,7 @@ function Conversation({
     <MessengerFileDropSurface className={`conversation-pane${embedded ? " embedded-conversation" : ""}${voiceOpen ? " has-voice-draft" : ""}`}
       title={chat.title} blockedReason={fileDropBlocked} receive={acceptFiles} reject={setError}>
       <header className={`conversation-header${selectionMode ? " has-message-selection" : ""}`}>
-        {!embedded ? <Button className="compact-back" appearance="subtle" icon={<ChevronLeft20Regular />} onClick={onBack}>К списку чатов</Button> : null}
+        {!embedded ? <Button className="compact-back" data-satin-excluded="true" appearance="subtle" icon={<ChevronLeft20Regular />} onClick={onBack}>К списку чатов</Button> : null}
         <div className="conversation-identity">
           {chat.canEditAvatar && chatActions.setAvatar ? <Dialog open={avatarPickerOpen}
             onOpenChange={(_, data) => { if (data.open) setAvatarDraft(chat.avatarIconKey ?? defaultChatIcon(chat)); setAvatarPickerOpen(data.open); }}>

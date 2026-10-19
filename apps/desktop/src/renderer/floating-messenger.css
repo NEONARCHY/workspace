@@ -46,7 +46,9 @@
 .floating-messenger-panel .messenger-mini:not(.conversation-open) > .conversation-pane,
 .floating-messenger-panel .messenger-mini.conversation-open > .list-pane { display: none; }
 .floating-messenger-panel .messenger-mini .conversation-header { display: grid; grid-template-columns: 36px minmax(0, 1fr) 36px; gap: 6px; min-height: 62px; padding: 8px 10px; }
-.floating-messenger-panel .messenger-mini .conversation-header .compact-back { display: inline-flex; grid-column: 1; grid-row: 1; font-size: 0; margin: 0; padding: 0; min-width: 36px; height: 36px; }
+.floating-messenger-panel .messenger-mini .conversation-header .compact-back { display: inline-flex; align-self: center; align-items: center; justify-content: center; gap: 0; grid-column: 1; grid-row: 1; font-size: 0; margin: 0; padding: 0; min-width: 36px; height: 40px; }
+.floating-messenger-panel .messenger-mini .conversation-header .compact-back:is(:enabled, :hover, :active) { background: transparent; border-color: transparent; box-shadow: none; }
+.floating-messenger-panel .messenger-mini .conversation-header .compact-back > .fui-Button__icon { margin: 0; }
 .floating-messenger-panel .messenger-mini .conversation-identity { grid-column: 2; grid-row: 1; gap: 8px; margin: 0; min-width: 0; }
 .floating-messenger-panel .messenger-mini .conversation-identity .fui-Avatar { width: 40px; height: 40px; min-width: 40px; font-size: 15px; }
 .floating-messenger-panel .messenger-mini .conversation-header h2 { font-size: 14px; line-height: 1.3; }
