@@ -83,6 +83,7 @@ import "./workspace-modal-backdrops.css";
 import "./notification-bell.css";
 import "./topbar-insights.css";
 import "./mobile-density.css";
+import "./page-scroll-layout.css";
 import { initializeColorTheme } from "./color-theme";
 import { observePopupInputMode } from "./popup-input-mode";
 import { observeFieldCaptionActivation } from "./field-caption-activation";
