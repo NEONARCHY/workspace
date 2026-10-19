@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 
 import type {
+  ApprovalRequestSummary,
   CalendarEvent,
   EfficiencyOverview,
   WorkspacePerson,
@@ -19,7 +20,6 @@ import {
   Clock24Regular,
   Dismiss24Regular,
   PeopleTeam24Regular,
-  Sparkle24Regular,
   Warning24Regular,
 } from "@fluentui/react-icons";
 
@@ -33,6 +33,7 @@ import { SlidingSegmented } from "./SlidingSegmented";
 import { isTaskOverdue as deadlineIsOverdue } from "./task-deadline";
 
 interface TeamDashboardViewProps {
+  readonly children?: ReactNode;
   readonly token: string;
   readonly tasks: readonly WorkspaceTask[];
   readonly people: readonly WorkspacePerson[];
@@ -41,6 +42,8 @@ interface TeamDashboardViewProps {
   readonly efficiencyLoading: boolean;
   readonly efficiencyError?: string;
   readonly onSelectTask: (taskId: string) => void;
+  readonly paymentRequests?: readonly ApprovalRequestSummary[];
+  readonly onSelectPaymentRequest?: (requestId: string) => void;
   readonly calendarEvents?: readonly CalendarEvent[];
   readonly onCalendarResponse?: (event: CalendarEvent, status: "accepted" | "declined") => Promise<CalendarEvent | undefined>;
   readonly onDecideDeadline?: (task: WorkspaceTask, requestId: string, approved: boolean) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
@@ -154,6 +157,7 @@ function MetricCard({ icon, label, value, note, tone, active, onSelect }: {
 }
 
 export function TeamDashboardView({
+  children,
   token,
   tasks,
   people,
@@ -162,34 +166,31 @@ export function TeamDashboardView({
   efficiencyLoading,
   efficiencyError,
   onSelectTask,
+  paymentRequests = [],
+  onSelectPaymentRequest,
   calendarEvents = [],
   onCalendarResponse,
   onDecideDeadline,
 }: TeamDashboardViewProps) {
   const [teamFilter, setTeamFilter] = useState<TeamFilter>("all");
-  const [decisionPanel, setDecisionPanel] = useState<"extensions" | "invitations">();
+  const [decisionPanel, setDecisionPanel] = useState<"extensions" | "invitations" | "payments">();
   const [selectedDeadlineTaskId, setSelectedDeadlineTaskId] = useState<string>();
   const [invitationBusyId, setInvitationBusyId] = useState<string>();
   const [invitationError, setInvitationError] = useState("");
   const [selectedPersonId, setSelectedPersonId] = useState<string>();
-  const [attentionFilter, setAttentionFilter] = useState<"all" | "overdue" | "review" | "today">("all");
+  const [attentionFilter, setAttentionFilter] = useState<"all" | "overdue" | "review">("all");
   const [flowSelection, setFlowSelection] = useState<FlowSelection>();
   const [drawerTaskId, setDrawerTaskId] = useState<string>();
   const attentionMotion = useContextMotion(`${selectedPersonId}:${attentionFilter}`);
   const workloadMotion = useContextMotion(teamFilter);
   const now = new Date();
   const todayStart = startOfDay(now);
-  const todayEnd = endOfDay(now);
   const weekEnd = endOfDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7));
   const currentUser = people.find((person) => person.id === currentUserId);
   const visiblePeople = people;
   const activeTasks = tasks.filter((task) => activeStatuses.has(task.status));
   const overdueTasks = activeTasks.filter((task) => isTaskOverdue(task, now));
   const reviewTasks = activeTasks.filter((task) => task.status === "awaiting_review");
-  const dueToday = activeTasks.filter((task) => {
-    const due = validDueDate(task);
-    return Boolean(due && due >= todayStart && due <= todayEnd && !isTaskOverdue(task, now));
-  });
   const dueThisWeek = activeTasks.filter((task) => {
     const due = validDueDate(task);
     return Boolean(due && due > now && due <= weekEnd);
@@ -197,6 +198,8 @@ export function TeamDashboardView({
   const efficiencyByUser = new Map(efficiency?.employees.map((employee) => [employee.userId, employee]));
   const personById = new Map(people.map((person) => [person.id, person]));
   const deadlineTasks = tasks.filter((task) => needsTaskDeadlineDecision(task, currentUserId));
+  const pendingPayments = paymentRequests.filter((request) => request.status === "running"
+    && request.activeStages.some((stage) => stage.canAct));
   const pendingInvitations = calendarEvents.filter((event) => event.status === "scheduled"
     && event.canRespond && (event.currentUserAttendanceStatus ?? "pending") === "pending"
     && new Date(event.endsAt).getTime() > now.getTime());
@@ -217,7 +220,7 @@ export function TeamDashboardView({
     .map((task) => ({ task, attention: taskAttention(task, now) }))
     .filter((item): item is { task: WorkspaceTask; attention: NonNullable<ReturnType<typeof taskAttention>> } => item.attention !== undefined)
     .filter((item) => !selectedPersonId || item.task.assigneeId === selectedPersonId)
-    .filter(({ task }) => attentionFilter === "all" || attentionFilter === "overdue" && isTaskOverdue(task, now) || attentionFilter === "review" && task.status === "awaiting_review" || attentionFilter === "today" && dueToday.some(item => item.id === task.id))
+    .filter(({ task }) => attentionFilter === "all" || attentionFilter === "overdue" && isTaskOverdue(task, now) || attentionFilter === "review" && task.status === "awaiting_review")
     .sort((left, right) => right.attention.score - left.attention.score)
     .slice(0, 8);
 
@@ -315,20 +318,17 @@ export function TeamDashboardView({
       </div>
     </WorkspaceSectionHeader>
 
-    {["manager", "admin", "superadmin"].includes(currentUser?.role ?? "")
-      ? <TeamPresencePanel token={token} /> : null}
-
     <section className="team-dash-metrics" aria-label="Ключевые показатели команды">
-      <MetricCard active={attentionFilter === "all"} onSelect={() => setAttentionFilter("all")} icon={<Sparkle24Regular />} label="Активные задачи" value={activeTasks.length} note={`${dueThisWeek.length} со сроком в ближайшие 7 дней`} tone="brand" />
-      <MetricCard active={attentionFilter === "overdue"} onSelect={() => setAttentionFilter("overdue")} icon={<Warning24Regular />} label="Нужна помощь" value={overdueTasks.length} note={overdueTasks.length ? "истёк текущий срок" : "истёкших сроков нет"} tone="danger" />
-      <MetricCard active={attentionFilter === "review"} onSelect={() => setAttentionFilter("review")} icon={<CheckmarkCircle24Regular />} label="Ждут решения" value={reviewTasks.length} note="результаты на проверке" tone="review" />
-      <MetricCard active={attentionFilter === "today"} onSelect={() => setAttentionFilter("today")} icon={<CalendarClock24Regular />} label="Срок сегодня" value={dueToday.length} note={dueToday.length ? "дедлайны до конца дня" : "сегодня без дедлайнов"} tone="calm" />
+      <MetricCard active={attentionFilter === "overdue"} onSelect={() => setAttentionFilter((current) => current === "overdue" ? "all" : "overdue")} icon={<Warning24Regular />} label="Нужна помощь" value={overdueTasks.length} note={overdueTasks.length ? "истёк текущий срок" : "истёкших сроков нет"} tone="danger" />
+      <MetricCard active={attentionFilter === "review"} onSelect={() => setAttentionFilter((current) => current === "review" ? "all" : "review")} icon={<CheckmarkCircle24Regular />} label="Ждут решения" value={reviewTasks.length} note="результаты задач на проверке" tone="review" />
+      {onSelectPaymentRequest ? <MetricCard active={decisionPanel === "payments"} onSelect={() => setDecisionPanel((current) => current === "payments" ? undefined : "payments")} icon={<CheckmarkCircle24Regular />} label="Заявки на оплату" value={pendingPayments.length} note="ждут вашего решения" tone="brand" /> : null}
       <MetricCard active={decisionPanel === "extensions"} onSelect={() => setDecisionPanel((current) => current === "extensions" ? undefined : "extensions")} icon={<Clock24Regular />} label="Перенос срока" value={deadlineTasks.length} note="запросы на ваше решение" tone="review" />
       <MetricCard active={decisionPanel === "invitations"} onSelect={() => setDecisionPanel((current) => current === "invitations" ? undefined : "invitations")} icon={<CalendarClock24Regular />} label="Приглашения" value={pendingInvitations.length} note="ожидают вашего ответа" tone="brand" />
     </section>
-    {decisionPanel ? <section className="team-dash-decisions" aria-label={decisionPanel === "extensions" ? "Запросы на перенос срока" : "Приглашения на мероприятия и встречи"}>
-      <header><h3>{decisionPanel === "extensions" ? "Запросы на перенос срока" : "Приглашения на мероприятия и встречи"}</h3><Button appearance="subtle" onClick={() => setDecisionPanel(undefined)}>Скрыть</Button></header>
-      {decisionPanel === "extensions" ? deadlineTasks.length ? deadlineTasks.map((task) => {
+    {decisionPanel ? <section className="team-dash-decisions" aria-label={decisionPanel === "extensions" ? "Запросы на перенос срока" : decisionPanel === "payments" ? "Заявки на оплату, ожидающие решения" : "Приглашения на мероприятия и встречи"}>
+      <header><h3>{decisionPanel === "extensions" ? "Запросы на перенос срока" : decisionPanel === "payments" ? "Заявки на оплату, ожидающие решения" : "Приглашения на мероприятия и встречи"}</h3><Button appearance="subtle" onClick={() => setDecisionPanel(undefined)}>Скрыть</Button></header>
+      {decisionPanel === "payments" ? pendingPayments.length ? pendingPayments.map((request) => <button type="button" className="team-dash-payment-item" key={request.id} onClick={() => onSelectPaymentRequest?.(request.id)}><strong>{request.title}</strong><span>№ {request.number} · {request.stageLabel}</span><ArrowRight20Regular aria-hidden="true" /></button>) : <p>Заявок на оплату, ожидающих вашего решения, нет.</p>
+      : decisionPanel === "extensions" ? deadlineTasks.length ? deadlineTasks.map((task) => {
         const request = pendingTaskDeadlineRequest(task);
         return request ? <div className="team-dash-decision-item" key={request.id}>
           <button type="button" aria-expanded={selectedDeadlineTaskId === task.id} onClick={() => setSelectedDeadlineTaskId((current) => current === task.id ? undefined : task.id)}><strong>{task.title}</strong><span>Предлагаемый срок: {new Date(request.proposedDueAt).toLocaleString("ru-RU")}</span></button>
@@ -346,7 +346,7 @@ export function TeamDashboardView({
       <section className="team-dash-panel team-dash-attention" aria-labelledby="attention-title">
         <header className="team-dash-panel-heading">
           <div><span>Следующее действие</span><h3 id="attention-title">Требует внимания</h3></div>
-          {selectedPersonId ? <Button appearance="subtle" onClick={() => setSelectedPersonId(undefined)}>Показать всю команду</Button> : <small>сначала самое срочное</small>}
+          {selectedPersonId || attentionFilter !== "all" ? <Button appearance="subtle" onClick={() => { setSelectedPersonId(undefined); setAttentionFilter("all"); }}>Показать все задачи</Button> : <small>сначала самое срочное</small>}
         </header>
         <div className="team-dash-attention-list" ref={attentionMotion}>
           {attentionTasks.map(({ task, attention }) => {
@@ -451,6 +451,9 @@ export function TeamDashboardView({
       </div>}
     </aside> : null}
 
+    {["manager", "admin", "superadmin"].includes(currentUser?.role ?? "")
+      ? <TeamPresencePanel token={token} /> : null}
+
     <section className="team-dash-panel team-dash-workload" aria-labelledby="workload-title">
       <header className="team-dash-panel-heading team-dash-workload-heading">
         <div><span>Без скрытых оценок</span><h3 id="workload-title">Текущая нагрузка</h3><p>Полоса показывает только количество активных задач относительно команды — не норму и не оценку сотрудника.</p><p>«Истёк срок» — текущие дедлайны. Процент справа — эффективность{efficiency ? ` за ${new Intl.DateTimeFormat("ru-RU", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${efficiency.period}-01T00:00:00Z`))}` : " за месяц"}, а не доля активных задач без просрочки.</p></div>
@@ -477,5 +480,6 @@ export function TeamDashboardView({
         {!teamRows.length ? <div className="team-dash-empty compact"><PeopleTeam24Regular /><div><strong>Нет сотрудников по этому фильтру</strong><span>Выберите другой срез команды.</span></div></div> : null}
       </div>
     </section>
+    {children}
   </div>;
 }

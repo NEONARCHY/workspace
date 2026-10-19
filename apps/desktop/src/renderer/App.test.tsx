@@ -190,6 +190,7 @@ function mockServer(
     readonly failApprovalActionOnce?: boolean;
     readonly withSubsidyRequest?: boolean;
     readonly superadminLogin?: boolean;
+    readonly chairmanLogin?: boolean;
   } = {},
 ) {
   let failApprovalActionOnce = serverOptions.failApprovalActionOnce ?? false;
@@ -383,7 +384,10 @@ function mockServer(
       const payload = JSON.parse(String(options?.body)) as { username: string };
       const selectedUser = people.find((person) => person.username === payload.username) ?? people[0]!;
       currentUser = serverOptions.superadminLogin && selectedUser.username === "malika"
-        ? { ...selectedUser, role: "superadmin" } : selectedUser;
+        ? { ...selectedUser, role: "superadmin" }
+        : serverOptions.chairmanLogin && selectedUser.username === "malika"
+          ? { ...selectedUser, jobTitle: '"Yuksalish" harakati raisi, Qonunchilik palatasi qo\'mita raisi' }
+          : selectedUser;
       return response({
         accessToken: "access-token",
         refreshToken: "refresh-token",
@@ -1684,6 +1688,27 @@ describe("corporate workspace authentication alpha", () => {
     render(<App />);
     await loginToWorkspace("baxtiyor");
     expect(screen.queryByRole("button", { name: "Обзор команды" })).not.toBeInTheDocument();
+  });
+
+  it("opens the chairman's team overview as Home with the allowed personal panels", async () => {
+    mockServer({ chairmanLogin: true, withSubsidyRequest: true });
+    render(<App />);
+    await loginToWorkspace("malika", "home");
+
+    expect(screen.getByRole("button", { name: "Обзор команды" })).toHaveAttribute("aria-current", "page");
+    expect(screen.queryByRole("button", { name: "Главная" })).not.toBeInTheDocument();
+    expect(screen.getByText("Ваше рабочее пространство")).toBeInTheDocument();
+    for (const heading of ["Мой фокус", "Важные уведомления", "Мини-мессенджер", "Ближайшие встречи", "Мои письма", "События из ленты"]) {
+      expect(screen.getByRole("heading", { name: heading })).toBeInTheDocument();
+    }
+    for (const heading of ["Моя эффективность", "Мой отдел", "Награды и достижения", "Отклик на мои сообщения"]) {
+      expect(screen.queryByRole("heading", { name: heading })).not.toBeInTheDocument();
+    }
+    const paymentCard = within(screen.getByRole("region", { name: "Ключевые показатели команды" })).getByText("Заявки на оплату").closest("button")!;
+    expect(paymentCard).toHaveTextContent("1");
+    fireEvent.click(paymentCard);
+    fireEvent.click(within(screen.getByRole("region", { name: "Заявки на оплату, ожидающие решения" })).getByRole("button", { name: /Оплата по субсидии/ }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Заявки на оплату" })).toHaveAttribute("aria-current", "page"));
   });
 
   it("finds employees without changing their roles or selected record", async () => {

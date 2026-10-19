@@ -116,6 +116,7 @@ import { RecoveryBoundary } from "./RecoveryBoundary";
 import { LeaveView } from "./LeaveView";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { employeeDisplayName, employeeDisplayPerson } from "./employee-display-name";
+import type { HomeTarget } from "./personal-home";
 import { EmployeeProfileProvider } from "./EmployeeProfileLink";
 import { WorkspacePeopleProvider } from "./WorkspaceSelect";
 import {
@@ -275,11 +276,16 @@ const defaultModuleAccess: readonly EffectiveModuleAccess[] = moduleKeys.map((mo
     : { view: true, create: true, edit: true, approve: true, admin: true },
 }));
 
+const chairmanPosition = '"Yuksalish" harakati raisi, Qonunchilik palatasi qo\'mita raisi';
 const teamOverviewPositions = new Set([
-  '"Yuksalish" harakati raisi, Qonunchilik palatasi qo\'mita raisi',
+  chairmanPosition,
   "Rais birinchi o‘rinbosari – ijrochi direktor",
   "Rais o‘rinbosari",
 ]);
+function chairmanHasTeamHome(user: WorkspacePerson, moduleAccess: readonly EffectiveModuleAccess[]): boolean {
+  return user.jobTitle?.trim().toLowerCase() === chairmanPosition.toLowerCase()
+    && moduleAccess.some((item) => item.moduleKey === "team_overview" && item.permissions.view);
+}
 
 function fallbackModuleAccess(user: WorkspacePerson): readonly EffectiveModuleAccess[] {
   const mayViewOverview = ["admin", "superadmin"].includes(user.role)
@@ -534,9 +540,15 @@ export function App() {
     setNavigationEditing(false);
     setSession(authenticated);
     persistRefreshSession(authenticated.refreshToken);
-    // Each authenticated session starts at the personal hub, never another
-    // employee's or the previous session's restored section.
-    setActiveSection("home");
+    // A new session never restores the previous employee's section. The
+    // chairman starts in the team overview; everyone else keeps their hub.
+    const chairmanHome = chairmanHasTeamHome(loaded.currentUser, loaded.moduleAccess ?? fallbackModuleAccess(loaded.currentUser));
+    setActiveSection(chairmanHome ? "team_overview" : "home");
+    setEfficiencyLoading(chairmanHome);
+    if (chairmanHome) void loadWorkspaceEfficiency(authenticated.accessToken)
+      .then((overview) => { if (activeToken.current === authenticated.accessToken) setEfficiency(overview); })
+      .catch((error: unknown) => { if (activeToken.current === authenticated.accessToken) setEfficiencyError(error instanceof Error ? error.message : "Не удалось загрузить данные"); })
+      .finally(() => { if (activeToken.current === authenticated.accessToken) setEfficiencyLoading(false); });
     setConnectionDetail(apiConnectionLabel());
     setAuthError(undefined);
     setBackgroundError("");
@@ -2034,9 +2046,17 @@ export function App() {
     payment_requests: workspace.requests.filter((request) => request.status === "running").length,
     notifications: workspace.notifications.filter((item) => !item.readAt).length,
   };
-  const orderedNavItems = visibleNavigation(workspace.personalPreferences.navigationOrder, workspace.personalPreferences.hiddenNavigationKeys, canView)
-    .filter((key) => key !== "project_funding" && key !== "notifications")
+  const chairmanHome = chairmanHasTeamHome(workspace.currentUser, workspace.moduleAccess);
+  const hiddenNavigationKeys = chairmanHome
+    ? (workspace.personalPreferences.hiddenNavigationKeys ?? []).filter((key) => key !== "team_overview")
+    : workspace.personalPreferences.hiddenNavigationKeys ?? [];
+  const orderedNavItems = visibleNavigation(workspace.personalPreferences.navigationOrder, hiddenNavigationKeys, canView)
+    .filter((key) => key !== "project_funding" && key !== "notifications" && (!chairmanHome || key !== "home"))
     .map((key) => navItems.find((item) => item.key === key)!);
+  if (chairmanHome) {
+    const teamHomeIndex = orderedNavItems.findIndex((item) => item.key === "team_overview");
+    if (teamHomeIndex > 0) orderedNavItems.unshift(...orderedNavItems.splice(teamHomeIndex, 1));
+  }
   const sidebarItems = groupAiNavigation(orderedNavItems);
   const aiModuleGroup = sidebarItems.find((item) => item.key === "ai_modules");
   const aiModuleExpansionHeight = aiModuleGroup?.key === "ai_modules" ? aiModuleGroup.modules.length * 46 + 9 : 0;
@@ -2044,6 +2064,15 @@ export function App() {
     !canView(activeSection);
   const fallbackSection = orderedNavItems.find((item) => item.key !== "settings")?.key ?? "notifications";
   const displayedSection = activeSectionDenied && fallbackSection !== "settings" ? fallbackSection : activeSection;
+  const openPersonalHomeTarget = (target: HomeTarget) => {
+    if (!canView(target.section) || target.section === "settings") return;
+    if (target.section === "feed" && target.entityId) { void openFeedPost(target.entityId); return; }
+    setActiveSection(target.section);
+    if (target.section !== "notifications") {
+      setFocusTarget({ section: target.section, entityId: target.entityId,
+        incomingReferent: target.incomingReferent, revision: Date.now() });
+    }
+  };
   const renderEmbeddedChat = (
     chatId: string,
     contextLabel: "задачи" | "проекта" | "поездки",
@@ -2113,7 +2142,7 @@ export function App() {
           </div>
           {navigationEditing ? <NavigationEditor key={workspace.currentUser.id}
             order={workspace.personalPreferences.navigationOrder} revision={workspace.personalPreferences.revision} labels={navigationLabels}
-            hiddenKeys={["projects", "project_funding", ...(workspace.personalPreferences.hiddenNavigationKeys ?? []), ...navItems.filter((item) => !canView(item.key)).map((item) => item.key)]}
+            hiddenKeys={["projects", "project_funding", ...(chairmanHome ? (["home"] as const) : []), ...hiddenNavigationKeys, ...navItems.filter((item) => !canView(item.key)).map((item) => item.key)]}
             icons={Object.fromEntries(navItems.map((item) => [item.key, item.icon]))}
             badges={badgeBySection}
             onClose={() => setNavigationEditing(false)}
@@ -2195,7 +2224,7 @@ export function App() {
           </WorkspaceNotice> : null}
 
           <WorkspaceSectionContent authorityKey={JSON.stringify([session.user.id, session.user.role, workspace.moduleAccess])} section={displayedSection}>
-            <RecoveryBoundary key={`${session.user.id}:${displayedSection}`} onHome={() => setActiveSection("home")}>
+            <RecoveryBoundary key={`${session.user.id}:${displayedSection}`} onHome={() => setActiveSection(chairmanHome ? "team_overview" : "home")}>
             {displayedSection === "home" ? <PersonalHomeView
               key={session.user.id}
               token={session.accessToken}
@@ -2209,16 +2238,7 @@ export function App() {
                 await refreshWorkspace(session.accessToken);
                 if (canView("zoom_meetings")) await refreshZoom();
               }}
-              onOpen={target => {
-                if (!canView(target.section)) return;
-                if (target.section === "settings") return;
-                if (target.section === "feed" && target.entityId) { void openFeedPost(target.entityId); return; }
-                setActiveSection(target.section);
-                if (target.section !== "notifications") {
-                  setFocusTarget({ section: target.section, entityId: target.entityId,
-                    incomingReferent: target.incomingReferent, revision: Date.now() });
-                }
-              }}
+              onOpen={openPersonalHomeTarget}
             /> : null}
             {displayedSection === "notifications" ? (
               <NotificationCenter
@@ -2385,7 +2405,28 @@ export function App() {
                     setFocusTarget((current) => ({ section: "tasks", entityId: taskId, revision: (current?.revision ?? 0) + 1 }));
                     setActiveSection("tasks");
                   }}
-                />
+                  paymentRequests={canView("payment_requests") && workspace.workflow ? workspace.requests : []}
+                  onSelectPaymentRequest={canView("payment_requests") && workspace.workflow ? (requestId) => {
+                    setFocusTarget((current) => ({ section: "payment_requests", entityId: requestId, revision: (current?.revision ?? 0) + 1 }));
+                    setActiveSection("payment_requests");
+                  } : undefined}
+                >
+                  {chairmanHome ? <PersonalHomeView
+                    variant="team-supplement"
+                    token={session.accessToken}
+                    workspace={workspace}
+                    canView={canView}
+                    zoomMeetings={zoomRegistry?.meetings}
+                    zoomError={zoomError}
+                    zoomLoading={canView("zoom_meetings") && !zoomRegistry && !zoomError}
+                    onOpenNotification={openNotification}
+                    onRefresh={async () => {
+                      await refreshWorkspace(session.accessToken);
+                      if (canView("zoom_meetings")) await refreshZoom();
+                    }}
+                    onOpen={openPersonalHomeTarget}
+                  /> : null}
+                </TeamDashboardView>
               </section>
             ) : null}
             {displayedSection === "payment_requests" && workspace.workflow ? (
@@ -2660,7 +2701,7 @@ export function App() {
             </RecoveryBoundary>
             {canView("survey_analytics") && (displayedSection === "survey_analytics" || surveyVisitedBy === session.user.id) ? (
               <div style={{ display: displayedSection === "survey_analytics" ? "contents" : "none" }}>
-                <RecoveryBoundary key={session.user.id} onHome={() => setActiveSection("home")}>
+                <RecoveryBoundary key={session.user.id} onHome={() => setActiveSection(chairmanHome ? "team_overview" : "home")}>
                   <SurveyAnalyticsView key={session.user.id} token={session.accessToken}
                     canCreate={modulePermissions.survey_analytics?.create ?? false}
                     canEdit={modulePermissions.survey_analytics?.edit ?? false} />

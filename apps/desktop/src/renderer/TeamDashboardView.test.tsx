@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import { FluentProvider } from "@fluentui/react-components";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { EfficiencyOverview, WorkspacePerson, WorkspaceTask } from "@yuksalish/contracts";
+import type { ApprovalRequestSummary, EfficiencyOverview, WorkspacePerson, WorkspaceTask } from "@yuksalish/contracts";
 
 import { TeamDashboardView } from "./TeamDashboardView";
 import { workspaceTheme } from "./workspace-theme";
@@ -117,7 +117,8 @@ describe("TeamDashboardView", () => {
     renderDashboard();
 
     expect(screen.getByRole("heading", { name: "Добрый день, Азиза" })).toBeInTheDocument();
-    expect(within(screen.getByText("Активные задачи").closest("button")!).getByText("3")).toBeInTheDocument();
+    expect(screen.queryByText("Активные задачи")).not.toBeInTheDocument();
+    expect(screen.queryByText("Срок сегодня")).not.toBeInTheDocument();
     expect(within(screen.getByText("Нужна помощь").closest("button")!).getByText("1")).toBeInTheDocument();
     expect(screen.getByText(/не норму и не оценку сотрудника/i)).toBeInTheDocument();
     expect(screen.getByText("80%")).toBeInTheDocument();
@@ -135,7 +136,7 @@ describe("TeamDashboardView", () => {
 
   it("keeps each metric label and note in one copy block, separate from its counter", () => {
     renderDashboard();
-    for (const label of ["Активные задачи", "Нужна помощь", "Ждут решения", "Срок сегодня"]) {
+    for (const label of ["Нужна помощь", "Ждут решения", "Перенос срока", "Приглашения"]) {
       const card = screen.getByText(label).closest("button")!;
       const copy = card.querySelector(".team-dash-metric-copy");
       expect(copy).toHaveTextContent(label);
@@ -153,7 +154,7 @@ describe("TeamDashboardView", () => {
     const attention = screen.getByRole("region", { name: "Требует внимания" });
     expect(within(attention).getByText("Проверить бюджет")).toBeInTheDocument();
     expect(within(attention).queryByText("Подготовить договор")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Показать всю команду" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Показать все задачи" })).toBeInTheDocument();
   });
 
   it("keeps EFF-1 optional when its API is unavailable", () => {
@@ -172,9 +173,36 @@ describe("TeamDashboardView", () => {
     fireEvent.click(screen.getByText("Ждут решения").closest("button")!);
     expect(within(attention).getByText("Проверить бюджет")).toBeInTheDocument();
     expect(within(attention).queryByText("Подготовить договор")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByText("Активные задачи").closest("button")!);
+    fireEvent.click(screen.getByRole("button", { name: "Показать все задачи" }));
     expect(within(attention).getByText("Подготовить договор")).toBeInTheDocument();
     expect(within(attention).getByText("Проверить бюджет")).toBeInTheDocument();
+  });
+
+  it("places the presence overview immediately before workload, after the action blocks", () => {
+    renderDashboard();
+    const presence = screen.getByText("Отметки рабочего дня");
+    const attention = screen.getByRole("region", { name: "Требует внимания" });
+    const workload = screen.getByRole("region", { name: "Текущая нагрузка" });
+    expect(attention.compareDocumentPosition(presence) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(presence.compareDocumentPosition(workload) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("counts only payment approvals actionable by this user and opens their card", () => {
+    const details = { projectName: "Проект", projectCode: "P", sourceAccount: "", destinationAccount: "", requestPriority: "normal" as const, comment: "", tripPurpose: "", employeeIds: [], paymentReason: "" };
+    const pending: ApprovalRequestSummary = {
+      id: "pay-1", number: "12", title: "Оплата услуг", amount: 100, currency: "UZS", status: "running", statusLabel: "В работе",
+      activeNodeKeys: ["approval"], activeStages: [{ key: "approval", label: "Согласование", kind: "approval", canAct: true }], stageLabel: "Согласование",
+      requesterId: "employee", responsibleUserId: "manager", purpose: "Услуги", details, createdAt: "2026-09-09T09:00:00Z", updatedAt: "2026-09-09T09:00:00Z", revision: 1, versions: [], actions: [],
+    };
+    const onSelectPaymentRequest = vi.fn();
+    render(<FluentProvider theme={workspaceTheme}><TeamDashboardView token="test-token" tasks={[]} people={people} currentUserId="manager" efficiencyLoading={false} onSelectTask={vi.fn()} paymentRequests={[pending, { ...pending, id: "pay-2", activeStages: [{ ...pending.activeStages[0]!, canAct: false }] }, { ...pending, id: "pay-3", status: "approved" }]} onSelectPaymentRequest={onSelectPaymentRequest} /></FluentProvider>);
+    const card = screen.getByText("Заявки на оплату").closest("button")!;
+    expect(card).toHaveTextContent("ждут вашего решения");
+    expect(within(card).getByText("1")).toBeInTheDocument();
+    fireEvent.click(card);
+    const list = screen.getByRole("region", { name: "Заявки на оплату, ожидающие решения" });
+    fireEvent.click(within(list).getByRole("button", { name: /Оплата услуг/ }));
+    expect(onSelectPaymentRequest).toHaveBeenCalledWith("pay-1");
   });
 
   it("opens flow groups in one drawer and resets task detail when another group is selected", () => {
