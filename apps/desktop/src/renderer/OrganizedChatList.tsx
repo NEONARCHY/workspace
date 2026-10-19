@@ -2,10 +2,10 @@ import { WorkspaceNotice } from "./WorkspaceNotice";
 import { SpatialSort, SpatialSortItem } from "./SpatialSort";
 import { useEffect, useMemo, useRef, useState, type ReactNode, type TransitionEvent } from "react";
 import type { ChatMessage, ChatSummary, PersonalChatAction, PersonalPreferences, WorkspaceDepartment, WorkspacePerson } from "@yuksalish/contracts";
-import { Badge, Menu, MenuItem, MenuList, MenuPopover, MenuTrigger } from "@fluentui/react-components";
+import { Badge, Button, Menu, MenuItem, MenuList, MenuPopover, MenuTrigger } from "@fluentui/react-components";
 import { EmployeeAvatar as Avatar } from "./EmployeeAvatar";
 import { Input } from "./WorkspaceInput";
-import { Airplane20Regular, Archive20Regular, ArrowDown20Regular, ArrowUp20Regular, Delete20Regular, Folder20Regular, MoreHorizontal20Regular, Pin16Filled, Pin20Regular, PinOff20Regular, Search24Regular, SignOut20Regular, TaskListSquareLtr24Regular } from "@fluentui/react-icons";
+import { Add24Regular, Airplane20Regular, Archive20Regular, ArrowDown20Regular, ArrowUp20Regular, Delete20Regular, Folder20Regular, MoreHorizontal20Regular, Pin16Filled, Pin20Regular, PinOff20Regular, Search24Regular, SignOut20Regular, TaskListSquareLtr24Regular } from "@fluentui/react-icons";
 import { moveBefore } from "./personal-organization";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
@@ -24,7 +24,8 @@ const bucketLabel = (bucket: ChatBucket): string => bucket === "chats" ? "Чат
 
 const bucketEmptyMessage = (bucket: ChatBucket): string => bucket === "archive" ? "Архив пуст" : bucket === "task-chats" ? "Чатов задач не найдено" : bucket === "project-chats" ? "Чатов проектов не найдено" : bucket === "trip-chats" ? "Чатов поездок не найдено" : "Все чаты в архиве";
 
-export function OrganizedChatList({ token, chats, messages, people = [], departments, currentUserId, activeChatId, focusChatId, preferences, onSelect, onOpenDirect, onChange, onReorder, onDelete, onLeave }: {
+export function OrganizedChatList({ token, chats, messages, people = [], departments, currentUserId, activeChatId, focusChatId, preferences, onSelect, onOpenDirect, onChange, onReorder, onDelete, onLeave, onCreateGroup }: {
+  readonly onCreateGroup?: () => void;
   readonly token?: string;
   readonly chats: readonly ChatSummary[];
   readonly messages: readonly ChatMessage[];
@@ -152,8 +153,10 @@ export function OrganizedChatList({ token, chats, messages, people = [], departm
     setBucket(nextBucket);
   };
   return <>
-    <Input aria-label="Поиск чатов и сообщений" className="pane-search" contentBefore={<Search24Regular />}
+    <div className="chat-list-searchbar"><Input aria-label="Поиск чатов и сообщений" className="pane-search" contentBefore={<Search24Regular />}
       placeholder={archive ? "Поиск в архиве" : "Поиск по чатам и сообщениям"} value={query} onChange={(_, data) => setQuery(data.value)} />
+      {onCreateGroup ? <Button appearance="subtle" icon={<Add24Regular />} aria-label="Создать группу" title="Создать группу" onClick={onCreateGroup} /> : null}
+    </div>
     <div className={`chat-buckets is-${bucket}${morePreviewActive || bucket === "project-chats" || bucket === "trip-chats" ? " is-more" : ""}`} role="group" aria-label="Папки чатов">
       <span className="chat-bucket-slider" aria-hidden="true" onTransitionEnd={(event: TransitionEvent<HTMLSpanElement>) => {
         if (event.target !== event.currentTarget) return;

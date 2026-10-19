@@ -19,6 +19,23 @@
 .forward-dialog-chats { display: grid; gap: 4px; max-height: 340px; overflow: auto; margin-top: 12px; }
 .forward-dialog-chats button { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px; border: 0; border-radius: 12px; background: transparent; font: inherit; color: inherit; text-align: left; cursor: pointer; }
 .forward-dialog-chats button:hover:not(:disabled) { background: var(--ws-hover, var(--ws-theme-surface-soft, #e9f5f6)); }
+.forward-dialog-chats button { position: relative; }
+.forward-dialog-chats button + button::before { content: ""; position: absolute; top: -2px; left: 62px; right: 10px; height: 1px; background: linear-gradient(90deg, transparent, var(--ws-line) 15%, var(--ws-line) 85%, transparent); }
+.forward-dialog-chats button > .fui-Avatar { flex: none; }
+.message-selection-toolbar { display: flex; flex: none; align-items: center; flex-wrap: wrap; gap: 8px; padding: 10px 16px; border-block: 1px solid var(--ws-line); background: var(--ws-muted-surface); }
+.message-selection-toolbar > span { margin-inline-end: auto; font-size: 13px; }
+.message-select { flex: none; align-self: center; width: 20px; height: 20px; margin: 4px; accent-color: var(--ws-link); cursor: pointer; }
+.message-select:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 3px; }
+.message.is-selecting { cursor: pointer; padding-inline: 4px; }
+.message.is-selected { border-radius: 14px; background: color-mix(in srgb, var(--ws-link) 12%, transparent); }
+.message.is-selecting .message-actions, .message.is-selecting .message-reactions { pointer-events: none; visibility: hidden; }
+.messenger-view .chat-list-searchbar { display: flex; align-items: center; gap: 8px; flex: none; }
+.messenger-view .chat-list-searchbar .pane-search { flex: 1; min-width: 0; margin: 0; }
+.chat-list-searchbar > .fui-Button { flex: none; width: 40px; min-width: 40px; height: 40px; padding: 8px; border-radius: 10px; }
+@media (forced-colors: active) {
+  .forward-dialog-chats button + button::before { background: CanvasText; }
+  .message.is-selected { outline: 1px solid Highlight; }
+}
 .forward-dialog-chats button > span:last-child { display: grid; gap: 4px; min-width: 0; }
 .forward-dialog-chats strong { overflow-wrap: anywhere; font-size: 14px; }
 .forward-dialog-chats small { color: var(--ws-text-secondary); font-size: 12px; }

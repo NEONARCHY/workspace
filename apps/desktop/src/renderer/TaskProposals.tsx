@@ -60,7 +60,7 @@ export function TaskProposals({ token, currentUserId, people, tasks, revision, f
       setError(cause instanceof Error ? cause.message : "Не удалось сохранить решение");
     } finally { setBusy(false); }
   };
-  return <section className="record-section" aria-label="Заявки на постановку задач">
+  return <section className="record-section task-proposals" aria-label="Заявки на постановку задач">
     <details open={Boolean(focusId && proposals.some((item) => item.id === focusId))}>
       <summary>Заявки на постановку · {pending.length} ожидают подтверждения</summary>
       <p>Входящие заявки и ваши предложения. До подтверждения это не рабочие задачи.</p>

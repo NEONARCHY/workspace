@@ -1,6 +1,9 @@
-from uuid import UUID
+from contextlib import suppress
+from datetime import UTC, datetime
+from uuid import UUID, uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import func, insert, select
+from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from .access_control import ensure_module_action
@@ -14,7 +17,8 @@ from .messenger_service import (
     message_with_details,
     send_chat_message,
 )
-from .tables import chats, feed_posts, messages, users
+from .object_storage import ObjectStorage, ObjectStorageError
+from .tables import attachments, chats, feed_posts, messages, users
 from .workspace_schemas import (
     ChatMessageResponse,
     ForwardMessageRequest,
@@ -29,12 +33,14 @@ async def forward_message(
     user: AuthenticatedUser,
     chat_id: UUID,
     payload: ForwardMessageRequest,
+    storage: ObjectStorage | None = None,
 ) -> ChatMessageResponse:
     # The client supplies only source IDs; names, excerpts and provenance are server-owned.
     await ensure_module_action(connection, user, "messenger", "edit")
     await connection.execute(select(func.pg_advisory_xact_lock(payload.request_id.int % (2**63))))
     source_chat_id = None
     entities: list[MessageEntity] = []
+    source_attachments: list[RowMapping] = []
     if payload.kind == "message":
         source_chat_id = await connection.scalar(
             select(messages.c.chat_id).where(
@@ -138,6 +144,22 @@ async def forward_message(
             if invitation is None or not invitation.available:
                 raise WorkspaceRepositoryError(404, "Приглашение для пересылки недоступно")
         body = source["body"]
+        source_attachments = list(
+            (
+                await connection.execute(
+                    select(attachments)
+                    .where(
+                        attachments.c.owner_type == "message",
+                        attachments.c.owner_id == payload.source_id,
+                    )
+                    .order_by(attachments.c.created_at, attachments.c.id)
+                )
+            ).mappings()
+        )
+        if source_attachments and not member_permissions(member).upload_files:
+            raise WorkspaceRepositoryError(403, "Нет права отправлять файлы в этот чат")
+        if source_attachments and storage is None:
+            raise WorkspaceRepositoryError(503, "Хранилище файлов недоступно для пересылки")
         entities = [MessageEntity.model_validate(item) for item in (source.get("entities") or [])]
         if source["forwarded"]:
             forwarded = dict(source["forwarded"])
@@ -165,13 +187,42 @@ async def forward_message(
                 "author_name": name or "Сотрудник",
             }
     forwarded.update(source_kind=payload.kind, source_id=str(payload.source_id))
-    result = await send_chat_message(
-        connection,
-        user,
-        chat_id,
-        SendMessageRequest(body=body, entities=entities),
-        message_id=payload.request_id,
-        forwarded=forwarded,
-    )
-    await audit(connection, user, "message.forwarded", chat_id, {"message_id": result.id})
-    return result
+    copies: list[tuple[RowMapping, UUID, str]] = []
+    completed = False
+    try:
+        # Copy bytes before creating a message; never silently send text without files.
+        for attachment in source_attachments:
+            attachment_id = uuid4()
+            key = f"message/{payload.request_id}/{attachment_id}"
+            copies.append((attachment, attachment_id, key))
+            if storage is not None:
+                await storage.copy(attachment["storage_key"], key)
+        result = await send_chat_message(
+            connection,
+            user,
+            chat_id,
+            SendMessageRequest(body=body, entities=entities),
+            message_id=payload.request_id,
+            forwarded=forwarded,
+        )
+        for attachment, attachment_id, key in copies:
+            await connection.execute(
+                insert(attachments).values(
+                    **{
+                        **dict(attachment),
+                        "id": attachment_id,
+                        "storage_key": key,
+                        "owner_id": UUID(result.id),
+                        "uploaded_by_user_id": user.id,
+                        "created_at": datetime.now(UTC),
+                    }
+                )
+            )
+        await audit(connection, user, "message.forwarded", chat_id, {"message_id": result.id})
+        completed = True
+        return result
+    finally:
+        if not completed and storage is not None:
+            for _, _, key in copies:
+                with suppress(ObjectStorageError):
+                    await storage.delete(key)

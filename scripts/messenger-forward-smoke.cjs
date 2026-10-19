@@ -1,0 +1,46 @@
+const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+let browser;
+(async () => {
+  browser = await chromium.launch({ channel: 'msedge', headless: true });
+  const page = await browser.newPage();
+  const errors = []; page.on('pageerror', error => errors.push(error.message));
+  const dir = 'tmp/messenger-forward-qa'; fs.mkdirSync(dir, { recursive: true });
+  for (const theme of ['light', 'dark']) for (const width of [1440, 1024, 640]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`http://127.0.0.1:5178/qa/detail-layout.html?view=messenger-forward&theme=${theme}`);
+    await page.evaluate(() => document.documentElement.classList.add('web-platform'));
+    const source = page.locator('[data-message-id="qa-photo"]');
+    await source.waitFor();
+    assert.equal(await page.getByRole('heading', { name: 'Сообщения', exact: true }).count(), 0);
+    await source.click({ button: 'right' });
+    await page.getByRole('button', { name: 'Выделить', exact: true }).click();
+    await page.getByRole('checkbox', { name: 'Выделить сообщение: Второе сообщение', exact: true }).check();
+    await page.getByRole('button', { name: 'Переслать выбранные', exact: true }).click();
+    let dialog = page.getByRole('dialog', { name: 'Переслать сообщения', exact: true });
+    await dialog.waitFor();
+    const avatars = await dialog.locator('.forward-dialog-chats .fui-Avatar').evaluateAll(nodes => nodes.map(node => getComputedStyle(node).width));
+    assert.ok(avatars.length && avatars.every(size => size === '40px'), JSON.stringify(avatars));
+    const divider = await dialog.locator('.forward-dialog-chats button').nth(1).evaluate(node => getComputedStyle(node, '::before').backgroundImage);
+    assert.ok(divider.includes('linear-gradient'));
+    await dialog.screenshot({ path: `${dir}/${theme}-${width}-dialog.png` });
+    await dialog.getByRole('button', { name: 'Отмена', exact: true }).click();
+    assert.ok((await page.getByRole('region', { name: 'Выделенные сообщения' }).textContent()).includes('Выбрано: 2'));
+    await page.getByRole('button', { name: 'Переслать выбранные', exact: true }).click();
+    dialog = page.getByRole('dialog', { name: 'Переслать сообщения', exact: true });
+    const target = dialog.getByRole('button', { name: /Бахтиёр Самугов/ });
+    await target.click();
+    await dialog.getByRole('alert').filter({ hasText: 'Переслано 1 из 2' }).waitFor();
+    await target.click();
+    await dialog.waitFor({ state: 'detached' });
+    const attempts = JSON.parse(await page.locator('[data-forward-attempts]').getAttribute('data-forward-attempts'));
+    assert.deepEqual(attempts.map(item => item.source), ['qa-photo', 'qa-text', 'qa-text']);
+    assert.equal(attempts[1].request, attempts[2].request);
+    assert.equal(await page.getByRole('region', { name: 'Выделенные сообщения' }).count(), 0);
+    if (width === 1440) await page.screenshot({ path: `${dir}/${theme}-messenger.png` });
+  }
+  assert.deepEqual(errors, []);
+  await browser.close();
+  console.log('Forwarding UI: 6 theme/viewport cases, 40px avatars, dividers, selection, cancellation, ordered retry and no duplicate successful sends passed.');
+})().catch(async error => { console.error(error); await browser?.close(); process.exit(1); });

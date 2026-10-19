@@ -1610,6 +1610,28 @@ describe("Private messenger", () => {
     expect(onSendMessage).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Переслать сообщение" })).not.toBeInTheDocument());
   });
+  it("selects several messages, keeps them on dialog cancellation and forwards in chat order", async () => {
+    const onForwardContent = vi.fn().mockResolvedValue({ id: "forwarded" });
+    const messages: ChatMessage[] = [
+      { id: "first", chatId: "finance", authorId: "dilshod", body: "Первое с фото", time: "12:00" },
+      { id: "second", chatId: "finance", authorId: "aziza", body: "Второе сообщение", time: "12:01" },
+    ];
+    renderMessenger({ messages, onForwardContent });
+    expect(screen.queryByRole("heading", { name: "Сообщения" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Создать группу" })).toBeInTheDocument();
+    openMessageMenu(messages[1]!.body);
+    fireEvent.click(screen.getByRole("button", { name: "Выделить" }));
+    expect(screen.getByRole("checkbox", { name: "Выделить сообщение: Второе сообщение" })).toBeChecked();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Выделить сообщение: Первое с фото" }));
+    fireEvent.click(screen.getByRole("button", { name: "Переслать выбранные" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Переслать сообщения" })).getByRole("button", { name: "Отмена" }));
+    expect(screen.getByRole("region", { name: "Выделенные сообщения" })).toHaveTextContent("Выбрано: 2");
+    fireEvent.click(screen.getByRole("button", { name: "Переслать выбранные" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Переслать сообщения" })).getByRole("button", { name: /Бахтиёр Самугов/ }));
+    await waitFor(() => expect(onForwardContent).toHaveBeenCalledTimes(2));
+    expect(onForwardContent.mock.calls.map(call => call[1].id)).toEqual(["first", "second"]);
+    await waitFor(() => expect(screen.queryByRole("region", { name: "Выделенные сообщения" })).not.toBeInTheDocument());
+  });
 
   it.each(["voice", "forwarded", "text"])("keeps the %s timestamp separate from content and compact for voice", kind => {
     renderMessenger({

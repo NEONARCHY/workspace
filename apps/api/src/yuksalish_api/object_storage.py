@@ -3,6 +3,7 @@ from io import BytesIO
 from typing import Protocol
 
 from minio import Minio
+from minio.commonconfig import CopySource
 
 from .settings import Settings
 
@@ -19,6 +20,8 @@ class ObjectStorage(Protocol):
     async def get(self, key: str) -> bytes: ...
 
     async def delete(self, key: str) -> None: ...
+
+    async def copy(self, source_key: str, target_key: str) -> None: ...
 
 
 class MinioObjectStorage:
@@ -74,6 +77,17 @@ class MinioObjectStorage:
         except Exception as error:
             raise ObjectStorageError("File could not be deleted") from error
 
+    async def copy(self, source_key: str, target_key: str) -> None:
+        try:
+            await asyncio.to_thread(
+                self._client.copy_object,
+                self._bucket,
+                target_key,
+                CopySource(self._bucket, source_key),
+            )
+        except Exception as error:
+            raise ObjectStorageError("File could not be forwarded") from error
+
 
 class InMemoryObjectStorage:
     def __init__(self) -> None:
@@ -94,3 +108,6 @@ class InMemoryObjectStorage:
 
     async def delete(self, key: str) -> None:
         self._objects.pop(key, None)
+
+    async def copy(self, source_key: str, target_key: str) -> None:
+        self._objects[target_key] = await self.get(source_key)
