@@ -1232,6 +1232,7 @@ describe("Private messenger", () => {
 
   it("shows sent text with blur instead of hiding it behind a particle canvas", async () => {
     const visible = vi.spyOn(HTMLElement.prototype, "getClientRects").mockReturnValue({ length: 1 } as DOMRectList);
+    const height = vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(600);
     const defaults = renderMessenger().props;
     cleanup();
     function Harness() {
@@ -1256,10 +1257,12 @@ describe("Private messenger", () => {
     await waitFor(() => expect(document.querySelector(".composer-send-text")).toBeNull(), { timeout: 2500 });
     expect(message.querySelector(".message-text")).toHaveTextContent("Плавное появление");
     visible.mockRestore();
+    height.mockRestore();
   });
 
   it("reveals remote incoming text with the same blur without a local send or history replay", () => {
     const visible = vi.spyOn(HTMLElement.prototype, "getClientRects").mockReturnValue({ length: 1 } as DOMRectList);
+    const height = vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(600);
     const { props, rerender } = renderMessenger();
     expect(document.querySelector('[data-text-animation="enter"]')).toBeNull();
     const incoming: ChatMessage = { id: "remote-blur", chatId: initialMessages[0]!.chatId, authorId: "other", body: "Входящее сообщение", time: "12:00" };
@@ -1268,6 +1271,7 @@ describe("Private messenger", () => {
     expect(document.querySelector('[data-message-id="remote-blur"] [data-text-animation="enter"]')).not.toBeNull();
     expect(props.onSendMessage).not.toHaveBeenCalled();
     visible.mockRestore();
+    height.mockRestore();
   });
 
   it("restores the draft when an animated send fails", async () => {

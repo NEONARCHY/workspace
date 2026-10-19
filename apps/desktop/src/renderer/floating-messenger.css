@@ -59,8 +59,8 @@
 .floating-messenger-panel .messenger-mini .conversation-search[hidden] { display: none; }
 .floating-messenger-panel .messenger-mini .message-scroll { padding: 12px 10px; }
 .floating-messenger-panel .messenger-mini .composer { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); padding: 10px; gap: 6px; }
-.floating-messenger-panel .messenger-mini .composer > .composer-input { grid-column: 1 / -2; grid-row: 1; }
-.floating-messenger-panel .messenger-mini .composer > .fui-Button:last-child { grid-column: -2 / -1; grid-row: 1; }
+.floating-messenger-panel .messenger-mini .composer > .composer-input { grid-column: 1 / -1; grid-row: 1; margin-inline-end: 44px; }
+.floating-messenger-panel .messenger-mini .composer > .fui-Button:last-child { grid-column: -2 / -1; grid-row: 1; justify-self: end; width: 38px; }
 .floating-messenger-panel .messenger-mini .composer > :not(.composer-input) { justify-self: center; }
 .floating-messenger-panel .messenger-mini .composer > :is(.composer-tool-button, .composer-rewrite-anchor) { justify-self: stretch; width: 100%; min-width: 0; }
 .floating-messenger-panel .messenger-mini .composer .composer-tool-button { width: 100%; min-width: 0; max-width: none; }

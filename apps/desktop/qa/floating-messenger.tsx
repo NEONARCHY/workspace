@@ -10,7 +10,9 @@ import "../src/renderer/page-scroll-layout.css";
 
 const noop = () => undefined;
 export function FloatingMessengerFixture() {
-  const rail = new URLSearchParams(location.search).has("scrollrail");
+  const params = new URLSearchParams(location.search);
+  const rail = params.has("scrollrail");
+  const history = Math.min(1000, Math.max(0, Number(params.get("history")) || 0));
   const compact = useBrowserCompactLayout();
   useEffect(() => {
     if (!rail) return;
@@ -19,10 +21,12 @@ export function FloatingMessengerFixture() {
   }, [rail]);
   const [section, setSection] = useState("Задачи");
   const [slot, setSlot] = useState<HTMLDivElement | null>(null);
-  const [chats, setChats] = useState(initialChats);
+  const [chats, setChats] = useState(() => params.has("unread")
+    ? initialChats.map(chat => ({ ...chat, unread: chat.id === "finance" ? Number(params.get("unread")) || 0 : 0 })) : initialChats);
   const [focusChatId, setFocusChatId] = useState<string>();
   const [sent, setSent] = useState<readonly { body: string; files: readonly string[] }[]>([]);
   const [messages, setMessages] = useState<readonly ChatMessage[]>([
+    ...Array.from({ length: history }, (_, index) => ({ id: `qa-history-${index}`, chatId: "finance", authorId: index % 2 ? "baxtiyor" : "aziza", body: `История ${index}: сообщение для проверки позиции открытия чата`, time: "11:00" })),
     { id: "qa-original", chatId: "finance", authorId: "baxtiyor", body: "Сообщение для проверки мини-окна", time: "12:00" },
   ]);
   const messenger: MessengerViewProps = {

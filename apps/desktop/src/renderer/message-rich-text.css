@@ -19,12 +19,24 @@ html body .app-provider .messenger-view .composer-textarea.composer-rich-editor 
 .pinned-message-item > small { padding-inline: 12px; color: var(--ws-muted); }
 .pinned-message-actions { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
 @media (forced-colors: none) {
+  html body .app-provider .messenger-view .composer-textarea.composer-rich-editor:focus {
+    border-color: transparent;
+    outline: none;
+    background: linear-gradient(var(--ws-surface), var(--ws-surface)) padding-box,
+      linear-gradient(90deg, transparent, color-mix(in srgb, var(--ws-link) 65%, white) 22%, color-mix(in srgb, var(--ws-link) 30%, transparent) 78%, transparent) top center / 80% 1px no-repeat border-box,
+      conic-gradient(from 0deg, var(--ws-link), color-mix(in srgb, var(--ws-link) 65%, transparent) 13%, color-mix(in srgb, var(--ws-link) 25%, transparent) 27%, color-mix(in srgb, var(--ws-link) 12%, transparent) 50%, color-mix(in srgb, var(--ws-link) 25%, transparent) 73%, color-mix(in srgb, var(--ws-link) 65%, transparent) 87%, var(--ws-link)) border-box;
+  }
   html[data-color-theme="dark"] body .app-provider .messenger-view .composer-textarea.composer-rich-editor {
     border-color: transparent;
     background: linear-gradient(var(--ws-surface), var(--ws-surface)) padding-box,
       var(--ws-satin-sheen) top center / 80% 1px no-repeat border-box, var(--ws-satin-edge) border-box;
   }
+  html[data-color-theme="dark"] body .app-provider .messenger-view .composer-textarea.composer-rich-editor:focus {
+    --ws-satin-sheen: linear-gradient(90deg, transparent, rgb(var(--ws-theme-ink-teal-rgb) / 85%) 22%, rgb(var(--ws-theme-ink-teal-rgb) / 40%) 78%, transparent);
+    --ws-satin-edge: conic-gradient(from 0deg, rgb(var(--ws-theme-ink-teal-rgb) / 85%), rgb(var(--ws-theme-ink-teal-rgb) / 65%) 13%, rgb(var(--ws-theme-ink-teal-rgb) / 24%) 27%, rgb(var(--ws-theme-ink-teal-rgb) / 12%) 50%, rgb(var(--ws-theme-ink-teal-rgb) / 24%) 73%, rgb(var(--ws-theme-ink-teal-rgb) / 65%) 87%, rgb(var(--ws-theme-ink-teal-rgb) / 85%));
+  }
 }
 @media (forced-colors: active) {
   html body .app-provider .messenger-view .composer-textarea.composer-rich-editor { border-color: CanvasText; }
+  html body .app-provider .messenger-view .composer-textarea.composer-rich-editor:focus { outline: 2px solid Highlight; outline-offset: -2px; }
 }

@@ -25,6 +25,7 @@ export function FloatingMessenger({ messenger, fullPage, pageSlot, onOpenFullPag
   const [pageBounds, setPageBounds] = useState<CSSProperties>({});
   const launcher = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLElement>(null);
+  const expansionAnchor = useRef<{ id?: string; offset: number; bottom: boolean } | undefined>(undefined);
   const elevation = useRef<HTMLDivElement>(null);
   const drag = useRef<{ id: number; x: number; y: number; start: MessengerPosition; next: MessengerPosition; moved: boolean } | undefined>(undefined);
   const frame = useRef<number | undefined>(undefined);
@@ -38,6 +39,21 @@ export function FloatingMessenger({ messenger, fullPage, pageSlot, onOpenFullPag
   const visible = fullPage ? Boolean(pageSlot) : miniOpen;
   const unread = messenger.chats.reduce((total, chat) => total + Math.max(0, chat.unread), 0);
   if (fullPage && !visited) setVisited(true);
+
+  useLayoutEffect(() => {
+    const anchor = expansionAnchor.current;
+    if (!anchor || !fullPage || !pageSlot || !pageBounds.width || !pageBounds.height) return;
+    const destination = pageSlot.getBoundingClientRect();
+    const zoom = readMessengerViewport().zoom;
+    if (Math.abs(Number(pageBounds.width) - destination.width / zoom) > 1
+      || Math.abs(Number(pageBounds.height) - destination.height / zoom) > 1) return;
+    const pane = panel.current?.querySelector<HTMLElement>(".message-scroll");
+    if (!pane?.clientHeight) return;
+    const row = [...pane.querySelectorAll<HTMLElement>("[data-message-row-id]")].find(item => item.dataset.messageRowId === anchor.id);
+    if (anchor.bottom) pane.scrollTop = pane.scrollHeight;
+    else if (row) pane.scrollTop += row.getBoundingClientRect().top - pane.getBoundingClientRect().top - anchor.offset;
+    expansionAnchor.current = undefined;
+  }, [fullPage, pageSlot, pageBounds]);
 
   useLayoutEffect(() => {
     if (miniOpen || fullPage || !restoreFocus.current) return;
@@ -224,12 +240,21 @@ export function FloatingMessenger({ messenger, fullPage, pageSlot, onOpenFullPag
           <span><MessageCircle size={18} aria-hidden="true" /><strong>Мессенджер</strong></span>
           <div>
             <button type="button" title="Вернуть кнопку в правый нижний угол" aria-label="Вернуть кнопку в правый нижний угол" onClick={() => savePosition({ x: 1, y: 1 })}><RotateCcw size={17} /></button>
-            <button type="button" title="Открыть полный мессенджер" aria-label="Открыть полный мессенджер" onClick={() => { setOpen(false); onOpenFullPage(activeChatId); }}><ArrowUpRight size={19} /></button>
+            <button type="button" title="Открыть полный мессенджер" aria-label="Открыть полный мессенджер" onClick={() => {
+              const pane = panel.current?.querySelector<HTMLElement>(".message-scroll");
+              if (pane?.clientHeight && pane.getClientRects().length) {
+                const top = pane.getBoundingClientRect().top;
+                const row = [...pane.querySelectorAll<HTMLElement>("[data-message-row-id]")].find(item => item.getBoundingClientRect().bottom > top);
+                expansionAnchor.current = { id: row?.dataset.messageRowId, offset: row ? row.getBoundingClientRect().top - top : 0, bottom: pane.scrollHeight - pane.scrollTop - pane.clientHeight < 2 };
+              }
+              setOpen(false); onOpenFullPage(activeChatId);
+            }}><ArrowUpRight size={19} /></button>
             <button type="button" title="Свернуть мини-мессенджер" aria-label="Свернуть мини-мессенджер" onClick={close}><Minus size={19} /></button>
           </div>
         </header>
         {notice ? <p className="floating-messenger-notice" role="status">{notice}</p> : null}
-        <MessengerView {...messenger} compact={!fullPage} visible={visible && !blocking && documentVisible} onActiveChatChange={setActiveChatId} />
+        <MessengerView {...messenger} compact={!fullPage} visible={visible && !blocking && documentVisible}
+          layoutReady={!fullPage || Boolean(pageSlot && pageBounds.width && pageBounds.height)} onActiveChatChange={setActiveChatId} />
       </section></div> : null}
     </div>
   </Portal>;

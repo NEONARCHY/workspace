@@ -126,6 +126,8 @@ interface OutgoingDraft {
 export interface MessengerViewProps {
   readonly compact?: boolean;
   readonly visible?: boolean;
+  /** The floating full-page host has measured its destination bounds. */
+  readonly layoutReady?: boolean;
   readonly onActiveChatChange?: (chatId: string | undefined) => void;
   readonly onForwardContent?: ForwardContentAction;
   readonly onOpenFeedPost?: (id: string) => void | Promise<void>;
@@ -263,12 +265,16 @@ function Conversation({
   focusMessageId,
   focusRevision,
   compact = false,
+  visible = true,
+  layoutReady = true,
+  opened = true,
 }: Omit<MessengerViewProps, "chats" | "onMarkRead"> & {
   readonly chat: ChatSummary;
   readonly availableChats: readonly ChatSummary[];
   readonly onManage: () => void;
   readonly onBack: () => void;
   readonly embedded?: boolean;
+  readonly opened?: boolean;
   readonly fileDropDisabledReason?: string;
 }) {
   const composerRevision = useRef(0);
@@ -442,7 +448,7 @@ function Conversation({
     [selectionMode, selectedIds, visibleSelectionIds, toggleSelection, cancelSelection]);
   const { arrivingIds, motionDisabled, cancelArrivalMotion } = useMessageArrivalMotion({
     paneRef: scrollRef, messages: renderedMessages, scope: `${chat.id}:${query}`,
-    followLatest, currentUserId,
+    followLatest, currentUserId, active: visible, opened, ready: layoutReady, unread: chat.unread,
   });
   useLayoutEffect(() => {
     const pane = scrollRef.current;
@@ -1565,8 +1571,8 @@ export function MessengerView(props: MessengerViewProps) {
     setListRevision((revision) => revision + 1);
   };
   useEffect(() => {
-    if (visible && (!compact || conversationOpen) && activeChat?.unread) void onMarkRead(activeChat.id);
-  }, [activeChat?.id, activeChat?.unread, onMarkRead, visible, compact, conversationOpen]);
+    if (visible && props.layoutReady !== false && (!compact || conversationOpen) && activeChat?.unread) void onMarkRead(activeChat.id);
+  }, [activeChat?.id, activeChat?.unread, onMarkRead, visible, props.layoutReady, compact, conversationOpen]);
   useEffect(() => {
     onActiveChatChange?.(conversationOpen || !compact ? activeChat?.id : undefined);
   }, [activeChat?.id, conversationOpen, compact, onActiveChatChange]);
@@ -1597,6 +1603,8 @@ export function MessengerView(props: MessengerViewProps) {
         <Conversation
           key={`${props.currentUserId}:${activeChat.id}`}
           {...props}
+          visible={visible && (!compact || conversationOpen)}
+          opened={!compact || conversationOpen}
           assistantDraft={assistantRecipient && activeChat.kind === "direct"
             && activeChat.members.some((member) => member.userId === assistantRecipient.id)
             ? props.assistantDraft : undefined}
