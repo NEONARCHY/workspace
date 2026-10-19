@@ -38,9 +38,10 @@ export function useMessageArrivalMotion({ paneRef, messages, scope, followLatest
 }) {
   const [disabled, setDisabled] = useState(() => document.hidden || Boolean(window.matchMedia?.(preferences).matches));
   const [arrivingIds, setArrivingIds] = useState<ReadonlySet<string>>(new Set());
+  const [unreadMessageId, setUnreadMessageId] = useState<string>();
   const previous = useRef<{ scope: string; ids: string[]; tops: Map<string, number>; scrollTop: number } | undefined>(undefined);
   const animations = useRef(new Map<HTMLElement, Animation>());
-  const entry = useRef<{ scope: string; unread: number; positioned: boolean } | undefined>(undefined);
+  const entry = useRef<{ scope: string; unread: number; anchorId?: string; positioned: boolean } | undefined>(undefined);
   const [layoutRevision, setLayoutRevision] = useState(0);
   useEffect(() => {
     const pane = paneRef.current;
@@ -78,6 +79,7 @@ export function useMessageArrivalMotion({ paneRef, messages, scope, followLatest
       return;
     }
     if (entry.current?.scope !== scope) entry.current = { scope, unread, positioned: false };
+    entry.current.anchorId ??= firstUnreadMessageId(messages, entry.current.unread, currentUserId);
     // Freeze unread before onMarkRead clears the summary, even if history arrives later.
     // Temporary invisibility (mini/full handoff, modal or hidden document) is not
     // a new chat entry. Keep its cursor; only closing the conversation resets it.
@@ -95,10 +97,14 @@ export function useMessageArrivalMotion({ paneRef, messages, scope, followLatest
     const following = followLatestRef.current;
     const initial = !entry.current.positioned && rows.length > 0;
     if (initial) {
-      const anchorId = firstUnreadMessageId(messages, entry.current.unread, currentUserId);
+      const anchorId = entry.current.anchorId;
+      // Render the boundary before measuring it, in the same pre-paint entry.
+      // Keep it for this opening even after the read acknowledgement clears unread.
+      if (unreadMessageId !== anchorId) { setUnreadMessageId(anchorId); return; }
       const anchor = rows.find(row => row.dataset.messageRowId === anchorId);
-      pane.scrollTop = anchor
-        ? pane.scrollTop + anchor.getBoundingClientRect().top - pane.getBoundingClientRect().top
+      const target = anchor?.querySelector<HTMLElement>(".message-unread-divider") ?? anchor;
+      pane.scrollTop = target
+        ? pane.scrollTop + target.getBoundingClientRect().top - pane.getBoundingClientRect().top
         : pane.scrollHeight;
       followLatestRef.current = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 80;
       entry.current.positioned = true;
@@ -136,6 +142,6 @@ export function useMessageArrivalMotion({ paneRef, messages, scope, followLatest
     previous.current = { scope, ids, tops, scrollTop: pane.scrollTop };
     if (!sameScope) setArrivingIds(current => current.size ? new Set() : current);
     else if (canAnimate) setArrivingIds(current => new Set([...current, ...additions]));
-  }, [messages, scope, paneRef, followLatestRef, currentUserId, active, opened, ready, unread, layoutRevision, disabled, cancel]);
-  return { arrivingIds, motionDisabled: disabled, cancelArrivalMotion: cancel };
+  }, [messages, scope, paneRef, followLatestRef, currentUserId, active, opened, ready, unread, unreadMessageId, layoutRevision, disabled, cancel]);
+  return { arrivingIds, unreadMessageId: opened ? unreadMessageId : undefined, motionDisabled: disabled, cancelArrivalMotion: cancel };
 }

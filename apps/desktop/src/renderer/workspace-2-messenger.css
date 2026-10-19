@@ -393,6 +393,22 @@
   font-variant-numeric: tabular-nums;
 }
 
+.messenger-view .message-unread-divider {
+  display: flex; align-items: center; gap: 12px; margin: 10px 0 14px;
+  color: var(--ws-link); font-size: 12px; font-weight: 600; line-height: 20px;
+  text-align: center;
+}
+.messenger-view .message-unread-divider::before,
+.messenger-view .message-unread-divider::after {
+  content: ""; flex: 1; min-width: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--ws-link) 35%, transparent);
+}
+@media (forced-colors: active) {
+  .messenger-view .message-unread-divider { color: CanvasText; }
+  .messenger-view .message-unread-divider::before,
+  .messenger-view .message-unread-divider::after { border-color: CanvasText; }
+}
+
 .messenger-view .message { position: relative; margin-bottom: 7px; }
 .messenger-view .message > .fui-Avatar { margin-top: 5px; }
 .messenger-view .message-avatar-spacer { width: 32px; flex: none; }

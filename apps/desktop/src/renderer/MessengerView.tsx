@@ -446,7 +446,7 @@ function Conversation({
   const isPaintPending = paint.isPending;
   const selection = useMemo(() => ({ active: selectionMode, ids: selectedIds, visibleIds: visibleSelectionIds, toggle: toggleSelection, cancel: cancelSelection }),
     [selectionMode, selectedIds, visibleSelectionIds, toggleSelection, cancelSelection]);
-  const { arrivingIds, motionDisabled, cancelArrivalMotion } = useMessageArrivalMotion({
+  const { arrivingIds, unreadMessageId, motionDisabled, cancelArrivalMotion } = useMessageArrivalMotion({
     paneRef: scrollRef, messages: renderedMessages, scope: `${chat.id}:${query}`,
     followLatest, currentUserId, active: visible, opened, ready: layoutReady, unread: chat.unread,
   });
@@ -711,8 +711,11 @@ function Conversation({
             : "История переписки";
           const deadlineRequest = message.systemKind === "task_deadline_request"
             ? taskForChat?.deadlineRequests?.find((item) => item.messageId === message.id) : undefined;
+          const unreadDivider = message.id === unreadMessageId
+            ? <div className="message-unread-divider" role="separator" aria-label="Непрочитанные сообщения">Непрочитанные сообщения</div> : null;
           if (message.systemKind) return <div key={message.id} data-message-row-id={message.id}>
             {(index === 0 || date !== previousDate) && <div className="date-separator">{date}</div>}
+            {unreadDivider}
             {deadlineRequest ? <div className="task-deadline-message" data-message-id={message.id} role="group" aria-label="Запрос переноса срока">
               <strong>Перенос срока · {deadlineRequest.status === "pending" ? "ожидает решения" : deadlineRequest.status === "approved" ? "подтверждён" : deadlineRequest.status === "rejected" ? "отклонён" : "неактуален"}</strong>
               <small>Запросил: {people.find((person) => person.id === deadlineRequest.requesterUserId)?.name ?? "Исполнитель"}</small>
@@ -728,8 +731,8 @@ function Conversation({
             </div>}
           </div>;
           const own = message.authorId === currentUserId;
-          const groupedWithPrevious = !query && messagesShareBubbleGroup(renderedMessages[index - 1], message);
-          const groupedWithNext = !query && messagesShareBubbleGroup(message, renderedMessages[index + 1]);
+          const groupedWithPrevious = !query && message.id !== unreadMessageId && messagesShareBubbleGroup(renderedMessages[index - 1], message);
+          const groupedWithNext = !query && renderedMessages[index + 1]?.id !== unreadMessageId && messagesShareBubbleGroup(message, renderedMessages[index + 1]);
           const groupPosition = groupedWithPrevious
             ? groupedWithNext ? "is-group-middle" : "is-group-last"
             : groupedWithNext ? "is-group-first" : "";
@@ -752,6 +755,7 @@ function Conversation({
               {(index === 0 || date !== previousDate) && (
                 <div className="date-separator">{date}</div>
               )}
+              {unreadDivider}
               <SelectableMessage
                 messageId={message.id}
                 label={`Выделить сообщение: ${message.body.slice(0, 80) || "Файл"}`}
@@ -877,7 +881,7 @@ function Conversation({
               </SelectableMessage>
             </div>
           );
-        }), [renderedMessages, activeMessages, taskForChat, people, canDecideDeadline, onDecideTaskDeadline, deadlineDecisionId, decideDeadline, arrivingIds, motionDisabled, currentUserId, query, attachments, onLoadAttachment, removingMessage, personName, personById, token, onOpenFeedPost, onDownloadAttachment, reactionTargetId, canSend, busy, run, onReactMessage, isPaintPending]);
+        }), [renderedMessages, activeMessages, taskForChat, people, canDecideDeadline, onDecideTaskDeadline, deadlineDecisionId, decideDeadline, arrivingIds, unreadMessageId, motionDisabled, currentUserId, query, attachments, onLoadAttachment, removingMessage, personName, personById, token, onOpenFeedPost, onDownloadAttachment, reactionTargetId, canSend, busy, run, onReactMessage, isPaintPending]);
   return (
     <MessengerFileDropSurface className={`conversation-pane${embedded ? " embedded-conversation" : ""}${voiceOpen ? " has-voice-draft" : ""}`}
       title={chat.title} blockedReason={fileDropBlocked} receive={acceptFiles} reject={setError}>

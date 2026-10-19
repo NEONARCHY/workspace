@@ -10,8 +10,8 @@ const message = (id: string, authorId = "other"): ChatMessage => ({ id, authorId
 function Harness({ messages, following = true, scope = "chat", active = true, ready = true, opened = true, unread = 0 }: { messages: ChatMessage[]; following?: boolean; scope?: string; active?: boolean; ready?: boolean; opened?: boolean; unread?: number }) {
   const paneRef = useRef<HTMLDivElement>(null);
   const followLatest = useRef(following);
-  const { arrivingIds } = useMessageArrivalMotion({ paneRef, messages, scope, followLatest, currentUserId: "me", active, ready, opened, unread });
-  return <div ref={paneRef} data-testid="pane" onScroll={() => { const pane = paneRef.current!; followLatest.current = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 80; }}>{messages.map(item => <div key={item.id} data-message-row-id={item.id} data-testid={item.id} data-arriving={arrivingIds.has(item.id)}>{item.body}</div>)}</div>;
+  const { arrivingIds, unreadMessageId } = useMessageArrivalMotion({ paneRef, messages, scope, followLatest, currentUserId: "me", active, ready, opened, unread });
+  return <div ref={paneRef} data-testid="pane" onScroll={() => { const pane = paneRef.current!; followLatest.current = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 80; }}>{messages.map(item => <div key={item.id} data-message-row-id={item.id} data-testid={item.id} data-arriving={arrivingIds.has(item.id)}>{item.id === unreadMessageId && <div className="message-unread-divider" role="separator">Непрочитанные сообщения</div>}{item.body}</div>)}</div>;
 }
 
 function geometry() {
@@ -19,7 +19,8 @@ function geometry() {
   vi.spyOn(HTMLElement.prototype, "getClientRects").mockReturnValue({ length: 1 } as DOMRectList);
   vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
     const isPane = this.dataset.testid === "pane";
-    const index = isPane ? 0 : [...this.parentElement!.children].indexOf(this);
+    const row = this.closest<HTMLElement>("[data-message-row-id]") ?? this;
+    const index = isPane ? 0 : [...row.parentElement!.children].indexOf(row);
     const top = isPane ? 0 : index * 80 - scrollTop;
     return { x: 0, y: top, top, bottom: top + (isPane ? 160 : 80), left: 0, right: 300, width: 300, height: isPane ? 160 : 80, toJSON: () => undefined };
   });
@@ -53,7 +54,9 @@ describe("Message arrival motion", () => {
     const messages = Array.from({ length: 10 }, (_, i) => message(String(i)));
     const view = render(<Harness messages={messages} unread={5} />);
     expect(screen.getByTestId("pane").scrollTop).toBe(400);
+    expect(screen.getByRole("separator").parentElement).toHaveAttribute("data-message-row-id", "5");
     view.rerender(<Harness messages={[...messages]} unread={0} />);
+    expect(screen.getAllByRole("separator")).toHaveLength(1);
     expect(screen.getByTestId("pane").scrollTop).toBe(400);
     view.rerender(<Harness messages={[...messages, message("incoming")]} />);
     expect(screen.getByTestId("pane").scrollTop).toBe(400);
@@ -64,6 +67,14 @@ describe("Message arrival motion", () => {
     geometry();
     const view = render(<Harness messages={[]} unread={5} />);
     view.rerender(<Harness messages={Array.from({ length: 10 }, (_, i) => message(String(i)))} />);
+    expect(screen.getByTestId("pane").scrollTop).toBe(400);
+  });
+  it("freezes the boundary ID while the host is preparing, even if another message arrives", () => {
+    geometry();
+    const messages = Array.from({ length: 10 }, (_, i) => message(String(i)));
+    const view = render(<Harness messages={messages} unread={5} ready={false} />);
+    view.rerender(<Harness messages={[...messages, message("new-arrival")]} ready />);
+    expect(screen.getByRole("separator").parentElement).toHaveAttribute("data-message-row-id", "5");
     expect(screen.getByTestId("pane").scrollTop).toBe(400);
   });
   it("waits for full-page portal bounds before consuming the unread anchor", () => {
@@ -91,9 +102,11 @@ describe("Message arrival motion", () => {
     view.rerender(<Harness messages={messages} active={false} />);
     view.rerender(<Harness messages={messages} />);
     expect(screen.getByTestId("pane").scrollTop).toBe(400);
+    expect(screen.getByRole("separator")).toBeInTheDocument();
     view.rerender(<Harness messages={messages} opened={false} />);
     view.rerender(<Harness messages={messages} />);
     expect(screen.getByTestId("pane").scrollTop).toBe(640);
+    expect(screen.queryByRole("separator")).not.toBeInTheDocument();
   });
   it("recognises tail additions but not edits, history prepends or removals", () => {
     expect(appendedMessageIds(["a", "b"], ["history", "a", "b", "c", "d"])).toEqual(["c", "d"]);

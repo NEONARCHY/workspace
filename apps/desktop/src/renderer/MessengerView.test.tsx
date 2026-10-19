@@ -76,6 +76,26 @@ function openMessageMenu(text: string) {
   fireEvent.contextMenu(message);
 }
 
+it.each([false, true])("keeps an unread divider before the captured first unread (system=%s) after mark-read", (system) => {
+  const rects = vi.spyOn(HTMLElement.prototype, "getClientRects").mockReturnValue({ length: 1 } as DOMRectList);
+  const height = vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(600);
+  const messages: ChatMessage[] = [
+    { id: "read-before", chatId: "finance", authorId: "baxtiyor", body: "Уже прочитано", time: "11:00" },
+    { id: "first-unread", chatId: "finance", authorId: "baxtiyor", body: "Новое сообщение", time: "11:01", ...(system ? { systemKind: "member_left" as const } : {}) },
+    { id: "own-between", chatId: "finance", authorId: "aziza", body: "Своё сообщение", time: "11:02" },
+    { id: "next-unread", chatId: "finance", authorId: "baxtiyor", body: "Ещё новое сообщение", time: "11:03" },
+  ];
+  const chats = initialChats.map(chat => ({ ...chat, unread: chat.id === "finance" ? 2 : 0 }));
+  const result = renderMessenger({ messages, chats });
+  const separator = screen.getByRole("separator", { name: "Непрочитанные сообщения" });
+  expect(separator.closest("[data-message-row-id]")).toHaveAttribute("data-message-row-id", "first-unread");
+  expect(separator.nextElementSibling).toHaveAttribute("data-message-id", "first-unread");
+  result.rerender(<FluentProvider theme={webLightTheme}><MessengerView {...result.props} chats={chats.map(chat => ({ ...chat, unread: 0 }))} /></FluentProvider>);
+  expect(screen.getAllByRole("separator", { name: "Непрочитанные сообщения" })).toHaveLength(1);
+  expect(screen.getByRole("separator", { name: "Непрочитанные сообщения" })).toBe(separator);
+  result.unmount(); rects.mockRestore(); height.mockRestore();
+});
+
 it("does not read chats in a closed mini messenger or merely in its list", async () => {
   const onMarkRead = vi.fn();
   const result = renderMessenger({ compact: true, visible: false, onMarkRead });
