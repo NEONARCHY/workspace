@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { FluentProvider } from "@fluentui/react-components";
 import type { LeaveRequest, TripRequest, WorkspacePerson, WorkspaceTask } from "@yuksalish/contracts";
 import { LeaveView } from "../src/renderer/LeaveView";
+import { HrView } from "../src/renderer/HrView";
 import { TeamDashboardView } from "../src/renderer/TeamDashboardView";
 import { TripApprovalsView } from "../src/renderer/TripApprovalsView";
 import { EmployeeProfileProvider } from "../src/renderer/EmployeeProfileLink";
@@ -14,6 +15,7 @@ import "../src/renderer/record-composer.css";
 import "../src/renderer/motion.css";
 import "../src/renderer/record-lists.css";
 import "../src/renderer/team-dashboard.css";
+import "../src/renderer/hr.css";
 import "../src/renderer/workday-presence.css";
 import "../src/renderer/spatial-workspace.css";
 import "../src/renderer/workspace-2-projects-trips.css";
@@ -26,6 +28,7 @@ import "../src/renderer/section-headers.css";
 import "../src/renderer/browser-responsive.css";
 import "../src/renderer/dark-theme.css";
 import "../src/renderer/workspace-field-borders.css";
+import "../src/renderer/workspace-inputs.css";
 
 const params = new URLSearchParams(location.search);
 const mode = params.get("mode") ?? "leaves";
@@ -73,19 +76,23 @@ window.fetch = async (input, init) => {
         tenureRules: [{ afterYears: 5, extraDays: 2 }, { afterYears: 10, extraDays: 4 }], canEditTenureRules: role === "hr" };
       status = 200;
     } else if (url.pathname.endsWith("/leave-requests")) { result = [leave]; status = 200; }
+    else if (url.pathname.endsWith("/hr")) {
+      result = { calculatedAt: "2026-10-19", settings: { hrUserId: "qa-1" }, profiles: [], registers: [] };
+      status = 200;
+    }
   }
   return new Response(JSON.stringify(result), { status, headers: { "Content-Type": "application/json" } });
 };
 const blocked = async () => { throw new Error("Изолированная проверка: сохранение отключено"); };
 createRoot(document.getElementById("root")!).render(
-  <FluentProvider theme={dark ? workspaceDarkTheme : workspaceTheme} className="app-provider"
-    style={{ zoom: params.has("zoom") ? 2 : 1 }}>
+  <FluentProvider theme={dark ? workspaceDarkTheme : workspaceTheme} className="app-provider">
     <EmployeeProfileProvider onOpenProfile={() => undefined}>
       <main className="launch-qa">
         {mode === "team" ? <TeamDashboardView token="qa" tasks={tasks} people={people}
           currentUserId="qa-0" efficiencyLoading={false} onSelectTask={() => undefined} />
         : mode === "trips" ? <TripApprovalsView requests={[trip]} people={people} currentUser={people[0]!}
           onCreate={blocked} onUpdate={blocked} onAction={blocked} />
+        : mode === "hr" ? <HrView token="qa" people={people} currentUser={people[1]!} />
         : <LeaveView token="qa" people={people} currentUserId={role === "hr" ? "qa-1" : "qa-0"}
           canCreate focusRequestId="qa-leave" />}
       </main>

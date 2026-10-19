@@ -22,6 +22,8 @@ from yuksalish_api.auth import AuthenticatedUser
 from yuksalish_api.employee_availability import ensure_trip_available, lock_employee_schedules
 from yuksalish_api.errors import WorkspaceRepositoryError
 from yuksalish_api.hr_hiring_tables import hiring_signatures
+from yuksalish_api.hr_schemas import HrProfileWrite
+from yuksalish_api.hr_service import HrError, save_profile
 from yuksalish_api.leave_service import (
     LeaveError,
     create_leave,
@@ -131,6 +133,35 @@ async def test_hr_revision_checks_requester_dates_and_keeps_hr_action(launch_db:
             action="reject", comment="Old browser tab", expected_updated_at=second.updated_at,
         ))
     assert first.status == "pending_hr"
+
+
+async def test_linked_hr_profile_supplies_organization_tenure_to_leave(launch_db: Fixture) -> None:
+    connection, actors, storage = launch_db
+    payload = HrProfileWrite(
+        employment_date=date(2020, 1, 10), service_anchor_date=date(2026, 1, 10),
+        service_years=6, service_months=0, service_days=0, service_reason="Test hiring order",
+    )
+    with pytest.raises(HrError) as denied:
+        await save_profile(connection, actors["employee"], actors["employee"].id, payload)
+    assert denied.value.status_code == 403
+    profile = await save_profile(connection, actors["hr"], actors["employee"].id, payload)
+    updated = await save_profile(connection, actors["hr"], actors["employee"].id, payload)
+    assert updated.id == profile.id and updated.user_id == actors["employee"].id
+    leave = await create_leave(connection, actors["employee"], storage, LeaveWriteRequest(
+        application_text="Менга меҳнат таътили беришингизни сўрайман.",
+        starts_on=date(2027, 6, 1), ends_on=date(2027, 6, 23),
+    ))
+    assert leave.organization_employment_date == payload.employment_date
+    reviewed = await review_hr(connection, actors["hr"], UUID(leave.id), LeaveHrDecisionRequest(
+        action="approve", starts_on=date(2027, 6, 1), ends_on=date(2027, 6, 23),
+        work_year_starts_on=date(2026, 6, 1), work_year_ends_on=date(2027, 5, 31),
+        calendar_days=23, paid_days=18, tenure_additional_days=2, return_on=date(2027, 6, 24),
+        order_employee_name="Test Employee", order_job_title="Bosh mutaxassis",
+        order_signer_name="Test Deputy", order_number="QA-LINK",
+        accounting_officer="Test Accountant",
+    ))
+    assert reviewed.tenure_additional_days == 2
+    assert reviewed.organization_employment_date == payload.employment_date
 
 
 async def _trip(connection: AsyncConnection, user: AuthenticatedUser) -> UUID:

@@ -9,6 +9,14 @@ const base = process.env.QA_BASE_URL || 'http://127.0.0.1:5176/qa/travel-leave-l
   mkdirSync(output, { recursive: true });
   const browser = await chromium.launch({ channel: 'msedge', headless: true });
   const page = await browser.newPage();
+  const devtools = await page.context().newCDPSession(page);
+  // Emulate browser zoom reflow (including portals), not CSS zoom, whose vw/vh
+  // layout differs from Ctrl+Plus and can place fixed dialogs outside the screen.
+  const viewport = async (width, height, scale = 1) => {
+    const size = { width: Math.round(width / scale), height: Math.round(height / scale) };
+    await page.setViewportSize(size);
+    await devtools.send('Emulation.setDeviceMetricsOverride', { ...size, deviceScaleFactor: scale, mobile: false });
+  };
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   // The fixture itself blocks APIs; also prevent accidental external network access.
@@ -21,7 +29,7 @@ const base = process.env.QA_BASE_URL || 'http://127.0.0.1:5176/qa/travel-leave-l
       ['desktop', 1440, 1000, ''], ['compact', 1024, 768, ''],
       ['mobile', 390, 844, ''], ['zoom', 1440, 1000, '&zoom'], ['dark', 1440, 1000, '&dark'],
     ]) {
-      await page.setViewportSize({ width, height });
+      await viewport(width, height, name === 'zoom' ? 2 : 1);
       await page.goto(`${base}?mode=leaves${extra}`);
       await page.getByRole('heading', { name: 'Проверка кадровой службы' }).waitFor();
       await page.getByRole('textbox', { name: 'Номер приказа (без «-сон а/ф»)' }).fill('QA-10');
@@ -41,7 +49,7 @@ const base = process.env.QA_BASE_URL || 'http://127.0.0.1:5176/qa/travel-leave-l
       assert((await text.inputValue()).includes('Синтетическая правка'), `${name}: lost text after failure`);
       console.log(`leaves ${name}: HR/footer/edit/preview/error preserve passed`);
     }
-    await page.setViewportSize({ width: 1440, height: 1000 });
+    await viewport(1440, 1000);
     await page.goto(`${base}?mode=team`);
     const workload = page.getByRole('region', { name: 'Нагрузка сотрудников' });
     await workload.waitFor();
@@ -63,6 +71,30 @@ const base = process.env.QA_BASE_URL || 'http://127.0.0.1:5176/qa/travel-leave-l
     await page.getByRole('button', { name: /К поездкам/ }).waitFor();
     await page.screenshot({ path: `${output}/trip-map.png`, fullPage: true });
     console.log('trips: composer/example/map passed');
+    for (const [name, width, height, extra] of [
+      ['compact', 1024, 768, ''], ['zoom', 1440, 1000, '&zoom'], ['dark', 1440, 1000, '&dark'],
+    ]) {
+      await viewport(width, height, name === 'zoom' ? 2 : 1);
+      await page.goto(`${base}?mode=hr${extra}`);
+      await page.getByRole('button', { name: 'Кадровая карточка', exact: true }).click();
+      const dialog = page.getByRole('dialog', { name: 'Кадровая карточка' });
+      await dialog.getByRole('button', { name: 'Сотрудник кадровой карточки' }).click();
+      await page.getByRole('button', { name: /Тестовый Сотрудник 1 бош мутахассис/, exact: true }).click();
+      const date = dialog.getByLabel('Дата приёма', { exact: true });
+      assert.equal(await date.inputValue(), '', 'Do not invent employment date');
+      await date.fill('2019-03-01');
+      await dialog.getByPlaceholder('Например: подтверждено трудовой книжкой').fill('Синтетический приказ');
+      const save = dialog.getByRole('button', { name: 'Сохранить карточку' });
+      await save.scrollIntoViewIfNeeded();
+      assert(await save.isEnabled(), `${name}: linked profile cannot be saved`);
+      await save.click();
+      await dialog.getByRole('alert').filter({ hasText: 'сохранение отключено' }).waitFor();
+      assert.equal(await date.inputValue(), '2019-03-01', 'HR date lost after error');
+      await page.screenshot({ path: `${output}/hr-profile-${name}.png`, fullPage: true });
+      await page.keyboard.press('Escape');
+      assert(await dialog.count() === 0);
+      console.log(`HR ${name}: employee/date/footer/error preserve passed`);
+    }
     assert.deepEqual(errors, [], 'browser exceptions');
   } catch (error) {
     console.error('Browser errors:', errors);
