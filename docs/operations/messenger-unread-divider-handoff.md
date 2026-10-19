@@ -20,6 +20,18 @@ Release-note and15 workflow tests passed. No live-account messages were sent.
 
 Final TypeScript check passed; Vite5178 stopped.
 
-Next: cherry-pick only this patch onto
-TEST9e0291f4 and replace web only. Preserve rollback, verify version/readiness/data
-counts and non-web container IDs. No API/schema/office/installed EXE update.
+## Delivered TEST
+
+Web2.0.073 / `localtest-20261019-unread-divider-35181b59`, built
+2026-10-19T11:25:22.745Z from compatibility4849b6b6 (source35181b59).
+Root/version/API readiness returned200 at `https://192.168.0.127:8443/`;
+web is healthy. Only web changed to8a46d2d69c99; all nine non-web IDs unchanged.
+Schema0102_merge_leave_task, users3/tasks1/messages133 unchanged. Rollback:
+`yuksalish-localtest-web:pre-unread-divider-20261019` (2.0.072).
+No API/schema/office/installed EXE update, push/PR/merge/CI. No live-account
+read receipts or test messages were changed by browser QA; fixtures were synthetic.
+
+Continue source `fix/messenger-unread-divider`. Keep TEST compatibility branch
+`fix/messenger-unread-divider-test` separate from main. Future unread/pagination
+changes must preserve this captured boundary and switch to a server cursor if the
+complete-history/atomic-read model changes; see the previous entry handoff.
