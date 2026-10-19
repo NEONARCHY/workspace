@@ -19,3 +19,11 @@ Page-scroll rail work remains separately committed at 4fa0ddfc on
 `fix/page-scroll-gutters`, not deployed. Complete navigation lifecycle/native
 scrollbar measurement checks in its handoff before release. No push/PR/merge is
 authorized by this corrective follow-up.
+
+## Delivered TEST
+
+Web 2.0.057, build `localtest-20261019-search-surface-02fff5bf`, built
+2026-10-19T08:26:33.339Z. Root, version and API readiness returned 200.
+Only web changed (container 1ee775f00167); all nine non-web container IDs stayed
+unchanged. Schema 0102_merge_leave_task, users=3, tasks=1, messages=133.
+Rollback: `yuksalish-localtest-web:pre-search-surface-20261019` (2.0.056).
