@@ -47,7 +47,7 @@ export function FloatingMessenger({ messenger, fullPage, pageSlot, onOpenFullPag
 
   useLayoutEffect(() => {
     const element = panel.current;
-    if (!miniOpen || !element) return;
+    if (!miniOpen || !element?.animate) return;
     const preference = matchMedia("(prefers-reduced-motion: reduce), (forced-colors: active)");
     if (element.animate && !preference.matches) {
       const origin = element.style.getPropertyValue("--messenger-origin-clip");
