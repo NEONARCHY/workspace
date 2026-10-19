@@ -113,7 +113,7 @@ function Fixture() {
   const view = new URLSearchParams(location.search).get("view");
   if (view === "controls") return <FluentProvider theme={theme} className="app-provider"><EmployeeProfileProvider onOpenProfile={noop}><MessageFileControls /></EmployeeProfileProvider></FluentProvider>;
   return <FluentProvider theme={theme} className="app-provider" style={{ minHeight: "100dvh", color: "var(--ws-text)", background: "var(--ws-canvas)" }}>
-    <EmployeeProfileProvider onOpenProfile={noop}><main className="app-content" style={{ height: "100dvh", padding: 16 }}>
+    <EmployeeProfileProvider onOpenProfile={noop}><main className="app-content" style={{ height: "100dvh", padding: new URLSearchParams(location.search).has("scrollrail") ? 0 : 16 }}>
       {view === "payments" ? <ApprovalsView token="qa-only" canManage={false} canCreateRequest={false} isSuperadmin={false} currentUserId="qa" people={[]} positions={[]} requests={[]} calendarEvents={[]} attachments={[]} onSaveWorkflow={noop} onPublishWorkflow={noop} onCreateRequest={noop} onAction={noop} onDeleteRequest={noop} onReviseRequest={noop} onUploadAttachments={noop} onDownloadAttachment={noop} /> :
       view === "trips" ? <TripApprovalsView requests={[]} people={people} currentUser={people[0]!} onCreate={async () => undefined} onUpdate={async () => undefined} onAction={async () => undefined} /> :
       view === "messenger-forward" ? <MessengerForwardFixture /> :

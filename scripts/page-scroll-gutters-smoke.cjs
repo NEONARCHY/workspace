@@ -11,9 +11,10 @@ let browser;
   await page.route('**/api/**', route => route.fulfill({ status: 503, json: { detail: 'Local layout QA: no server' } }));
   fs.mkdirSync('tmp/page-scroll-gutters', { recursive: true });
   const rows = [];
-  for (const theme of ['light', 'dark']) for (const width of (process.env.QA_WIDTH ? [Number(process.env.QA_WIDTH)] : [1440, 1024, 640, 320])) {
+  const widths = process.env.QA_WIDTH ? [Number(process.env.QA_WIDTH)] : [1440, 1024, 640, 320];
+  for (const theme of ['light', 'dark']) for (const width of widths) {
     const cases = [...Array.from({ length: 16 }, (_, sample) => ({ section: 'samples', sample })),
-      ...['notifications', 'calendar', 'payments', 'messenger', 'zoom', 'trips', 'tasks', 'letters', 'team'].map(section => ({ section }))];
+      ...['home', 'survey', 'notifications', 'calendar', 'payments', 'messenger', 'zoom', 'trips', 'tasks', 'letters', 'team'].map(section => ({ section }))];
     const beforeCount = rows.length;
     for (const test of cases) {
       if (process.env.QA_CASE && test.section !== process.env.QA_CASE) continue;
@@ -30,22 +31,25 @@ let browser;
       await main.locator(':scope > *').first().waitFor();
       await page.waitForTimeout(100);
       const geometry = await main.evaluate(node => {
-        const root = node.firstElementChild;
+        const first = node.firstElementChild;
+        const root = getComputedStyle(first).display === 'contents' ? first.firstElementChild : first;
         const box = node.getBoundingClientRect(), content = root.getBoundingClientRect();
         const style = getComputedStyle(node), childStyle = getComputedStyle(root);
+        const painted = parseFloat(style.getPropertyValue('--ws-page-scrollbar-width'));
         return { right: innerWidth - content.right, scrollEdge: innerWidth - box.right,
+          leftGap: box.right - painted - content.right, rightGap: innerWidth - box.right, painted,
           inset: node.offsetWidth - node.clientWidth, padding: parseFloat(style.paddingRight),
           rootPadding: childStyle.paddingRight, rootMargin: childStyle.marginRight,
           rootOverflow: childStyle.overflowY, pageOverflow: style.overflowY,
           width: node.clientWidth, scrollWidth: node.scrollWidth,
           className: root.className };
       });
-      assert.ok(Math.abs(geometry.right - 20) <= 1, JSON.stringify({ theme, width, ...test, geometry }));
-      assert.ok(Math.abs(geometry.scrollEdge - (width >= 1024 ? 4 : 12)) <= 1, JSON.stringify({ width, ...test, geometry }));
+      assert.ok(Math.abs(geometry.right - (width >= 1024 ? 20 : 24 + geometry.painted)) <= 1, JSON.stringify({ theme, width, ...test, geometry }));
+      assert.ok(Math.abs(geometry.leftGap - geometry.rightGap) <= 1, JSON.stringify({ width, ...test, geometry }));
       assert.equal(geometry.rootOverflow, 'visible', JSON.stringify({ ...test, geometry }));
       assert.equal(geometry.pageOverflow, 'auto');
       assert.ok(geometry.scrollWidth <= geometry.width + 1, JSON.stringify({ ...test, geometry }));
-      if (test.section === 'team' && width !== 320) await page.screenshot({ path: `tmp/page-scroll-gutters/${theme}-${width}-team.png` });
+      if (['home', 'team'].includes(test.section) && width !== 320) await page.screenshot({ path: `tmp/page-scroll-gutters/${theme}-${width}-${test.section}.png` });
       // Force page overflow without changing business data or inner list sizing.
       await main.evaluate(node => {
         const sentinel = document.createElement('button');
@@ -67,7 +71,7 @@ let browser;
     console.log(`Page scroll rails: ${theme}, ${width}px, ${rows.length - beforeCount} layouts passed.`);
   }
   assert.deepEqual(errors, []);
-  fs.writeFileSync('tmp/page-scroll-gutters/report.json', JSON.stringify(rows, null, 2));
+  fs.writeFileSync(`tmp/page-scroll-gutters/report-${widths.join('-')}.json`, JSON.stringify(rows, null, 2));
   await browser.close();
   console.log(`${rows.length} page geometry/keyboard checks passed; real component views and all root classes, both themes.`);
 })().catch(async error => {

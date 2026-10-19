@@ -11,7 +11,8 @@ describe("Shared page scroll rail", () => {
     const page = css.match(/\.app-shell \.app-stage > \.app-content \{([^}]+)\}/)?.[1];
     expect(page).toContain("overflow-y: auto");
     expect(page).toContain("scrollbar-gutter: stable");
-    expect(page).toContain("var(--ws-page-trailing-gutter) - var(--ws-page-scroll-edge) - var(--ws-page-scrollbar-width)");
+    expect(page).toContain("var(--ws-page-trailing-gutter) - var(--ws-page-scrollbar-width)");
+    expect(page).toContain("var(--ws-page-scrollbar-width) - var(--ws-page-scrollbar-inset)");
     expect(css).toContain("padding-inline-end: 0");
     expect(css).toContain("margin-inline-end: 0");
     expect(css).toContain("overflow: visible");
@@ -19,9 +20,9 @@ describe("Shared page scroll rail", () => {
   });
   it("accounts for touch scrollbar width and existing compact shell clearance", () => {
     const css = read("page-scroll-layout.css");
-    expect(css).toContain("--ws-page-scrollbar-width: 6px");
-    expect(css).toContain("--ws-page-scrollbar-width: 8px");
-    expect(css).toContain("--ws-page-trailing-gutter: 8px");
+    expect(css).toContain("--ws-page-scrollbar-fallback: 6px");
+    expect(css).toContain("--ws-page-scrollbar-fallback: 8px");
+    expect(css).toContain("--ws-page-scroll-outer-inset: max(12px, env(safe-area-inset-right))");
     expect(css).toContain("--ws-page-scroll-edge: 0px");
     expect(css).toContain("@container workspace (max-width: 720px)");
     expect(css).toContain(".members-view .member-inspector { margin-inline-end: 0; }");

@@ -16,9 +16,13 @@ import { TaskRecords } from "../src/renderer/TaskRecords";
 import { ScrollbarEdges } from "../src/renderer/ScrollbarEdges";
 import { UndoActionsProvider } from "../src/renderer/UndoActions";
 import { WorkspaceSectionHeader } from "../src/renderer/WorkspaceSectionHeader";
+import { WorkspaceSectionContent } from "../src/renderer/WorkspaceSectionContent";
 import { useQaTheme } from "./color-theme";
 import { useBrowserCompactLayout, observeBrowserViewport } from "../src/renderer/browser-layout";
 import { TeamDashboardView } from "../src/renderer/TeamDashboardView";
+import { PersonalHomeView } from "../src/renderer/PersonalHomeView";
+import { SurveyAnalyticsView } from "../src/renderer/SurveyAnalyticsView";
+import { homeFixture } from "../src/renderer/test-fixtures/personal-home-fixture";
 import { initialChats, initialMessages, initialTasks, people } from "../src/renderer/test-fixtures/demo-data";
 import "../src/renderer/styles.css";
 import "../src/renderer/responsive.css";
@@ -274,7 +278,7 @@ function Preview() {
               <button type="button" onClick={showGroupedPreview}>QA: группа и длинный текст</button>
             </div>}
           </header>
-          <main className="app-content" id="workspace-content" tabIndex={-1}>
+          <WorkspaceSectionContent authorityKey="qa-layout" section={`${section}:${sample}`}>
             {section === "notifications" ? <NotificationCenter notifications={notifications} preferences={{ desktopEnabled: true, messagesEnabled: true, tasksEnabled: true, approvalsEnabled: true, tripsEnabled: true, calendarEnabled: true, absencesEnabled: true, zoomEnabled: true, remindersEnabled: true }} onOpen={nothing} onMarkRead={nothing} onMarkAllRead={nothing} onUpdatePreferences={nothing} />
             : section === "calendar" ? <CalendarView events={scheduleEvents} people={zoomPeople} departments={zoomDepartments} canInviteCalendarAudience currentUserId={people[0]!.id} onCreate={createPreviewEvent} onUpdate={nothing} onCancel={nothing} />
             : section === "payments" ? <ApprovalsView token="qa-only" canManage={false} canCreateRequest={false} isSuperadmin={false} currentUserId={people[0]!.id} people={people} positions={[]} requests={requests} calendarEvents={[]} attachments={[]} onSaveWorkflow={nothing} onPublishWorkflow={nothing} onCreateRequest={nothing} onAction={nothing} onDeleteRequest={nothing} onReviseRequest={nothing} onUploadAttachments={nothing} onDownloadAttachment={nothing} />
@@ -285,13 +289,15 @@ function Preview() {
              : section === "trips" ? <TripApprovalsView requests={[]} people={people} currentUser={people[0]!} onCreate={nothing} onUpdate={nothing} onAction={nothing} />
               : section === "team" ? <section className="workspace-view tasks-view bp5-tasks dashboard-mode"><TeamDashboardView token="qa-only" currentUserId={people[0]!.id} people={people} tasks={initialTasks} efficiencyLoading={false} onSelectTask={nothing} /></section>
               : section === "tasks" ? <section className="workspace-view tasks-view bp5-tasks"><TaskRecords tasks={taskSamples} people={people} filterKey="qa" selectedId={selectedTask} onSelect={setSelectedTask} /></section>
+              : section === "home" ? <PersonalHomeView token="qa-only" workspace={homeFixture("aziza")} canView={() => true} onOpen={() => undefined} onOpenNotification={() => undefined} onRefresh={nothing} />
+              : section === "survey" ? <div style={{ display: "contents" }}><SurveyAnalyticsView token="qa-only" canCreate={false} canEdit={false} /></div>
               : section === "letters" ? <QaIncomingLetters />
               : section === "files" ? <section className="qa-canvas-sample-card"><h2>Встроенный просмотрщик · тестовые данные</h2>{previewSamples.map(file => <button key={file.id} onClick={() => setPreviewFile(file)}>{file.fileName}</button>)}</section>
             : <section className={roots[sample]![1]} aria-label={`Макет: ${roots[sample]![0]}`}>
               <WorkspaceSectionHeader motif="tasks"><div><h1>{roots[sample]![0]}</h1><p>Проверка внешнего контейнера, не рабочая страница раздела.</p></div></WorkspaceSectionHeader>
               <div className="qa-canvas-sample-card"><h2>Карточки остаются самостоятельными</h2><p>Корень страницы не перекрашивается. Только существующие белые рабочие панели расширяются вместо внешней стеклянной рамки.</p></div>
             </section>}
-          </main>
+          </WorkspaceSectionContent>
         </div>
       </div>
       {previewFile && <FileViewer key={previewFile.id} attachment={previewFile} onClose={() => setPreviewFile(undefined)} onDownload={nothing} onLoadOffice={previewOffice} onLoad={loadPreviewBlob} />}

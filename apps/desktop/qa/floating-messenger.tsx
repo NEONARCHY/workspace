@@ -1,12 +1,22 @@
 // Synthetic shell: real MessengerView, no live API or account data.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ChatMessage } from "@yuksalish/contracts";
 import { FloatingMessenger } from "../src/renderer/FloatingMessenger";
 import type { MessengerViewProps } from "../src/renderer/MessengerView";
 import { initialChats, people } from "../src/renderer/test-fixtures/demo-data";
+import { WorkspaceSectionContent } from "../src/renderer/WorkspaceSectionContent";
+import { observeBrowserViewport, useBrowserCompactLayout } from "../src/renderer/browser-layout";
+import "../src/renderer/page-scroll-layout.css";
 
 const noop = () => undefined;
 export function FloatingMessengerFixture() {
+  const rail = new URLSearchParams(location.search).has("scrollrail");
+  const compact = useBrowserCompactLayout();
+  useEffect(() => {
+    if (!rail) return;
+    document.documentElement.classList.add("web-platform");
+    return observeBrowserViewport();
+  }, [rail]);
   const [section, setSection] = useState("Задачи");
   const [slot, setSlot] = useState<HTMLDivElement | null>(null);
   const [chats, setChats] = useState(initialChats);
@@ -36,13 +46,18 @@ export function FloatingMessengerFixture() {
     },
   };
   return <>
-    <nav aria-label="Тестовые страницы" style={{ display: "flex", gap: 12, padding: 12 }}>
+    <nav aria-label="Тестовые страницы" style={{ display: "flex", gap: 12, padding: 12, ...(rail ? { height: 70, boxSizing: "border-box", flexWrap: "wrap" } : {}) }}>
       {["Задачи", "Проекты", "Мессенджер"].map(name => <button key={name} onClick={() => setSection(name)}>{name}</button>)}
       <button onClick={() => setChats(current => current.map(chat => ({ ...chat, unread: 0 })))}>Прочитать все в тесте</button>
     </nav>
-    <section style={{ position: "absolute", inset: "70px 16px 16px", minHeight: 0 }}>
+    {rail ? <div className={`app-shell${compact ? " browser-compact" : ""}`} style={{ gridTemplateColumns: "minmax(0, 1fr)", height: "calc(100dvh - 70px)", paddingTop: 0 }}>
+      <div className="app-stage"><WorkspaceSectionContent authorityKey="qa" section={section}>
+        {section === "Мессенджер" ? <div className="messenger-page-slot" ref={setSlot} />
+          : <section className="workspace-view"><h1>{section}</h1><div style={{ height: 1400 }}>Прокручиваемая тестовая страница</div></section>}
+      </WorkspaceSectionContent></div>
+    </div> : <section style={{ position: "absolute", inset: "70px 16px 16px", minHeight: 0 }}>
       {section === "Мессенджер" ? <div className="messenger-page-slot" ref={setSlot} /> : <h1>{section}</h1>}
-    </section>
+    </section>}
     <output className="sr-only" data-sent={JSON.stringify(sent)} />
     <FloatingMessenger messenger={messenger} fullPage={section === "Мессенджер"} pageSlot={slot}
       onMinimizeFullPage={() => setSection("Задачи")}

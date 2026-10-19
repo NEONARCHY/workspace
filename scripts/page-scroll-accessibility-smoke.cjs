@@ -13,11 +13,13 @@ let browser;
     for (const zoom of [1, 2]) {
       await page.evaluate(value => { document.documentElement.style.zoom = String(value); window.dispatchEvent(new Event('resize')); }, zoom);
       await page.waitForTimeout(200);
-      const geometry = await page.locator('.app-content').evaluate(node => ({
-        right: innerWidth - node.firstElementChild.getBoundingClientRect().right,
-        inset: node.offsetWidth - node.clientWidth, width: node.clientWidth, scrollWidth: node.scrollWidth,
-      }));
-      assert.ok(Math.abs(geometry.right / zoom - 20) < 1, JSON.stringify({ touch, zoom, geometry }));
+      const geometry = await page.locator('.app-content').evaluate((node, scale) => {
+        const box = node.getBoundingClientRect(), content = node.firstElementChild.getBoundingClientRect();
+        const painted = parseFloat(getComputedStyle(node).getPropertyValue('--ws-page-scrollbar-width')) * scale;
+        return { leftGap: box.right - painted - content.right, rightGap: innerWidth - box.right,
+          inset: node.offsetWidth - node.clientWidth, width: node.clientWidth, scrollWidth: node.scrollWidth };
+      }, zoom);
+      assert.ok(Math.abs(geometry.leftGap - geometry.rightGap) / zoom < 1, JSON.stringify({ touch, zoom, geometry }));
       assert.equal(geometry.inset, touch ? 8 : 6);
       assert.ok(geometry.scrollWidth <= geometry.width + 1, JSON.stringify({ touch, zoom, geometry }));
     }

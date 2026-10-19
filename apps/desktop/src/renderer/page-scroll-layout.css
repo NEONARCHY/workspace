@@ -1,12 +1,15 @@
 /* One page scroll owner and one trailing rail. Nested tables, lanes, messages
    and portal dialogs keep their own native scroll regions. */
 .app-shell {
-  --ws-page-scroll-edge: 4px;
-  --ws-page-scrollbar-width: 6px;
+  --ws-page-scrollbar-fallback: 6px;
+  --ws-page-scrollbar-width: var(--ws-page-scrollbar-fallback);
+  --ws-page-scrollbar-inset: var(--ws-page-scrollbar-width);
+  --ws-page-scroll-outer-inset: 0px;
 }
 .app-shell .app-stage > .app-content {
+  --ws-page-scroll-edge: max(0px, calc((var(--ws-page-trailing-gutter) - var(--ws-page-scrollbar-width)) / 2));
   margin-inline-end: var(--ws-page-scroll-edge);
-  padding-inline-end: max(0px, calc(var(--ws-page-trailing-gutter) - var(--ws-page-scroll-edge) - var(--ws-page-scrollbar-width)));
+  padding-inline-end: max(0px, calc(var(--ws-page-scroll-outer-inset) + var(--ws-page-scroll-edge) + var(--ws-page-scrollbar-width) - var(--ws-page-scrollbar-inset)));
   overflow-x: hidden;
   overflow-y: auto;
   scrollbar-gutter: stable;
@@ -47,12 +50,12 @@ html body .app-provider .app-shell .app-stage > .app-content > div > .survey-ana
   .app-content > .notifications-view .notification-layout { grid-template-columns: minmax(0, 1fr); }
 }
 @media (pointer: coarse) {
-  .app-shell { --ws-page-scrollbar-width: 8px; }
+  .app-shell { --ws-page-scrollbar-fallback: 8px; }
 }
 @media (max-width: 1023px), (max-width: 1366px) and (any-pointer: coarse) {
   .web-platform .app-shell.browser-compact {
     /* The compact shell already reserves 12px outside the scroll owner. */
-    --ws-page-trailing-gutter: 8px;
-    --ws-page-scroll-edge: 0px;
+    --ws-page-scroll-outer-inset: max(12px, env(safe-area-inset-right));
   }
+  .web-platform .app-shell.browser-compact .app-stage > .app-content { --ws-page-scroll-edge: 0px; }
 }
