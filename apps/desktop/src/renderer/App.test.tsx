@@ -1174,6 +1174,9 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.click(screen.getByRole("button", { name: "Открыть полный мессенджер" }));
     await screen.findByRole("region", { name: "Раздел мессенджера" });
     expect(screen.getByRole("textbox", { name: "Новое сообщение" })).toBe(editor);
+    expect(screen.queryByRole("button", { name: "Открыть мини-мессенджер" })).not.toBeInTheDocument();
+    fireEvent.click(within(screen.getByRole("navigation")).getByRole("button", { name: /^Задачи/ }));
+    await screen.findByRole("button", { name: "Открыть мини-мессенджер" });
     fireEvent.click(screen.getByRole("button", { name: "Открыть мини-мессенджер" }));
     await screen.findByRole("dialog", { name: "Мини-мессенджер" });
     expect(screen.getByRole("textbox", { name: "Новое сообщение" })).toBe(editor);
