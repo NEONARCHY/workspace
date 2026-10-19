@@ -17,11 +17,16 @@ let browser;
     const header = page.locator('.notification-header');
     await input.waitFor();
     await page.waitForTimeout(650); // Let the page-entry motion settle before comparing focus geometry.
+    const actions = page.locator('.notification-head-actions');
+    assert.deepEqual(await actions.evaluate(node => ({ image: getComputedStyle(node).backgroundImage, fill: getComputedStyle(node).backgroundColor })),
+      { image: 'none', fill: 'rgba(0, 0, 0, 0)' }, 'layout reservation must not paint an empty pill');
     const before = { button: await button.boundingBox(), search: await search.boundingBox(), header: await header.boundingBox() };
     await input.focus();
     await search.evaluate(node => Promise.all(node.getAnimations().map(animation => animation.finished.catch(() => undefined))));
     await page.waitForTimeout(650);
     const after = { button: await button.boundingBox(), search: await search.boundingBox(), header: await header.boundingBox() };
+    const icon = await search.locator('.workspace-search-trigger').boundingBox();
+    assert.ok(Math.abs(icon.width - icon.height) < 1 && icon.width >= 24, 'expanded icon remains a compact circle');
     assert.ok(Math.abs(before.button.x - after.button.x) < 1 && Math.abs(before.button.y - after.button.y) < 1, JSON.stringify({ theme, width, before, after }));
     assert.ok(Math.abs(before.header.height - after.header.height) < 1);
     assert.ok(Math.abs(before.search.x + before.search.width - after.search.x - after.search.width) < 1);

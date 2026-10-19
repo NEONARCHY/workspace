@@ -195,7 +195,7 @@ export function NotificationCenter({
           <h1>Требует моего внимания</h1>
           <p>Одна спокойная очередь для решений, сроков и важных обновлений.</p>
         </div>
-        <div className="notification-head-actions">
+        <div className="notification-head-actions" data-satin-excluded="true">
           <Input
             aria-label="Поиск уведомлений"
             contentBefore={<Search24Regular />}
