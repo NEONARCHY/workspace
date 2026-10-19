@@ -36,12 +36,22 @@ HTTPS https://192.168.0.127:8443/ and API readiness returned 200.
 Web 2.0.054, build localtest-20261019-messenger-forward-570a5c4b.
 Only web is to be built/replaced. No API, DB, worker, scheduler or office update.
 
-## Next step
+## Delivery status
 
-After final checks, commit frontend changes; cherry-pick onto the TEST-compatible
-branch, prepare release-note order, build web, retain the old image for rollback,
-replace only web, verify version.json/API readiness/root and record evidence here.
-Keep the main-based branch available for later authorized publication/review.
+Feature integration commit: fa12997a; initial TEST cherry-pick: 8c1ef476.
+Final compatibility fix/build revision: 135a588d.
+TEST web updated to 2.0.055, build
+localtest-20261019-floating-messenger-135a588d, builtAt 2026-10-19T07:44:02.044Z.
+HTTPS root, version.json and API readiness returned 200 after replacement.
+
+Only web was recreated (new container e81df6c915bc). API 60a24a287228, worker,
+scheduler, databases, MinIO, gateway and office-preview container IDs stayed the
+same. Schema remains 0102_merge_leave_task; users=3, tasks=1, messages=133.
+Rollback image retained as yuksalish-localtest-web:pre-floating-20261019.
+No office server, installed EXE, push, PR, merge or real-account sending test.
+
+Next task: review/publish the main-based feature/floating-messenger branch only
+when authorized. Do not merge the TEST compatibility branch back into main.
 
 ## Final compatibility checks
 
