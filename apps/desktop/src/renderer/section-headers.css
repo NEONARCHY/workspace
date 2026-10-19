@@ -237,16 +237,23 @@ html body .app-provider .ws-section-header .calendar-month-navigation .fui-Butto
 .messenger-view .ws-section-header-compact h1 { font-size: 24px; }
 .messenger-view .ws-section-header-compact p { font-size: 12px; }
 .messenger-view .ws-section-header-compact > .ws-section-header-art { right: 0; width: 85%; opacity: .5; }
-.notifications-view .ws-section-header .notification-head-actions {
-  display: flex;
-  flex: 0 1 480px;
-  flex-wrap: wrap;
+body .app-provider .notifications-view .ws-section-header .notification-head-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  flex: 0 1 520px;
+  max-width: 100%;
   gap: 8px;
   min-width: 0;
   padding: 0;
   border: 0;
   background: transparent;
   box-shadow: none;
+}
+.notifications-view .ws-section-header .notification-head-actions > .workspace-search {
+  justify-self: end;
+}
+.notifications-view .ws-section-header .notification-head-actions > .fui-Button {
+  white-space: nowrap;
 }
 .ws-section-header .notification-head-actions .fui-Input {
   flex: 1 1 220px;

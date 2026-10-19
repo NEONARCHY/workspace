@@ -16,6 +16,7 @@ import { TripApprovalsView } from "../src/renderer/TripApprovalsView";
 import { MessengerForwardFixture } from "./messenger-forward";
 import { FloatingMessengerFixture } from "./floating-messenger";
 import { TeamDashboardView } from "../src/renderer/TeamDashboardView";
+import { NotificationSearchFixture } from "./notification-search";
 import "../src/renderer/styles.css";
 import "../src/renderer/responsive.css";
 import "../src/renderer/context-colors.css";
@@ -120,6 +121,7 @@ function Fixture() {
       view === "team-flow" ? <TeamDashboardView token="qa-only" currentUserId="baxtiyor" people={people}
         tasks={Array.from({ length: 188 }, (_, index) => ({ ...task, id: `qa-flow-${index}` }))}
         efficiencyLoading={false} onSelectTask={noop} /> :
+      view === "notification-search" ? <NotificationSearchFixture /> :
       view === "incoming" ? <section className="ai-referent-view"><AIReferentIncomingRegister token="qa" /></section> :
       view === "trip" ? <TripWorldMap requests={[trip, { ...trip, id: "qa-free", destination: "Термиз 4" }]} people={people} onOpenRequest={noop} onClose={noop} /> :
        view === "hisobot" ? <div style={{ width: "min(100%, 480px)", height: "100%" }}><AIHisobotView token="qa" /></div> :
