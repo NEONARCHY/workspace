@@ -116,9 +116,11 @@ async def claim_job(connection: AsyncConnection, agent_id: str) -> dict[str, obj
         .limit(1)
     ):
         return None
+    # A prepared letter awaiting the final review has no open Exat compose window.
+    # Only an operator-held compose window blocks another prepare on this PC.
     waiting_for_operator = await connection.scalar(
         select(letters.c.id)
-        .where(letters.c.status.in_(["referent_review_pending", "awaiting_final_send"]))
+        .where(letters.c.status == "referent_review_pending")
         .limit(1)
     )
     job = (
