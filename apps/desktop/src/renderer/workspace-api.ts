@@ -1,5 +1,10 @@
 import type { OfficePreviewResult } from "./file-viewer-kind";
 import type {
+  ReferenceDirectory, ReferenceExpert, ReferenceExpertFields,
+  ReferencePartner, ReferencePartnerFields, ReferenceProfile, ReferenceProfileFields,
+  ReferenceTemplate, ReferenceTemplateFields, ReferenceTemplateVersion,
+} from "@yuksalish/contracts";
+import type {
   MessageEntity,
   ExchangeSnapshot, WeatherSnapshot,
   HiringDetail, HiringRegistry, HiringFields, HiringSignatureBox, HiringActionName, HiringActionRequest, HiringDocumentKind, IdentityRecognition,
@@ -2142,6 +2147,48 @@ export function changeWorkspaceProjectStage(
 
 export function loadProjectHub(token: string): Promise<ProjectHubOverview> {
   return apiRequest<ProjectHubOverview>("/project-hub", {}, token);
+}
+
+export function loadReferenceDirectory(token: string): Promise<ReferenceDirectory> {
+  return apiRequest("/reference", {}, token);
+}
+export function saveReferenceProfile(token: string, profile: ReferenceProfileFields, expectedRevision: number): Promise<ReferenceProfile> {
+  return apiRequest("/reference/profile", { method: "PUT", body: JSON.stringify({ ...profile, expectedRevision }) }, token);
+}
+export function createReferencePartner(token: string, value: ReferencePartnerFields): Promise<ReferencePartner> {
+  return apiRequest("/reference/partners", { method: "POST", body: JSON.stringify(value) }, token);
+}
+export function saveReferencePartner(token: string, id: string, value: ReferencePartnerFields, expectedRevision: number, archived: boolean): Promise<ReferencePartner> {
+  return apiRequest(`/reference/partners/${id}`, { method: "PUT", body: JSON.stringify({ ...value, expectedRevision, archived }) }, token);
+}
+export function createReferenceExpert(token: string, value: ReferenceExpertFields): Promise<ReferenceExpert> {
+  return apiRequest("/reference/experts", { method: "POST", body: JSON.stringify(value) }, token);
+}
+export function saveReferenceExpert(token: string, id: string, value: ReferenceExpertFields, expectedRevision: number, archived: boolean): Promise<ReferenceExpert> {
+  return apiRequest(`/reference/experts/${id}`, { method: "PUT", body: JSON.stringify({ ...value, expectedRevision, archived }) }, token);
+}
+export function createReferenceTemplate(token: string, value: ReferenceTemplateFields): Promise<ReferenceTemplate> {
+  return apiRequest("/reference/templates", { method: "POST", body: JSON.stringify(value) }, token);
+}
+export function saveReferenceTemplate(token: string, id: string, value: ReferenceTemplateFields, expectedRevision: number, archived: boolean): Promise<ReferenceTemplate> {
+  return apiRequest(`/reference/templates/${id}`, { method: "PUT", body: JSON.stringify({ ...value, expectedRevision, archived }) }, token);
+}
+export function uploadReferenceTemplate(token: string, id: string, expectedRevision: number, file: File): Promise<ReferenceTemplateVersion> {
+  checkRemoteUploadSize(file);
+  const query = new URLSearchParams({ fileName: file.name, expectedRevision: String(expectedRevision) });
+  return boundedRequest(`${getApiBaseUrl()}/api/v1/reference/templates/${id}/file?${query}`, {
+    method: "PUT", headers: { Authorization: `Bearer ${token}`, "Content-Type": file.type || "application/octet-stream" }, body: file,
+  }, async (response) => await response.json() as ReferenceTemplateVersion, 120_000);
+}
+export function downloadReferenceTemplate(token: string, id: string, versionId?: string): Promise<Blob> {
+  const query = versionId ? `?versionId=${encodeURIComponent(versionId)}` : "";
+  return boundedRequest(`${getApiBaseUrl()}/api/v1/reference/templates/${id}/file${query}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  }, async (response) => await response.blob(), 120_000);
+}
+export function previewReferenceTemplate(token: string, id: string, versionId: string, sheet: number, offset: number, signal?: AbortSignal): Promise<OfficePreviewResult> {
+  const query = new URLSearchParams({ versionId, sheet: String(sheet), offset: String(offset) });
+  return apiRequest(`/reference/templates/${id}/preview?${query}`, { signal }, token, 120_000, readOfficePreview);
 }
 
 export function loadProjectImports(token: string, projectId?: string): Promise<readonly ProjectDocumentImport[]> {

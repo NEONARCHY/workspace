@@ -62,6 +62,7 @@ import {
   Alert24Regular,
   Airplane24Regular,
   Board24Regular,
+  BookContacts24Regular,
   Home24Regular,
   CalendarLtr24Regular,
   Chat24Filled,
@@ -120,6 +121,7 @@ import {
   AbsencesView, AccountPanel, AIHisobotView, AIReferentView, IncomingLettersView, ApprovalsView,
   CalendarView, EmployeeProfileDialog, EmployeesView, FeedView, HrView, PersonalHomeView,
   MembersView, preloadWorkspaceModules, prepareEmployeeProfile, ProjectHubView, ProjectsView,
+  ReferenceView,
   SupportDialog, TasksView, TeamDashboardView, TelegramAccessView, SurveyAnalyticsView,
   TripApprovalsView, ZoomView,
 } from "./workspace-module-preload";
@@ -268,7 +270,7 @@ interface WorkspaceState {
 
 const defaultModuleAccess: readonly EffectiveModuleAccess[] = moduleKeys.map((moduleKey) => ({
   moduleKey,
-  permissions: moduleKey === "team_overview"
+  permissions: moduleKey === "team_overview" || moduleKey === "reference"
     ? { view: false, create: false, edit: false, approve: false, admin: false }
     : { view: true, create: true, edit: true, approve: true, admin: true },
 }));
@@ -356,6 +358,7 @@ const navItems: readonly NavItem[] = [
   { key: "feed", label: "Лента", icon: <News24Regular /> },
   { key: "projects", label: "Список проектов", icon: <FolderPeople24Regular /> },
   { key: "project_hub", label: "Проекты", icon: <FolderPeople24Regular /> },
+  { key: "reference", label: "Справочник", icon: <BookContacts24Regular /> },
   { key: "project_funding", label: "Проектные заявки", icon: <DocumentBulletList24Regular /> },
   {
     key: "trip_approvals",
@@ -2552,6 +2555,12 @@ export function App() {
                 }}
               />
             ) : null}
+            {displayedSection === "reference" ? <ReferenceView
+              token={session.accessToken}
+              people={displayPeople}
+              canCreate={modulePermissions.reference?.create ?? false}
+              canEdit={modulePermissions.reference?.edit ?? false}
+            /> : null}
             {displayedSection === "trip_approvals" ? (
               <TripApprovalsView
                 key={focusTarget?.revision}
