@@ -4,6 +4,14 @@ import { describe, expect, it } from "vitest";
 
 const read = (name: string) => readFileSync(resolve(process.cwd(), "src/renderer", name), "utf8");
 describe("Scoped work-panel surfaces", () => {
+  it("extends rounded messenger panes into a transparent full-page portal without changing mini mode", () => {
+    const css = read("floating-messenger.css");
+    const full = css.match(/\.floating-messenger-panel\.is-full-page > \.messenger-view \{([^}]+)\}/)?.[1];
+    expect(full).toContain("padding: 0");
+    expect(full).toContain("background: transparent");
+    expect(full).not.toMatch(/border-radius|grid-template|gap/);
+    expect(css).toContain(".floating-messenger-panel .messenger-mini > .list-pane { padding: 12px;");
+  });
   it("widens shared native scrollbars and fades entering pages without animating layout", () => {
     expect(read("scrollbars.css")).toContain("width: 6px; height: 6px");
     const motion = read("workspace-2-interactions.css");

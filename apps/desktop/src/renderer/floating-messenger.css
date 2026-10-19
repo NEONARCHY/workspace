@@ -36,6 +36,9 @@
 .floating-messenger-toolbar button:hover { background: var(--ws-button-hover); color: var(--ws-text); }
 .floating-messenger-notice { flex: none; margin: 0; padding: 8px 14px; font-size: 12px; color: var(--ws-link); }
 .floating-messenger-panel > .messenger-view { flex: 1; min-height: 0; width: 100%; height: 100%; }
+/* The full-page portal is layout, not a square backing sheet. Extend its
+   existing rounded work panes into the former outer padding. */
+.floating-messenger-panel.is-full-page > .messenger-view { padding: 0; background: transparent; }
 /* Compact by presentation, not by the size of the entire browser window. */
 .floating-messenger-panel .messenger-mini { display: grid; grid-template-columns: minmax(0, 1fr); padding: 0; gap: 0; }
 .floating-messenger-panel .messenger-mini > :is(.list-pane, .conversation-pane) { min-height: 0; height: 100%; border: 0; border-radius: 0; box-shadow: none; }
