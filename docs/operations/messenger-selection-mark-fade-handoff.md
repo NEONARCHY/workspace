@@ -17,3 +17,15 @@ deselection and reduced motion. Existing paint suite passed1440/640/320px plus
 mini light/dark. TypeScript, changed-source ESLint, release notes and15 workflow
 tests passed. All107 MessengerView/selection-shell unit tests passed, including
 inactive/active inert and aria-hidden regression assertions.
+
+## Delivered TEST
+
+Web2.0.069 / `localtest-20261019-mark-fade-a2175a8a`, built
+2026-10-19T10:14:12.683Z from compatibility40780d91 (sourcea2175a8a).
+Root, version and API readiness returned200. Only web changed(1d973438f09c);
+all nine other container IDs unchanged. Schema0102_merge_leave_task and
+users3/tasks1/messages133 unchanged. Rollback image:
+`yuksalish-localtest-web:pre-selection-mark-fade-20261019` (2.0.068).
+Vite5178 stopped. No office/EXE update, push, PR, merge or CI.
+Continue source branch `fix/messenger-selection-mark-fade`; never merge TEST
+compatibility into main. Browser checks use synthetic fixtures, not a live account.
