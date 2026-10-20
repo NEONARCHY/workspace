@@ -12,8 +12,9 @@ describe("corporate workspace authentication alpha", () => {
     await loginToWorkspace("malika");
 
     fireEvent.click(screen.getByRole("button", { name: "Задачи" }));
-    fireEvent.click(screen.getAllByRole("button", { name: /^Открыть задачу:/ })[0]!);
-    fireEvent.click(screen.getByRole("button", { name: "Удалить задачу" }));
+    // This suite must work cold, without an earlier task scenario warming React.lazy.
+    fireEvent.click((await screen.findAllByRole("button", { name: /^Открыть задачу:/ }))[0]!);
+    fireEvent.click(await screen.findByRole("button", { name: "Удалить задачу" }));
     const confirmation = await screen.findByRole("dialog", { name: "Удалить задачу?" });
     fireEvent.click(within(confirmation).getByText("Удалить").closest("button")!);
 
