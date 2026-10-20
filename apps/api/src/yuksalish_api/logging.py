@@ -6,6 +6,9 @@ import structlog
 
 def configure_logging() -> None:
     logging.basicConfig(stream=sys.stdout, level=logging.INFO, format="%(message)s")
+    # HTTP client INFO logs include Gmail search queries and private message identifiers.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
     structlog.configure(
         processors=[
             structlog.contextvars.merge_contextvars,

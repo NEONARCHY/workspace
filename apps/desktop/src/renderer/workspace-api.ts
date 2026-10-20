@@ -1,4 +1,5 @@
 import type { OfficePreviewResult } from "./file-viewer-kind";
+import type { MailConnection, MailConnect, MailConnectStatus, MailPage, MailThread, MailDraft, MailDraftSummary, MailDraftWrite, MailSignedFile, MailTaskExport } from "@yuksalish/contracts";
 import type { GrantAction, GrantDetail, GrantFields, GrantSettings, GrantSummary } from "@yuksalish/contracts";
 import type {
   ReferenceDirectory, ReferenceExpert, ReferenceExpertFields,
@@ -2148,6 +2149,72 @@ export function changeWorkspaceProjectStage(
 
 export function loadProjectHub(token: string): Promise<ProjectHubOverview> {
   return apiRequest<ProjectHubOverview>("/project-hub", {}, token);
+}
+
+export function loadMailConnection(token: string): Promise<MailConnection> {
+  return apiRequest("/mail/connection", {}, token);
+}
+export function connectMail(token: string): Promise<MailConnect> {
+  return apiRequest("/mail/connect", { method: "POST" }, token);
+}
+export function loadMailConnectStatus(token: string, id: string): Promise<MailConnectStatus> {
+  return apiRequest(`/mail/connect/${encodeURIComponent(id)}`, {}, token);
+}
+export function cancelMailConnect(token: string, id: string): Promise<void> {
+  return apiRequest(`/mail/connect/${encodeURIComponent(id)}/cancel`, { method: "POST" }, token);
+}
+export function disconnectMail(token: string): Promise<{ readonly disconnected: boolean; readonly googleRevoked: boolean }> {
+  return apiRequest("/mail/disconnect", { method: "POST" }, token);
+}
+export function loadMailMessages(token: string, folder: string, query: string, page = "", signal?: AbortSignal): Promise<MailPage> {
+  return apiRequest("/mail/messages/search", { signal, method: "POST", body: JSON.stringify({ folder, query, page }) }, token, 120_000);
+}
+export function loadMailThread(token: string, id: string, signal?: AbortSignal): Promise<MailThread> {
+  return apiRequest(`/mail/threads/${encodeURIComponent(id)}`, { signal }, token, 120_000);
+}
+export function loadMailDrafts(token: string): Promise<readonly MailDraftSummary[]> {
+  return apiRequest("/mail/drafts", {}, token);
+}
+export function loadMailDraft(token: string, id: string): Promise<MailDraft> {
+  return apiRequest(`/mail/drafts/${encodeURIComponent(id)}`, {}, token);
+}
+export function saveMailDraft(token: string, payload: MailDraftWrite): Promise<MailDraft> {
+  return apiRequest("/mail/drafts", { method: "POST", body: JSON.stringify(payload) }, token, 90_000);
+}
+export function sendMailDraft(token: string, id: string, expectedRevision: number, operationId: string): Promise<MailDraft> {
+  return apiRequest(`/mail/drafts/${encodeURIComponent(id)}/send`, { method: "POST", body: JSON.stringify({ expectedRevision, operationId }) }, token, 90_000);
+}
+export function reconcileMailDraft(token: string, id: string): Promise<MailDraft> {
+  return apiRequest(`/mail/drafts/${encodeURIComponent(id)}/reconcile`, { method: "POST" }, token, 120_000);
+}
+export function loadMailSignedFiles(token: string): Promise<readonly MailSignedFile[]> {
+  return apiRequest("/mail/signed-files", {}, token);
+}
+export function attachMailSignedFile(token: string, id: string, fileId: string, expectedRevision: number): Promise<MailDraft> {
+  return apiRequest(`/mail/drafts/${encodeURIComponent(id)}/signed-files`, { method: "POST", body: JSON.stringify({ fileId, expectedRevision }) }, token, 120_000);
+}
+export function attachMailProviderFile(token: string, id: string, messageId: string, attachmentId: string, expectedRevision: number): Promise<MailDraft> {
+  return apiRequest(`/mail/drafts/${encodeURIComponent(id)}/provider-files`, { method: "POST", body: JSON.stringify({ messageId, attachmentId, expectedRevision }) }, token, 120_000);
+}
+export function removeMailFile(token: string, id: string, fileId: string, expectedRevision: number): Promise<MailDraft> {
+  return apiRequest(`/mail/drafts/${encodeURIComponent(id)}/files/${encodeURIComponent(fileId)}?expected_revision=${expectedRevision}`, { method: "DELETE" }, token);
+}
+export function downloadMailFile(token: string, fileId: string, signal?: AbortSignal): Promise<Blob> {
+  return apiRequest(`/mail/files/${encodeURIComponent(fileId)}`, { signal }, token, 120_000, response => response.blob());
+}
+export function downloadMailProviderFile(token: string, messageId: string, fileId: string, signal?: AbortSignal): Promise<Blob> {
+  return apiRequest(`/mail/messages/${encodeURIComponent(messageId)}/files/${encodeURIComponent(fileId)}`, { signal }, token, 120_000, response => response.blob());
+}
+export async function uploadMailFile(token: string, id: string, file: File, expectedRevision: number): Promise<MailDraft> {
+  if (file.size > 18 * 1024 * 1024 || !file.size) throw new Error("Размер файла должен быть от 1 байта до 18 МБ");
+  const body = new FormData(); body.set("file", file);
+  const headers = new Headers({ Authorization: `Bearer ${token}`, Accept: "application/json" });
+  if (workspacePlatform.kind === "electron") headers.set("X-Desktop-Version", workspacePlatform.version);
+  return boundedRequest(`${getApiBaseUrl()}/api/v1/mail/drafts/${encodeURIComponent(id)}/files?expected_revision=${expectedRevision}`,
+    { method: "POST", headers, body }, async response => await response.json() as MailDraft, 120_000);
+}
+export function createTaskFromMail(token: string, payload: MailTaskExport): Promise<WorkspaceTask> {
+  return apiRequest("/mail/tasks", { method: "POST", body: JSON.stringify(payload) }, token, 120_000);
 }
 
 export function loadGrants(token: string): Promise<readonly GrantSummary[]> {

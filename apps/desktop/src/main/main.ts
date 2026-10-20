@@ -9,6 +9,7 @@ import { registerEncryptedDrafts } from "./drafts";
 import { registerSecureSession } from "./secure-session";
 import { editContextMenu } from "./edit-context-menu";
 import { registerZoomNavigation } from "./zoom-navigation";
+import { registerMailNavigation } from "./mail-navigation";
 
 app.enableSandbox();
 
@@ -128,6 +129,7 @@ void app.whenReady().then(() => {
   registerEncryptedDrafts(isAllowedNavigation);
   registerSecureSession(isAllowedNavigation);
   registerZoomNavigation(isAllowedNavigation);
+  registerMailNavigation(isAllowedNavigation, Boolean(developmentUrl));
   try {
     const previous: unknown = JSON.parse(readFileSync(join(app.getPath("userData"), "diagnostics.json"), "utf8"));
     if (Array.isArray(previous)) diagnostics.push(...previous.slice(-49));

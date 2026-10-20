@@ -122,7 +122,7 @@ import {
   AbsencesView, AccountPanel, AIHisobotView, AIReferentView, IncomingLettersView, ApprovalsView,
   CalendarView, EmployeeProfileDialog, EmployeesView, FeedView, HrView, PersonalHomeView,
   MembersView, preloadWorkspaceModules, prepareEmployeeProfile, ProjectHubView, ProjectsView,
-  ReferenceView, GrantsView,
+  ReferenceView, GrantsView, MailView,
   SupportDialog, TasksView, TeamDashboardView, TelegramAccessView, SurveyAnalyticsView,
   TripApprovalsView, ZoomView,
 } from "./workspace-module-preload";
@@ -374,6 +374,7 @@ const navItems: readonly NavItem[] = [
     icon: <Chat24Regular />,
   },
   { key: "calendar", label: "Календарь", icon: <CalendarLtr24Regular /> },
+  { key: "mail", label: "Почта", icon: <Mail24Regular /> },
   { key: "zoom_meetings", label: "Zoom-конференции", icon: <Video24Regular /> },
   { key: "absences", label: "Отсутствия", icon: <PersonAvailable24Regular /> },
   { key: "members", label: "Работа с членами", icon: <PeopleTeam24Regular /> },
@@ -2557,6 +2558,20 @@ export function App() {
                 }}
               />
             ) : null}
+            {displayedSection === "mail" ? <MailView
+              key={workspace.currentUser.id}
+              token={session.accessToken} currentUserId={workspace.currentUser.id}
+              people={displayPeople} departments={workspace.departments} tasks={workspace.tasks}
+              canCreate={modulePermissions.mail?.create ?? false}
+              canEdit={modulePermissions.mail?.edit ?? false}
+              canCreateTask={modulePermissions.tasks?.create ?? false}
+              canUseSigned={modulePermissions.ai_referent?.view ?? false}
+              onTaskCreated={(task) => {
+                setWorkspace(current => ({ ...current, tasks: [task, ...current.tasks.filter(item => item.id !== task.id)] }));
+                setFocusTarget(current => ({ section: "tasks", entityId: task.id, revision: (current?.revision ?? 0) + 1 }));
+                setActiveSection("tasks");
+              }}
+            /> : null}
             {displayedSection === "reference" ? <ReferenceView
               token={session.accessToken}
               people={displayPeople}

@@ -3,6 +3,7 @@ export * from "./file-preview";
 export * from "./project-budget";
 export * from "./reference";
 export * from "./grants";
+export * from "./mail";
 import type { ProjectBudgetArticle } from "./project-budget";
 
 export const moduleKeys = [
@@ -27,6 +28,7 @@ export const moduleKeys = [
   "members",
   "hr",
   "messenger",
+  "mail",
   "calendar",
   "zoom_meetings",
   "employees",

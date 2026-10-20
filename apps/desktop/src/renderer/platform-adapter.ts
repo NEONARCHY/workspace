@@ -37,6 +37,7 @@ export interface ReleaseHistoryEntry {
 }
 
 export interface WorkspacePlatform {
+  readonly openMailAuthorization?: (url: string) => Promise<boolean>;
   readonly openZoomMeeting?: (url: string) => Promise<boolean>;
   readonly kind: "electron" | "web";
   readonly platform: string;
@@ -140,6 +141,7 @@ function electronPlatform(): WorkspacePlatform | undefined {
   if (!bridge) return undefined;
   return {
     openZoomMeeting: bridge.openZoomMeeting,
+    openMailAuthorization: bridge.openMailAuthorization,
     kind: "electron",
     platform: bridge.platform,
     version: bridge.version,

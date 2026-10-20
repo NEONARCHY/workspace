@@ -1706,6 +1706,7 @@ class NotificationPreferencesUpdate(ApiModel):
 
 
 NavigationKey = Literal[
+    "mail",
     "grants",
     "survey_analytics",
     "home",
@@ -1751,6 +1752,7 @@ DEFAULT_NAVIGATION: list[NavigationKey] = [
     "trip_approvals",
     "leave_approvals",
     "messenger",
+    "mail",
     "calendar",
     "zoom_meetings",
     "absences",
@@ -1821,7 +1823,7 @@ class NavigationOrder(ApiModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="forbid")
     # Derived from the catalog so adding a section never silently breaks reordering.
     order: list[NavigationKey] = Field(
-        min_length=len(DEFAULT_NAVIGATION) - 3, max_length=len(DEFAULT_NAVIGATION)
+        min_length=len(DEFAULT_NAVIGATION) - 4, max_length=len(DEFAULT_NAVIGATION)
     )
     revision: int = Field(ge=0)
 
@@ -1830,7 +1832,7 @@ class NavigationOrder(ApiModel):
     def complete_order(cls, value: list[NavigationKey]) -> list[NavigationKey]:
         # Older clients may omit Home and/or the newly added leave module.
         missing = set(DEFAULT_NAVIGATION) - set(value)
-        if len(value) != len(set(value)) or missing - {"home", "leave_approvals", "grants"}:
+        if len(value) != len(set(value)) or missing - {"home", "leave_approvals", "grants", "mail"}:
             raise ValueError("Меню должно содержать все разделы без повторений")
         value = list(value)
         if "home" in missing:
@@ -1839,6 +1841,8 @@ class NavigationOrder(ApiModel):
             value.insert(value.index("trip_approvals") + 1, "leave_approvals")
         if "grants" in missing:
             value.insert(value.index("tasks") + 1, "grants")
+        if "mail" in missing:
+            value.insert(value.index("messenger") + 1, "mail")
         if set(value) != set(DEFAULT_NAVIGATION):
             raise ValueError("Меню должно содержать все разделы без повторений")
         return value
