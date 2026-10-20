@@ -173,6 +173,8 @@ export function GrantsView({ token, currentUser, people, departments, canCreate,
     return fits && `${row.title} ${row.description} ${name(row.assigneeId)}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase());
   });
   const can = (action: string) => detail?.allowedActions.includes(action) === true;
+  const canOpenChat = detail && [detail.authorUserId, detail.assigneeId, detail.leaderUserId,
+    detail.chairUserId, ...detail.coAssigneeIds].includes(currentUser.id);
   const routeReady = Boolean(settings?.leaderUserId && settings.chairUserId);
 
   return <section className="workspace-view grants-view" aria-label="Гранты">
@@ -216,7 +218,7 @@ export function GrantsView({ token, currentUser, people, departments, canCreate,
                 setChairId(detail.chairUserId); setActionError(""); setSettingsOpen(true);
               }}>Изменить согласующих</Button>}
               {can("edit") && <Button onClick={() => openEditor(detail)} disabled={busy}>Редактировать заявку</Button>}
-              {onOpenChat && <Button icon={<Chat20Regular />} onClick={() => onOpenChat(detail.chatId)} disabled={busy}>Чат заявки</Button>}
+              {onOpenChat && canOpenChat && <Button icon={<Chat20Regular />} onClick={() => onOpenChat(detail.chatId)} disabled={busy}>Чат заявки</Button>}
               <Button disabled={busy} onClick={() => void run(async () => { saveDetail(await loadGrant(token, detail.id)); setDetailError(""); })}>Обновить карточку</Button></div>
             <ol className="grants-route" aria-label="Маршрут согласования">
               {([ ["in_progress", "Подготовка", detail.assigneeId], ["author_review", "Постановщик", detail.authorUserId],
