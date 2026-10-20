@@ -928,7 +928,7 @@ def test_voice_return_is_bound_to_reviewer_and_revision(tmp_path):
     api.request.assert_not_called()
 
 
-def test_bobur_can_return_prepared_pdf_and_offline_notice_reaches_him(tmp_path):
+def test_sender_can_return_prepared_pdf_and_offline_notice_only_reaches_sender(tmp_path):
     journal, _, reviewer = _offline_journal(tmp_path)
     bobur = journal.offline_actor("999")["userId"]
     workflow = OfflineWorkflow(journal)
@@ -955,6 +955,8 @@ def test_bobur_can_return_prepared_pdf_and_offline_notice_reaches_him(tmp_path):
     workflow.act("999", letter["id"], approval_id, action="approve", expected_revision=4)
     prepared = workflow.record_prepared("999", letter["id"], approval_id, b"%PDF-1.7 test")
     assert prepared["status"] == "awaiting_final_send"
+    assert prepared["availableActions"] == []
+    prepared = workflow.read("123", letter["id"])
     assert "return_for_revision" in prepared["availableActions"]
     assert "release_delivery" in prepared["availableActions"]
     api, telegram = Mock(), Mock()
@@ -963,12 +965,13 @@ def test_bobur_can_return_prepared_pdf_and_offline_notice_reaches_him(tmp_path):
     bot = SharedBot(telegram, api, State(tmp_path / "bot.sqlite"), journal)
     bot.show = Mock()
     bot.offline_notifications()
-    assert telegram.send_document.call_count == 2  # Author and Bobur receive signed PDF.
+    assert telegram.send_document.call_count == 1
+    assert telegram.send_document.call_args.args[0] == "123"
     bot.offline_notifications()
-    assert telegram.send_document.call_count == 2
+    assert telegram.send_document.call_count == 1
     api.request.assert_not_called()
     returned = workflow.act(
-        "999", letter["id"], str(uuid4()), action="return_for_revision",
+        "123", letter["id"], str(uuid4()), action="return_for_revision",
         expected_revision=6, comment="Исправьте дату",
     )
     assert returned["status"] == "needs_revision"
@@ -1001,7 +1004,7 @@ def test_bobur_can_return_prepared_pdf_and_offline_notice_reaches_him(tmp_path):
 
 
 @pytest.mark.parametrize("auto_send", [False, True])
-def test_offline_bobur_release_prepares_compose_without_physical_send(tmp_path, auto_send):
+def test_offline_sender_release_prepares_compose_without_physical_send(tmp_path, auto_send):
     journal, _, reviewer = _offline_journal(tmp_path)
     bobur = journal.offline_actor("999")["userId"]
     workflow = OfflineWorkflow(journal)
@@ -1026,8 +1029,13 @@ def test_offline_bobur_release_prepares_compose_without_physical_send(tmp_path, 
     workflow.act("999", letter["id"], approval_id, action="approve", expected_revision=4)
     workflow.record_prepared("999", letter["id"], approval_id, b"%PDF-1.7 final")
     release_id = str(uuid4())
+    with pytest.raises(WorkspaceError):
+        workflow.act(
+            "999", letter["id"], str(uuid4()),
+            action="release_delivery", expected_revision=6,
+        )
     released = workflow.act(
-        "999", letter["id"], release_id,
+        "123", letter["id"], release_id,
         action="release_delivery", expected_revision=6,
     )
     assert released["status"] == "queued"
@@ -1046,7 +1054,7 @@ def test_offline_bobur_release_prepares_compose_without_physical_send(tmp_path, 
         assert "return_for_revision" in workflow.read("321", letter["id"])["availableActions"]
         assert workflow.read("999", letter["id"])["availableActions"] == []
     assert workflow.record_dispatched(
-        "999", letter["id"], release_id, auto_send=auto_send,
+        "123", letter["id"], release_id, auto_send=auto_send,
     )["status"] == current["status"]
 
 

@@ -227,11 +227,8 @@ async def test_shared_workflow_round_trip_and_uncertain_delivery():
         assert replay["id"] == letter["id"]
         await call("POST", "/letters", author, expected=409, json={**payload, "subject": "Changed"})
         path = "/letters/" + letter["id"]
-        await call("GET", "/agent" + path, telegram("910004"), expected=404)
-        await call(
-            "DELETE", "/agent" + path + f"?expectedRevision={letter['revision']}",
-            telegram("910004"), expected=403,
-        )
+        await call("GET", "/agent" + path, telegram("910004"))
+        assert (await call("GET", "/agent" + path, telegram("910004")))["canDelete"]
 
         async def action(name, actor, expected=200, comment="", revision=None):
             nonlocal letter
@@ -279,13 +276,11 @@ async def test_shared_workflow_round_trip_and_uncertain_delivery():
         await action("submit", telegram("910004"), 403)
         await action("submit", author)
         admin_queue = await call("GET", "/agent/letters?activeOnly=true", telegram("910004"))
-        assert not any(item["id"] == letter["id"] for item in admin_queue["letters"])
+        assert any(item["id"] == letter["id"] for item in admin_queue["letters"])
         admin_progress = await call(
             "GET", "/agent/letters/progress", telegram("910004")
         )
-        stage = next(item for item in admin_progress["letters"] if item["id"] == letter["id"])
-        assert stage["status"] == "pending_review"
-        assert "subject" not in stage and "events" not in stage and "attachments" not in stage
+        assert admin_progress["letters"] == []
         await call("GET", "/agent/letters/progress/" + letter["id"], telegram("910003"),
                    expected=404)
         admin_view = await call("GET", path, admin)
@@ -295,10 +290,9 @@ async def test_shared_workflow_round_trip_and_uncertain_delivery():
         await action("approve", admin, 403)
         await action("return_for_revision", admin, 403, comment="Read access is not approval")
         await action("cancel", admin, 403)
-        await call("GET", "/agent" + path, telegram("910004"), expected=404)
+        await call("GET", "/agent" + path, telegram("910004"))
         await call(
             "GET", f"/agent/packets/outgoing/{letter['id']}", telegram("910004"),
-            expected=404,
         )
         await action("approve", telegram("910004"), 403)
         await action(
@@ -357,7 +351,7 @@ async def test_shared_workflow_round_trip_and_uncertain_delivery():
         await call("POST", f"/agent/jobs/{job['id']}/result", expected=204, json=completion)
         letter = await call("GET", path, author)
         assert letter["status"] == "awaiting_final_send" and letter["finalPdfFileId"]
-        await call("GET", "/agent" + path, telegram("910004"), expected=404)
+        await call("GET", "/agent" + path, telegram("910004"))
         admin_final_progress = await call(
             "GET", "/agent/letters/progress/" + letter["id"], telegram("910004")
         )
@@ -400,7 +394,8 @@ async def test_shared_workflow_round_trip_and_uncertain_delivery():
         await action("release_delivery", telegram("910004"), 403)
         await action("send", admin, 409)
         await action("release_delivery", telegram("910001"), 403)
-        await action("release_delivery", telegram("910002"))
+        await action("release_delivery", telegram("910002"), 403)
+        await action("release_delivery", telegram("910003"))
         dispatch = (await call("POST", "/agent/jobs/claim?agentId=referent-test"))["job"]
         assert dispatch["kind"] == "dispatch"
         await call(
@@ -814,7 +809,7 @@ async def test_reassignment_failed_preparation_and_operator_delivery():
         assert final_view["status"] == "awaiting_final_send"
         old_pdf = final_view["finalPdfFileId"]
         returned = await action(
-            "return_for_revision", auth("baxtiyor"), comment="Fix the final PDF layout"
+            "return_for_revision", author, comment="Fix the final PDF layout"
         )
         assert returned["status"] == "needs_revision"
         assert returned["finalPdfFileId"] is None
@@ -838,7 +833,8 @@ async def test_reassignment_failed_preparation_and_operator_delivery():
         assert final_view["status"] == "awaiting_final_send"  # even with auto-send on
         assert final_view["displayNumber"] == returned["displayNumber"]
         assert final_view["finalPdfFileId"] != old_pdf
-        await action("release_delivery", auth("baxtiyor"))
+        await action("release_delivery", auth("baxtiyor"), 403)
+        await action("release_delivery", author)
         dispatch = (await call("POST", "/agent/jobs/claim?agentId=referent-test"))["job"]
         assert dispatch["kind"] == "dispatch"
         await call(
