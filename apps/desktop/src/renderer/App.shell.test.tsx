@@ -1,19 +1,15 @@
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import type { SurveyAnalysisDetail, GrantDetail } from "@yuksalish/contracts";
+import type { SurveyAnalysisDetail } from "@yuksalish/contracts";
 import { App } from "./App";
 import { initialTasks, people, initialChats } from "./test-fixtures/demo-data";
 import { changeField } from "./test-fixtures/rich-editor";
-import { render, response, mockServer, loginToWorkspace, clickWithFocus } from "./app-test-harness";
-import type { NotificationNavigation } from "./platform-adapter";
-
-// Compile only the real workflows covered by this isolated suite.
+import { render, response, mockServer, loginToWorkspace } from "./app-test-harness";
 import "./SurveyAnalyticsView";
 import "./TeamDashboardView";
 import "./AIReferentView";
 import "./TasksView";
 import "./ApprovalsView";
-import "./GrantsView";
 
 describe("corporate workspace authentication alpha", () => {
   it("uses the real mobile web menu without losing the current section", async () => {
@@ -491,41 +487,5 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.click(screen.getByRole("button", { name: /Нужно решить/ }));
     fireEvent.click(screen.getByText("Исправить заявку").closest("button")!);
     expect(await screen.findByRole("dialog", { name: "Вернувшаяся заявка" })).toBeInTheDocument();
-  });
-
-  it("reopens the same grant from its notification after closing the card", async () => {
-    let openDesktopNotification: ((payload: NotificationNavigation) => void) | undefined;
-    vi.stubGlobal("yuksalish", { ...window.yuksalish,
-      onNotificationOpen: (listener: (payload: NotificationNavigation) => void) => {
-        openDesktopNotification = listener;
-        return () => { openDesktopNotification = undefined; };
-      },
-    });
-    const grant: GrantDetail = {
-      id: "grant-notification", title: "Проверить грантовую заявку", description: "План и бюджет",
-      authorUserId: people[0]!.id, assigneeId: people[1]!.id, coAssigneeIds: [],
-      leaderUserId: people[1]!.id, chairUserId: people[2]!.id, dueAt: "2099-11-01T12:00:00Z",
-      status: "author_review", revision: 1, checklist: [], resultText: "Материалы готовы",
-      chatId: "grant-chat", createdAt: "2026-10-20T12:00:00Z", updatedAt: "2026-10-20T12:00:00Z",
-      allowedActions: ["approve", "return", "comment"], events: [], attachments: [],
-    };
-    mockServer({ grant, extraNotifications: [{
-      id: "notification-grant", kind: "approval", priority: "attention", title: "Грант ждёт решения",
-      body: grant.title, section: "grants", entityId: grant.id, requiresAction: true,
-      isReminder: false, occurredAt: "2026-10-20T12:00:00Z",
-    }] });
-    render(<App />);
-    await loginToWorkspace("aziza", "home");
-    clickWithFocus(screen.getByRole("button", { name: "Уведомления" }));
-    clickWithFocus(screen.getByText("Грант ждёт решения").closest("button")!);
-    const dialog = await screen.findByRole("dialog", { name: grant.title });
-    clickWithFocus(await within(dialog).findByRole("button", { name: "Закрыть" }));
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: grant.title })).not.toBeInTheDocument());
-    // A Windows notification reopens the same section without navigating away.
-    expect(openDesktopNotification).toBeDefined();
-    await act(async () => {
-      openDesktopNotification?.({ id: "notification-grant", section: "grants", entityId: grant.id });
-    });
-    expect(await screen.findByRole("dialog", { name: grant.title })).toBeInTheDocument();
   });
 });

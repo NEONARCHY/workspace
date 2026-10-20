@@ -44,6 +44,13 @@ function view(currentUserId = "employee") {
     people={[employee, deputy]} currentUserId={currentUserId} canCreate /></FluentProvider>);
 }
 
+async function openCreationForm() {
+  const createButton = await screen.findByRole("button", { name: "Новое заявление" });
+  // The button is rendered before loadContext finishes, but is not clickable yet.
+  await waitFor(() => expect(createButton).toBeEnabled());
+  fireEvent.click(createButton);
+}
+
 beforeEach(() => {
   api.loadLeaves.mockResolvedValue([]);
   api.loadContext.mockResolvedValue({ hrUserId: "hr", deputyUserId: "deputy", canConfigureSignature: false, signatureReady: false,
@@ -54,7 +61,7 @@ afterEach(() => { cleanup(); vi.clearAllMocks(); });
 describe("LeaveView", () => {
   it("shows the leave application example beside the editor without changing the draft", async () => {
     view();
-    fireEvent.click(await screen.findByRole("button", { name: "Новое заявление" }));
+    await openCreationForm();
     const editor = screen.getByRole("textbox", { name: "Текст заявления" });
     fireEvent.change(editor, { target: { value: "Мой текст заявления" } });
     fireEvent.click(screen.getByRole("button", { name: "Посмотреть пример аризы" }));
@@ -76,7 +83,7 @@ describe("LeaveView", () => {
   it("keeps the employee's text after a failed submission and needs no drawn signature", async () => {
     api.create.mockRejectedValue(new Error("Сервер временно недоступен"));
     view();
-    fireEvent.click(await screen.findByRole("button", { name: "Новое заявление" }));
+    await openCreationForm();
     expect(screen.queryByText(/нарисуйте подпись/i)).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText(/Предполагаемое начало/), { target: { value: "2026-11-19" } });
     fireEvent.change(screen.getByRole("textbox", { name: "Текст заявления" }), { target: { value: "Прошу отпуск" } });

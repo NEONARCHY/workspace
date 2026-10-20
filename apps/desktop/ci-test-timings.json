@@ -66,6 +66,7 @@
     "ui:src/renderer/AnimatedAmount.test.tsx": 981,
     "ui:src/renderer/AnimatedApprovalMoveHint.test.tsx": 4128,
     "ui:src/renderer/AnimatedInteger.test.tsx": 1243,
+    "ui:src/renderer/App.desktop-notifications.test.tsx": 20000,
     "ui:src/renderer/App.shell.test.tsx": 86119,
     "ui:src/renderer/App.tasks.test.tsx": 59408,
     "ui:src/renderer/App.workflows.test.tsx": 72690,
@@ -253,5 +254,8 @@
     "ui:src/renderer/workspace-events-recovery.test.ts": 1106,
     "ui:src/renderer/workspace-sounds.test.ts": 1216,
     "ui:src/shared/zoom-link.test.ts": 854
+  },
+  "nativeNotificationEstimate": {
+    "method": "New isolated native notification scenario: conservative 20s startup/UI estimate. All existing file weights remain measured from sourceRun; no test is excluded by timing metadata."
   }
 }
