@@ -41,7 +41,7 @@ const settle = page => page.evaluate(async () => {
     else if (endpoint.endsWith("/incoming")) data = registry;
     else if (endpoint.endsWith("/letters")) data = { letters: [], totalCount: 0, pendingReviewCount: 0, readyCount: 0, sentCount: 0, signedCount: 0 };
     else if (endpoint.endsWith("/reviewers")) data = { revision: 1, reviewers: [], runtimes: [] };
-    else if (endpoint.endsWith("/packet")) data = { files: [] };
+    else if (endpoint.includes("/ai-referent/packets/")) data = { files: [] };
     return route.fulfill({ json: data });
   });
   try {

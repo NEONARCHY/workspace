@@ -1,10 +1,19 @@
 /* One page scroll owner and one trailing rail. Nested tables, lanes, messages
    and portal dialogs keep their own native scroll regions. */
 .app-shell {
+  --ws-process-board-scrollbar-size: 4px;
   --ws-page-scrollbar-fallback: 6px;
   --ws-page-scrollbar-width: var(--ws-page-scrollbar-fallback);
   --ws-page-scrollbar-inset: var(--ws-page-scrollbar-width);
   --ws-page-scroll-outer-inset: 0px;
+}
+/* The thin horizontal rail sits in the shell's existing bottom inset, below
+   lanes whose lower edge stays level with the sidebar. Reserve it even when
+   all stages fit; opening a wider window must not change the lane baseline. */
+@supports selector(::-webkit-scrollbar) {
+  .app-shell .app-stage > .app-content:has(> :is(.approvals-view, .trips-view) .approval-kanban) {
+    margin-block-end: calc(-1 * var(--ws-process-board-scrollbar-size));
+  }
 }
 .app-shell .app-stage > .app-content {
   --ws-page-scroll-edge: max(0px, calc((var(--ws-page-trailing-gutter) - var(--ws-page-scrollbar-width)) / 2));
@@ -50,7 +59,7 @@ html body .app-provider .app-shell .app-stage > .app-content > div > .survey-ana
   .app-content > .notifications-view .notification-layout { grid-template-columns: minmax(0, 1fr); }
 }
 @media (pointer: coarse) {
-  .app-shell { --ws-page-scrollbar-fallback: 8px; }
+  .app-shell { --ws-page-scrollbar-fallback: 8px; --ws-process-board-scrollbar-size: 8px; }
 }
 @media (max-width: 1023px), (max-width: 1366px) and (any-pointer: coarse) {
   .web-platform .app-shell.browser-compact {
