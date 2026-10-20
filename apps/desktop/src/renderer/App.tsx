@@ -2564,6 +2564,7 @@ export function App() {
               canEdit={modulePermissions.reference?.edit ?? false}
             /> : null}
             {displayedSection === "grants" ? <GrantsView
+              key={focusTarget?.section === "grants" ? focusTarget.revision : undefined}
               token={session.accessToken} currentUser={workspace.currentUser} people={displayPeople}
               departments={workspace.departments} canCreate={modulePermissions.grants?.create ?? false}
               canAdmin={modulePermissions.grants?.admin === true && ["admin", "superadmin"].includes(workspace.currentUser.role)}

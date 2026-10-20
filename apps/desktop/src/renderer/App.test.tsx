@@ -13,6 +13,7 @@ import type {
   CalendarEventInput,
   ChatMessage,
   FeedPost,
+  GrantDetail,
   NotificationPreferences,
   PaymentRequestDetails,
   TripRequest,
@@ -23,6 +24,7 @@ import type {
 } from "@yuksalish/contracts";
 
 import { App } from "./App";
+import type { NotificationNavigation } from "./platform-adapter";
 import { initialChats, initialMessages, initialTasks, people } from "./test-fixtures/demo-data";
 import { homeEfficiency, homeRecognition } from "./test-fixtures/personal-home-fixture";
 
@@ -39,6 +41,7 @@ import "./SurveyAnalyticsView";
 import "./EmployeesView";
 import "./TasksView";
 import "./AIReferentView";
+import "./GrantsView";
 
 function render(element: ReactElement) {
   // Each scenario models a new app session. A shared Griffel renderer retains
@@ -193,6 +196,7 @@ function mockServer(
     readonly withSubsidyRequest?: boolean;
     readonly superadminLogin?: boolean;
     readonly chairmanLogin?: boolean;
+    readonly grant?: GrantDetail;
   } = {},
 ) {
   let failApprovalActionOnce = serverOptions.failApprovalActionOnce ?? false;
@@ -382,6 +386,13 @@ function mockServer(
   };
   const fetchMock = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
     const url = String(input);
+    if (url.endsWith("/grants/settings")) {
+      return response({ leaderUserId: people[1]!.id, chairUserId: people[2]!.id, revision: 1 });
+    }
+    if (url.endsWith("/grants")) return response(serverOptions.grant ? [serverOptions.grant] : []);
+    if (serverOptions.grant && url.endsWith(`/grants/${serverOptions.grant.id}`)) {
+      return response(serverOptions.grant);
+    }
     if (url.endsWith("/auth/login")) {
       const payload = JSON.parse(String(options?.body)) as { username: string };
       const selectedUser = people.find((person) => person.username === payload.username) ?? people[0]!;
@@ -1513,6 +1524,40 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.click(screen.getByRole("button", { name: /Нужно решить/ }));
     fireEvent.click(screen.getByText("Исправить заявку").closest("button")!);
     expect(await screen.findByRole("dialog", { name: "Вернувшаяся заявка" })).toBeInTheDocument();
+  });
+
+  it("reopens the same grant from its notification after closing the card", async () => {
+    let openDesktopNotification: ((payload: NotificationNavigation) => void) | undefined;
+    vi.stubGlobal("yuksalish", { ...window.yuksalish,
+      onNotificationOpen: (listener: (payload: NotificationNavigation) => void) => {
+        openDesktopNotification = listener;
+        return () => { openDesktopNotification = undefined; };
+      },
+    });
+    const grant: GrantDetail = {
+      id: "grant-notification", title: "Проверить грантовую заявку", description: "План и бюджет",
+      authorUserId: people[0]!.id, assigneeId: people[1]!.id, coAssigneeIds: [],
+      leaderUserId: people[1]!.id, chairUserId: people[2]!.id, dueAt: "2099-11-01T12:00:00Z",
+      status: "author_review", revision: 1, checklist: [], resultText: "Материалы готовы",
+      chatId: "grant-chat", createdAt: "2026-10-20T12:00:00Z", updatedAt: "2026-10-20T12:00:00Z",
+      allowedActions: ["approve", "return", "comment"], events: [], attachments: [],
+    };
+    mockServer({ grant, extraNotifications: [{
+      id: "notification-grant", kind: "approval", priority: "attention", title: "Грант ждёт решения",
+      body: grant.title, section: "grants", entityId: grant.id, requiresAction: true,
+      isReminder: false, occurredAt: "2026-10-20T12:00:00Z",
+    }] });
+    render(<App />);
+    await loginToWorkspace("aziza", "home");
+    clickWithFocus(screen.getByRole("button", { name: "Уведомления" }));
+    clickWithFocus(screen.getByText("Грант ждёт решения").closest("button")!);
+    const dialog = await screen.findByRole("dialog", { name: grant.title });
+    clickWithFocus(await within(dialog).findByRole("button", { name: "Закрыть" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: grant.title })).not.toBeInTheDocument());
+    // A Windows notification reopens the same section without navigating away.
+    expect(openDesktopNotification).toBeDefined();
+    act(() => openDesktopNotification?.({ id: "notification-grant", section: "grants", entityId: grant.id }));
+    expect(await screen.findByRole("dialog", { name: grant.title })).toBeInTheDocument();
   });
 
   it("uploads a real attachment with a new message", async () => {
