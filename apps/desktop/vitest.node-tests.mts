@@ -1,6 +1,7 @@
 // Keep this allowlist explicit: all other current and future tests retain the UI environment.
 // Source/CSS contracts and pure calculations need neither jsdom nor the Fluent/Tabster setup.
 export const nodeTestFiles = [
+  "src/renderer/ci-test-sharding.test.ts",
   "src/renderer/ai-register-action-glow.test.ts",
   "src/renderer/assistant-context-close.test.ts",
   "src/renderer/assistant-resize-layout.test.ts",

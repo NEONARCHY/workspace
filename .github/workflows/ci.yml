@@ -38,7 +38,7 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: node scripts/validate-release-notes.mjs "$BASE_SHA" "$GITHUB_SHA"
       - name: Test CI gates, independent notes and PR overlap reporting
-        run: node --test scripts/ci/changed-areas.test.mjs scripts/ci/required-check.test.mjs scripts/lib/release-note-order.test.mjs scripts/lib/pr-overlap.test.mjs
+        run: node --test scripts/ci/changed-areas.test.mjs scripts/ci/required-check.test.mjs scripts/ci/update-test-timings.test.mjs scripts/lib/release-note-order.test.mjs scripts/lib/pr-overlap.test.mjs
 
   python-checks:
     needs: release-notes
@@ -139,6 +139,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Verify personal development configuration isolation
         run: pnpm test:local-dev
+      - name: Verify every desktop test is assigned to exactly one shard
+        run: node scripts/ci/verify-test-shards.mjs
       - name: Prepare Docker release numbering metadata
         shell: pwsh
         run: |
@@ -187,6 +189,7 @@ jobs:
           catch { Write-Host $_.ScriptStackTrace; throw }
       # Each Windows runner has limited memory; parallel test workers can starve
       # jsdom timers and trigger false 10-second UI timeouts.
+      # BalancedSequencer assigns all discovered tests by recorded Windows cost.
       - run: pnpm --filter @yuksalish/desktop exec vitest run --shard=${{ matrix.shard }}/4 --maxWorkers=1
 
   # Keep all existing required names; only explicitly irrelevant work may be skipped.
