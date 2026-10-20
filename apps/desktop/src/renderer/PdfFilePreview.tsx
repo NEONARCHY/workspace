@@ -42,17 +42,24 @@ function PdfPage({ pdf, number, initialSize, frameSize, zoom, active, showText, 
       }
       const viewport = page.getViewport({ scale });
       const ratio = pdfPixelRatio(viewport, window.devicePixelRatio);
-      element.width = Math.max(1, Math.floor(viewport.width * ratio));
-      element.height = Math.max(1, Math.floor(viewport.height * ratio));
-      const context = element.getContext("2d");
+      // Render offscreen so a zoom/resize never clears the visible page first.
+      const nextCanvas = window.document.createElement("canvas");
+      nextCanvas.width = Math.max(1, Math.floor(viewport.width * ratio));
+      nextCanvas.height = Math.max(1, Math.floor(viewport.height * ratio));
+      const context = nextCanvas.getContext("2d");
       if (!context) throw new Error("Canvas unavailable");
-      task = page.render({ canvas: element, canvasContext: context, viewport,
+      task = page.render({ canvas: nextCanvas, canvasContext: context, viewport,
         transform: ratio === 1 ? undefined : [ratio, 0, 0, ratio, 0, 0] });
       rendering.current = task;
       try {
         await task.promise;
-        if (live) { setRendered({ element, key: renderKey }); setError(""); }
-      } finally { page.cleanup(); }
+        if (live) {
+          element.width = nextCanvas.width;
+          element.height = nextCanvas.height;
+          element.getContext("2d")?.drawImage(nextCanvas, 0, 0);
+          setRendered({ element, key: renderKey }); setError("");
+        }
+      } finally { nextCanvas.width = 0; nextCanvas.height = 0; page.cleanup(); }
     }).catch(reason => {
       if (live && !(reason instanceof Error && reason.name === "RenderingCancelledException")) {
         setError("Не удалось отобразить страницу");
@@ -76,13 +83,13 @@ function PdfPage({ pdf, number, initialSize, frameSize, zoom, active, showText, 
     }).catch(() => { if (live) setText("Не удалось прочитать текстовый слой. Попробуйте открыть оригинал."); });
     return () => { live = false; };
   }, [pdf, number, showText]);
-  const busy = active && !ready && !error;
+  const busy = active && rendered?.element !== canvas && !error;
   return <div ref={register} className="file-viewer-pdf-sheet" data-page={number}
     style={{ width: size.width * scale }} role="group" aria-label={`Страница ${number}`}>
-    <div className="file-viewer-pdf-paper" style={{ height: size.height * scale }} aria-busy={busy}>
+    <div className="file-viewer-pdf-paper" style={{ height: size.height * scale }} aria-busy={active && !ready && !error}>
       {active && <canvas ref={setCanvas} role="img"
         aria-label={`Страница ${number} PDF. Текст доступен кнопкой «Текст страницы».`}
-        style={{ visibility: ready && !error ? "visible" : "hidden" }} />}
+        style={{ visibility: rendered?.element === canvas && !error ? "visible" : "hidden" }} />}
       {busy && <div className="file-viewer-pdf-page-placeholder" aria-label={`Загружается страница ${number}`}><SkeletonBlock width="100%" height="100%" /></div>}
       {error && active && <div className="file-viewer-pdf-page-error" role="alert">{error}<Button onClick={() => { setError(""); setAttempt(value => value + 1); }}>Повторить страницу {number}</Button></div>}
     </div>
@@ -114,7 +121,7 @@ export default function PdfFilePreview({ blob, onError }: { readonly blob: Blob;
   const document = loaded?.blob === blob ? loaded.pdf : undefined;
   const [page, setPage] = useState(1);
   const [pageInput, setPageInput] = useState("1");
-  const [zoom, setZoom] = useState<PdfZoomMode>("page");
+  const [zoom, setZoom] = useState<PdfZoomMode>("comfortable");
   const [showText, setShowText] = useState(false);
   const [pageSizes, setPageSizes] = useState<ReadonlyMap<number, PdfPageSize>>(new Map());
   const rememberSize = useCallback((number: number, size: PdfPageSize) => {
@@ -138,7 +145,7 @@ export default function PdfFilePreview({ blob, onError }: { readonly blob: Blob;
       if (live) {
         setLoaded({ blob, pdf, first: { width: first.width, height: first.height } });
         setPageSizes(new Map([[1, { width: first.width, height: first.height }]]));
-        setPage(1); setPageInput("1"); setZoom("page"); setShowText(false);
+        setPage(1); setPageInput("1"); setZoom("comfortable"); setShowText(false);
         if (frame.current) frame.current.scrollTop = 0;
       }
     }).catch(reason => { if (live) onError(reason instanceof Error && reason.name === "PasswordException"
@@ -215,6 +222,7 @@ export default function PdfFilePreview({ blob, onError }: { readonly blob: Blob;
         <Button appearance="subtle" icon={<Subtract20Regular />} aria-label="Уменьшить PDF" disabled={!document || scale <= .1} onClick={() => changeZoom(Math.max(.1, scale - .15))} />
         <span className="file-viewer-pdf-scale" title="Ctrl + колесо — масштаб документа">{Math.round(scale * 100)}%</span>
         <Button appearance="subtle" icon={<Add20Regular />} aria-label="Увеличить PDF" disabled={!document || scale >= 3} onClick={() => changeZoom(Math.min(3, scale + .15))} />
+        <Button appearance="subtle" aria-pressed={zoom === "comfortable"} disabled={!document} onClick={() => changeZoom("comfortable")}>Удобно</Button>
         <Button appearance="subtle" aria-pressed={zoom === "page"} disabled={!document} onClick={() => changeZoom("page")}>Страница целиком</Button>
         <Button appearance="subtle" aria-pressed={zoom === "width"} disabled={!document} onClick={() => changeZoom("width")}>По ширине</Button>
       </div>

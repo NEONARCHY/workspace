@@ -26,7 +26,7 @@ beforeEach(() => {
     getViewport: ({ scale }: { scale: number }) => ({ width: (number === 2 ? 900 : 600) * scale, height: (number === 2 ? 600 : 900) * scale }),
     render: (options: unknown) => mocks.render(number, options), getTextContent: mocks.text, cleanup: vi.fn(),
   }));
-  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({} as CanvasRenderingContext2D);
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({ drawImage: vi.fn() } as unknown as CanvasRenderingContext2D);
   vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(function (this: HTMLElement) { return this.classList.contains("file-viewer-pdf-page") ? width : 0; });
   vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockImplementation(function (this: HTMLElement) { return this.classList.contains("file-viewer-pdf-page") ? height : 0; });
   vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
@@ -63,13 +63,13 @@ describe("continuous document reader", () => {
     view.unmount();
     expect(region.dispatchEvent(new WheelEvent("wheel", { deltaY: -100, ctrlKey: true, cancelable: true }))).toBe(true);
   });
-  it("starts with the whole first page, prefills the next pages and bounds active canvases", async () => {
+  it("starts with a comfortable readable zoom, prefills pages and bounds active canvases", async () => {
     const { onError } = setup();
     await waitFor(() => expect(mocks.render).toHaveBeenCalledWith(3, expect.anything()));
-    expect(screen.getByRole("button", { name: "Страница целиком" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Удобно" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getAllByRole("group", { name: /^Страница \d+$/ })).toHaveLength(12);
     const first = screen.getByRole("group", { name: "Страница 1" });
-    expect(parseFloat((first.firstElementChild as HTMLElement).style.height)).toBeCloseTo(560);
+    expect(parseFloat((first.firstElementChild as HTMLElement).style.height)).toBeCloseTo(644);
     const second = screen.getByRole("group", { name: "Страница 2" });
     expect(parseFloat(second.style.width)).toBeLessThanOrEqual(width - 32);
     expect(document.querySelectorAll("canvas")).toHaveLength(3);
@@ -95,7 +95,7 @@ describe("continuous document reader", () => {
     width = 400; height = 360;
     act(() => resized());
     const first = screen.getByRole("group", { name: "Страница 1" });
-    await waitFor(() => expect(parseFloat((first.firstElementChild as HTMLElement).style.height)).toBeCloseTo(320));
+    await waitFor(() => expect(parseFloat((first.firstElementChild as HTMLElement).style.height)).toBeCloseTo(368));
     fireEvent.click(screen.getByRole("button", { name: "По ширине" }));
     await waitFor(() => expect(parseFloat(first.style.width)).toBeCloseTo(368));
     fireEvent.click(screen.getByRole("button", { name: "Увеличить PDF" }));
@@ -108,6 +108,19 @@ describe("continuous document reader", () => {
     expect(await screen.findByText("Текст документа")).toBeInTheDocument();
     fireEvent.change(page, { target: { value: "99" } }); fireEvent.blur(page);
     expect(page).toHaveValue(3);
+  });
+
+  it("keeps the rendered page visible while a new zoom is still rasterizing", async () => {
+    setup(1);
+    const sheet = await screen.findByRole("group", { name: "Страница 1" });
+    await waitFor(() => expect(sheet.querySelector("canvas")).toBeVisible());
+    let finish: () => void = () => {};
+    mocks.render.mockImplementation(() => ({ promise: new Promise<void>(resolve => { finish = resolve; }), cancel: mocks.cancel }));
+    fireEvent.click(screen.getByRole("button", { name: "Увеличить PDF" }));
+    await waitFor(() => expect(mocks.render).toHaveBeenCalledTimes(2));
+    expect(sheet.querySelector("canvas")).toBeVisible();
+    expect(sheet.querySelector(".file-viewer-pdf-page-placeholder")).toBeNull();
+    act(() => finish());
   });
 
   it("cancels page rendering and destroys the worker when closed", async () => {

@@ -2,17 +2,19 @@ import { dropSpatialCard, installSpatialGeometry } from "./spatial-test-helpers"
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FluentProvider, webLightTheme } from "@fluentui/react-components";
-import type { TripRequest } from "@yuksalish/contracts";
+import type { TripRequest, TripRequestInput } from "@yuksalish/contracts";
 import { TripApprovalsView } from "./TripApprovalsView";
 import { people } from "./test-fixtures/demo-data";
 import type { FileViewerSource } from "./FileViewer";
 
 vi.mock("./FileViewer", () => ({
-  ExternalFileViewer: ({ attachment, onLoad, onClose }: {
+  ExternalFileViewer: ({ attachment, onLoad, onClose, onEdit }: {
     attachment: FileViewerSource;
     onLoad: (file: FileViewerSource, signal?: AbortSignal) => Promise<Blob>;
     onClose: () => void;
+    onEdit?: () => void;
   }) => <div role="dialog" aria-label="Просмотр билдирги"><span>{attachment.fileName}</span>
+    {onEdit && <button type="button" onClick={onEdit}>Редактировать билдирги</button>}
     <button type="button" onClick={() => void onLoad(attachment, new AbortController().signal).then(onClose)}>Показать файл</button>
   </div>,
 }));
@@ -196,6 +198,26 @@ describe("Trip approvals interaction", async () => {
     fireEvent.click(screen.getByText("Показать файл"));
     await waitFor(() => expect(onDownloadDocument).toHaveBeenCalledWith("new-trip", "brief-preview", expect.any(AbortSignal)));
     expect(screen.getByRole("button", { name: "Изменить" })).toBeInTheDocument();
+  });
+  it("opens the draft brief editor from the PDF viewer and regenerates the preview after saving", async () => {
+    installSpatialGeometry();
+    const draft: TripRequest = { ...request, stage: "launch", stageLabel: "Запуск", status: "draft",
+      statusLabel: "Черновик", workflowVersion: 3, canEdit: true, allowedActions: ["submit"],
+      briefFormat: "generated", briefText: "2026-yil oktabr oyida Qashqadaryo hududiga xizmat safari rejalashtirilgan. Hamkor tashkilot vakillari bilan loyiha natijalarini muhokama qilish va keyingi ishlarni kelishish uchun xizmat safariga ruxsat berishingizni soʻrayman. Safar xarajatlari loyiha mablagʻlaridan qoplanadi." };
+    const onUpdate = vi.fn(async (_old: TripRequest, payload: TripRequestInput) => ({ ...draft, ...payload, updatedAt: "2026-10-20T09:00:00Z" }));
+    render(<FluentProvider theme={webLightTheme}><TripApprovalsView requests={[draft]} people={people}
+      currentUser={people[0]!} onCreate={vi.fn()} onUpdate={onUpdate} onAction={vi.fn()}
+      onDownloadDocument={vi.fn(async () => new Blob(["pdf"], { type: "application/pdf" }))} /></FluentProvider>);
+    fireEvent.click(card().querySelector(".approval-card-open")!);
+    fireEvent.click(screen.getByRole("button", { name: "Предпросмотр билдирги PDF" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Редактировать билдирги" }));
+    expect(screen.getByRole("heading", { name: "Редактор билдирги" })).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("combobox", { name: "Размер текста билдирги" }), { target: { value: "12" } });
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить и проверить PDF" }));
+    await waitFor(() => expect(onUpdate).toHaveBeenCalledWith(draft, expect.objectContaining({
+      briefFormat: "edited", briefFontSize: 12,
+    })));
+    expect(await screen.findByText("bildirgi-preview.pdf")).toBeInTheDocument();
   });
   it("lets the requester edit the generated preview, restore it, and save reviewed text", async () => {
     const onCreate = vi.fn(async () => ({ ...request, id: "edited-trip", stage: "launch" as const,
