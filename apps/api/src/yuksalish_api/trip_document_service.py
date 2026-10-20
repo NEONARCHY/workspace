@@ -287,6 +287,8 @@ async def prepare_signed_brief(
             brief_text=brief_text, attachment_name=row["brief_attachment_name"],
             signature=signature, signed_on=datetime.now(_LOCAL).date(),
             include_fact_lines=row.get("brief_format") not in {"generated", "edited"},
+            brief_font_size=row.get("brief_font_size") or 11,
+            brief_font_weight=row.get("brief_font_weight") or "regular",
         )
     # Reject layouts that cannot become a usable order before entering the chair's queue.
     await run_in_threadpool(
@@ -445,6 +447,8 @@ async def read_document(
             brief_text=row["brief_text"], attachment_name=None,
             signature=None, signed_on=datetime.now(_LOCAL).date(),
             include_fact_lines=row.get("brief_format") not in {"generated", "edited"},
+            brief_font_size=row.get("brief_font_size") or 11,
+            brief_font_weight=row.get("brief_font_weight") or "regular",
         )
         return content, "application/pdf", "bildirgi-preview.pdf"
     keys = {

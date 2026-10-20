@@ -68,6 +68,17 @@ it("shows a converted DOC as paginated PDF and still downloads the untouched ori
   fireEvent.click(screen.getByRole("button", { name: "Скачать" }));
   expect(p.onDownload).toHaveBeenCalledWith(attachment);
 });
+it("keeps an opened PDF stable when a parent refresh replaces callbacks", async () => {
+  const attachment = { ...file, fileName: "bildirgi-preview.pdf", contentType: "application/pdf" };
+  const first = props(attachment);
+  const view = render(wrap(<FileViewer {...first} />));
+  await screen.findByTestId("rendered-office-pdf");
+  const next = { ...first, onLoad: vi.fn().mockResolvedValue(new Blob(["different"])) };
+  view.rerender(wrap(<FileViewer {...next} attachment={{ ...attachment }} />));
+  await waitFor(() => expect(screen.getByTestId("rendered-office-pdf")).toBeInTheDocument());
+  expect(first.onLoad).toHaveBeenCalledTimes(1);
+  expect(next.onLoad).not.toHaveBeenCalled();
+});
 it("switches Excel sheets and loads rows in bounded pages",async()=>{
   const p=props({...file,fileName:"book.xlsx"}); p.onLoadOffice.mockResolvedValue(excel);
   render(wrap(<FileViewer {...p}/>));

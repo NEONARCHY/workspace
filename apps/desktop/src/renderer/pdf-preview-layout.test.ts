@@ -8,6 +8,7 @@ describe("document page fitting", () => {
     expect(page.width * scale).toBeLessThanOrEqual(frame.width - 32);
     expect(page.height * scale).toBeLessThanOrEqual(frame.height - 40);
     expect(pdfPageScale(page, frame, "width") * page.width).toBeCloseTo(frame.width - 32);
+    expect(pdfPageScale(page, frame, "comfortable")).toBeCloseTo(Math.min(scale * 1.15, (frame.width - 32) / page.width));
     expect(pdfPageScale(page, frame, 1.5)).toBe(1.5);
   });
   it("refits narrow/short viewports and bounds canvas memory and dimensions", () => {

@@ -124,10 +124,17 @@ def brief_pdf(
     start: date, end: date, employees: list[str], expense_source: str,
     brief_text: str, attachment_name: str | None, signature: bytes | None,
     signed_on: date, include_fact_lines: bool = True,
+    brief_font_size: int = 11, brief_font_weight: str = "regular",
 ) -> bytes:
     """Create a Latin-script brief for the chair's resolution and optional legacy signature."""
     _fonts()
+    if not 9 <= brief_font_size <= 14 or brief_font_weight not in {"regular", "bold"}:
+        raise ValueError("Недопустимое оформление билдирги")
     regular = _style("brief-body")
+    brief_body = _style(
+        "brief-authored-body", size=brief_font_size,
+        leading=brief_font_size * 1.5, bold=brief_font_weight == "bold",
+    )
     small = _style("brief-small", size=9.5, leading=14)
     centered = _style("brief-title", size=16, leading=22, bold=True)
     centered.alignment = 1
@@ -153,11 +160,11 @@ def brief_pdf(
     if brief_text.strip():
         for paragraph in brief_text.strip().splitlines():
             if paragraph.strip():
-                story.append(Paragraph(_text(paragraph), regular))
+                story.append(Paragraph(_text(paragraph), brief_body))
     else:
         story.append(Paragraph(
             f"{start:%d.%m.%Y} - {end:%d.%m.%Y} kunlari {_text(destination)}ga "
-            "xizmat safariga yuborishga ruxsat berishingizni soʻrayman.", regular,  # noqa: RUF001
+            "xizmat safariga yuborishga ruxsat berishingizni soʻrayman.", brief_body,  # noqa: RUF001
         ))
     if employees:
         story.append(Paragraph(

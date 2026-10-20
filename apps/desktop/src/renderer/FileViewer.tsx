@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Button, DialogBody, DialogContent, DialogSurface, DialogTitle, Spinner } from "@fluentui/react-components";
 import { Input } from "./WorkspaceInput";
 import { ArrowDownload20Regular, Dismiss20Regular, Add20Regular, Subtract20Regular, ArrowLeft20Regular, ArrowRight20Regular } from "@fluentui/react-icons";
@@ -20,6 +20,8 @@ interface Props<T extends FileViewerSource> {
   readonly onLoad: (attachment: T, signal?: AbortSignal) => Promise<Blob>;
   readonly onLoadOffice: (attachment: T, sheet: number, offset: number, signal?: AbortSignal) => Promise<OfficePreviewResult>;
   readonly onDownload: (attachment: T) => void | Promise<void>;
+  readonly onEdit?: () => void;
+  readonly editLabel?: string;
   readonly images?: readonly GalleryImage<T>[];
   readonly onGoToMessage?: (image: GalleryImage<T>) => void;
   readonly onForward?: (image: GalleryImage<T>) => void;
@@ -65,7 +67,7 @@ export function LocalFileViewer({ file, files, onClose, onLoadOffice }: {
     : <FileViewer attachment={source} onClose={onClose} onLoad={load} onLoadOffice={loadOffice} onDownload={download} />;
 }
 
-function FileViewer<T extends FileViewerSource>({ attachment, onClose, onLoad, onLoadOffice, onDownload }: Props<T>) {
+function FileViewer<T extends FileViewerSource>({ attachment, onClose, onLoad, onLoadOffice, onDownload, onEdit, editLabel }: Props<T>) {
   const kind = fileViewerKind(attachment);
   const [url, setUrl] = useState("");
   const [mediaBlob, setMediaBlob] = useState<Blob>();
@@ -83,6 +85,10 @@ function FileViewer<T extends FileViewerSource>({ attachment, onClose, onLoad, o
   const visibleBlocks = office?.blocks.filter(block => matches(block.text) || block.rows.some(row => row.some(matches))) ?? [];
   const visibleRows = office?.rows.map((row, index) => ({row, index})).filter(({row}) => row.some(matches)) ?? [];
   const videoRef = useRef<HTMLVideoElement>(null);
+  // A parent refresh may replace callback identities without changing the file.
+  // Keep the latest authorized routes, but load only when the source key changes.
+  const sourceRef = useRef({ attachment, onLoad, onLoadOffice });
+  useLayoutEffect(() => { sourceRef.current = { attachment, onLoad, onLoadOffice }; }, [attachment, onLoad, onLoadOffice]);
   const requestKey = `${attachment.id}:${sheet}:${offset}:${attempt}`;
   const busy = loadedKey !== requestKey;
   useEffect(() => {
@@ -90,16 +96,17 @@ function FileViewer<T extends FileViewerSource>({ attachment, onClose, onLoad, o
     let objectUrl = "";
     const controller = new AbortController();
     const load = async () => {
+      const source = sourceRef.current;
       if (kind === "unsupported") return;
       if (kind === "word" || kind === "excel") {
-        const result = await onLoadOffice(attachment, sheet, offset, controller.signal);
+        const result = await source.onLoadOffice(source.attachment, sheet, offset, controller.signal);
         if (active) {
           if (result instanceof Blob) { setMediaBlob(result); setOffice(undefined); }
           else { setOffice(result); setMediaBlob(undefined); }
           setError("");
         }
       } else {
-        const blob = await onLoad(attachment, controller.signal);
+        const blob = await source.onLoad(source.attachment, controller.signal);
         if (!active) return;
         objectUrl = kind === "pdf" ? "" : URL.createObjectURL(blob);
         setMediaBlob(blob);
@@ -110,7 +117,7 @@ function FileViewer<T extends FileViewerSource>({ attachment, onClose, onLoad, o
     void load().catch(reason => { if (active) setError(reason instanceof Error ? reason.message : "Не удалось открыть файл"); })
       .finally(() => { if (active) setLoadedKey(requestKey); });
     return () => { active = false; controller.abort(); if (objectUrl) URL.revokeObjectURL(objectUrl); };
-  }, [attachment, kind, onLoad, onLoadOffice, sheet, offset, attempt, requestKey]);
+  }, [kind, sheet, offset, requestKey]);
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -136,7 +143,7 @@ function FileViewer<T extends FileViewerSource>({ attachment, onClose, onLoad, o
       <header className="file-viewer-header"><div className="file-viewer-heading"><DialogTitle>
         <span className="file-viewer-title" title={attachment.fileName}>{attachment.fileName}</span>
       </DialogTitle><span className="file-viewer-file-meta">{kind === "unsupported" ? "Файл" : {word:"Word",excel:"Excel",pdf:"PDF",image:"Изображение",video:"Видео",audio:"Аудио"}[kind]}{size ? ` · ${size}` : ""}</span></div>
-        <div className="file-viewer-tools"><Button appearance="subtle" icon={<ArrowDownload20Regular />} disabled={saving} onClick={() => void download()}>Скачать</Button><Button className="file-viewer-close" appearance="subtle" icon={<Dismiss20Regular />} aria-label="Закрыть просмотрщик" onClick={onClose} /></div></header>
+        <div className="file-viewer-tools">{onEdit && <Button appearance="primary" onClick={onEdit}>{editLabel ?? "Редактировать"}</Button>}<Button appearance="subtle" icon={<ArrowDownload20Regular />} disabled={saving} onClick={() => void download()}>Скачать</Button><Button className="file-viewer-close" appearance="subtle" icon={<Dismiss20Regular />} aria-label="Закрыть просмотрщик" onClick={onClose} /></div></header>
       {office?.kind === "word" && !busy && <div className="file-viewer-toolbar" aria-label="Масштаб текстового просмотра Word">
         <span>Текстовый просмотр</span><div className="file-viewer-tools">
             <Button appearance="subtle" icon={<Subtract20Regular />} aria-label="Уменьшить" disabled={zoom <= .5} onClick={() => setZoom(value => Math.max(.5, value - .25))} />
