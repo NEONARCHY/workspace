@@ -1,4 +1,5 @@
 import { personalHomeMessages } from "./personal-home-messages";
+import { grantMessages } from "./grant-messages";
 
 export const locales = ["ru", "uz_cyrl", "uz_latn"] as const;
 export type Locale = (typeof locales)[number];
@@ -48,6 +49,7 @@ type Translation = Readonly<{ uz_cyrl: string; uz_latn: string }>;
  */
 export const productMessages: Readonly<Record<string, Translation>> = {
   ...personalHomeMessages,
+  ...grantMessages,
   "Настройки": { uz_cyrl: "Созламалар", uz_latn: "Sozlamalar" },
   "Оформление": { uz_cyrl: "Кўриниш", uz_latn: "Ko‘rinish" },
   "Тема рабочего пространства": { uz_cyrl: "Иш майдони мавзуси", uz_latn: "Ish maydoni mavzusi" },

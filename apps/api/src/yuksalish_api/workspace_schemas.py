@@ -287,6 +287,7 @@ class LinkPreviewResponse(ApiModel):
 
 
 AttachmentOwnerType = Literal[
+    "grant",
     "message",
     "task",
     "approval_request",
@@ -1638,6 +1639,7 @@ NotificationKind = Literal[
 ]
 NotificationPriority = Literal["normal", "attention", "urgent"]
 NotificationSection = Literal[
+    "grants",
     "ai_referent",
     "ai_hisobot",
     "messenger",
@@ -1704,6 +1706,7 @@ class NotificationPreferencesUpdate(ApiModel):
 
 
 NavigationKey = Literal[
+    "grants",
     "survey_analytics",
     "home",
     "tasks",
@@ -1733,6 +1736,7 @@ NavigationKey = Literal[
 DEFAULT_NAVIGATION: list[NavigationKey] = [
     "home",
     "tasks",
+    "grants",
     "team_overview",
     "payment_requests",
     "ai_referent",
@@ -1817,7 +1821,7 @@ class NavigationOrder(ApiModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="forbid")
     # Derived from the catalog so adding a section never silently breaks reordering.
     order: list[NavigationKey] = Field(
-        min_length=len(DEFAULT_NAVIGATION) - 2, max_length=len(DEFAULT_NAVIGATION)
+        min_length=len(DEFAULT_NAVIGATION) - 3, max_length=len(DEFAULT_NAVIGATION)
     )
     revision: int = Field(ge=0)
 
@@ -1826,13 +1830,15 @@ class NavigationOrder(ApiModel):
     def complete_order(cls, value: list[NavigationKey]) -> list[NavigationKey]:
         # Older clients may omit Home and/or the newly added leave module.
         missing = set(DEFAULT_NAVIGATION) - set(value)
-        if len(value) != len(set(value)) or missing - {"home", "leave_approvals"}:
+        if len(value) != len(set(value)) or missing - {"home", "leave_approvals", "grants"}:
             raise ValueError("Меню должно содержать все разделы без повторений")
         value = list(value)
         if "home" in missing:
             value.insert(0, "home")
         if "leave_approvals" in missing:
             value.insert(value.index("trip_approvals") + 1, "leave_approvals")
+        if "grants" in missing:
+            value.insert(value.index("tasks") + 1, "grants")
         if set(value) != set(DEFAULT_NAVIGATION):
             raise ValueError("Меню должно содержать все разделы без повторений")
         return value

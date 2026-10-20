@@ -1870,6 +1870,20 @@ async def _sync_notifications_for_user(
 ) -> list[NotificationResponse]:
     now = datetime.now(UTC)
     active_attention_keys: set[str] = set()
+    from .grant_tables import grant_requests
+
+    notification_rights = await module_permissions_for_user(connection, current_user)
+    accessible_grant_ids = select(grant_requests.c.id)
+    if current_user.role not in {"admin", "superadmin"}:
+        accessible_grant_ids = accessible_grant_ids.where(or_(
+            grant_requests.c.author_user_id == current_user.id,
+            grant_requests.c.assignee_id == current_user.id,
+            grant_requests.c.leader_user_id == current_user.id,
+            grant_requests.c.chair_user_id == current_user.id,
+            grant_requests.c.co_assignee_ids.contains([str(current_user.id)]),
+        ))
+    if not notification_rights.get("grants", {}).get("view", False):
+        accessible_grant_ids = accessible_grant_ids.where(grant_requests.c.id.is_(None))
     trip_chair_user_id = await connection.scalar(
         select(hr_settings.c.chair_user_id).where(hr_settings.c.id == 1)
     ) if trip_rows else None
@@ -1878,6 +1892,10 @@ async def _sync_notifications_for_user(
     accessible_chat_ids = select(chat_members.c.chat_id).where(
         chat_members.c.user_id == current_user.id
     )
+    if not notification_rights.get("grants", {}).get("view", False):
+        accessible_chat_ids = accessible_chat_ids.join(
+            chats, chats.c.id == chat_members.c.chat_id,
+        ).where(or_(chats.c.context_type.is_(None), chats.c.context_type != "grant"))
 
     unread_message_rows = (
         (
@@ -2071,6 +2089,7 @@ async def _sync_notifications_for_user(
         and not item["event_key"].startswith("hisobot:")
         and not item["event_key"].startswith("support:")
         and not item["event_key"].startswith("task-proposal:")
+        and not item["event_key"].startswith("grant:")
     ]
     if stale_ids:
         await connection.execute(
@@ -2158,6 +2177,8 @@ async def _sync_notifications_for_user(
                         workspace_notifications.c.section == "hr",
                         workspace_notifications.c.section == "project_hub",
                         workspace_notifications.c.section == "project_funding",
+                        and_(workspace_notifications.c.section == "grants",
+                             workspace_notifications.c.entity_id.in_(accessible_grant_ids)),
                         workspace_notifications.c.section == "ai_hisobot",
                         workspace_notifications.c.section == "notifications",
                         and_(workspace_notifications.c.section == "ai_referent",
@@ -2237,6 +2258,10 @@ async def _load_visible_notification_row(
     if row is None:
         raise WorkspaceRepositoryError(404, "Notification was not found")
     await _ensure_ai_referent_notification_visible(connection, current_user, row)
+    if row["section"] == "grants":
+        from .grant_service import access_grant
+
+        await access_grant(connection, current_user, row["entity_id"])
     return row
 
 
@@ -2905,6 +2930,8 @@ async def load_workspace(
         )
     accessible_chat_ids = select(chats.c.id).where(
         chats.c.id.in_(accessible_chat_ids),
+        or_(chats.c.context_type.is_(None), chats.c.context_type != "grant")
+        if not can("grants") else chats.c.id.is_not(None),
         chats.c.id.not_in(select(chat_dismissals.c.chat_id).where(
             chat_dismissals.c.user_id == current_user.id,
         )),
@@ -4168,7 +4195,7 @@ async def _active_user_id(connection: AsyncConnection, value: str) -> UUID:
 async def _sync_context_chat(
     connection: AsyncConnection,
     *,
-    context_type: Literal["project", "project_hub", "trip"],
+    context_type: Literal["project", "project_hub", "trip", "grant"],
     context_id: UUID,
     title: str,
     description: str,
@@ -4185,8 +4212,8 @@ async def _sync_context_chat(
             chats.c.context_id == context_id,
         ).with_for_update()
     )
-    kind = "approval" if context_type == "trip" else "project"
-    label = "Поездка" if context_type == "trip" else "Проект"
+    kind = "approval" if context_type in {"trip", "grant"} else "project"
+    label = {"trip": "Поездка", "grant": "Грант"}.get(context_type, "Проект")
     if chat_id is None:
         chat_id = await connection.scalar(
             pg_insert(chats)
@@ -6882,16 +6909,24 @@ async def validate_attachment_owner(
     *,
     write: bool,
 ) -> None:
+    if owner_type == "grant":
+        from .grant_service import access_grant, allowed_actions
+
+        await ensure_module_action(connection, current_user, "grants", "edit" if write else "view")
+        grant = await access_grant(connection, current_user, owner_id, lock=write)
+        if write and "upload" not in allowed_actions(grant, current_user):
+            raise WorkspaceRepositoryError(403, "Вложения этой заявки доступны только для чтения")
+        return
     if owner_type == "message":
+        chat_id = await connection.scalar(
+            select(messages.c.chat_id).where(messages.c.id == owner_id)
+        )
+        if chat_id is None:
+            raise WorkspaceRepositoryError(404, "Message was not found")
+        _, member = await messenger_service.chat_access(
+            connection, current_user, chat_id, lock=write,
+        )
         if write:
-            chat_id = await connection.scalar(
-                select(messages.c.chat_id).where(messages.c.id == owner_id)
-            )
-            if chat_id is None:
-                raise WorkspaceRepositoryError(404, "Message was not found")
-            _, member = await messenger_service.chat_access(
-                connection, current_user, chat_id, lock=True
-            )
             permissions = messenger_service.member_permissions(member)
             if not permissions.send_messages or not permissions.upload_files:
                 raise WorkspaceRepositoryError(403, "Нет права отправлять файлы в этой группе")
@@ -7135,6 +7170,10 @@ async def create_attachment(
         "created_at": now,
     }
     await connection.execute(insert(attachments).values(**values))
+    if owner_type == "grant":
+        from .grant_service import record_attachment
+
+        await record_attachment(connection, current_user, owner_id, file_name)
     if owner_type == "ai_referent_letter":
         await connection.execute(update(ai_referent_letters).where(
             ai_referent_letters.c.id == owner_id,

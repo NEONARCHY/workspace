@@ -1,0 +1,67 @@
+.grants-view { gap: 16px; min-width: 0; overflow: auto; }
+.grants-actions, .grants-detail-command, .grants-filters { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.grants-toolbar { display: flex; gap: 16px; justify-content: space-between; align-items: end; flex-wrap: wrap; }
+.grants-search, .grants-form label, .grants-result label, .grants-comment label, .grants-return label, .grants-upload { display: grid; gap: 8px; }
+.grants-search { min-width: min(260px, 100%); }
+.grants-view input, .grants-view select, .grants-view textarea,
+.grants-dialog input:not([type="checkbox"]), .grants-dialog select, .grants-dialog textarea {
+  font: inherit; color: var(--ws-text); background: var(--ws-surface); border: 1px solid var(--ws-line);
+  border-radius: 12px; padding: 10px 12px; min-width: 0; width: 100%; box-sizing: border-box;
+}
+.grants-dialog textarea { resize: vertical; }
+.grants-records { background: var(--ws-surface); border-radius: 20px; overflow: auto; min-height: 160px; }
+.grants-records table { width: 100%; border-collapse: collapse; text-align: left; }
+.grants-records th, .grants-records td { padding: 16px; border-bottom: 1px solid var(--ws-line); vertical-align: top; }
+.grants-records th { font-size: 12px; color: var(--ws-muted); }
+.grants-records td:first-child { min-width: 240px; }
+.grants-title-button { border: 0; background: transparent; color: var(--ws-link); font: inherit; font-weight: 600; text-align: left; cursor: pointer; padding: 0; display: block; margin-bottom: 8px; }
+.grants-title-button:hover { text-decoration: underline; }
+.grants-status { display: inline-flex; padding: 5px 9px; border-radius: 8px; font-size: 12px; font-weight: 600; background: var(--ws-surface-recessed, var(--ws-muted-surface)); color: var(--ws-text); }
+.grants-status[data-status="completed"] { color: var(--colorPaletteGreenForeground1); }
+.grants-status[data-status="needs_revision"] { color: var(--colorPaletteRedForeground1); }
+.grants-person { display: flex; gap: 10px; align-items: center; }
+.grants-person small, .grants-overdue { display: block; margin-top: 4px; }
+.grants-overdue { color: var(--colorPaletteRedForeground1); }
+.grants-empty { padding: 32px; text-align: center; color: var(--ws-muted); }
+.fui-DialogSurface.grants-dialog { width: min(1040px, calc(100vw - 40px)); max-width: 1040px; max-height: calc(100dvh - 40px); padding: 0; display: flex; flex-direction: column; overflow: hidden; color: var(--ws-text); background: var(--ws-surface); }
+.grants-dialog > form { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.grants-dialog-header { display: flex; flex: none; align-items: start; justify-content: space-between; gap: 20px; padding: 24px; border-bottom: 1px solid var(--ws-line); }
+.grants-dialog-header h2 { margin: 0; font-size: 24px; overflow-wrap: anywhere; }
+.grants-dialog-header .eyebrow { margin-top: 0; }
+.grants-dialog-body { overflow: auto; min-height: 0; padding: 24px; display: grid; gap: 24px; overscroll-behavior: contain; }
+.grants-dialog-body h3 { font-size: 16px; margin: 0 0 12px; }
+.grants-dialog-body p { margin: 0; }
+.grants-dialog-footer { flex: none; padding: 16px 24px; border-top: 1px solid var(--ws-line); display: grid; gap: 12px; max-height: 40dvh; overflow: auto; }
+.grants-dialog-footer:empty { display: none; }
+.grants-route { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; list-style: none; margin: 0; padding: 0; }
+.grants-route li { border: 1px solid var(--ws-line); border-radius: 12px; padding: 12px; display: grid; align-content: start; gap: 6px; font-size: 12px; overflow-wrap: anywhere; }
+.grants-route li[aria-current="step"] { border-color: var(--ws-link); background: var(--ws-surface-recessed, var(--ws-muted-surface)); }
+.grants-metadata, .grants-form-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 0; }
+.grants-metadata dt { color: var(--ws-muted); font-size: 12px; margin-bottom: 6px; }
+.grants-metadata dd { margin: 0; }
+.grants-preserve { white-space: pre-wrap; overflow-wrap: anywhere; }
+.grants-checklist { display: grid; gap: 10px; }
+.grants-checklist label { display: flex; align-items: start; gap: 10px; }
+.grants-checklist small, .grants-history small { display: block; color: var(--ws-muted); margin-top: 4px; font-size: 12px; }
+.grants-result, .grants-comment, .grants-return { display: grid; justify-items: start; gap: 12px; width: 100%; margin-top: 12px; }
+.grants-result label, .grants-comment label, .grants-return label { width: 100%; }
+.grants-history { list-style: none; display: grid; gap: 16px; padding: 0; margin: 20px 0 0; }
+.grants-history li { padding: 12px 16px; border-inline-start: 2px solid var(--ws-line); background: var(--ws-surface-recessed, var(--ws-muted-surface)); border-radius: 0 12px 12px 0; display: grid; gap: 6px; }
+.grants-files { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.grants-files li { display: flex; justify-content: space-between; gap: 8px; }
+.grants-files li > :first-child { min-width: 0; overflow-wrap: anywhere; }
+.grants-upload { margin-top: 12px; }
+.grants-review-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.grants-review-actions > p { width: 100%; font-size: 12px; color: var(--ws-muted); margin: 0; }
+.fui-DialogSurface.grants-settings { max-width: 640px; }
+.grants-dialog :focus-visible, .grants-view :focus-visible { outline: 2px solid var(--ws-link); outline-offset: 3px; }
+@media (max-width: 700px) {
+  .fui-DialogSurface.grants-dialog { width: calc(100vw - 16px); max-height: calc(100dvh - 16px); }
+  .grants-route { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grants-form-columns, .grants-metadata { grid-template-columns: minmax(0, 1fr); }
+  .grants-dialog-header, .grants-dialog-body { padding: 16px; }
+  .grants-dialog-footer { padding: 12px 16px; }
+}
+@media (forced-colors: active) {
+  .grants-status, .grants-route li[aria-current="step"] { border: 1px solid Highlight; color: CanvasText; }
+}
