@@ -1,4 +1,4 @@
-import { EmployeeAvatar as Avatar } from "./EmployeeAvatar";
+import { TaskPersonAvatar } from "./TaskPersonAvatar";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { LoadingSkeleton } from "./LoadingSkeleton";
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
@@ -765,7 +765,7 @@ export function TasksView(props: TasksViewProps) {
               return <SpatialLane id={status} className="kanban-column" data-task-status={status} key={status}>
                 <header><strong>{statusLabels[status]}</strong><Badge appearance="filled">{columnTasks.length}</Badge></header>
                 <div className="kanban-stack" role="region" tabIndex={0} aria-label={`${statusLabels[status]}: задачи`}>
-                  {columnTasks.map((task) => <SpatialCard id={task.id} lane={status} label={task.title} disabled={!canEditTask(task) || ["awaiting_review", "completed", "cancelled"].includes(task.status)} className={`kanban-card priority-${task.priority} status-${task.status} ${selectedTask?.id === task.id ? "selected" : ""}`} key={task.id}><button {...newTaskFocusTarget} className="spatial-card-open" type="button" onClick={() => setSelectedId(task.id)}><span className="task-card-topline"><span className="spatial-card-context">{task.project || "Без проекта"}</span><TaskPriorityIndicator className="task-card-priority" priority={task.priority} label={taskPriorityLabels[task.priority]} /></span><strong>{task.title}</strong>{pendingTaskDeadlineRequest(task) ? <Badge className="task-deadline-request-badge" appearance="tint" color="warning">{task.authorId === currentUserId ? "Перенос срока · ждёт вашего решения" : "Запрошен перенос срока"}</Badge> : null}{task.parentTaskId ? <span className="subtask-marker">Подзадача</span> : null}<span className="task-card-footer"><EmployeeProfileLink userId={task.assigneeId} personName={personById(task.assigneeId)?.name ?? "Сотрудник"} className="spatial-person"><Avatar size={28} name={personById(task.assigneeId)?.name ?? "Сотрудник"} color="colorful" /><small>{personById(task.assigneeId)?.name ?? "Сотрудник"}</small></EmployeeProfileLink><small className="task-card-due">{task.dueLabel}</small></span>{task.checklistTotal ? <span className="task-card-progress"><span><small>План</small><b>{task.checklistDone}/{task.checklistTotal}</b></span><ProgressBar aria-label={`Чек-лист: ${task.title}`} value={task.checklistDone / task.checklistTotal} /></span> : null}</button></SpatialCard>)}
+                  {columnTasks.map((task) => <SpatialCard id={task.id} lane={status} label={task.title} disabled={!canEditTask(task) || ["awaiting_review", "completed", "cancelled"].includes(task.status)} className={`kanban-card priority-${task.priority} status-${task.status} ${selectedTask?.id === task.id ? "selected" : ""}`} key={task.id}><button {...newTaskFocusTarget} className="spatial-card-open" type="button" onClick={() => setSelectedId(task.id)}><span className="task-card-topline"><span className="spatial-card-context">{task.project || "Без проекта"}</span><TaskPriorityIndicator className="task-card-priority" priority={task.priority} label={taskPriorityLabels[task.priority]} /></span><strong>{task.title}</strong>{pendingTaskDeadlineRequest(task) ? <Badge className="task-deadline-request-badge" appearance="tint" color="warning">{task.authorId === currentUserId ? "Перенос срока · ждёт вашего решения" : "Запрошен перенос срока"}</Badge> : null}{task.parentTaskId ? <span className="subtask-marker">Подзадача</span> : null}<span className="task-card-footer"><EmployeeProfileLink userId={task.assigneeId} personName={personById(task.assigneeId)?.name ?? "Сотрудник"} className="spatial-person"><TaskPersonAvatar person={personById(task.assigneeId)} token={props.token} size={28} /><small>{personById(task.assigneeId)?.name ?? "Сотрудник"}</small></EmployeeProfileLink><small className="task-card-due">{task.dueLabel}</small></span>{task.checklistTotal ? <span className="task-card-progress"><span><small>План</small><b>{task.checklistDone}/{task.checklistTotal}</b></span><ProgressBar aria-label={`Чек-лист: ${task.title}`} value={task.checklistDone / task.checklistTotal} /></span> : null}</button></SpatialCard>)}
                 </div>
               </SpatialLane>;
             })}
@@ -777,6 +777,7 @@ export function TasksView(props: TasksViewProps) {
       {creating ? <TaskComposer
         open
         people={people}
+        token={props.token}
         departments={departments}
         tasks={tasks}
         projectOptions={projectOptions}
@@ -807,11 +808,24 @@ export function TasksView(props: TasksViewProps) {
         {selectedTask.sourceMessageId && sourceNoticeTaskId === selectedTask.id ? <WorkspaceNotice tone="info" className="source-link-note" role="status" actions={<><button type="button" aria-label="Закрыть уведомление" onClick={() => setSourceNoticeTaskId(null)}><Dismiss16Regular /></button></>}>
           <span>Создана из сообщения · связь сохранена</span>
         </WorkspaceNotice> : null}
-        <div className="detail-meta"><EmployeeProfileLink userId={selectedTask.assigneeId} personName={personById(selectedTask.assigneeId)?.name ?? "Сотрудник"}><span className="task-person-avatar"><Avatar name={personById(selectedTask.assigneeId)?.name ?? "Сотрудник"} size={48} color="colorful" /></span><span className="task-meta-copy"><small>Ответственный</small><strong>{personById(selectedTask.assigneeId)?.name ?? "Сотрудник"}</strong></span></EmployeeProfileLink><div className="task-deadline-meta"><Calendar24Regular /><span className="task-meta-copy"><small>Срок</small><strong>{taskDeadlineLabel(selectedTask)}</strong>{canExtendDeadline && <Button className="task-deadline-trigger" size="small" appearance="subtle" aria-expanded={extendingDeadline} disabled={deadlineBusy} onClick={() => {
+        <div className="detail-meta">
+          <TaskMetaPerson userId={selectedTask.authorId} person={personById(selectedTask.authorId)} label="Постановщик" token={props.token} />
+          <TaskMetaPerson userId={selectedTask.assigneeId} person={personById(selectedTask.assigneeId)} label="Ответственный" token={props.token} />
+          <div className="task-deadline-meta"><Calendar24Regular /><span className="task-meta-copy"><small>Срок</small><strong>{taskDeadlineLabel(selectedTask)}</strong>{canExtendDeadline && <Button className="task-deadline-trigger" size="small" appearance="subtle" aria-expanded={extendingDeadline} disabled={deadlineBusy} onClick={() => {
           const base = Math.max(Date.now(), new Date(selectedTask.dueAt!).getTime());
           setExtendedDueAt(localDateTime(new Date(base + 24 * 60 * 60_000).toISOString()));
           setExtendingDeadline(value => !value);
         }}>Продлить срок</Button>}</span></div></div>
+        {selectedTask.participants.some((participant) => participant.role === "co_assignee") ? <div className="task-detail-co-assignees">
+          <span>Соисполнители</span>
+          <div className="task-detail-co-assignee-list">{selectedTask.participants.filter((participant) => participant.role === "co_assignee").map((participant) => {
+            const person = personById(participant.userId);
+            return <EmployeeProfileLink key={participant.userId} userId={participant.userId} personName={person?.name ?? "Сотрудник"}>
+              <TaskPersonAvatar person={person} token={props.token} size={24} />
+              <span>{person?.name ?? "Сотрудник"}</span>
+            </EmployeeProfileLink>;
+          })}</div>
+        </div> : null}
         </div>
         {pendingDeadline ? <TaskDeadlineDecision key={pendingDeadline.id} task={selectedTask} request={pendingDeadline}
           people={people} canDecide={canManageParticipants} onDecide={props.onDecideDeadline}
@@ -867,7 +881,7 @@ export function TasksView(props: TasksViewProps) {
 
         {!editing ? <div className="detail-section task-description-section"><TaskSectionHeading title="Описание" help="Здесь указаны цель и условия задачи. Изменить их можно через действие «Редактировать карточку», если у вас есть право редактирования." /><p>{selectedTask.description || "Описание пока не добавлено."}</p></div> : null}
 
-        <div className="detail-section task-comments-section"><TaskSectionHeading title="Комментарии" help="Обсуждение задачи доступно её участникам по действующим правам. Комментарий сохранится в истории задачи и будет виден коллегам с доступом." meta={selectedTask.comments.length} /><div className="task-comment-list">{selectedTask.comments.map((comment) => <div className="task-comment" key={comment.id}><EmployeeProfileLink userId={comment.authorUserId} personName={personById(comment.authorUserId)?.name ?? "Сотрудник"}><Avatar name={personById(comment.authorUserId)?.name ?? ""} size={28} /></EmployeeProfileLink><span><EmployeeProfileLink userId={comment.authorUserId} personName={personById(comment.authorUserId)?.name ?? "Сотрудник"}><strong>{personById(comment.authorUserId)?.name}</strong></EmployeeProfileLink><small>{new Date(comment.createdAt).toLocaleString("ru-RU")}</small><p>{comment.body}</p>{onReactToComment ? <FeedReactions reactions={comment.reactions ?? []} disabled={false} currentUserId={currentUserId} onToggle={(emoji, reacted) => void onReactToComment(selectedTask, comment.id, emoji, reacted)} /> : null}</span></div>)}</div><div className="task-comment-composer"><Textarea aria-label="Новый комментарий" placeholder="Написать комментарий" value={commentBody} onChange={(_event, data) => setCommentBody(data.value)} /><Button appearance="primary" onClick={() => void addComment()} disabled={!commentBody.trim()}>Отправить</Button></div></div>
+        <div className="detail-section task-comments-section"><TaskSectionHeading title="Комментарии" help="Обсуждение задачи доступно её участникам по действующим правам. Комментарий сохранится в истории задачи и будет виден коллегам с доступом." meta={selectedTask.comments.length} /><div className="task-comment-list">{selectedTask.comments.map((comment) => <div className="task-comment" key={comment.id}><EmployeeProfileLink userId={comment.authorUserId} personName={personById(comment.authorUserId)?.name ?? "Сотрудник"}><TaskPersonAvatar person={personById(comment.authorUserId)} token={props.token} size={28} /></EmployeeProfileLink><span><EmployeeProfileLink userId={comment.authorUserId} personName={personById(comment.authorUserId)?.name ?? "Сотрудник"}><strong>{personById(comment.authorUserId)?.name}</strong></EmployeeProfileLink><small>{new Date(comment.createdAt).toLocaleString("ru-RU")}</small><p>{comment.body}</p>{onReactToComment ? <FeedReactions reactions={comment.reactions ?? []} disabled={false} currentUserId={currentUserId} onToggle={(emoji, reacted) => void onReactToComment(selectedTask, comment.id, emoji, reacted)} /> : null}</span></div>)}</div><div className="task-comment-composer"><Textarea aria-label="Новый комментарий" placeholder="Написать комментарий" value={commentBody} onChange={(_event, data) => setCommentBody(data.value)} /><Button appearance="primary" onClick={() => void addComment()} disabled={!commentBody.trim()}>Отправить</Button></div></div>
         <TaskHistory key={selectedTask.id} token={props.token} taskId={selectedTask.id} revision={selectedTask} />
         <div className="task-secondary-settings">
           <Button appearance="subtle" aria-expanded={settingsTaskId === selectedTask.id} aria-controls={settingsId}
@@ -876,8 +890,8 @@ export function TasksView(props: TasksViewProps) {
           </Button>
           <div id={settingsId} className="task-secondary-settings-content" hidden={settingsTaskId !== selectedTask.id}>
         <div className="detail-section task-participants-section"><TaskSectionHeading title="Участники" help="Ответственный выполняет задачу; соисполнители помогают с результатом, наблюдатели следят за ходом работы. Состав участников меняет постановщик или уполномоченный сотрудник." meta={selectedTask.participants.length + 1} /><div className="participant-list">
-          <ParticipantChip person={personById(selectedTask.assigneeId)} label="Ответственный" />
-          {selectedTask.participants.map((participant) => <ParticipantChip key={`${participant.userId}-${participant.role}`} person={personById(participant.userId)} label={participant.role === "co_assignee" ? "Соисполнитель" : "Наблюдатель"} onRemove={canManageParticipants ? () => void onRemoveParticipant(selectedTask, participant.userId) : undefined} />)}
+          <ParticipantChip person={personById(selectedTask.assigneeId)} label="Ответственный" token={props.token} />
+          {selectedTask.participants.map((participant) => <ParticipantChip key={`${participant.userId}-${participant.role}`} person={personById(participant.userId)} label={participant.role === "co_assignee" ? "Соисполнитель" : "Наблюдатель"} token={props.token} onRemove={canManageParticipants ? () => void onRemoveParticipant(selectedTask, participant.userId) : undefined} />)}
         </div>{canManageParticipants ? <div className="inline-task-form">{departments ? <EmployeeScopeSwitch value={participantScope} onChange={(next) => { setParticipantScope(next); setParticipantId(""); }} label="Группа новых участников" /> : null}<WorkspaceSelect aria-label="Новый участник" value={participantId} onChange={(event) => setParticipantId(event.target.value)}><option value="">Выберите сотрудника</option>{people.filter((person) => inEmployeeScope(person, participantScope) && person.id !== selectedTask.assigneeId && !selectedTask.participants.some((item) => item.userId === person.id)).map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</WorkspaceSelect><WorkspaceSelect aria-label="Роль участника" value={participantRole} onChange={(event) => setParticipantRole(event.target.value as TaskParticipantRole)}><option value="co_assignee">Соисполнитель</option><option value="observer">Наблюдатель</option></WorkspaceSelect><Button appearance="secondary" onClick={() => void addParticipant()} disabled={!participantId}>Добавить</Button></div> : null}</div>
 
         <div className="detail-section task-plan-links"><TaskSectionHeading title="Планы" help="Задача может входить в несколько планов. Связи меняет постановщик или уполномоченный сотрудник." meta={plans.filter((plan) => plan.taskIds.includes(selectedTask.id)).length} />
@@ -946,10 +960,23 @@ export function TasksView(props: TasksViewProps) {
   );
 }
 
-function ParticipantChip({ person, label, onRemove }: {
+function TaskMetaPerson({ userId, person, label, token }: {
+  readonly userId: string;
   readonly person?: WorkspacePerson;
   readonly label: string;
+  readonly token?: string;
+}) {
+  return <EmployeeProfileLink userId={userId} personName={person?.name ?? "Сотрудник"}>
+    <span className="task-person-avatar"><TaskPersonAvatar person={person} token={token} size={48} /></span>
+    <span className="task-meta-copy"><small>{label}</small><strong>{person?.name ?? "Сотрудник"}</strong></span>
+  </EmployeeProfileLink>;
+}
+
+function ParticipantChip({ person, label, token, onRemove }: {
+  readonly person?: WorkspacePerson;
+  readonly label: string;
+  readonly token?: string;
   readonly onRemove?: () => void;
 }) {
-  return <div className={`participant-chip${person?.status && person.status !== "active" ? " workspace-person-inactive" : ""}`}><EmployeeProfileLink userId={person?.id} personName={person?.name ?? "Сотрудник"}><span className="task-person-avatar"><Avatar name={person?.name ?? "Сотрудник"} size={32} /></span><span>{person?.name ?? "Сотрудник"}<small>{label}</small></span></EmployeeProfileLink>{onRemove ? <button aria-label={`Убрать участника ${person?.name ?? ""}`} onClick={onRemove} type="button">×</button> : null}</div>;
+  return <div className={`participant-chip${person?.status && person.status !== "active" ? " workspace-person-inactive" : ""}`}><EmployeeProfileLink userId={person?.id} personName={person?.name ?? "Сотрудник"}><span className="task-person-avatar"><TaskPersonAvatar person={person} token={token} size={32} /></span><span>{person?.name ?? "Сотрудник"}<small>{label}</small></span></EmployeeProfileLink>{onRemove ? <button aria-label={`Убрать участника ${person?.name ?? ""}`} onClick={onRemove} type="button">×</button> : null}</div>;
 }

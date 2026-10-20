@@ -57,14 +57,12 @@ import type {
 } from "@yuksalish/contracts";
 import { moduleKeys } from "@yuksalish/contracts";
 import { setInterfaceLocale } from "@yuksalish/i18n";
-import {
-  Button,
-  FluentProvider,
-} from "@fluentui/react-components";
+import { Button } from "@fluentui/react-components";
 import {
   Alert24Regular,
   Airplane24Regular,
   Board24Regular,
+  BookContacts24Regular,
   Home24Regular,
   CalendarLtr24Regular,
   Chat24Filled,
@@ -93,8 +91,7 @@ import { workspacePlatform } from "./platform-adapter";
 import { useNotificationSounds } from "./useNotificationSounds";
 import { resolveAssistantForm } from "./assistant-form-handoff";
 import { WebUpdateNotice } from "./WebUpdateNotice";
-import { workspaceTheme, workspaceDarkTheme } from "./workspace-theme";
-import { useColorTheme } from "./color-theme";
+import { WorkspaceFluentProvider } from "./WorkspaceFluentProvider";
 import { ColorThemeToggle } from "./ColorThemeToggle";
 import { NotificationBell } from "./NotificationBell";
 import { SectionJump } from "./SectionJump";
@@ -124,6 +121,7 @@ import {
   AbsencesView, AccountPanel, AIHisobotView, AIReferentView, IncomingLettersView, ApprovalsView,
   CalendarView, EmployeeProfileDialog, EmployeesView, FeedView, HrView, PersonalHomeView,
   MembersView, preloadWorkspaceModules, prepareEmployeeProfile, ProjectHubView, ProjectsView,
+  ReferenceView,
   SupportDialog, TasksView, TeamDashboardView, TelegramAccessView, SurveyAnalyticsView,
   TripApprovalsView, ZoomView,
 } from "./workspace-module-preload";
@@ -272,7 +270,7 @@ interface WorkspaceState {
 
 const defaultModuleAccess: readonly EffectiveModuleAccess[] = moduleKeys.map((moduleKey) => ({
   moduleKey,
-  permissions: moduleKey === "team_overview"
+  permissions: moduleKey === "team_overview" || moduleKey === "reference"
     ? { view: false, create: false, edit: false, approve: false, admin: false }
     : { view: true, create: true, edit: true, approve: true, admin: true },
 }));
@@ -360,6 +358,7 @@ const navItems: readonly NavItem[] = [
   { key: "feed", label: "Лента", icon: <News24Regular /> },
   { key: "projects", label: "Список проектов", icon: <FolderPeople24Regular /> },
   { key: "project_hub", label: "Проекты", icon: <FolderPeople24Regular /> },
+  { key: "reference", label: "Справочник", icon: <BookContacts24Regular /> },
   { key: "project_funding", label: "Проектные заявки", icon: <DocumentBulletList24Regular /> },
   {
     key: "trip_approvals",
@@ -467,8 +466,6 @@ export function App() {
   const railCollapsed = !browserCompact && (railPreference ?? compactWindow);
   const closeBrowserMenu = () => { setBrowserMenuOpen(false); if (browserCompact) setAiModulesOpen(false); };
   const { theme: sidebarTheme } = useSidebarTheme(session?.user.id);
-  const { theme: colorTheme } = useColorTheme(session?.user.id);
-  const fluentTheme = colorTheme === "dark" ? workspaceDarkTheme : workspaceTheme;
   const [backgroundError, setBackgroundError] = useState("");
   const [updatePolicy, setUpdatePolicy] = useState<DesktopUpdatePolicy>();
   const [updateStatus, setUpdateStatus] = useState<DesktopUpdateStatus>({ phase: "idle" });
@@ -1921,7 +1918,7 @@ export function App() {
 
   if (session === undefined) {
     return (
-      <FluentProvider theme={fluentTheme} className="app-provider">
+      <WorkspaceFluentProvider>
         <LoginView
           busy={authBusy || sessionRestoring}
           error={authError}
@@ -1935,12 +1932,12 @@ export function App() {
             setRestoreAttempt((current) => current + 1);
           } : undefined}
         />
-      </FluentProvider>
+      </WorkspaceFluentProvider>
     );
   }
 
   if (workspacePlatform.kind === "electron" && requiresDesktopUpdate(updatePolicy, workspacePlatform.version)) {
-    return <FluentProvider theme={fluentTheme} className="app-provider">
+    return <WorkspaceFluentProvider userId={session.user.id}>
       <DesktopUpdateGate
         requiredVersion={updatePolicy!.minimumVersion!}
         currentVersion={workspacePlatform.version}
@@ -1958,7 +1955,7 @@ export function App() {
           });
         }}
       />
-    </FluentProvider>;
+    </WorkspaceFluentProvider>;
   }
 
   const modulePermissions = Object.fromEntries(workspace.moduleAccess.map((item) => [item.moduleKey, item.permissions]));
@@ -2148,7 +2145,7 @@ export function App() {
     focusRevision: focusTarget?.section === "messenger" ? focusTarget.revision : undefined,
   };
   return (
-    <FluentProvider theme={fluentTheme} className="app-provider">
+    <WorkspaceFluentProvider userId={session.user.id}>
       <UndoActionsProvider key={workspace.currentUser.id}>
       <WorkspacePeopleProvider people={displayPeople}>
       <EmployeeProfileProvider onOpenProfile={setProfileUserId} onPrepareProfile={(userId) => {
@@ -2558,6 +2555,12 @@ export function App() {
                 }}
               />
             ) : null}
+            {displayedSection === "reference" ? <ReferenceView
+              token={session.accessToken}
+              people={displayPeople}
+              canCreate={modulePermissions.reference?.create ?? false}
+              canEdit={modulePermissions.reference?.edit ?? false}
+            /> : null}
             {displayedSection === "trip_approvals" ? (
               <TripApprovalsView
                 key={focusTarget?.revision}
@@ -2794,6 +2797,6 @@ export function App() {
       </EmployeeProfileProvider>
       </WorkspacePeopleProvider>
       </UndoActionsProvider>
-    </FluentProvider>
+    </WorkspaceFluentProvider>
   );
 }

@@ -94,7 +94,7 @@ import { ConfirmActionDialog } from "./ConfirmActionDialog";
 
 type ApprovalNode = Node<ApprovalNodeData>;
 type ApprovalMode = "requests" | "designer";
-type ApprovalBoardFilter = "all" | "actionable" | "revision" | "finished";
+type ApprovalBoardFilter = "all" | "actionable" | "running" | "revision" | "overdue" | "finished";
 export function ApprovalMoveHint({ text }: { text: string }) {
   return <span className="approval-move-hint" aria-live="polite" aria-atomic="true">{text}</span>;
 }
@@ -1107,12 +1107,6 @@ export function ApprovalsView({
     () => approvalBoardColumns(workflow, requests),
     [requests, workflow],
   );
-  const boardSummary = useMemo(() => ({
-    actionable: requests.filter(request => approvalRequestNeedsAction(request, currentUserId)).length,
-    running: requests.filter(request => request.status === "running").length,
-    revision: requests.filter(request => request.status === "needs_revision").length,
-    overdue: requests.filter(request => approvalRequestIsOverdue(request)).length,
-  }), [currentUserId, requests]);
   const matchingRequests = useMemo(() => {
     const query = requestQuery.trim().toLocaleLowerCase("ru-RU");
     return requests.filter(request => !query || [
@@ -1126,7 +1120,9 @@ export function ApprovalsView({
   const filterCounts = useMemo(() => ({
     all: matchingRequests.length,
     actionable: matchingRequests.filter(request => approvalRequestNeedsAction(request, currentUserId)).length,
+    running: matchingRequests.filter(request => request.status === "running").length,
     revision: matchingRequests.filter(request => request.status === "needs_revision").length,
+    overdue: matchingRequests.filter(request => approvalRequestIsOverdue(request)).length,
     finished: matchingRequests.filter(request => ["approved", "rejected", "cancelled"].includes(request.status)).length,
   }), [currentUserId, matchingRequests]);
   const filteredRequests = useMemo(() => {
@@ -1134,7 +1130,9 @@ export function ApprovalsView({
       if (boardFilter === "actionable") {
         return approvalRequestNeedsAction(request, currentUserId);
       }
+      if (boardFilter === "running") return request.status === "running";
       if (boardFilter === "revision") return request.status === "needs_revision";
+      if (boardFilter === "overdue") return approvalRequestIsOverdue(request);
       if (boardFilter === "finished") {
         return ["approved", "rejected", "cancelled"].includes(request.status);
       }
@@ -1693,21 +1691,6 @@ export function ApprovalsView({
 
       {mode === "requests" ? (
         <div className="approval-workspace">
-          <div className="approval-commandbar">
-            <div className="approval-metrics" aria-label="Сводка заявок">
-              <button
-                type="button"
-                className="approval-metric approval-metric-actionable"
-                aria-pressed={boardFilter === "actionable"}
-                onClick={() => setBoardFilter("actionable")}
-              >
-                <strong>{boardSummary.actionable}</strong><span>Нужно моё решение</span>
-              </button>
-              <span className="approval-metric"><strong>{boardSummary.running}</strong><span>В работе</span></span>
-              <span className="approval-metric"><strong>{boardSummary.revision}</strong><span>На доработке</span></span>
-              <span className="approval-metric approval-metric-overdue"><strong>{boardSummary.overdue}</strong><span>Просрочено</span></span>
-            </div>
-          </div>
           <div className="approval-view-toolbar ws2-process-toolbar">
             <SlidingSegmented className="ws2-segmented" role="group" aria-label="Вид заявок">
               <button type="button" className={presentation === "kanban" ? "active" : ""} aria-pressed={presentation === "kanban"} onClick={() => setPresentation("kanban")}>Канбан</button>
@@ -1718,7 +1701,9 @@ export function ApprovalsView({
               {([
                 ["all", "Все", filterCounts.all],
                 ["actionable", "Нужно моё решение", filterCounts.actionable],
+                ["running", "В работе", filterCounts.running],
                 ["revision", "Доработка", filterCounts.revision],
+                ["overdue", "Просрочено", filterCounts.overdue],
                 ["finished", "Завершённые", filterCounts.finished],
               ] as const).map(([filter, label, count]) => (
                 <button

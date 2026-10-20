@@ -109,6 +109,21 @@ def test_written_brief_needs_no_employee_signature_and_keeps_resolution_space() 
     assert len(PdfReader(BytesIO(content)).pages[0].images) == 1  # logo only
 
 
+def test_legacy_brief_does_not_transliterate_russian_purpose_before_authored_text() -> None:
+    content = brief_pdf(
+        requester="Testova Zebo", chair="Testov Rais",
+        purpose="Проведение консультаций в рамках юридической клиники",
+        destination="Qashqadaryo", start=date(2026, 10, 22),
+        end=date(2026, 10, 22), employees=["Testova Zebo"],
+        expense_source="", brief_text="Yuridik klinika doirasida sayyor qabul o'tkaziladi.",
+        attachment_name=None, signature=None, signed_on=date(2026, 10, 20),
+    )
+    text = text_of(content)
+    assert "Yuridik klinika doirasida sayyor qabul o'tkaziladi." in text
+    assert "Safar maqsadi:" not in text
+    assert "Provedenie konsultatsiy" not in text
+
+
 def test_new_trip_needs_deputy_then_chair_without_hr_access() -> None:
     requester_id, deputy_id, chair_id = uuid4(), uuid4(), uuid4()
     requester = AuthenticatedUser(requester_id, "requester", "Requester", None, None, "employee")

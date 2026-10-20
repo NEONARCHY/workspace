@@ -18,15 +18,14 @@ export function ColorThemeSettings({ userId }: { readonly userId: string }) {
       <p>Все разделы, окна и меню меняются вместе. Выбор сохраняется на этом устройстве.</p></div></div>
     <div className="color-theme-choices" role="group" aria-label="Тема рабочего пространства">
       {choices.map(choice => <button type="button" key={choice.value} className="color-theme-choice"
-        aria-pressed={preference === choice.value} onClick={event => {
-          const bounds = event.currentTarget.getBoundingClientRect();
+        aria-pressed={preference === choice.value} onClick={() => {
           if (preference === choice.value && !pendingChoice.current) return;
           pendingChoice.current = choice.value;
           void transitionColorTheme(() => flushSync(() => {
             pendingChoice.current = undefined;
             setNotice(setPreference(choice.value) ? "" :
               "Тема применена, но сохранить выбор не удалось. После перезапуска он может сброситься.");
-          }), { x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 });
+          }));
         }}>
         <span className="color-theme-preview" data-preview={choice.value} aria-hidden="true"><i /><i /><i /><i /></span>
         <span className="color-theme-choice-title">{choice.icon}{choice.label}</span>

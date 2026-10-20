@@ -17,6 +17,7 @@ const telegram = () => import("./TelegramAccessView");
 const feed = () => import("./FeedView");
 const projects = () => import("./ProjectsView");
 const projectHub = () => import("./ProjectHubView");
+const reference = () => import("./ReferenceView");
 const trips = () => import("./TripApprovalsView");
 const calendar = () => import("./CalendarView");
 const zoom = () => import("./ZoomView");
@@ -39,6 +40,7 @@ export const TelegramAccessView = lazy(() => telegram().then((module) => ({ defa
 export const FeedView = lazy(() => feed().then((module) => ({ default: module.FeedView })));
 export const ProjectsView = lazy(() => projects().then((module) => ({ default: module.ProjectsView })));
 export const ProjectHubView = lazy(() => projectHub().then((module) => ({ default: module.ProjectHubView })));
+export const ReferenceView = lazy(() => reference().then((module) => ({ default: module.ReferenceView })));
 export const TripApprovalsView = lazy(() => trips().then((module) => ({ default: module.TripApprovalsView })));
 export const CalendarView = lazy(() => calendar().then((module) => ({ default: module.CalendarView })));
 export const ZoomView = lazy(() => zoom().then((module) => ({ default: module.ZoomView })));
@@ -56,7 +58,7 @@ const sectionLoaders: readonly [NavigationKey, () => Promise<unknown>][] = [
   ["feed", feed], ["projects", projects], ["project_hub", projectHub],
   ["project_funding", projectHub], ["trip_approvals", trips], ["calendar", calendar],
   ["zoom_meetings", zoom], ["absences", absences], ["members", members],
-  ["hr", hr], ["employees", employees], ["survey_analytics", surveys],
+  ["hr", hr], ["employees", employees], ["survey_analytics", surveys], ["reference", reference],
 ];
 
 export async function prepareEmployeeProfile(token: string, userId: string): Promise<() => void> {

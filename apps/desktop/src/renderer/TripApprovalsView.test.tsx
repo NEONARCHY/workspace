@@ -40,6 +40,18 @@ const card = () => document.querySelector(".trip-board-card")!;
 async function drop(target: string) { await dropSpatialCard(card(), column(target)); }
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 describe("Trip approvals interaction", async () => {
+  it("replaces the summary strip with status filters in the navigation row", () => {
+    setup();
+    expect(document.querySelector(".trip-overview")).toBeNull();
+    const filters = screen.getByRole("group", { name: "Фильтр поездок" });
+    for (const label of ["Все", "Нужно моё решение", "В работе", "На доработке", "Утверждено", "Завершённые"]) {
+      expect(within(filters).getByRole("button", { name: new RegExp(label) })).toBeInTheDocument();
+    }
+    const actionable = within(filters).getByRole("button", { name: /Нужно моё решение/ });
+    fireEvent.click(actionable);
+    expect(actionable).toHaveAttribute("aria-pressed", "true");
+  });
+
   it("presents empty-board guidance as one readable status with a decorative icon", () => {
     render(<FluentProvider theme={webLightTheme}><TripApprovalsView
       requests={[]} people={people} currentUser={people[0]!}

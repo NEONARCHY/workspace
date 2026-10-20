@@ -26,7 +26,7 @@ import {
   Search20Regular,
 } from "@fluentui/react-icons";
 import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
-import { EmployeeAvatar as Avatar } from "./EmployeeAvatar";
+import { TaskPersonAvatar } from "./TaskPersonAvatar";
 import { SlidingSegmented } from "./SlidingSegmented";
 
 import { RecordComposer, RecordSection, RecordSummary } from "./RecordComposer";
@@ -46,6 +46,7 @@ type DraftDependency = NonNullable<WorkspaceTaskCreateInput["dependencies"]>[num
 interface TaskComposerProps {
   readonly open: boolean;
   readonly people: readonly WorkspacePerson[];
+  readonly token?: string;
   readonly departments?: readonly WorkspaceDepartment[];
   readonly tasks: readonly WorkspaceTask[];
   readonly projectOptions?: readonly TaskProjectOption[];
@@ -85,6 +86,7 @@ function dateTimeLabel(value: string): string {
 export function TaskComposer({
   open,
   people,
+  token,
   departments = [],
   tasks,
   projectOptions = [],
@@ -553,7 +555,7 @@ export function TaskComposer({
             <RecordSection collapsible summary={participants.length ? `Дополнительно: ${participants.length}` : "Добавить соисполнителей и наблюдателей"} title="Команда" description="Добавьте людей или целый отдел к задаче.">
               <div className="task-team-builder">
                 <div className="task-team-lead">
-                  <Avatar name={assignee?.name ?? "Ответственный"} size={36} color="colorful" aria-hidden="true" />
+                  <TaskPersonAvatar person={assignee} token={token} size={36} fallbackName="Ответственный" />
                   <div><span className="task-team-lead-label">Ответственный за задачу</span><strong>{assignee?.name ?? "Не выбран"}</strong></div>
                   <p>Остальных можно добавить по одному или целым отделом.</p>
                 </div>
@@ -572,7 +574,7 @@ export function TaskComposer({
                   {teamMode === "people" ? <>
                     <div className="task-team-options" role="group" aria-label="Доступные сотрудники">
                       {filteredTeamPeople.length ? filteredTeamPeople.map((person) => <button type="button" key={person.id} className="task-team-option" aria-pressed={participantId === person.id} onClick={() => setParticipantId(person.id)}>
-                        <Avatar name={person.name} size={32} color="colorful" aria-hidden="true" />
+                        <TaskPersonAvatar person={person} token={token} size={32} />
                         <span className="task-team-option-copy"><strong>{person.name}</strong><small>{person.jobTitle || "Должность не указана"}</small></span>
                         <span className="task-team-option-state" aria-hidden="true">{participantId === person.id ? "Выбран" : "Выбрать"}</span>
                       </button>) : <p className="task-team-no-results">{teamQuery ? "По вашему запросу никого не нашли." : "В этом списке нет доступных сотрудников."}</p>}
@@ -611,7 +613,7 @@ export function TaskComposer({
                 {participants.map((participant) => {
                   const person = peopleById.get(participant.userId);
                   return <div className="task-composer-person-chip" key={participant.userId}>
-                    <EmployeeProfileLink userId={person?.id} personName={person?.name ?? "Сотрудник"}><Avatar name={person?.name ?? "Сотрудник"} size={28} /><span className="task-composer-person-info"><strong>{person?.name ?? "Сотрудник"}</strong><small>{participant.role === "co_assignee" ? "Соисполнитель" : "Наблюдатель"}</small></span></EmployeeProfileLink>
+                    <EmployeeProfileLink userId={person?.id} personName={person?.name ?? "Сотрудник"}><TaskPersonAvatar person={person} token={token} size={28} /><span className="task-composer-person-info"><strong>{person?.name ?? "Сотрудник"}</strong><small>{participant.role === "co_assignee" ? "Соисполнитель" : "Наблюдатель"}</small></span></EmployeeProfileLink>
                     <button type="button" aria-label={`Убрать участника ${person?.name ?? ""}`} onClick={() => setParticipants((current) => current.filter((item) => item.userId !== participant.userId))}><Delete20Regular /></button>
                   </div>;
                 })}

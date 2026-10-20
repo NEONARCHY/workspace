@@ -105,6 +105,14 @@ MODULE_CATALOG = (
         status="available",
     ),
     ModuleDescriptor(
+        key="reference",
+        label=LocalizedLabel(
+            ru="Справочник", uz_cyrl="Маълумотнома", uz_latn="Ma’lumotnoma",
+        ),
+        route="/reference",
+        status="available",
+    ),
+    ModuleDescriptor(
         key="project_funding",
         label=LocalizedLabel(
             ru="Проектные заявки",

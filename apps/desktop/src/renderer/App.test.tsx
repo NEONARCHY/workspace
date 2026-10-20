@@ -2029,7 +2029,9 @@ describe("corporate workspace authentication alpha", () => {
     render(<App />);
     await loginToWorkspace("malika", "payment_requests");
     expect(screen.getByRole("navigation").closest(".app-shell")).not.toHaveClass("approval-shell");
-    expect(await screen.findByLabelText("Сводка заявок")).toHaveTextContent("В работе");
+    const approvalFilters = await screen.findByRole("group", { name: "Фильтр заявок" });
+    expect(within(approvalFilters).getByRole("button", { name: "В работе" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Сводка заявок")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Сводка заявок на оплату")).not.toBeInTheDocument();
     fireEvent.click(await screen.findByRole("button", { name: "Новая заявка" }));
     const projectSection = screen.getByText("Проект и контекст").closest("section");
