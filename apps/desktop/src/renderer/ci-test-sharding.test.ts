@@ -24,12 +24,12 @@ describe("duration-balanced CI shards", () => {
     expect(() => balanceTests([{ file: 1, key: "a", duration: NaN }], 4)).toThrow();
   });
   it("normalizes Windows paths and balances the measured CI workload", () => {
-    expect(testWeight("ui", "src\\renderer\\App.test.tsx")).toBe(testWeight("ui", "src/renderer/App.test.tsx"));
+    expect(testWeight("ui", "src\\renderer\\App.tasks.test.tsx")).toBe(testWeight("ui", "src/renderer/App.tasks.test.tsx"));
     const measured = Object.entries(timings.durationsMs).map(([key, duration]) => ({ key, duration, file: key }));
     const totals = balanceTests(measured, 4).map((shard) => shard.reduce((sum, key) => sum + timings.durationsMs[key as keyof typeof timings.durationsMs], 0));
     expect(Math.max(...totals) / Math.min(...totals)).toBeLessThan(1.05);
     const shards = balanceTests(measured, 4);
-    expect(shards.findIndex((shard) => shard.includes("ui:src/renderer/App.test.tsx")))
-      .not.toBe(shards.findIndex((shard) => shard.includes("ui:src/renderer/MessengerView.test.tsx")));
+    expect(shards.findIndex((shard) => shard.includes("ui:src/renderer/App.tasks.test.tsx")))
+      .not.toBe(shards.findIndex((shard) => shard.includes("ui:src/renderer/App.shell.test.tsx")));
   });
 });

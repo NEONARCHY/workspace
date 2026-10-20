@@ -18,6 +18,7 @@
     "build:web": "pnpm --filter @yuksalish/desktop build:web",
     "lint": "pnpm -r --if-present lint",
     "test": "pnpm -r --if-present test",
+    "test:app": "pnpm --filter @yuksalish/desktop exec vitest run src/renderer/App. --maxWorkers=1",
     "typecheck": "pnpm -r --if-present typecheck",
     "check:release-notes": "node scripts/validate-release-notes.mjs",
     "check:pr-overlaps": "node scripts/check-pr-overlaps.mjs --local",
