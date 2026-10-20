@@ -6,6 +6,13 @@ import { initialTasks } from "./test-fixtures/demo-data";
 import { changeField } from "./test-fixtures/rich-editor";
 import { render, mockServer, clickWithFocus, loginToWorkspace } from "./app-test-harness";
 
+import "./EmployeesView";
+import "./ProjectHubView";
+import "./ProjectsView";
+import "./TripApprovalsView";
+import "./FeedView";
+import "./CalendarView";
+
 describe("corporate workspace authentication alpha", () => {
   it("finds employees without changing their roles or selected record", async () => {
     mockServer();

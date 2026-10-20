@@ -6,6 +6,11 @@ import { initialTasks, people } from "./test-fixtures/demo-data";
 import { changeField } from "./test-fixtures/rich-editor";
 import { render, response, mockServer, loginToWorkspace } from "./app-test-harness";
 
+// Compile real workflow chunks during collection, not inside assertion timers.
+import "./SurveyAnalyticsView";
+import "./TeamDashboardView";
+import "./AIReferentView";
+
 describe("corporate workspace authentication alpha", () => {
   it("uses the real mobile web menu without losing the current section", async () => {
     const server = mockServer();

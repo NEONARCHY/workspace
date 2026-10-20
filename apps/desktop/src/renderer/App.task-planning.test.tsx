@@ -1,9 +1,11 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { App } from "./App";
 import { initialTasks, people } from "./test-fixtures/demo-data";
 import { changeField } from "./test-fixtures/rich-editor";
 import { render, mockServer, loginToWorkspace } from "./app-test-harness";
+
+import "./TasksView";
 
 describe("corporate workspace authentication alpha", () => {
   it("creates a task after authentication", async () => {
@@ -11,7 +13,11 @@ describe("corporate workspace authentication alpha", () => {
     render(<App />);
     await loginToWorkspace();
 
-    fireEvent.click(screen.getByRole("button", { name: "Задачи" }));
+    // Flush the real lazy module's asynchronous transition on a cold file.
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Задачи" }));
+      await import("./TasksView");
+    });
     fireEvent.click(await screen.findByRole("button", { name: "Новая задача" }));
     changeField(screen.getByRole("textbox", { name: "Название задачи" }), {
       target: { value: "Проверить новый маршрут оплаты" },

@@ -6,6 +6,8 @@ import { people } from "./test-fixtures/demo-data";
 import { changeField } from "./test-fixtures/rich-editor";
 import { render, mockServer, clickWithFocus, loginToWorkspace, selectPaymentDirection } from "./app-test-harness";
 
+import "./ApprovalsView";
+
 describe("corporate workspace authentication alpha", () => {
   it("submits the complete payment card and publishes a workflow version", async () => {
     const fetchMock = mockServer();

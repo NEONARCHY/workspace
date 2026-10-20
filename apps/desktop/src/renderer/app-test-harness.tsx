@@ -6,20 +6,11 @@ import { afterEach, vi } from "vitest";
 import type { AIReferentLetter, ApprovalRequestSummary, CalendarEvent, CalendarEventInput, ChatMessage, FeedPost, NotificationPreferences, PaymentRequestDetails, TripRequest, WorkspaceAttachment, WorkspaceProject, WorkspaceNotification, WorkspaceTask } from "@yuksalish/contracts";
 import { initialChats, initialMessages, initialTasks, people } from "./test-fixtures/demo-data";
 import { homeEfficiency, homeRecognition } from "./test-fixtures/personal-home-fixture";
-import "./PersonalHomeView";
-import "./ProjectHubView";
-import "./ProjectsView";
-import "./TripApprovalsView";
-import "./FeedView";
-import "./CalendarView";
-import "./SurveyAnalyticsView";
-import "./EmployeesView";
-import "./TasksView";
-import "./AIReferentView";
 import { changeField } from "./test-fixtures/rich-editor";
 
 // Shared real-app harness. Each isolated suite registers identical cleanup.
-// Preloaded workflow modules preserve the original cold-transform behaviour.
+// Each suite preloads only the real workflow modules it exercises, not every
+// secondary view in every isolated worker.
 export function render(element: ReactElement) {
   // Each scenario models a new app session. A shared Griffel renderer retains
   // unrelated screens' CSS, making jsdom accessibility queries slower over time.

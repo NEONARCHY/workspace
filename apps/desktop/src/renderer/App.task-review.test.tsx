@@ -1,9 +1,11 @@
-import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { App } from "./App";
 import { initialTasks } from "./test-fixtures/demo-data";
 import { changeField } from "./test-fixtures/rich-editor";
 import { render, mockServer, loginToWorkspace } from "./app-test-harness";
+
+import "./TasksView";
 
 describe("corporate workspace authentication alpha", () => {
   it("lets an administrator delete an active task after confirmation", async () => {
@@ -11,7 +13,10 @@ describe("corporate workspace authentication alpha", () => {
     render(<App />);
     await loginToWorkspace("malika");
 
-    fireEvent.click(screen.getByRole("button", { name: "Задачи" }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Задачи" }));
+      await import("./TasksView");
+    });
     // This suite must work cold, without an earlier task scenario warming React.lazy.
     fireEvent.click((await screen.findAllByRole("button", { name: /^Открыть задачу:/ }))[0]!);
     fireEvent.click(await screen.findByRole("button", { name: "Удалить задачу" }));

@@ -4,6 +4,9 @@ import { App } from "./App";
 import { initialTasks } from "./test-fixtures/demo-data";
 import { render, mockServer, loginToWorkspace } from "./app-test-harness";
 
+import "./TasksView";
+import "./ApprovalsView";
+
 describe("corporate workspace authentication alpha", () => {
   it("opens the unread queue, marks an item read and follows its deep link", async () => {
     const fetchMock = mockServer();

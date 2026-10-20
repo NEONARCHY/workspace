@@ -65,13 +65,13 @@
     "ui:src/renderer/AnimatedAmount.test.tsx": 777,
     "ui:src/renderer/AnimatedApprovalMoveHint.test.tsx": 5483,
     "ui:src/renderer/AnimatedInteger.test.tsx": 1313,
-    "ui:src/renderer/App.approvals.test.tsx": 40976,
-    "ui:src/renderer/App.messaging.test.tsx": 33536,
-    "ui:src/renderer/App.modules.test.tsx": 38933,
-    "ui:src/renderer/App.notifications.test.tsx": 32297,
-    "ui:src/renderer/App.shell.test.tsx": 35466,
-    "ui:src/renderer/App.task-planning.test.tsx": 45707,
-    "ui:src/renderer/App.task-review.test.tsx": 48475,
+    "ui:src/renderer/App.approvals.test.tsx": 37375,
+    "ui:src/renderer/App.messaging.test.tsx": 21094,
+    "ui:src/renderer/App.modules.test.tsx": 23444,
+    "ui:src/renderer/App.notifications.test.tsx": 23963,
+    "ui:src/renderer/App.shell.test.tsx": 29480,
+    "ui:src/renderer/App.task-planning.test.tsx": 38152,
+    "ui:src/renderer/App.task-review.test.tsx": 45896,
     "ui:src/renderer/ApprovalsScroll.test.tsx": 5962,
     "ui:src/renderer/AssistantFormPrefill.test.tsx": 5884,
     "ui:src/renderer/AssistantModelControl.test.tsx": 5696,
@@ -257,16 +257,16 @@
     "ui:src/shared/zoom-link.test.ts": 1171
   },
   "splitSuiteEstimates": {
-    "sourceRun": "39444262675",
-    "method": "Sum of original per-test assertion durations plus 15000ms startup/import budget per isolated suite. Provisional until next full successful timing refresh.",
+    "sourceRun": "39448374259",
+    "method": "Observed completion-to-completion costs of all seven suites in diagnostic Windows run. Two cold-transition query failures are fixed separately; weights remain provisional estimates until a successful full timing refresh.",
     "files": [
-      "ui:src/renderer/App.shell.test.tsx",
-      "ui:src/renderer/App.messaging.test.tsx",
-      "ui:src/renderer/App.notifications.test.tsx",
-      "ui:src/renderer/App.task-planning.test.tsx",
-      "ui:src/renderer/App.task-review.test.tsx",
       "ui:src/renderer/App.approvals.test.tsx",
-      "ui:src/renderer/App.modules.test.tsx"
+      "ui:src/renderer/App.messaging.test.tsx",
+      "ui:src/renderer/App.modules.test.tsx",
+      "ui:src/renderer/App.notifications.test.tsx",
+      "ui:src/renderer/App.shell.test.tsx",
+      "ui:src/renderer/App.task-planning.test.tsx",
+      "ui:src/renderer/App.task-review.test.tsx"
     ]
   }
 }

@@ -5,6 +5,8 @@ import { initialChats } from "./test-fixtures/demo-data";
 import { changeField } from "./test-fixtures/rich-editor";
 import { render, response, mockServer, loginToWorkspace } from "./app-test-harness";
 
+import "./TasksView";
+
 describe("corporate workspace authentication alpha", () => {
   it("keeps the floating messenger and draft across pages and its full-section handoff", async () => {
     mockServer();
