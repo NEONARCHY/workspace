@@ -8,6 +8,7 @@ import { EmployeeProfileProvider } from "./EmployeeProfileLink";
 import { workspaceTheme } from "./workspace-theme";
 import { initialTasks, people } from "./test-fixtures/demo-data";
 import * as api from "./workspace-api";
+import { readFileSync } from "node:fs";
 
 const employees: DirectoryEmployee[] = Array.from({ length: 31 }, (_, i) => ({
   id: `e-${i}`, name: `Сотрудник ${i + 1}`, username: `employee-${i + 1}`, role: "employee", status: i === 30 ? "pending" : "active", jobTitle: "Mutaxassis",
@@ -59,7 +60,9 @@ describe("Corporate record tables", () => {
     expect(within(table).getByRole("columnheader", { name: /Постановщик/ })).toBeInTheDocument();
     expect(screen.queryByText("Активность")).not.toBeInTheDocument();
   });
-  it("shows a matching priority glyph and readable label for every task priority", () => {
+  it("keeps each priority glyph and label on a block row below the status", () => {
+    // More specific than the shared inline-flex indicator, loaded later for other views.
+    expect(readFileSync("src/renderer/record-lists.css", "utf8")).toMatch(/\.task-record-table \.record-priority-indicator\s*\{\s*display:\s*flex;/);
     const priorities = ["low", "normal", "high", "urgent"] as const;
     const priorityTasks = priorities.map((priority) => ({ ...initialTasks[0]!, id: `priority-${priority}`, priority }));
     render(wrap(<TaskRecords tasks={priorityTasks} people={people} filterKey="all" onSelect={vi.fn()} />));
@@ -67,6 +70,7 @@ describe("Corporate record tables", () => {
     for (const [priority, label] of [["low", "Низкий"], ["normal", "Обычный"], ["high", "Высокий"], ["urgent", "Срочный"]] as const) {
       expect(screen.getByRole("img", { name: `Приоритет: ${label}` })).toBeInTheDocument();
       expect(document.querySelector(`.record-priority-indicator.priority-${priority} .task-priority-icon`)).not.toBeNull();
+      expect(document.querySelector(`.record-priority-indicator.priority-${priority}`)?.previousElementSibling).toHaveClass("record-status-badge");
     }
   });
   it("shows all linked plans before the project and sorts by plan name", () => {
