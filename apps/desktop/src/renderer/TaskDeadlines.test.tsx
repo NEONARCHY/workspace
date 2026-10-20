@@ -147,8 +147,12 @@ describe("Task list deadline colours and overdue filter", () => {
     const p = props([original]);
     render(wrap(<TasksView {...p} focusTaskId={original.id} />));
     const avatars = document.querySelectorAll(".task-person-avatar > .fui-Avatar");
-    expect(avatars).toHaveLength(3);
-    expect(document.querySelectorAll(".task-detail-sticky-header .task-person-avatar")).toHaveLength(1);
+    expect(avatars).toHaveLength(4);
+    const headerPeople = document.querySelectorAll(".task-detail-sticky-header .detail-meta > .employee-profile-link");
+    expect(headerPeople).toHaveLength(2);
+    expect(headerPeople[0]).toHaveTextContent("Постановщик");
+    expect(headerPeople[1]).toHaveTextContent("Ответственный");
+    expect(document.querySelector(".task-detail-co-assignee-list")).toHaveTextContent(people[1]!.name);
     expect(document.querySelectorAll(".participant-chip .task-person-avatar")).toHaveLength(2);
     expect(avatars[2]!.closest(".employee-profile-link")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Команда и настройки задачи" }));
