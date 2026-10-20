@@ -166,7 +166,8 @@ export default defineConfig(({ mode }) => ({
     noExternal: [/@fluentui/, /tabster/, /keyborg/],
   },
   test: {
-    maxWorkers: 4,
+    // Keep worker limits on the CLI: an inherited project-level limit would
+    // override CI's --maxWorkers=1 with the local default.
     // Multi-step Fluent UI scenarios can exceed 5s on Windows while packaging runs.
     testTimeout: 10000,
     server: {

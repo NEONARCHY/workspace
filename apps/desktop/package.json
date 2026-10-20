@@ -13,7 +13,7 @@
     "lint": "eslint src vite.config.mts",
     "postinstall": "node node_modules/electron/install.js",
     "start": "electron .",
-    "test": "vitest run",
+    "test": "vitest run --maxWorkers=4",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
