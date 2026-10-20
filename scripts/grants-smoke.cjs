@@ -30,7 +30,7 @@ async function main() {
     let data;
     if (url.pathname === "/api/v1/grants" && route.request().method() === "POST") {
       creationAttempts.push(route.request().postDataJSON());
-      return route.fulfill({status:503,contentType:"application/json",body:JSON.stringify({detail:"Synthetic retry test"})});
+      return route.fulfill({status:503,headers:{"Content-Type":"application/json","Access-Control-Allow-Origin":"*"},body:JSON.stringify({detail:"Synthetic retry test"})});
     }
     if (url.pathname === "/api/v1/grants/settings") data = {leaderUserId:"actor-3",chairUserId:"actor-4",revision:1};
     else if (url.pathname === "/api/v1/grants") data = [grant];
@@ -72,8 +72,8 @@ async function main() {
     await form.waitFor();
     await page.screenshot({path:path.join(output,"create-light.png")});
     await form.getByLabel("Название гранта *",{exact:true}).fill("Синтетическая заявка для проверки повтора");
-    await form.getByLabel("Ответственный *",{exact:true}).selectOption("actor-1");
-    await form.getByLabel("Срок *",{exact:true}).fill("2099-11-01T09:00");
+    await form.getByRole("combobox",{name:/Ответственный/}).selectOption("actor-1");
+    await form.getByLabel(/Срок/).fill("2099-11-01T09:00");
     await form.getByRole("button",{name:"Сохранить заявку",exact:true}).click();
     await form.getByRole("alert").filter({hasText:"Synthetic retry test"}).waitFor();
     assert.equal(await form.getByLabel("Название гранта *",{exact:true}).inputValue(),"Синтетическая заявка для проверки повтора");
