@@ -6,6 +6,7 @@ import { TaskParticipantAvatar } from "./TaskParticipantAvatar";
 import { isTaskOverdue, taskDeadlineTone } from "./task-deadline";
 import { useTaskDeadlineClock } from "./useTaskDeadlineClock";
 import { pendingTaskDeadlineRequest } from "./task-deadline-request";
+import { TaskPriorityIndicator } from "./TaskPriority";
 
 const statuses: Record<TaskStatus, string> = { new: "Новая", in_progress: "В работе", awaiting_review: "На проверке", completed: "Завершена", overdue: "Просрочена", cancelled: "Отменена" };
 
@@ -66,7 +67,7 @@ export function TaskRecords({ tasks, plans = [], plansLoading = false, plansErro
           <td role="cell"><RecordMobileLabel>Участники</RecordMobileLabel><div className="task-participant-group" aria-label="Участники задачи">{participants(task).map(({ userId, role }) =>
             <TaskParticipantAvatar key={`${userId}-${role}`} person={peopleById.get(userId)} role={role} token={token} />
           )}</div></td>
-          <td role="cell"><RecordMobileLabel>Статус</RecordMobileLabel><Badge className="record-status-badge" data-status={task.status} appearance="tint" color={task.status === "overdue" ? "danger" : task.status === "completed" ? "success" : task.status === "awaiting_review" ? "warning" : "brand"}>{task.status === "awaiting_review" ? task.authorId === currentUserId ? "Ждёт вашей проверки" : "Ждёт проверки постановщиком" : statuses[task.status]}</Badge>{["high", "urgent"].includes(task.priority) && <small className="record-priority">{task.priority === "urgent" ? "Срочный приоритет" : "Высокий приоритет"}</small>}</td>
+          <td role="cell"><RecordMobileLabel>Статус</RecordMobileLabel><Badge className="record-status-badge" data-status={task.status} appearance="tint" color={task.status === "overdue" ? "danger" : task.status === "completed" ? "success" : task.status === "awaiting_review" ? "warning" : "brand"}>{task.status === "awaiting_review" ? task.authorId === currentUserId ? "Ждёт вашей проверки" : "Ждёт проверки постановщиком" : statuses[task.status]}</Badge><TaskPriorityIndicator className="record-priority-indicator" priority={task.priority} /></td>
           <td role="cell" className={isTaskOverdue(task, now) ? "record-deadline overdue" : "record-deadline"}><RecordMobileLabel>Крайний срок</RecordMobileLabel>{task.dueLabel}{isTaskOverdue(task, now) && task.status !== "overdue" ? <small className="record-priority">Срок истёк</small> : null}</td>
           <td role="cell"><RecordMobileLabel>Постановщик</RecordMobileLabel><div className="task-participant-group"><TaskParticipantAvatar person={peopleById.get(task.authorId)} role="Постановщик" token={token} /></div></td>
           <td role="cell" className="record-plan"><RecordMobileLabel>План</RecordMobileLabel><span title={planLabel(task.id)}>{planLabel(task.id)}</span></td>
