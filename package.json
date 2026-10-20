@@ -21,7 +21,7 @@
     "typecheck": "pnpm -r --if-present typecheck",
     "check:release-notes": "node scripts/validate-release-notes.mjs",
     "check:pr-overlaps": "node scripts/check-pr-overlaps.mjs --local",
-    "test:workflow": "node --test scripts/ci/changed-areas.test.mjs scripts/ci/required-check.test.mjs scripts/lib/release-note-order.test.mjs scripts/lib/pr-overlap.test.mjs",
+    "test:workflow": "node --test scripts/ci/changed-areas.test.mjs scripts/ci/required-check.test.mjs scripts/ci/update-test-timings.test.mjs scripts/lib/release-note-order.test.mjs scripts/lib/pr-overlap.test.mjs",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
   },
   "devDependencies": {
