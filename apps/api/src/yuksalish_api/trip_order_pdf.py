@@ -146,7 +146,9 @@ def brief_pdf(
         Paragraph("BILDIRGI", centered),
         Spacer(1, 14),
     ]
-    if include_fact_lines and purpose.strip():
+    # The authored brief is the official wording. A legacy purpose field may be
+    # Russian; transliteration is not a translation and must not precede it.
+    if include_fact_lines and purpose.strip() and not brief_text.strip():
         story.append(Paragraph(f"Safar maqsadi: {_text(purpose)}", regular))
     if brief_text.strip():
         for paragraph in brief_text.strip().splitlines():
