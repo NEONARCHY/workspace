@@ -82,6 +82,9 @@
 .record-deadline { font-variant-numeric: tabular-nums; }
 .record-deadline.overdue, .record-priority { color: var(--ws-theme-ink-danger, #a02939); }
 .record-priority { display: block; margin-top: 6px; font-size: 11px; }
+.record-priority-indicator { margin-top: 6px; color: var(--ws-theme-muted, #526c78); font-size: 11px; }
+.record-priority-indicator.priority-low, .record-priority-indicator.priority-high { color: var(--ws-theme-ink-warning, #956b32); }
+.record-priority-indicator.priority-urgent { color: var(--ws-theme-ink-danger, #a02939); }
 .record-project { color: var(--ws-muted); }
 .employee-record-table { min-width: 1160px; }
 .employee-record-table th:first-child { width: 50px; }

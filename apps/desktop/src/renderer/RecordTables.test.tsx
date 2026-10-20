@@ -59,6 +59,16 @@ describe("Corporate record tables", () => {
     expect(within(table).getByRole("columnheader", { name: /Постановщик/ })).toBeInTheDocument();
     expect(screen.queryByText("Активность")).not.toBeInTheDocument();
   });
+  it("shows a matching priority glyph and readable label for every task priority", () => {
+    const priorities = ["low", "normal", "high", "urgent"] as const;
+    const priorityTasks = priorities.map((priority) => ({ ...initialTasks[0]!, id: `priority-${priority}`, priority }));
+    render(wrap(<TaskRecords tasks={priorityTasks} people={people} filterKey="all" onSelect={vi.fn()} />));
+
+    for (const [priority, label] of [["low", "Низкий"], ["normal", "Обычный"], ["high", "Высокий"], ["urgent", "Срочный"]] as const) {
+      expect(screen.getByRole("img", { name: `Приоритет: ${label}` })).toBeInTheDocument();
+      expect(document.querySelector(`.record-priority-indicator.priority-${priority} .task-priority-icon`)).not.toBeNull();
+    }
+  });
   it("shows all linked plans before the project and sorts by plan name", () => {
     const plans: TaskPlan[] = [
       { id: "beta", title: "Бета", kind: "work", periodStart: null, periodEnd: null,

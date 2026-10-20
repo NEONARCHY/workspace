@@ -201,6 +201,8 @@
 .task-card-footer,
 .task-card-progress > span { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .task-card-priority { flex: none; padding: 3px 7px; border-radius: 999px; color: var(--ws-theme-ink-warning, #8e5520); background: var(--ws-theme-wash-warning, #fff1d0); font-size: 10px; font-weight: 700; }
+.task-card-priority .task-priority-icon { width: 14px; height: 14px; }
+.priority-normal .task-card-priority { color: var(--ws-theme-muted, #526c78); background: var(--ws-theme-surface-soft, #eaf2f4); }
 .priority-urgent .task-card-priority { color: var(--ws-theme-ink-danger, #943d3a); background: var(--ws-theme-wash-danger, #fbe4e2); }
 .task-card-footer { margin-top: 3px; }
 .task-card-footer .spatial-person { min-width: 0; }

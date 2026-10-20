@@ -13,6 +13,7 @@ import {
 
 import { Dropdown, Option } from "@fluentui/react-components";
 import { EmployeeAvatar as Avatar } from "./EmployeeAvatar";
+import { isTaskPriority, TaskPriorityIcon } from "./TaskPriority";
 import type { WorkspacePerson } from "@yuksalish/contracts";
 
 const WorkspacePeopleContext = createContext<readonly WorkspacePerson[]>([]);
@@ -100,6 +101,8 @@ export function WorkspaceSelect({
     ? value.map(String)
     : [String(value ?? defaultValue ?? options[0]?.value ?? "")]), [defaultValue, options, value]);
   const selected = options.filter((option) => selectedValues.includes(option.value));
+  const selectedValue = selectedValues[0] ?? "";
+  const selectedPriority = variant === "priority" && isTaskPriority(selectedValue) ? selectedValue : undefined;
   const peopleByKey = useMemo(() => new Map(people.flatMap((person) => [
     [person.id, person] as const,
     ...(person.username ? [[person.username, person] as const] : []),
@@ -155,15 +158,22 @@ export function WorkspaceSelect({
     >
       {options.map((option) => (
         <Option className={variant === "priority" ? `workspace-priority-option priority-${option.value}` : undefined} disabled={option.disabled} key={option.value} text={option.text} value={option.value}>
-          {peopleByKey.has(option.value)
+          {variant === "priority" && isTaskPriority(option.value)
+            ? <span className="workspace-priority-option-content"><TaskPriorityIcon priority={option.value} /><span className="workspace-select-option-label">{option.label}</span></span>
+            : peopleByKey.has(option.value)
             ? <span className="workspace-select-person-option"><Avatar name={peopleByKey.get(option.value)!.name} size={24} color="colorful" aria-hidden="true" /><span>{option.label}</span></span>
             : listboxClassName?.includes("release-history") ? <span className="release-history-option-text">{option.label}</span> : <span className="workspace-select-option-label">{option.label}</span>}
         </Option>
       ))}
     </Dropdown>
   );
-  return isPersonSelect ? <span className="workspace-select-person-wrap">
+  if (isPersonSelect) return <span className="workspace-select-person-wrap">
     {selectedPerson ? <Avatar className="workspace-select-person-avatar" name={selectedPerson.name} size={24} color="colorful" aria-hidden="true" /> : null}
     {dropdown}
-  </span> : dropdown;
+  </span>;
+  if (selectedPriority) return <span className="workspace-priority-select-wrap">
+    <span className="workspace-priority-select-mark" aria-hidden="true"><TaskPriorityIcon priority={selectedPriority} /></span>
+    {dropdown}
+  </span>;
+  return dropdown;
 }

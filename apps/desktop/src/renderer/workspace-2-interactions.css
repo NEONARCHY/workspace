@@ -96,7 +96,17 @@
 .workspace-select-person-option { display: inline-flex; align-items: center; gap: 11px; min-width: 0; }
 .workspace-select-person-option > .fui-Avatar { flex: none; }
 .workspace-select-person-option > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.workspace-priority-select.priority-low, .workspace-priority-option.priority-low { --priority-ink: var(--ws-theme-ink, #246247); --priority-fill: var(--ws-theme-surface-soft, #e8f6ef); --priority-line: var(--ws-theme-line, #b6dfc9); }
+.workspace-priority-select-wrap { position: relative; display: block; width: 100%; min-width: 0; }
+.workspace-priority-select-wrap > .workspace-select { width: 100%; }
+.workspace-priority-select-mark { position: absolute; z-index: 1; top: 50%; left: 10px; display: inline-flex; pointer-events: none; transform: translateY(-50%); }
+.workspace-priority-select-wrap .fui-Dropdown__button { padding-left: 36px; }
+.workspace-priority-option-content { display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
+.workspace-priority-option-content .workspace-select-option-label { overflow-wrap: anywhere; }
+.task-priority-indicator { display: inline-flex; align-items: center; gap: 5px; width: max-content; max-width: 100%; min-width: 0; line-height: 1.25; }
+.task-priority-icon { display: block; flex: none; width: 16px; height: 16px; color: var(--ws-theme-muted, #697784); }
+.task-priority-icon.priority-low, .task-priority-icon.priority-high { color: var(--ws-theme-ink-warning, #c76e28); }
+.task-priority-icon.priority-urgent { color: var(--ws-theme-ink-danger, #b42332); }
+.workspace-priority-select.priority-low, .workspace-priority-option.priority-low { --priority-ink: var(--ws-theme-ink-warning, #875d13); --priority-fill: var(--ws-theme-wash-warning, #fff3d9); --priority-line: var(--ws-theme-line-warning, #efd8a8); }
 .workspace-priority-select.priority-normal, .workspace-priority-option.priority-normal { --priority-ink: var(--ws-theme-muted, #526c78); --priority-fill: var(--ws-theme-surface-soft, #eaf2f4); --priority-line: var(--ws-theme-line, #c4d9df); }
 .workspace-priority-select.priority-high, .workspace-priority-option.priority-high { --priority-ink: var(--ws-theme-ink-warning, #875d13); --priority-fill: var(--ws-theme-wash-warning, #fff3d9); --priority-line: var(--ws-theme-line-warning, #efd8a8); }
 .workspace-priority-select.priority-urgent, .workspace-priority-option.priority-urgent { --priority-ink: var(--ws-theme-ink-danger, #933948); --priority-fill: var(--ws-theme-wash-danger, #ffedf0); --priority-line: var(--ws-theme-line, #ecc5cc); }
