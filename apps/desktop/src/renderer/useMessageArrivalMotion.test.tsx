@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ChatMessage } from "@yuksalish/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -7,11 +7,12 @@ import { appendedMessageIds, firstUnreadMessageId, useMessageArrivalMotion } fro
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 const message = (id: string, authorId = "other"): ChatMessage => ({ id, authorId, chatId: "chat", body: id, time: "12:00" });
 
-function Harness({ messages, following = true, scope = "chat", active = true, ready = true, opened = true, unread = 0 }: { messages: ChatMessage[]; following?: boolean; scope?: string; active?: boolean; ready?: boolean; opened?: boolean; unread?: number }) {
+function Harness({ messages, following = true, scope = "chat", active = true, ready = true, opened = true, unread = 0, reveal }: { messages: ChatMessage[]; following?: boolean; scope?: string; active?: boolean; ready?: boolean; opened?: boolean; unread?: number; reveal?: string }) {
   const paneRef = useRef<HTMLDivElement>(null);
   const followLatest = useRef(following);
-  const { arrivingIds, unreadMessageId } = useMessageArrivalMotion({ paneRef, messages, scope, followLatest, currentUserId: "me", active, ready, opened, unread });
-  return <div ref={paneRef} data-testid="pane" onScroll={() => { const pane = paneRef.current!; followLatest.current = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 80; }}>{messages.map(item => <div key={item.id} data-message-row-id={item.id} data-testid={item.id} data-arriving={arrivingIds.has(item.id)}>{item.id === unreadMessageId && <div className="message-unread-divider" role="separator">Непрочитанные сообщения</div>}{item.body}</div>)}</div>;
+  const { arrivingIds, unreadMessageId, revealMessage } = useMessageArrivalMotion({ paneRef, messages, scope, followLatest, currentUserId: "me", active, ready, opened, unread });
+  useLayoutEffect(() => { if (reveal) revealMessage(reveal); }, [reveal, revealMessage]);
+  return <div ref={paneRef} data-testid="pane" onScroll={() => { const pane = paneRef.current!; followLatest.current = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 80; }}>{messages.map(item => <div key={item.id} data-message-row-id={item.id} data-message-id={item.id} tabIndex={0} data-testid={item.id} data-arriving={arrivingIds.has(item.id)}>{item.id === unreadMessageId && <div className="message-unread-divider" role="separator">Непрочитанные сообщения</div>}{item.body}</div>)}</div>;
 }
 
 function geometry() {
@@ -68,6 +69,25 @@ describe("Message arrival motion", () => {
     const view = render(<Harness messages={[]} unread={5} />);
     view.rerender(<Harness messages={Array.from({ length: 10 }, (_, i) => message(String(i)))} />);
     expect(screen.getByTestId("pane").scrollTop).toBe(400);
+  });
+  it("gives explicit navigation priority over unread entry positioning when clearing search", () => {
+    geometry();
+    const messages = Array.from({ length: 10 }, (_, i) => message(String(i)));
+    const view = render(<Harness messages={messages.slice(-1)} scope="chat:search" unread={2} />);
+    const pane = screen.getByTestId("pane");
+    const scroll = vi.fn((options: ScrollToOptions) => { pane.scrollTop = options.top ?? 0; });
+    Object.defineProperty(pane, "scrollTo", { configurable: true, value: scroll });
+    view.rerender(<Harness messages={messages} unread={2} reveal="2" />);
+    expect(scroll).toHaveBeenCalledTimes(1);
+    expect(scroll).toHaveBeenLastCalledWith({ top: 120, behavior: "instant" });
+    expect(pane.scrollTop).toBe(120);
+    expect(screen.getByTestId("2")).toHaveFocus();
+    expect(screen.getByRole("separator").parentElement).toBe(screen.getByTestId("8"));
+    // Polling and read acknowledgement must not repeat an old navigation request.
+    pane.scrollTop = 200;
+    view.rerender(<Harness messages={[...messages]} unread={0} reveal="2" />);
+    expect(scroll).toHaveBeenCalledTimes(1);
+    expect(pane.scrollTop).toBe(200);
   });
   it("freezes the boundary ID while the host is preparing, even if another message arrives", () => {
     geometry();

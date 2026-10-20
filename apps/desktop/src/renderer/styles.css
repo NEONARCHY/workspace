@@ -143,6 +143,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .chat-row {
   display: grid;
   grid-template-columns: 40px minmax(0, 1fr);
+  align-items: center;
   gap: 11px;
   width: 100%;
   padding: 10px 12px;
@@ -202,7 +203,8 @@ button { -webkit-tap-highlight-color: transparent; }
 @media (hover: none), (pointer: coarse) {
   .message-actions > .fui-Button { min-height: 36px; padding: 6px 8px; font-size: 12px; }
 }
-.message-quote { display: grid; gap: 2px; max-height: 84px; overflow: hidden; margin: 4px 0 8px; padding: 6px 10px; border-left: 3px solid var(--ws-link, var(--ws-theme-line-blue, #0f6cbd)); border-radius: 4px; color: var(--ws-theme-ink-blue, #466078); background: rgb(15 108 189 / 6%); font-size: 12px; overflow-wrap: anywhere; }
+.message-quote { display: grid; box-sizing: border-box; width: 100%; gap: 2px; max-height: 84px; overflow: hidden; margin: 4px 0 8px; padding: 6px 10px; border: 0; border-left: 3px solid var(--ws-link, var(--ws-theme-line-blue, #0f6cbd)); border-radius: 4px; color: var(--ws-theme-ink-blue, #466078); background: rgb(15 108 189 / 6%); font-family: inherit; font-size: 12px; line-height: inherit; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
+.message-quote:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 2px; }
 .message-mentions { display: flex; flex-wrap: wrap; gap: 5px; margin: 5px 0; color: var(--ws-theme-ink-blue, #0b5a96); font-size: 11px; }
 .message-mentions span { padding: 2px 6px; border-radius: 4px; background: var(--ws-theme-wash-blue, #dbeeff); }
 .message-mentioned .message-body { border-color: var(--ws-link, var(--ws-theme-line-blue, #0f6cbd)); }

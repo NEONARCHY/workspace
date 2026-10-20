@@ -77,7 +77,8 @@ html body .messenger-view .message-row:not(.is-group-first):not(.is-group-middle
 html[data-color-theme] body .messenger-view .message .is-media-message.has-media-caption { background: var(--chat-incoming-fill); }
 html[data-color-theme] body .messenger-view .message.own .is-media-message.has-media-caption { background: var(--chat-outgoing-fill); }
 .messenger-view .is-media-message > .employee-profile-link { background: var(--chat-incoming-fill); border-radius: 14px 14px 0 0; }
-.messenger-view .is-media-message:has(> .employee-profile-link) .attachment-media-preview:first-child { border-top-left-radius: 0; border-top-right-radius: 0; }
+.messenger-view .is-media-message > .employee-profile-link > strong { margin-bottom: 0; }
+.messenger-view .is-media-message:has(> .employee-profile-link) :is(.attachment-media-preview, .attachment-image-album):first-child { border-top-left-radius: 0; border-top-right-radius: 0; }
 .messenger-view .message-body > .message-media-caption { display: block; padding: 7px 11px 0; }
 .messenger-view .message-body.is-media-message > .message-meta { margin: 4px 10px 7px; }
 .messenger-view .message-body.is-media-message:not(.has-media-caption) > .message-meta {

@@ -11,7 +11,7 @@ import { useState } from "react";
 import { changeField, editorCaret } from "./test-fixtures/rich-editor";
 import { readRichEditor, setEditorSelection } from "./message-rich-text";
 import { Dialog, DialogSurface, FluentProvider, webLightTheme } from "@fluentui/react-components";
-import type { ChatMessage, ChatSummary } from "@yuksalish/contracts";
+import type { ChatMessage, ChatSummary, WorkspaceAttachment } from "@yuksalish/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ChatManagement, type ChatActions } from "./ChatManagement";
 import { initialChats, initialMessages, initialTasks, people } from "./test-fixtures/demo-data";
@@ -125,6 +125,66 @@ it("reopens the same focused chat on a new navigation request without remounting
 describe("rich messenger integration", () => {
   afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); window.getSelection()?.removeAllRanges(); });
   const quoted: ChatMessage = { id: "quote-source", chatId: "finance", authorId: "baxtiyor", body: "Альфа 😀 бета гамма", time: "12:00", canPin: true };
+  it.each([false, true])("jumps to a reply's original immediately within the current pane, including from search (compact=%s)", compact => {
+    const response = { ...quoted, id: "reply", body: "Найденный ответ", replyToMessageId: quoted.id };
+    renderMessenger({ compact, focusChatId: "finance", messages: [quoted, response] });
+    const editor = screen.getByRole("textbox", { name: "Новое сообщение" });
+    changeField(editor, { target: { value: "Сохранённый черновик" } });
+    const pane = document.querySelector<HTMLElement>(".message-scroll")!;
+    const scroll = vi.fn();
+    Object.defineProperty(pane, "scrollTo", { configurable: true, value: scroll });
+    Object.defineProperty(pane, "clientHeight", { configurable: true, value: 400 });
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      return { top: this === pane ? 100 : 200, height: 60 } as DOMRect;
+    });
+    // Search can hide the original while leaving its reply visible.
+    fireEvent.change(screen.getByPlaceholderText("Найти сообщение в этом чате"), { target: { value: response.body } });
+    expect(pane.querySelector(`[data-message-id="${quoted.id}"]`)).toBeNull();
+    pane.scrollTop = 600;
+    const quote = screen.getByRole("button", { name: /К исходному сообщению от/ });
+    fireEvent.click(quote);
+    expect(scroll).toHaveBeenLastCalledWith({ top: 530, behavior: "instant" });
+    expect(document.activeElement).toBe(pane.querySelector(`[data-message-id="${quoted.id}"]`));
+    expect(screen.getByPlaceholderText("Найти сообщение в этом чате")).toHaveValue("");
+    expect(editor).toHaveTextContent("Сохранённый черновик");
+    // A second activation of the same quote must still navigate.
+    scroll.mockClear(); fireEvent.click(screen.getByRole("button", { name: /К исходному сообщению от/ }));
+    expect(scroll).toHaveBeenCalledTimes(1);
+  });
+  it.each(["Файл", "Подпись альбома"])("shows actual attachment names in quotes/composer without replacing real captions: %s", body => {
+    const source = { ...quoted, body };
+    const attachment = (id: string, ownerId = source.id): WorkspaceAttachment => ({ id, ownerId, ownerType: "message", fileName: `${id}.png`,
+      contentType: "image/png", byteSize: 1000, documentRole: "general", sha256: id, uploadedByUserId: source.authorId, createdAt: "2026-10-20T09:00:00Z" });
+    renderMessenger({ messages: [source, { ...quoted, id: "reply", body: "Ответ на альбом", replyToMessageId: source.id }],
+      attachments: [attachment("first"), attachment("second"), attachment("other", "another-message")] });
+    const expected = body === "Файл" ? "first.png, second.png" : body;
+    const quote = screen.getByRole("button", { name: /К исходному сообщению от/ });
+    expect(quote).toHaveTextContent(expected);
+    expect(quote).not.toHaveTextContent("other.png");
+    fireEvent.contextMenu(document.querySelector(`[data-message-id="${source.id}"]`)!);
+    fireEvent.click(screen.getByRole("button", { name: "Ответить" }));
+    expect(document.querySelector(".composer-context p")).toHaveTextContent(expected);
+  });
+  it("keeps explicit quoted fragments and hides inaccessible/deleted originals", () => {
+    const response = { ...quoted, id: "reply", body: "Ответ", replyToMessageId: quoted.id, replyQuote: { offset: 9, text: "бета" } };
+    const view = renderMessenger({ messages: [quoted, response] });
+    expect(screen.getByRole("button", { name: /К исходному сообщению от/ })).toHaveTextContent("бета");
+    for (const source of [{ ...quoted, deletedAt: "2026-10-20T09:00:00Z" }, { ...quoted, chatId: "another-chat" }]) {
+      view.rerender(<FluentProvider theme={webLightTheme}><MessengerView {...view.props} messages={[source, response]} /></FluentProvider>);
+      expect(screen.queryByRole("button", { name: /К исходному сообщению от/ })).not.toBeInTheDocument();
+    }
+  });
+  it("selects rather than navigating when a quote is clicked in selection mode", () => {
+    const response = { ...quoted, id: "reply", body: "Ответ для выбора", replyToMessageId: quoted.id };
+    renderMessenger({ messages: [quoted, response], onForwardContent: vi.fn() });
+    const pane = document.querySelector<HTMLElement>(".message-scroll")!, scroll = vi.fn();
+    Object.defineProperty(pane, "scrollTo", { configurable: true, value: scroll });
+    openMessageMenu(response.body);
+    fireEvent.click(screen.getByRole("button", { name: "Выделить" }));
+    fireEvent.click(screen.getByRole("button", { name: /К исходному сообщению от/ }));
+    expect(scroll).not.toHaveBeenCalled();
+    expect(screen.queryByRole("region", { name: "Выделенные сообщения" })).not.toBeInTheDocument();
+  });
   it("replies with the selected fragment and sends whole-message pin actions", async () => {
     const onSendMessage = vi.fn().mockResolvedValue({ id: "sent" }), onPinMessage = vi.fn().mockResolvedValue(undefined);
     renderMessenger({ messages: [quoted], onSendMessage, onPinMessage });
