@@ -215,7 +215,7 @@
   .web-platform .ai-referent-view .ai-referent-summary button > span { grid-column: 2; grid-row: 1; min-width: 0; font-size: 12px; }
   .web-platform .ai-referent-view .ai-referent-summary button > small { grid-column: 1 / -1; grid-row: 2; }
   /* The register, not its decorative chrome, owns the remaining phone height. */
-  .web-platform .app-provider .app-content > .ai-referent-view { gap: 6px; padding: 8px 10px; overflow-y: auto; }
+  .web-platform .app-provider .app-content > .ai-referent-view { --ws-page-content-inset: 10px; gap: 6px; padding: 8px 10px; overflow-y: auto; }
   .web-platform body .app-provider .ai-referent-view .ai-referent-header.ws-section-header { min-height: 0; margin: 0; padding: 4px 2px; background: transparent; border: 0; box-shadow: none; }
   .web-platform .ai-referent-view .ai-referent-header :is(.view-kicker, p, .ai-referent-header-art) { display: none; }
   .web-platform body .app-provider .ai-referent-view .ai-referent-header h1 { margin: 0; font-size: 20px; line-height: 1.3; color: var(--ws-text); }

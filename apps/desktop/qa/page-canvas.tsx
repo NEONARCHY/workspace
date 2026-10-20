@@ -11,6 +11,7 @@ import { IncomingLettersView } from "../src/renderer/IncomingLettersView";
 import { NotificationCenter } from "../src/renderer/NotificationCenter";
 import { ZoomView } from "../src/renderer/ZoomView";
 import { TripApprovalsView } from "../src/renderer/TripApprovalsView";
+import { AIReferentView } from "../src/renderer/AIReferentView";
 import { SectionJump } from "../src/renderer/SectionJump";
 import { TaskRecords } from "../src/renderer/TaskRecords";
 import { ScrollbarEdges } from "../src/renderer/ScrollbarEdges";
@@ -257,6 +258,7 @@ function Preview() {
     { id: "tasks", label: "Задачи", icon: <Grid20Regular /> },
     { id: "files", label: "Просмотр файлов", icon: <Grid20Regular /> },
     { id: "letters", label: "Входящие письма", icon: <ReceiptMoney20Regular /> },
+    { id: "referent", label: "AI Referent", icon: <ReceiptMoney20Regular /> },
     { id: "samples", label: "Компоновка разделов", icon: <Grid20Regular /> },
   ];
   return <FluentProvider theme={workspaceTheme} className="app-provider">
@@ -292,6 +294,7 @@ function Preview() {
               : section === "home" ? <PersonalHomeView token="qa-only" workspace={homeFixture("aziza")} canView={() => true} onOpen={() => undefined} onOpenNotification={() => undefined} onRefresh={nothing} />
               : section === "survey" ? <div style={{ display: "contents" }}><SurveyAnalyticsView token="qa-only" canCreate={false} canEdit={false} /></div>
               : section === "letters" ? <QaIncomingLetters />
+               : section === "referent" ? <AIReferentView token="qa-only" people={people} canCreate />
               : section === "files" ? <section className="qa-canvas-sample-card"><h2>Встроенный просмотрщик · тестовые данные</h2>{previewSamples.map(file => <button key={file.id} onClick={() => setPreviewFile(file)}>{file.fileName}</button>)}</section>
             : <section className={roots[sample]![1]} aria-label={`Макет: ${roots[sample]![0]}`}>
               <WorkspaceSectionHeader motif="tasks"><div><h1>{roots[sample]![0]}</h1><p>Проверка внешнего контейнера, не рабочая страница раздела.</p></div></WorkspaceSectionHeader>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useState } from "react";
 import type { AIReferentPacketFile, AIReferentPacketKind } from "@yuksalish/contracts";
 import { Button, DialogBody, DialogContent, DialogSurface, DialogTitle, DialogTrigger } from "@fluentui/react-components";
 import { LoadingSkeleton } from "./LoadingSkeleton";
@@ -21,7 +21,7 @@ export function saveReferentBlob(blob: Blob, name: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export function AIReferentFiles({ token, kind, ownerId, letterLabel, details, triggerLabel }: {
+export const AIReferentFiles = memo(function AIReferentFiles({ token, kind, ownerId, letterLabel, details, triggerLabel }: {
   readonly token: string; readonly kind: AIReferentPacketKind; readonly ownerId: string;
   readonly letterLabel?: string;
   readonly details?: readonly { readonly label: string; readonly value: string }[];
@@ -83,4 +83,4 @@ export function AIReferentFiles({ token, kind, ownerId, letterLabel, details, tr
         </DialogBody>
       </DialogSurface>
     </WorkspaceDialog>;
-}
+});

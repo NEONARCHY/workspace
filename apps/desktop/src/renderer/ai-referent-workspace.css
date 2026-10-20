@@ -1,5 +1,6 @@
 /* AI Referent: a compact mailroom inside the shared Workspace canvas. */
 .app-content > .ai-referent-view {
+  --ws-page-content-inset: var(--ws-view-panel-title-inline, 20px);
   --ai-ink: var(--ws-text, var(--ws-theme-ink, #293a55));
   --ai-soft: var(--ws-muted, #566b7c);
   --ai-line: var(--ws-line, var(--ws-theme-line, #e1e9eb));
@@ -10,7 +11,7 @@
   height: calc(100% - var(--ws-view-edge, 4px));
   min-height: 0;
   margin: var(--ws-view-edge, 4px) var(--ws-view-edge, 4px) 0;
-  padding: 18px var(--ws-view-panel-title-inline, 20px) 16px;
+  padding: 18px var(--ws-page-content-inset) 16px;
   overflow: hidden;
   border: 1px solid var(--ws-line);
   border-radius: var(--ws-radius, 22px);
@@ -275,6 +276,8 @@ html[data-color-theme="dark"] .ai-referent-register-actions .ai-referent-registe
 .ai-referent-view .ai-referent-list,
 .ai-referent-view .ai-incoming-table-wrap {
   flex: 1 1 auto;
+  /* This fixed scroll viewport must not relayout its registry when toolbar width animates. */
+  contain: strict;
   min-height: 0;
   margin: 0;
   overflow: auto;
@@ -573,7 +576,7 @@ html[data-color-theme="dark"] .ai-referent-register-actions .ai-referent-registe
 }
 @container workspace (max-width: 740px) {
   .ai-referent-header-art { display: none; }
-  .app-content > .ai-referent-view { padding: 12px; gap: 9px; }
+  .app-content > .ai-referent-view { --ws-page-content-inset: 12px; padding: 12px; gap: 9px; }
   .ai-referent-view .ai-referent-toolbar > .ai-gooey-search { flex: none; width: 100%; max-width: none; }
   .ai-referent-view .ai-incoming-toolbar { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 5px; }
   .ai-referent-view .ai-incoming-toolbar > .ai-gooey-search { flex: 1 1 210px; width: auto; min-width: 180px; }

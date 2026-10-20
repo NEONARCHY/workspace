@@ -19,7 +19,7 @@ html body .app-provider .app-shell .app-stage > .app-content > :is(.workspace-vi
 html body .app-provider .app-shell .app-stage > .app-content > div > .survey-analytics {
   width: auto;
   margin-inline-end: 0;
-  padding-inline-end: 0;
+  padding-inline-end: var(--ws-page-content-inset, 0px);
   overflow: visible;
   scrollbar-gutter: auto;
 }
