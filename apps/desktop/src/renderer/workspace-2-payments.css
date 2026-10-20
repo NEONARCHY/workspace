@@ -92,7 +92,8 @@
 .approvals-view .approval-mode-switch button { min-height: 34px; padding: 7px 13px; border: 0; border-radius: 10px; color: var(--ws-theme-muted, #5b7180); }
 .approvals-view .approval-mode-switch button:hover { background: rgb(var(--ws-theme-surface-rgb, 255 255 255) / 0.56); color: var(--ws-theme-ink, #19334f); }
 .approvals-view .approval-mode-switch button.active { color: var(--ws-theme-ink, #19334f); background: var(--ws-theme-surface, #fbfcfc); box-shadow: 0 3px 10px -7px rgb(20 43 67 / 28%); }
-.approvals-view .approval-workspace { gap: 0; padding-top: var(--ws2-process-section-gap); background: transparent; }
+.approvals-view .approval-workspace { gap: 0; padding-top: 0; background: transparent; }
+.approvals-view .approval-workspace:has(> .approval-kanban) { overflow: visible; }
 
 .approvals-view .approval-commandbar {
   display: block;
@@ -138,10 +139,11 @@
 .approvals-view .approval-board-filters button.active .approval-filter-count { color: var(--ws-theme-ink-teal, #247180); background: var(--ws-theme-surface-soft, #e2f2ef); }
 
 .approvals-view .approval-kanban {
+  min-height: 240px;
   grid-auto-columns: minmax(258px, 284px);
   gap: 12px;
-  padding: 0 4px 13px;
-  overflow-x: auto;
+  padding: 0 4px;
+  overflow-x: scroll;
   overflow-y: hidden;
   scrollbar-width: thin;
   scrollbar-color: rgb(91 121 128 / 28%) transparent;

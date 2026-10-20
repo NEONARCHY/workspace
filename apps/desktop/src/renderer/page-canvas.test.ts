@@ -71,10 +71,29 @@ describe("Scoped work-panel surfaces", () => {
     const hero = css.match(/\.project-hub-header,([^]*?)\{([^}]+)\}/)?.[2];
     expect(hero?.trim()).toBe("box-shadow: none;");
   });
-  it("keeps high contrast and a thicker native payment scrollbar", () => {
+  it("keeps high contrast and compact matching native payment/trip scrollbars", () => {
     expect(read("page-canvas.css")).toContain("--ws-page-panel: Canvas");
-    expect(read("scrollbars.css")).toContain(".approvals-view .approval-kanban::-webkit-scrollbar { height: 10px; }");
+    expect(read("scrollbars.css")).toContain(":is(.approvals-view, .trips-view) .approval-kanban::-webkit-scrollbar { height: var(--ws-process-board-scrollbar-size, 4px); }");
+    expect(read("scrollbars.css")).toContain(":is(.approvals-view, .trips-view) .approval-kanban::-webkit-scrollbar { height: 8px; }");
     expect(read("scrollbars.css")).toContain(".approvals-view .approval-kanban { scrollbar-width: auto; }");
+  });
+  it("shares navigation spacing and stretches approval lanes without a second bottom gap", () => {
+    const payments = read("workspace-2-payments.css");
+    expect(payments.match(/\.approvals-view \.approval-workspace \{([^}]+)\}/)?.[1]).toContain("padding-top: 0");
+    expect(payments.match(/\.approvals-view \.approval-kanban \{([^}]+)\}/)?.[1]).toContain("padding: 0 4px");
+    for (const css of [payments, read("workspace-2-projects-trips.css")]) {
+      expect(css).toContain("min-height: 240px");
+      expect(css).toContain("overflow-x: scroll");
+    }
+    expect(read("workspace-2-projects-trips.css").match(/^\.trips-view \.trip-kanban \{([^\r\n}]+)\}/m)?.[1]).toContain("padding-bottom: 0");
+    expect(read("mobile-density.css")).toContain(":is(.approvals-view, .trips-view) .workflow-hero-header { margin-bottom: 0; }");
+    const compact = read("browser-responsive.css");
+    for (const selector of [".approvals-view .approval-kanban", ".trips-view .trip-kanban"]) {
+      const rule = compact.match(new RegExp(selector.replaceAll(".", "\\.") + " \\{([^}]+)\\}"))?.[1];
+      expect(rule).toContain("flex: 1 1 auto");
+      expect(rule).toContain("height: auto");
+      expect(rule).toContain("min-height: 240px");
+    }
   });
   it("keeps the subtly darkened shell behind white pages and their transparent gutter", () => {
     const css = read("page-canvas.css");

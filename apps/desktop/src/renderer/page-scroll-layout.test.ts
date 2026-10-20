@@ -27,11 +27,25 @@ describe("Shared page scroll rail", () => {
     expect(css).toContain("@container workspace (max-width: 720px)");
     expect(css).toContain(".members-view .member-inspector { margin-inline-end: 0; }");
   });
+  it("preserves the AI Referent panel's symmetrical inner inset, separately from the page rail", () => {
+    expect(read("page-scroll-layout.css")).toContain("padding-inline-end: var(--ws-page-content-inset, 0px)");
+    const css = read("ai-referent-workspace.css");
+    expect(css).toContain("--ws-page-content-inset: var(--ws-view-panel-title-inline, 20px)");
+    expect(css).toContain("--ws-page-content-inset: 12px; padding: 12px");
+    expect(css).toContain("contain: strict");
+  });
   it("does not re-style nested lists, mini messenger, dialogs, colours or motion", () => {
     const css = read("page-scroll-layout.css");
     expect(css).not.toMatch(/!important|background\s*:|border-radius\s*:|animation\s*:|transition\s*:/);
     expect(css).not.toMatch(/\.fui-Dialog|\.message-scroll|\.notification-stream|\.kanban-stack|\.record-table-scroll/);
     expect(css).toContain(".floating-messenger-panel.is-full-page > .messenger-view");
     expect(css).not.toContain(".app-content *");
+  });
+  it("puts only payment/trip board rails below the shared sidebar baseline", () => {
+    const css = read("page-scroll-layout.css");
+    expect(css).toContain("--ws-process-board-scrollbar-size: 4px");
+    expect(css).toContain("--ws-process-board-scrollbar-size: 8px");
+    expect(css).toContain(":has(> :is(.approvals-view, .trips-view) .approval-kanban)");
+    expect(css).toContain("margin-block-end: calc(-1 * var(--ws-process-board-scrollbar-size))");
   });
 });
