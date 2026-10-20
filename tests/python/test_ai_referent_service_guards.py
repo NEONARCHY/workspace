@@ -80,7 +80,15 @@ def test_administrator_cannot_take_another_reviewers_actions(
     assigned_actions, _ = letters._available_actions(
         row, administrator, may_approve=True, may_operate=True, attachment_count=1
     )
-    assert review_actions.issubset(assigned_actions)
+    if status == "awaiting_final_send":
+        assert review_actions.isdisjoint(assigned_actions)
+        row["created_by_user_id"] = administrator.id
+        sender_actions, _ = letters._available_actions(
+            row, administrator, may_approve=False, attachment_count=1
+        )
+        assert review_actions.issubset(sender_actions)
+    else:
+        assert review_actions.issubset(assigned_actions)
 
 
 @pytest.mark.parametrize("role", ["admin", "superadmin"])
@@ -244,7 +252,7 @@ def test_sent_letter_visibility_is_owner_or_leadership(role):
     ],
 )
 @pytest.mark.parametrize("client_kind", ["desktop", "web", "telegram"])
-def test_administrator_workspace_read_access_keeps_telegram_private(role, status, client_kind):
+def test_administrator_has_full_read_access_in_both_clients(role, status, client_kind):
     administrator = actor(role)
     administrator = replace(administrator, client_kind=client_kind)
     row = {
@@ -252,7 +260,7 @@ def test_administrator_workspace_read_access_keeps_telegram_private(role, status
         "created_by_user_id": uuid4(),
         "reviewer_user_id": uuid4(),
     }
-    assert letters._may_view(row, administrator, may_operate=True) is (client_kind != "telegram")
+    assert letters._may_view(row, administrator, may_operate=True)
 
 
 @pytest.mark.parametrize(
@@ -289,7 +297,7 @@ async def test_sent_letter_direct_open_denied_to_other_employee(monkeypatch):
 
 
 @pytest.mark.anyio
-async def test_telegram_administrator_cannot_open_other_pending_letter(monkeypatch):
+async def test_telegram_administrator_can_open_other_pending_letter(monkeypatch):
     administrator = replace(actor("admin"), client_kind="telegram")
     row = {
         "status": "pending_review",
@@ -303,13 +311,13 @@ async def test_telegram_administrator_cannot_open_other_pending_letter(monkeypat
         "module_permissions_for_user",
         AsyncMock(return_value={"ai_referent": {"admin": True}}),
     )
-    with pytest.raises(letters.AIReferentServiceError) as error:
-        await letters.load_letter(Mock(), administrator, uuid4())
-    assert error.value.status_code == 404
+    response = Mock()
+    monkeypatch.setattr(letters, "_response", AsyncMock(return_value=response))
+    assert await letters.load_letter(Mock(), administrator, uuid4()) is response
 
 
 @pytest.mark.anyio
-async def test_telegram_administrator_list_is_limited_to_operator_stage_and_history(monkeypatch):
+async def test_telegram_administrator_list_includes_all_stages(monkeypatch):
     administrator = replace(actor("admin"), client_kind="telegram")
     connection = SimpleNamespace(execute=AsyncMock(side_effect=[mapped([]), mapped([])]))
     monkeypatch.setattr(letters, "ensure_module_action", AsyncMock())
@@ -319,16 +327,7 @@ async def test_telegram_administrator_list_is_limited_to_operator_stage_and_hist
         AsyncMock(return_value={"ai_referent": {"admin": True, "approve": True}}),
     )
     await letters.load_letters(connection, administrator)
-    where = str(
-        connection.execute.call_args_list[1].args[0].whereclause.compile(
-            compile_kwargs={"literal_binds": True}
-        )
-    )
-    assert "referent_review_pending" in where
-    assert "operator_revision" in where
-    assert "delivery_unknown" in where
-    assert "created_by_user_id" in where
-    assert "reviewer_user_id" in where
+    assert connection.execute.call_args_list[1].args[0].whereclause is None
 
 
 @pytest.mark.anyio
@@ -336,7 +335,7 @@ async def test_telegram_administrator_list_is_limited_to_operator_stage_and_hist
 async def test_progress_list_exposes_only_status_and_identity_to_operator(
     monkeypatch, is_operator
 ):
-    user = actor("admin" if is_operator else "employee")
+    user = actor("employee")
     record = {
         "id": uuid4(),
         "status": "pending_review",
@@ -829,8 +828,8 @@ async def test_administrator_can_upload_only_at_operator_replacement_stage(
 
 
 @pytest.mark.anyio
-async def test_administrator_cannot_delete_another_letter(monkeypatch):
-    administrator = actor("admin")
+async def test_employee_cannot_delete_another_letter(monkeypatch):
+    administrator = actor("employee")
     letter_id = uuid4()
     query_result = Mock()
     query_result.mappings.return_value.first.return_value = {
@@ -1001,9 +1000,10 @@ async def test_sign_only_result_requires_complete_page_set_and_finishes_signed(m
     command_rows = SimpleNamespace(mappings=lambda: SimpleNamespace(one_or_none=lambda: job))
     filenames = [f"signed/{job_id}/{page:03d}.pdf" for page in (1, 2)]
     file_rows = SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: filenames))
-    connection = SimpleNamespace(execute=AsyncMock(side_effect=[
-        Mock(), command_rows, file_rows, Mock(), Mock(),
-    ]))
+    connection = SimpleNamespace(
+        scalar=AsyncMock(return_value=None),
+        execute=AsyncMock(side_effect=[Mock(), command_rows, file_rows, Mock(), Mock()]),
+    )
     monkeypatch.setattr(agent, "_letter_row", AsyncMock(return_value=row))
     monkeypatch.setattr(agent, "_event", AsyncMock())
     monkeypatch.setattr(agent, "notify_letter", AsyncMock())

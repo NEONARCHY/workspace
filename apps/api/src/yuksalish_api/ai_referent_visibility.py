@@ -21,7 +21,7 @@ PROGRESS_ONLY_STATUSES = frozenset(
 
 
 def may_view_all_workspace_letters(user: AuthenticatedUser) -> bool:
-    return user.role in {"admin", "superadmin"} and user.client_kind != "telegram"
+    return user.role in {"admin", "superadmin"}
 
 
 def may_view_letter(

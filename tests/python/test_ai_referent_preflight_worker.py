@@ -54,7 +54,7 @@ def test_dispatch_uses_pinned_pdf_and_current_gui_send_setting(
     assert prepare.call_count == 1
 
 
-def test_delete_reconciles_missing_mapping_and_refuses_sent_local_letter(
+def test_delete_reconciles_missing_mapping_and_removes_historical_letter(
     modules, tmp_path, monkeypatch
 ):
     service = Mock(archive_root=str(tmp_path))
@@ -62,17 +62,19 @@ def test_delete_reconciles_missing_mapping_and_refuses_sent_local_letter(
     worker = modules.worker.DeliveryWorker(service, Mock(agent_id="test"), state)
     job = {"letterId": str(uuid4()), "kind": "delete", "leaseToken": str(uuid4())}
     service.database.list_outgoing_letters.return_value = []
-    with pytest.raises(modules.client.WorkspaceError):
-        worker.finish_local(job)
+    assert worker.finish_local(job)["outcome"] == "deleted"
     row = {
         "id": 4,
         "status": "exat_sent",
         "dry_run_json": '{"workspace_letter_id":"' + job["letterId"] + '"}',
     }
     service.database.list_outgoing_letters.return_value = [row]
-    with pytest.raises(modules.client.WorkspaceError):
-        worker.finish_local(job)
-    service.database.delete_outgoing_letter.assert_not_called()
+    close = Mock()
+    monkeypatch.setattr(modules.worker, "close_prepared", close)
+    assert worker.finish_local(job)["outcome"] == "deleted"
+    service.database.delete_outgoing_letter.assert_called_once_with(4)
+    close.assert_not_called()
+    service.database.delete_outgoing_letter.reset_mock()
     row["status"] = "manual_send_pending"
     monkeypatch.setattr(modules.worker, "close_prepared", Mock())
     assert worker.finish_local(job)["outcome"] == "deleted"

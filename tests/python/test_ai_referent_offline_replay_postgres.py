@@ -903,13 +903,13 @@ async def test_draft_replay_retries_same_receipt_and_preserves_original_time(
                     operation=bobur_prepared, enabled=True, storage=storage,
                 )).result_revision == 6
                 release = approved.model_copy(update={
-                    "operation_id": uuid4(), "sequence": 63,
-                    "actor_id": bobur_actor_id, "letter_id": bobur_create.letter_id,
+                    "operation_id": uuid4(), "sequence": 63, "required_action": "edit",
+                    "actor_id": actor_id, "letter_id": bobur_create.letter_id,
                     "payload": {**approved.payload, "action": "release_delivery",
                                 "expectedRevision": 6, "fromStatus": "awaiting_final_send",
                                 "nextReviewerUserId": None, "outgoingNumber": None,
-                                "yearSuffix": None, "actorUserId": str(bobur_id),
-                                "actorName": "Offline Test Bobur"},
+                                "yearSuffix": None, "actorUserId": str(user_id),
+                                "actorName": "Offline Test Employee"},
                     "occurred_at": bobur_prepared.occurred_at + timedelta(seconds=10),
                 })
                 assert (await replay_offline_operation(
@@ -923,7 +923,7 @@ async def test_draft_replay_retries_same_receipt_and_preserves_original_time(
                     operation_id=uuid5(
                         NAMESPACE_URL, "ai-offline-dispatch:" + str(release.operation_id)
                     ),
-                    sequence=64, actor_id=bobur_actor_id,
+                    sequence=64, actor_id=actor_id,
                     letter_id=bobur_create.letter_id, kind="letter.dispatched",
                     payload={
                         "releaseOperationId": str(release.operation_id),
@@ -931,12 +931,12 @@ async def test_draft_replay_retries_same_receipt_and_preserves_original_time(
                         "expectedRevision": 7, "fromStatus": "queued",
                         "toStatus": "queued" if auto_send else "referent_review_pending",
                         "autoSend": auto_send,
-                        "actorUserId": str(bobur_id),
-                        "actorName": "Offline Test Bobur",
+                        "actorUserId": str(user_id),
+                        "actorName": "Offline Test Employee",
                         "creatorUserId": str(user_id),
                     },
                     authority_epoch=epoch, rights_snapshot_id=snapshot_id,
-                    rights_content_sha256=rights_hash, required_action="approve",
+                    rights_content_sha256=rights_hash, required_action="edit",
                     occurred_at=release.occurred_at + timedelta(seconds=10),
                 )
                 dispatch_receipt = await replay_offline_operation(
@@ -990,7 +990,7 @@ async def test_draft_replay_retries_same_receipt_and_preserves_original_time(
                         NAMESPACE_URL, "ai-offline-result:" + str(effect_id)
                     ),
                     sequence=65 if auto_send else 66,
-                    actor_id=bobur_actor_id if auto_send and sent_outcome
+                    actor_id=actor_id if auto_send and sent_outcome
                     else operator_actor_id,
                     letter_id=bobur_create.letter_id, kind="letter.external_result",
                     payload={
@@ -1005,14 +1005,14 @@ async def test_draft_replay_retries_same_receipt_and_preserves_original_time(
                         "evidence": "Журнал E-XAT подтвердил отправку" if sent_outcome
                         else "Журнал E-XAT подтвердил отсутствие отправки",
                         "signedSha256": bobur_pdf_hash,
-                        "actorUserId": str(bobur_id if auto_send and sent_outcome else operator_id),
-                        "actorName": "Offline Test Bobur" if auto_send and sent_outcome
+                        "actorUserId": str(user_id if auto_send and sent_outcome else operator_id),
+                        "actorName": "Offline Test Employee" if auto_send and sent_outcome
                         else "Offline Test Operator",
                         "creatorUserId": str(user_id),
                     },
                     authority_epoch=epoch, rights_snapshot_id=snapshot_id,
                     rights_content_sha256=rights_hash,
-                    required_action="approve" if auto_send and sent_outcome else "admin",
+                    required_action="edit" if auto_send and sent_outcome else "admin",
                     occurred_at=send_source.occurred_at + timedelta(seconds=10),
                 )
                 wrong_pdf = external_result.model_copy(deep=True)
