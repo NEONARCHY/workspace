@@ -14,12 +14,12 @@
   .web-platform :is(.approval-view-toolbar, .trip-commandbar) { flex-wrap: wrap; }
   .web-platform .approvals-view { display: flex; flex-direction: column; overflow-y: auto; }
   .web-platform .approvals-view > .approvals-toolbar { flex: none; }
-  .web-platform .approvals-view .approval-workspace { flex: none; overflow: visible; }
+  .web-platform .approvals-view .approval-workspace { flex: 1 1 auto; min-height: 0; overflow: visible; }
   .web-platform .approvals-view :is(.approval-commandbar, .approval-view-toolbar) { flex: none; }
-  .web-platform .approvals-view .approval-kanban { flex: none; height: clamp(340px, 55dvh, 540px); }
+  .web-platform .approvals-view .approval-kanban { flex: 1 1 auto; height: auto; min-height: 240px; }
   .web-platform .trips-view { overflow-y: auto; }
   .web-platform .trips-view > :not(.trip-kanban) { flex-shrink: 0; }
-  .web-platform .trips-view .trip-kanban { flex: none; height: clamp(340px, 55dvh, 540px); }
+  .web-platform .trips-view .trip-kanban { flex: 1 1 auto; height: auto; min-height: 240px; }
   .web-platform .approvals-view .approval-board-empty { width: min(460px, calc(100vw - 56px)); }
   .web-platform .approvals-view .approval-detail-overlay { top: var(--ws-browser-top, 0px); bottom: auto; height: var(--ws-browser-height, 100dvh); padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left)); }
   .web-platform .approvals-view .approval-detail-panel { min-width: 0; width: min(780px, 100%); height: 100%; max-height: 100%; }

@@ -34,4 +34,11 @@ describe("Shared page scroll rail", () => {
     expect(css).toContain(".floating-messenger-panel.is-full-page > .messenger-view");
     expect(css).not.toContain(".app-content *");
   });
+  it("puts only payment/trip board rails below the shared sidebar baseline", () => {
+    const css = read("page-scroll-layout.css");
+    expect(css).toContain("--ws-process-board-scrollbar-size: 4px");
+    expect(css).toContain("--ws-process-board-scrollbar-size: 8px");
+    expect(css).toContain(":has(> :is(.approvals-view, .trips-view) .approval-kanban)");
+    expect(css).toContain("margin-block-end: calc(-1 * var(--ws-process-board-scrollbar-size))");
+  });
 });

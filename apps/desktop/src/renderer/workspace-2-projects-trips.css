@@ -262,7 +262,7 @@
   scrollbar-gutter: stable;
 }
 .projects-view .project-board { grid-template-columns: repeat(5, minmax(250px, 275px)); height: auto; min-width: 0; padding-right: 4px; }
-.trips-view .trip-kanban { grid-auto-columns: minmax(250px, 275px); }
+.trips-view .trip-kanban { grid-auto-columns: minmax(250px, 275px); min-height: 240px; padding-bottom: 0; overflow-x: scroll; }
 
 .projects-view .project-column,
 .trips-view .trip-column {
@@ -593,8 +593,7 @@
 }
 
 @media (max-height: 700px) {
-  .projects-view .project-board,
-  .trips-view .trip-kanban { min-height: 0; }
+  .projects-view .project-board { min-height: 0; }
 }
 
 @media (max-width: 900px) {
