@@ -1,6 +1,14 @@
 import { readFileSync } from "node:fs";
 import { expect, it } from "vitest";
 const css = readFileSync("src/renderer/messenger-outgoing.css", "utf8");
+it("joins sender names directly to both individual photos and albums", () => {
+  expect(css).toMatch(/\.is-media-message > \.employee-profile-link > strong\s*\{\s*margin-bottom: 0;/);
+  expect(css).toContain(":is(.attachment-media-preview, .attachment-image-album):first-child { border-top-left-radius: 0; border-top-right-radius: 0; }");
+});
+it("centers chat avatars vertically instead of stretching them across the text grid", () => {
+  const base = readFileSync("src/renderer/styles.css", "utf8");
+  expect(base.match(/\.chat-row\s*\{([^}]+)\}/)?.[1]).toMatch(/align-items:\s*center;/);
+});
 it("uses separate Telegram-inspired dark and softened light outgoing palettes", () => {
   expect(css).toContain("--chat-outgoing-fill: #2b5278");
   expect(css).toContain("--chat-outgoing-fill: #e5eff9");

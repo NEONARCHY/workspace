@@ -148,5 +148,19 @@ export function useMessageArrivalMotion({ paneRef, messages, scope, followLatest
     if (!sameScope) setArrivingIds(current => current.size ? new Set() : current);
     else if (canAnimate) setArrivingIds(current => new Set([...current, ...additions]));
   }, [messages, scope, paneRef, followLatestRef, currentUserId, active, opened, ready, unread, unreadMessageId, layoutRevision, disabled, cancel]);
-  return { arrivingIds, unreadMessageId: opened ? unreadMessageId : undefined, motionDisabled: disabled, cancelArrivalMotion: cancel };
+  const revealMessage = useCallback((id: string) => {
+    const pane = paneRef.current;
+    const target = pane?.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(id)}"]`);
+    if (!pane || !target) return;
+    cancel();
+    // Explicit navigation owns the viewport, including when clearing search has
+    // queued an unread-divider render but not finished automatic entry positioning.
+    if (entry.current) entry.current.positioned = true;
+    followLatestRef.current = false;
+    const bounds = pane.getBoundingClientRect();
+    const row = target.getBoundingClientRect();
+    pane.scrollTo({ top: pane.scrollTop + row.top - bounds.top - Math.max(0, (pane.clientHeight - row.height) / 2), behavior: "instant" });
+    target.focus({ preventScroll: true });
+  }, [paneRef, followLatestRef, cancel]);
+  return { arrivingIds, unreadMessageId: opened ? unreadMessageId : undefined, motionDisabled: disabled, cancelArrivalMotion: cancel, revealMessage };
 }

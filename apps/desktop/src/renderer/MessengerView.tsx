@@ -93,6 +93,13 @@ import { employeeScope, type EmployeeScope } from "./employee-scope";
 import { chatBackgrounds, readChatBackground, saveChatBackground } from "./chat-backgrounds";
 import { ChatAvatar, ChatIconPicker, defaultChatIcon } from "./ChatAvatar";
 
+function replyPreview(message: ChatMessage, attachments: readonly WorkspaceAttachment[], quote?: MessageQuote | null) {
+  if (quote) return quote.text;
+  if (message.body.trim() && message.body.trim() !== "Файл") return message.body;
+  return attachments.filter(item => item.ownerType === "message" && item.ownerId === message.id)
+    .map(item => item.fileName).join(", ") || message.body;
+}
+
 function messagesShareBubbleGroup(first?: ChatMessage, second?: ChatMessage): boolean {
   if (!first || !second || first.systemKind || second.systemKind || first.chatId !== second.chatId
     || first.authorId !== second.authorId || !first.createdAt || !second.createdAt
@@ -327,6 +334,7 @@ function Conversation({
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
   const [avatarDraft, setAvatarDraft] = useState<ChatAvatarIconKey>(chat.avatarIconKey ?? defaultChatIcon(chat));
   const [query, setQuery] = useState("");
+  const [messageToReveal, setMessageToReveal] = useState<{ id: string }>();
   const compactViewport = useBrowserCompactLayout(workspacePlatform.kind === "web", "(max-width: 800px)");
   const compactBrowser = compact || compactViewport;
   const [searchOpen, setSearchOpen] = useState(false);
@@ -447,7 +455,7 @@ function Conversation({
   const isPaintPending = paint.isPending;
   const selection = useMemo(() => ({ active: selectionMode, ids: selectedIds, visibleIds: visibleSelectionIds, toggle: toggleSelection, cancel: cancelSelection }),
     [selectionMode, selectedIds, visibleSelectionIds, toggleSelection, cancelSelection]);
-  const { arrivingIds, unreadMessageId, motionDisabled, cancelArrivalMotion } = useMessageArrivalMotion({
+  const { arrivingIds, unreadMessageId, motionDisabled, cancelArrivalMotion, revealMessage: scrollToMessage } = useMessageArrivalMotion({
     paneRef: scrollRef, messages: renderedMessages, scope: `${chat.id}:${query}`,
     followLatest, currentUserId, active: visible, opened, ready: layoutReady, unread: chat.unread,
   });
@@ -519,12 +527,13 @@ function Conversation({
   });
   const pinnedMessages = activeMessages.filter((message) => message.isPinned && !message.pinHiddenForMe && !message.deletedAt);
   const latestPinned = pinnedMessages.at(-1);
-  const revealMessage = (messageId: string) => {
+  const revealMessage = useCallback((messageId: string) => {
     setQuery("");
-    requestAnimationFrame(() => {
-      document.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(messageId)}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" });
-    });
-  };
+    setMessageToReveal({ id: messageId });
+  }, []);
+  useLayoutEffect(() => {
+    if (messageToReveal) scrollToMessage(messageToReveal.id);
+  }, [messageToReveal, scrollToMessage]);
   useEffect(() => {
     if (!focusMessageId) return;
     const frame = requestAnimationFrame(() => scrollRef.current?.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(focusMessageId)}"]`)?.scrollIntoView({ block: "center", behavior: "instant" }));
@@ -811,10 +820,12 @@ function Conversation({
                       ? <span className="sr-only">Сообщение от {personName(message.authorId)}</span>
                       : <EmployeeProfileLink userId={message.authorId} personName={personName(message.authorId)}><strong>{personName(message.authorId)}</strong></EmployeeProfileLink>)}
                     {parent && (
-                      <blockquote className="message-quote">
-                        <EmployeeProfileLink userId={parent.authorId} personName={personName(parent.authorId)}><strong>{personName(parent.authorId)}</strong></EmployeeProfileLink>
-                        <span>{message.replyQuote?.text ?? parent.body}</span>
-                      </blockquote>
+                      <button type="button" className="message-quote" data-satin-excluded="true"
+                        aria-label={`К исходному сообщению от ${personName(parent.authorId)}`}
+                        onClick={() => revealMessage(parent.id)}>
+                        <strong>{personName(parent.authorId)}</strong>
+                        <span>{replyPreview(parent, attachments, message.replyQuote)}</span>
+                      </button>
                     )}
                     {message.zoomInvitation && !message.deletedAt ? <ZoomInvitationCard messageId={message.id} invitation={message.zoomInvitation} people={people} token={token} />
                       : message.forwarded ? <ForwardedMessage message={message} voice={voiceOnly} onOpenPost={onOpenFeedPost} animateText={arrivingIds.has(message.id)} motionDisabled={motionDisabled} />
@@ -884,7 +895,7 @@ function Conversation({
               </SelectableMessage>
             </div>
           );
-        }), [renderedMessages, activeMessages, taskForChat, people, canDecideDeadline, onDecideTaskDeadline, deadlineDecisionId, decideDeadline, arrivingIds, unreadMessageId, motionDisabled, currentUserId, query, attachments, onLoadAttachment, removingMessage, personName, personById, token, onOpenFeedPost, onDownloadAttachment, reactionTargetId, canSend, busy, run, onReactMessage, isPaintPending]);
+        }), [renderedMessages, activeMessages, taskForChat, people, canDecideDeadline, onDecideTaskDeadline, deadlineDecisionId, decideDeadline, arrivingIds, unreadMessageId, motionDisabled, currentUserId, query, attachments, onLoadAttachment, removingMessage, personName, personById, token, onOpenFeedPost, onDownloadAttachment, reactionTargetId, canSend, busy, run, onReactMessage, isPaintPending, revealMessage]);
   return (
     <MessengerFileDropSurface className={`conversation-pane${embedded ? " embedded-conversation" : ""}${voiceOpen ? " has-voice-draft" : ""}`}
       title={chat.title} blockedReason={fileDropBlocked} receive={acceptFiles} reject={setError}>
@@ -1193,7 +1204,7 @@ function Conversation({
               <div>
                 <small>Ответ · <EmployeeProfileLink userId={reply.authorId} personName={personName(reply.authorId)}>{personName(reply.authorId)}</EmployeeProfileLink></small>
                 <p>
-                  {(reply.selectedQuote?.text ?? reply.body).slice(0, 200)}
+                  {replyPreview(reply, attachments, reply.selectedQuote).slice(0, 200)}
                 </p>
               </div>
               <Button
