@@ -523,7 +523,9 @@ describe("corporate workspace authentication alpha", () => {
     await waitFor(() => expect(screen.queryByRole("dialog", { name: grant.title })).not.toBeInTheDocument());
     // A Windows notification reopens the same section without navigating away.
     expect(openDesktopNotification).toBeDefined();
-    act(() => openDesktopNotification?.({ id: "notification-grant", section: "grants", entityId: grant.id }));
+    await act(async () => {
+      openDesktopNotification?.({ id: "notification-grant", section: "grants", entityId: grant.id });
+    });
     expect(await screen.findByRole("dialog", { name: grant.title })).toBeInTheDocument();
   });
 });
