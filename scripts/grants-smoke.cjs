@@ -11,6 +11,7 @@ async function main() {
   const page = await browser.newPage();
   const errors = [];
   const checks = [];
+  const creationAttempts = [];
   page.on("pageerror", (error) => errors.push(error.message));
   const grant = {
     id: "synthetic-grant", title: "Подготовка грантовой заявки: развитие местных инициатив",
@@ -27,6 +28,10 @@ async function main() {
   await page.route("**/api/v1/**", async (route) => {
     const url = new URL(route.request().url());
     let data;
+    if (url.pathname === "/api/v1/grants" && route.request().method() === "POST") {
+      creationAttempts.push(route.request().postDataJSON());
+      return route.fulfill({status:503,contentType:"application/json",body:JSON.stringify({detail:"Synthetic retry test"})});
+    }
     if (url.pathname === "/api/v1/grants/settings") data = {leaderUserId:"actor-3",chairUserId:"actor-4",revision:1};
     else if (url.pathname === "/api/v1/grants") data = [grant];
     else if (url.pathname === "/api/v1/grants/synthetic-grant") data = grant;
@@ -66,6 +71,19 @@ async function main() {
     const form=page.getByRole("dialog",{name:"Новая заявка на грант"});
     await form.waitFor();
     await page.screenshot({path:path.join(output,"create-light.png")});
+    await form.getByLabel("Название гранта *",{exact:true}).fill("Синтетическая заявка для проверки повтора");
+    await form.getByLabel("Ответственный *",{exact:true}).selectOption("actor-1");
+    await form.getByLabel("Срок *",{exact:true}).fill("2099-11-01T09:00");
+    await form.getByRole("button",{name:"Сохранить заявку",exact:true}).click();
+    await form.getByRole("alert").filter({hasText:"Synthetic retry test"}).waitFor();
+    assert.equal(await form.getByLabel("Название гранта *",{exact:true}).inputValue(),"Синтетическая заявка для проверки повтора");
+    await form.getByRole("button",{name:"Сохранить заявку",exact:true}).click();
+    await page.waitForFunction(()=>!document.querySelector('.grants-editor button[type="submit"]').disabled);
+    assert.equal(creationAttempts.length,2);
+    assert.equal(creationAttempts[0].requestId,creationAttempts[1].requestId);
+    await form.getByRole("button",{name:"Отмена",exact:true}).click();
+    await form.waitFor({state:"hidden"});
+    checks.push("real browser: failed creation preserves input, retries the same request, and cancels without another request");
     assert.equal(errors.length,0,errors.join("\n"));
     await fs.writeFile(path.join(output,"report.json"),JSON.stringify({checks,errors},null,2));
     console.log(JSON.stringify({checks,errors,output}));

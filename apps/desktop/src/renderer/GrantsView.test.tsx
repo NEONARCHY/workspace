@@ -105,20 +105,24 @@ it("filters the personal decision inbox using server-provided actions", async ()
 it("preserves a creation draft and request identity after failure, and cancellation creates nothing", async () => {
   api.create.mockRejectedValue(new Error("Повторите отправку"));
   show(0); const createButton = await screen.findByRole("button", { name: "Новая заявка" });
-  await waitFor(() => expect(createButton).toBeEnabled()); fireEvent.click(createButton);
+  await waitFor(() => expect(createButton).toBeEnabled()); createButton.focus(); fireEvent.click(createButton);
   const dialog = screen.getByRole("dialog", { name: "Новая заявка на грант" });
   fireEvent.change(within(dialog).getByLabelText("Название гранта *"), { target: { value: "Новый грант" } });
   fireEvent.change(within(dialog).getByLabelText("Ответственный *"), { target: { value: people[1].id } });
   fireEvent.change(within(dialog).getByLabelText("Срок *"), { target: { value: "2099-11-01T09:00" } });
   fireEvent.change(within(dialog).getByLabelText(/Чек-лист/), { target: { value: "Заявка\nБюджет" } });
-  fireEvent.click(within(dialog).getByRole("button", { name: "Сохранить заявку" }));
+  const save = within(dialog).getByRole("button", { name: "Сохранить заявку" });
+  save.focus(); fireEvent.click(save);
   expect(await within(dialog).findByRole("alert")).toHaveTextContent("Повторите отправку");
   const firstId = api.create.mock.calls.at(0)?.[2];
-  fireEvent.click(within(dialog).getByRole("button", { name: "Сохранить заявку" }));
+  await waitFor(() => expect(save).toBeEnabled());
+  save.focus(); fireEvent.click(save);
   await waitFor(() => expect(api.create).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(save).toBeEnabled());
   expect(api.create.mock.calls.at(1)?.[2]).toBe(firstId);
   expect(api.create.mock.calls.at(0)?.[1]).toMatchObject({ title: "Новый грант", checklist: ["Заявка", "Бюджет"] });
   fireEvent.click(within(dialog).getByRole("button", { name: "Отмена" }));
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: "Новая заявка на грант" })).not.toBeInTheDocument());
   expect(api.create).toHaveBeenCalledTimes(2);
 });
 
