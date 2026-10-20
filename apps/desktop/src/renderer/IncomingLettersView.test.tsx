@@ -137,7 +137,7 @@ describe("incoming EDO letters", () => {
     expect(screen.getByRole("button", { name: "Подтвердить выполнение" })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "Проверить состояние письма" }));
     await waitFor(() => expect(loadEdoIncomingLetter).toHaveBeenCalledTimes(2));
-    expect(screen.getByRole("button", { name: "Подтвердить выполнение" })).toBeEnabled();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Подтвердить выполнение" })).toBeEnabled());
     expect(completeEdoIncomingLetter).toHaveBeenCalledTimes(1);
   });
 

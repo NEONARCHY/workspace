@@ -383,7 +383,8 @@ describe("AIReferentView", () => {
     fireEvent.change(screen.getByLabelText("Выбрать дополнительные вложения"), { target: { files: [additional] } });
     expect(previewAIReferentLocalFile).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Открыть выбранное письмо selected.docx" }));
-    expect(await screen.findByText("Просмотр выбранного оригинала")).toBeInTheDocument();
+    // The real viewer is lazy-loaded; wait for its content, including a cold worker import.
+    expect(await screen.findByText("Просмотр выбранного оригинала", {}, { timeout: 5_000 })).toBeInTheDocument();
     // Model browser autofocus: JSDOM has no geometry for Tabster's modal focus search.
     act(() => document.querySelector<HTMLButtonElement>(".file-viewer-header button")?.focus());
     expect(previewAIReferentLocalFile).toHaveBeenLastCalledWith("token", primary, 0, 0, expect.any(AbortSignal));
@@ -391,7 +392,7 @@ describe("AIReferentView", () => {
     act(() => document.querySelector<HTMLInputElement>('.ai-referent-form-dialog input[placeholder="Если пропустить — исходящий номер"]')?.focus());
     expect(screen.getByRole("button", { name: "Открыть выбранное письмо selected.docx" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Просмотреть выбранное вложение appendix.docx" }));
-    expect(await screen.findByText("Просмотр выбранного оригинала")).toBeInTheDocument();
+    expect(await screen.findByText("Просмотр выбранного оригинала", {}, { timeout: 5_000 })).toBeInTheDocument();
     expect(previewAIReferentLocalFile).toHaveBeenLastCalledWith("token", additional, 0, 0, expect.any(AbortSignal));
     expect(createAIReferentLetter).not.toHaveBeenCalled();
     expect(uploadWorkspaceAttachment).not.toHaveBeenCalled();

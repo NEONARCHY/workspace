@@ -1551,7 +1551,8 @@ describe("corporate workspace authentication alpha", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Добавить задачу" }));
 
-    expect(await screen.findByText("Создана из сообщения · связь сохранена")).toBeInTheDocument();
+    // A cold worker must mount the destination section before its notice is visible.
+    expect(await screen.findByText("Создана из сообщения · связь сохранена", {}, { timeout: 5_000 })).toBeInTheDocument();
     const closeNotice = screen.queryByRole("button", { name: "Закрыть уведомление" });
     if (closeNotice) fireEvent.click(closeNotice);
     await waitFor(

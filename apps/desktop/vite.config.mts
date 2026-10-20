@@ -2,7 +2,8 @@ import react from "@vitejs/plugin-react";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
+import { nodeTestFiles } from "./vitest.node-tests.mts";
 
 import { compareReleaseVersions, consolidateUpdateNotes, numberUpdateNotes, type ReleaseConsolidation } from "./src/renderer/release-versions.mts";
 import { readReleaseNoteOrder } from "./release-note-order.mts";
@@ -165,16 +166,30 @@ export default defineConfig(({ mode }) => ({
     noExternal: [/@fluentui/, /tabster/, /keyborg/],
   },
   test: {
-    environment: "jsdom",
-    maxWorkers: 4,
+    // Keep worker limits on the CLI: an inherited project-level limit would
+    // override CI's --maxWorkers=1 with the local default.
     // Multi-step Fluent UI scenarios can exceed 5s on Windows while packaging runs.
     testTimeout: 10000,
-    setupFiles: "./src/renderer/test-setup.ts",
     server: {
       deps: {
         inline: [/@fluentui/, /tabster/, /keyborg/],
       },
     },
+    projects: [
+      {
+        extends: true,
+        test: { name: "node", environment: "node", include: nodeTestFiles },
+      },
+      {
+        extends: true,
+        test: {
+          name: "ui",
+          environment: "jsdom",
+          setupFiles: "./src/renderer/test-setup.ts",
+          exclude: [...configDefaults.exclude, ...nodeTestFiles],
+        },
+      },
+    ],
   },
   // Emit a tiny non-cacheable manifest used by the running web client.
   ...(mode === "web" ? {
