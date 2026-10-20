@@ -65,7 +65,13 @@
     "ui:src/renderer/AnimatedAmount.test.tsx": 777,
     "ui:src/renderer/AnimatedApprovalMoveHint.test.tsx": 5483,
     "ui:src/renderer/AnimatedInteger.test.tsx": 1313,
-    "ui:src/renderer/App.test.tsx": 204109,
+    "ui:src/renderer/App.approvals.test.tsx": 40976,
+    "ui:src/renderer/App.messaging.test.tsx": 33536,
+    "ui:src/renderer/App.modules.test.tsx": 38933,
+    "ui:src/renderer/App.notifications.test.tsx": 32297,
+    "ui:src/renderer/App.shell.test.tsx": 35466,
+    "ui:src/renderer/App.task-planning.test.tsx": 45707,
+    "ui:src/renderer/App.task-review.test.tsx": 48475,
     "ui:src/renderer/ApprovalsScroll.test.tsx": 5962,
     "ui:src/renderer/AssistantFormPrefill.test.tsx": 5884,
     "ui:src/renderer/AssistantModelControl.test.tsx": 5696,
@@ -249,5 +255,18 @@
     "ui:src/renderer/workspace-events-recovery.test.ts": 1151,
     "ui:src/renderer/workspace-sounds.test.ts": 1422,
     "ui:src/shared/zoom-link.test.ts": 1171
+  },
+  "splitSuiteEstimates": {
+    "sourceRun": "39444262675",
+    "method": "Sum of original per-test assertion durations plus 15000ms startup/import budget per isolated suite. Provisional until next full successful timing refresh.",
+    "files": [
+      "ui:src/renderer/App.shell.test.tsx",
+      "ui:src/renderer/App.messaging.test.tsx",
+      "ui:src/renderer/App.notifications.test.tsx",
+      "ui:src/renderer/App.task-planning.test.tsx",
+      "ui:src/renderer/App.task-review.test.tsx",
+      "ui:src/renderer/App.approvals.test.tsx",
+      "ui:src/renderer/App.modules.test.tsx"
+    ]
   }
 }

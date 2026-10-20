@@ -62,10 +62,21 @@ node scripts/ci/update-test-timings.mjs RUN_ID
 его независимо в каждом шарде: разные оценки могут привести к пропускам/дублям.
 Балансировка не меняет worker limits, таймауты, isolation или состав проверок.
 
+Интеграционные сценарии оболочки разделены на семь `App.*.test.tsx` по областям:
+shell/auth, messaging, notifications, task planning, task review, approvals и
+modules. Общий `app-test-harness.tsx` сохраняет реальный App, предзагрузку модулей,
+серверные fixtures и одинаковый afterEach (cleanup, Tabster, Griffel, storage,
+globals/mocks). Все 57 исходных объявлений (58 случаев с `it.each`) перенесены
+без изменения тел и проверок. Изоляция между файлами не отключается.
+Первые оценки новых групп — сумма прежних замеров сценариев плюс запас на
+загрузку изолированного файла; это отмечено в `splitSuiteEstimates` manifest.
+Обычное обновление замеров заменяет их результатами полного Windows CI.
+
 Локальные команды из корня:
 
 ```powershell
 pnpm test:workflow
+pnpm test:app
 pnpm --filter @yuksalish/desktop exec vitest run --project node --maxWorkers=1
 pnpm --filter @yuksalish/desktop exec vitest run --shard=1/4 --maxWorkers=1
 ```
