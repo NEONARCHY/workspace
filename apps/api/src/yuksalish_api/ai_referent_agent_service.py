@@ -69,6 +69,12 @@ async def expire_jobs(connection: AsyncConnection) -> int:
         row = await _letter_row(connection, job["letter_id"], lock=True)
         if row["status"] != "sending":
             continue
+        deleting = await connection.scalar(select(commands.c.id).where(
+            commands.c.letter_id == row["id"], commands.c.kind == "delete",
+            commands.c.status == "pending",
+        ).limit(1))
+        if deleting:
+            status = "queued"
         await connection.execute(
             update(letters)
             .where(letters.c.id == row["id"])
@@ -412,6 +418,14 @@ async def complete_job(
             if job["kind"] == "delete"
             else "failed"
         )
+    # A deletion requested during a claimed job wins over its result and prevents
+    # auto-send. The next job closes local state before removing server records.
+    deleting = await connection.scalar(select(commands.c.id).where(
+        commands.c.letter_id == row["id"], commands.c.kind == "delete",
+        commands.c.status == "pending",
+    ).limit(1))
+    if deleting:
+        status = "queued"
     now = datetime.now(UTC)
     await connection.execute(
         update(commands)
@@ -436,7 +450,7 @@ async def complete_job(
             delivery_error=detail if outcome in {"failed", "unknown"} else "",
         )
     )
-    if status == "queued":
+    if status == "queued" and not deleting:
         await connection.execute(
             insert(commands).values(
                 id=uuid4(),

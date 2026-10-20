@@ -288,14 +288,14 @@ async def notify_letter(
     now = datetime.now(UTC)
     # Do not ask a future reviewer to decide before their stage has begun.
     recipients = {row["created_by_user_id"]}
-    if row["status"] != "needs_revision":
+    if row["status"] not in {"needs_revision", "awaiting_final_send"}:
         recipients.add(row["reviewer_user_id"])
     if row["status"] in {"sent", "signed"}:
         recipients.update({row.get("initial_reviewer_user_id"), row.get("final_reviewer_user_id")})
     action_recipients = set()
-    if row["status"] == "needs_revision":
+    if row["status"] in {"needs_revision", "awaiting_final_send"}:
         action_recipients.add(row["created_by_user_id"])
-    elif row["status"] in {"pending_review", "approved", "awaiting_final_send", "failed"}:
+    elif row["status"] in {"pending_review", "approved", "failed"}:
         action_recipients.add(row["reviewer_user_id"])
     if row["status"] in OPERATOR_VISIBLE_STATUSES:
         candidates = (

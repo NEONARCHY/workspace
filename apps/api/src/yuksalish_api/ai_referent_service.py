@@ -136,7 +136,7 @@ def _available_actions(
         actions.append("queue_delivery")
     if status == "failed" and may_approve and is_reviewer:
         actions.extend(("retry_delivery", "return_for_revision"))
-    if status == "awaiting_final_send" and may_approve and is_reviewer:
+    if status == "awaiting_final_send" and is_creator:
         actions.extend(("release_delivery", "return_for_revision"))
     if status == "referent_review_pending" and may_operate:
         actions.extend(("send", "return_for_revision", "replace_document", "mark_sent"))
@@ -444,8 +444,9 @@ async def _response(
         final_pdf_file_id=str(row["final_pdf_file_id"]) if row.get("final_pdf_file_id") else None,
         can_edit=can_edit,
         can_delete=bool(
-            permissions.get("ai_referent", {}).get("edit")
-            and row["created_by_user_id"] == current_user.id
+            _is_privileged(current_user)
+            or (permissions.get("ai_referent", {}).get("edit")
+                and row["created_by_user_id"] == current_user.id)
         ),
         can_replace_document=(
             row["status"] == "operator_revision"
@@ -934,6 +935,20 @@ async def act_on_letter(
         if current_status != "operator_revision" or not await _replacement_ready(connection, row):
             raise AIReferentServiceError(409, "Сначала загрузите новый DOCX или готовый PDF.")
         next_status, command_kind = "queued", "reprepare"
+    elif action == "release_delivery" or (
+        action == "return_for_revision" and current_status == "awaiting_final_send"
+    ):
+        await ensure_module_action(connection, current_user, "ai_referent", "edit")
+        if not is_creator:
+            raise AIReferentServiceError(403, "Итоговый PDF подтверждает отправитель письма.")
+        if current_status != "awaiting_final_send" or not row.get("final_pdf_file_id"):
+            raise AIReferentServiceError(409, "Подписанный документ не ожидает решения.")
+        if action == "return_for_revision":
+            if len(payload.comment) < 3 and payload.comment_audio_id is None:
+                raise AIReferentServiceError(422, "Укажите причину возврата на доработку.")
+            next_status = "needs_revision"
+        else:
+            next_status, command_kind = "queued", "dispatch"
     elif action in {
         "send",
         "confirm_sent",
@@ -977,7 +992,6 @@ async def act_on_letter(
         "return_for_revision",
         "queue_delivery",
         "retry_delivery",
-        "release_delivery",
     }:
         await ensure_module_action(connection, current_user, "ai_referent", "approve")
         if not is_reviewer:
@@ -1016,12 +1030,6 @@ async def act_on_letter(
             if len(payload.comment) < 3 and payload.comment_audio_id is None:
                 raise AIReferentServiceError(422, "Укажите причину возврата на доработку.")
             next_status = "needs_revision"
-        elif action == "release_delivery":
-            if current_status != "awaiting_final_send":
-                raise AIReferentServiceError(409, "Подписанный документ не ожидает решения.")
-            if not row.get("final_pdf_file_id"):
-                raise AIReferentServiceError(409, "Итоговый PDF ещё не подготовлен.")
-            next_status, command_kind = "queued", "dispatch"
         else:
             expected = "approved" if action == "queue_delivery" else "failed"
             if current_status != expected:

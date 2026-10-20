@@ -59,6 +59,9 @@ async def list_other_letter_progress(
 ) -> AIReferentProgressResponse:
     if not await _require_operator(connection, user):
         return AIReferentProgressResponse()
+    if user.role in {"admin", "superadmin"}:
+        # Administrators now receive full cards in the main registry.
+        return AIReferentProgressResponse()
     statement = (
         _statement()
         .where(
