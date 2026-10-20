@@ -80,6 +80,7 @@ import {
   Settings24Regular,
   Edit16Regular,
   TaskListSquareLtr24Filled,
+  Trophy24Regular,
   TaskListSquareLtr24Regular,
   Video24Regular,
 } from "@fluentui/react-icons";
@@ -121,7 +122,7 @@ import {
   AbsencesView, AccountPanel, AIHisobotView, AIReferentView, IncomingLettersView, ApprovalsView,
   CalendarView, EmployeeProfileDialog, EmployeesView, FeedView, HrView, PersonalHomeView,
   MembersView, preloadWorkspaceModules, prepareEmployeeProfile, ProjectHubView, ProjectsView,
-  ReferenceView,
+  ReferenceView, GrantsView,
   SupportDialog, TasksView, TeamDashboardView, TelegramAccessView, SurveyAnalyticsView,
   TripApprovalsView, ZoomView,
 } from "./workspace-module-preload";
@@ -359,6 +360,7 @@ const navItems: readonly NavItem[] = [
   { key: "projects", label: "Список проектов", icon: <FolderPeople24Regular /> },
   { key: "project_hub", label: "Проекты", icon: <FolderPeople24Regular /> },
   { key: "reference", label: "Справочник", icon: <BookContacts24Regular /> },
+  { key: "grants", label: "Гранты", icon: <Trophy24Regular /> },
   { key: "project_funding", label: "Проектные заявки", icon: <DocumentBulletList24Regular /> },
   {
     key: "trip_approvals",
@@ -2560,6 +2562,14 @@ export function App() {
               people={displayPeople}
               canCreate={modulePermissions.reference?.create ?? false}
               canEdit={modulePermissions.reference?.edit ?? false}
+            /> : null}
+            {displayedSection === "grants" ? <GrantsView
+              token={session.accessToken} currentUser={workspace.currentUser} people={displayPeople}
+              departments={workspace.departments} canCreate={modulePermissions.grants?.create ?? false}
+              canAdmin={modulePermissions.grants?.admin === true && ["admin", "superadmin"].includes(workspace.currentUser.role)}
+              focusId={focusTarget?.section === "grants" ? focusTarget.entityId : undefined}
+              onOpenChat={canView("messenger") ? (chatId) => void handleOpenContextChat(chatId) : undefined}
+              onPreviewAttachment={setPreviewAttachment} onDownloadAttachment={handleSaveAttachment}
             /> : null}
             {displayedSection === "trip_approvals" ? (
               <TripApprovalsView

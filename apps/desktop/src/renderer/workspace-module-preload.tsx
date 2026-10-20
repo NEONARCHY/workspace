@@ -18,6 +18,7 @@ const feed = () => import("./FeedView");
 const projects = () => import("./ProjectsView");
 const projectHub = () => import("./ProjectHubView");
 const reference = () => import("./ReferenceView");
+const grants = () => import("./GrantsView");
 const trips = () => import("./TripApprovalsView");
 const calendar = () => import("./CalendarView");
 const zoom = () => import("./ZoomView");
@@ -41,6 +42,7 @@ export const FeedView = lazy(() => feed().then((module) => ({ default: module.Fe
 export const ProjectsView = lazy(() => projects().then((module) => ({ default: module.ProjectsView })));
 export const ProjectHubView = lazy(() => projectHub().then((module) => ({ default: module.ProjectHubView })));
 export const ReferenceView = lazy(() => reference().then((module) => ({ default: module.ReferenceView })));
+export const GrantsView = lazy(() => grants().then((module) => ({ default: module.GrantsView })));
 export const TripApprovalsView = lazy(() => trips().then((module) => ({ default: module.TripApprovalsView })));
 export const CalendarView = lazy(() => calendar().then((module) => ({ default: module.CalendarView })));
 export const ZoomView = lazy(() => zoom().then((module) => ({ default: module.ZoomView })));
@@ -54,6 +56,7 @@ export const SupportDialog = lazy(() => support().then((module) => ({ default: m
 
 const sectionLoaders: readonly [NavigationKey, () => Promise<unknown>][] = [
   ["tasks", tasks], ["team_overview", team], ["payment_requests", approvals],
+  ["grants", grants],
   ["ai_referent", referent], ["incoming_letters", incomingLetters], ["ai_hisobot", hisobot], ["telegram_access", telegram],
   ["feed", feed], ["projects", projects], ["project_hub", projectHub],
   ["project_funding", projectHub], ["trip_approvals", trips], ["calendar", calendar],

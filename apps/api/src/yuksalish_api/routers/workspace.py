@@ -1462,6 +1462,7 @@ async def put_attachment(
     expected_revision: Annotated[int | None, Query(alias="expectedRevision", ge=1)] = None,
 ) -> AttachmentResponse:
     attachment_module = {
+        "grant": "grants",
         "message": "messenger",
         "task": "tasks",
         "approval_request": "payment_requests",
@@ -1656,6 +1657,7 @@ async def _attachment_content(
             attachment_id,
         )
         attachment_module = {
+            "grant": "grants",
             "message": "messenger",
             "task": "tasks",
             "approval_request": "payment_requests",

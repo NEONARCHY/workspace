@@ -14,8 +14,8 @@ const labels = Object.fromEntries(navigationKeys.map((key) => [key, key])) as Re
 describe("Personal organization", () => {
   it("moves identities in both directions without losing hidden or future sections", () => {
     const oldOrder = ["home", "tasks", "trip_approvals", "messenger"] as NavigationKey[];
-    expect(normalizeNavigation(oldOrder).slice(0, 5)).toEqual([
-      "home", "tasks", "trip_approvals", "leave_approvals", "messenger",
+    expect(normalizeNavigation(oldOrder).slice(0, 6)).toEqual([
+      "home", "tasks", "grants", "trip_approvals", "leave_approvals", "messenger",
     ]);
     expect(moveBefore(["a", "b", "c"], "a", "c")).toEqual(["b", "c", "a"]);
     expect(moveBefore(["a", "b", "c"], "c", "a")).toEqual(["c", "a", "b"]);
@@ -23,8 +23,8 @@ describe("Personal organization", () => {
     expect(moveBefore(["a", "b"], "a", "a")).toEqual(["a", "b"]);
     expect(normalizeNavigation(["calendar", "calendar"])).toEqual(["home", "calendar", ...navigationKeys.filter((key) => key !== "calendar" && key !== "home")]);
     expect(normalizeNavigation(["tasks", "projects", "settings"])).toEqual([
-      "home", "tasks", "projects", "project_hub", "project_funding", "settings",
-      ...navigationKeys.filter((key) => !["home", "tasks", "projects", "project_hub", "project_funding", "settings"].includes(key)),
+      "home", "tasks", "grants", "projects", "project_hub", "project_funding", "settings",
+      ...navigationKeys.filter((key) => !["home", "tasks", "grants", "projects", "project_hub", "project_funding", "settings"].includes(key)),
     ]);
   });
   it("does not let an older bootstrap overwrite a just-saved preference response", () => {

@@ -17,6 +17,11 @@ MODULE_CATALOG = (
         status="available",
     ),
     ModuleDescriptor(
+        key="grants",
+        label=LocalizedLabel(ru="Гранты", uz_cyrl="Грантлар", uz_latn="Grantlar"),
+        route="/grants", status="available",
+    ),
+    ModuleDescriptor(
         key="team_overview",
         label=LocalizedLabel(
             ru="Обзор команды",
