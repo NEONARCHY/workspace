@@ -23,7 +23,7 @@ from yuksalish_api.repository import (
 )
 from yuksalish_api.trip_document_service import validate_attachment
 from yuksalish_api.trip_order_pdf import _signature_image, brief_pdf, order_pdf
-from yuksalish_api.workspace_schemas import CreateTripRequest, TripActionRequest
+from yuksalish_api.workspace_schemas import CreateTripRequest, TripActionRequest, TripWriteRequest
 
 
 def signature() -> bytes:
@@ -107,6 +107,40 @@ def test_written_brief_needs_no_employee_signature_and_keeps_resolution_space() 
     assert "Safarga ruxsat" in text
     assert "Manzil" not in text
     assert len(PdfReader(BytesIO(content)).pages[0].images) == 1  # logo only
+
+
+def test_brief_typography_is_bounded_and_changes_the_authored_body(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from yuksalish_api import trip_order_pdf
+
+    original_style = trip_order_pdf._style
+    calls: list[tuple[str, float, bool]] = []
+
+    def record_style(name: str, *, size: float = 11, leading: float = 17,
+                     bold: bool = False) -> object:
+        calls.append((name, size, bold))
+        return original_style(name, size=size, leading=leading, bold=bold)
+
+    monkeypatch.setattr(trip_order_pdf, "_style", record_style)
+    values = dict(
+        requester="Testova Zebo", chair="Testov Rais", purpose="", destination="Nukus",
+        start=date(2026, 10, 15), end=date(2026, 10, 16), employees=["Testova Zebo"],
+        expense_source="", brief_text="Safarga ruxsat berishingizni soʻraymiz.",  # noqa: RUF001
+        attachment_name=None, signature=None, signed_on=date(2026, 10, 14),
+    )
+    content = brief_pdf(**values, brief_font_size=14, brief_font_weight="bold")
+    assert content.startswith(b"%PDF-")
+    assert ("brief-authored-body", 14, True) in calls
+    with pytest.raises(ValueError, match="оформление"):
+        brief_pdf(**values, brief_font_size=20)
+    with pytest.raises(ValueError, match="оформление"):
+        brief_pdf(**values, brief_font_weight="other")
+    with pytest.raises(ValueError):
+        TripWriteRequest(
+            destination="Nukus", start_date=date(2026, 10, 15),
+            end_date=date(2026, 10, 16), employee_ids=["user"], brief_font_size=20,
+        )
 
 
 def test_legacy_brief_does_not_transliterate_russian_purpose_before_authored_text() -> None:

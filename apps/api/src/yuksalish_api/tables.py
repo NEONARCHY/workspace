@@ -931,6 +931,8 @@ trip_requests = sa.Table(
     sa.Column("end_date", sa.Date()),
     sa.Column("brief_text", sa.Text()),
     sa.Column("brief_format", sa.String(16)),
+    sa.Column("brief_font_size", sa.Integer()),
+    sa.Column("brief_font_weight", sa.String(8)),
     sa.Column("expense_source", sa.String(300)),
     sa.Column("brief_attachment_key", sa.String(300)),
     sa.Column("brief_attachment_name", sa.String(240)),

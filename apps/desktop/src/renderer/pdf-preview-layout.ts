@@ -1,5 +1,5 @@
 export interface PdfPageSize { readonly width: number; readonly height: number }
-export type PdfZoomMode = "page" | "width" | number;
+export type PdfZoomMode = "comfortable" | "page" | "width" | number;
 
 export function validPdfPageSize(size: PdfPageSize): boolean {
   return Number.isFinite(size.width) && Number.isFinite(size.height) && size.width > 0 && size.height > 0
@@ -11,6 +11,7 @@ export function pdfPageScale(page: PdfPageSize, frame: PdfPageSize, mode: PdfZoo
   if (typeof mode === "number") return mode;
   const width = Math.max(1, frame.width - 32) / page.width;
   const height = Math.max(1, frame.height - 40) / page.height;
+  if (mode === "comfortable") return Math.min(3, width, Math.min(width, height) * 1.15);
   return Math.min(3, mode === "page" ? Math.min(width, height) : width);
 }
 

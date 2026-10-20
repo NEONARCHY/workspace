@@ -826,6 +826,8 @@ def _trip_request(
         employee_ids=[str(value) for value in employee_ids],
         brief_text=row["brief_text"] or "",
         brief_format=row.get("brief_format") or "manual",
+        brief_font_size=row.get("brief_font_size") or 11,
+        brief_font_weight=row.get("brief_font_weight") or "regular",
         expense_source=row["expense_source"] or "",
         brief_attachment_name=row["brief_attachment_name"],
         brief_attachment_type=row["brief_attachment_type"],
@@ -7537,6 +7539,8 @@ async def create_trip_request(
             end_date=payload.end_date,
             brief_text=brief_text,
             brief_format=payload.brief_format,
+            brief_font_size=payload.brief_font_size,
+            brief_font_weight=payload.brief_font_weight,
             expense_source=payload.expense_source.strip(),
             stage="launch",
             status="draft",
@@ -7628,6 +7632,10 @@ async def update_trip_request(
         if "brief_text" in payload.model_fields_set or brief_format == "generated":
             values["brief_text"] = brief_text
         values["brief_format"] = brief_format
+        if "brief_font_size" in payload.model_fields_set:
+            values["brief_font_size"] = payload.brief_font_size
+        if "brief_font_weight" in payload.model_fields_set:
+            values["brief_font_weight"] = payload.brief_font_weight
         if "expense_source" in payload.model_fields_set:
             values["expense_source"] = payload.expense_source.strip()
         # A revision must be signed again; no old signature may cover new terms.

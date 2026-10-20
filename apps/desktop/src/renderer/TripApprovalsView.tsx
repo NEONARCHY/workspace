@@ -27,6 +27,7 @@ import { assistantPeopleIds } from "./assistant-form-handoff";
 import type { FileViewerSource } from "./FileViewer";
 import { TripDestinationPicker } from "./TripDestinationPicker";
 import { editedTripBriefError, tripBriefError, tripBriefPreview } from "./trip-brief-generator";
+import { TripBriefEditor } from "./TripBriefEditor";
 
 const ExternalFileViewer = lazy(() => import("./FileViewer").then(module => ({ default: module.ExternalFileViewer })));
 const TripWorldMap = lazy(() => import("./TripWorldMap").then(module => ({ default: module.TripWorldMap })));
@@ -76,11 +77,13 @@ interface TripFormState {
   purpose: string; destination: string; startDate: string; endDate: string;
   employeeIds: readonly string[]; briefText: string; expenseSource: string;
   briefFormat: "manual" | "generated" | "edited";
+  briefFontSize: number; briefFontWeight: "regular" | "bold";
 }
 function emptyForm(currentUserId: string): TripFormState {
   const today = new Date().toISOString().slice(0, 10);
   return { purpose: "", destination: "", startDate: today, endDate: today,
-    employeeIds: [currentUserId], briefText: "", expenseSource: "", briefFormat: "generated" };
+    employeeIds: [currentUserId], briefText: "", expenseSource: "", briefFormat: "generated",
+    briefFontSize: 11, briefFontWeight: "regular" };
 }
 
 const exampleTripFacts = {
@@ -111,6 +114,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
       employeeIds: assistantDraft.fields.employees?.trim()
         ? assistantPeopleIds(assistantDraft.fields, "employees", people, currentUser.id) : [currentUser.id],
       briefText: "", expenseSource: "", briefFormat: "generated",
+      briefFontSize: 11, briefFontWeight: "regular",
     } : emptyForm(currentUser.id));
   const [employeeListScope, setEmployeeListScope] = useState<EmployeeScope>("central");
   const [view, setView] = useState<"kanban" | "list">("kanban");
@@ -132,6 +136,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
   const [documentPreview, setDocumentPreview] = useState<FileViewerSource & {
     updatedAt: string; kind: "attachment" | "brief" | "brief-preview" | "order" | "order-preview";
   }>();
+  const [briefEditorRequest, setBriefEditorRequest] = useState<TripRequest>();
   const [error, setError] = useState("");
   const selected = requests.find((request) => request.id === selectedId);
   const canChooseOthers = ["manager", "admin", "superadmin"].includes(currentUser.role);
@@ -376,7 +381,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
               {selected.status === "annulled" ? <WorkspaceNotice tone="warning" role="status" className="trip-document-reminder">Приказ аннулирован. Исходный подписанный документ и история решений сохранены.</WorkspaceNotice> : null}
             </section> : selected.stage === "hr" ? <WorkspaceNotice tone="warning" className="trip-document-reminder">Эта поездка проходит прежний маршрут через кадровую службу.</WorkspaceNotice> : null}
             <div className="bp7-actions">
-              {selected.canEdit ? <Button disabled={busy || Boolean(pendingDecision)} icon={<Edit24Regular />} onClick={() => { setDocumentPreview(undefined); setForm({ purpose: selected.purpose, destination: selected.destination, startDate: selected.startDate, endDate: selected.endDate, employeeIds: selected.employeeIds, briefText: selected.briefText ?? "", expenseSource: selected.expenseSource ?? "", briefFormat: selected.briefFormat ?? "manual" }); setEmployeeQuery(""); setError(""); setFormMode("edit"); }}>Изменить</Button> : null}
+              {selected.canEdit ? <Button disabled={busy || Boolean(pendingDecision)} icon={<Edit24Regular />} onClick={() => { setDocumentPreview(undefined); setForm({ purpose: selected.purpose, destination: selected.destination, startDate: selected.startDate, endDate: selected.endDate, employeeIds: selected.employeeIds, briefText: selected.briefText ?? "", expenseSource: selected.expenseSource ?? "", briefFormat: selected.briefFormat ?? "manual", briefFontSize: selected.briefFontSize ?? 11, briefFontWeight: selected.briefFontWeight ?? "regular" }); setEmployeeQuery(""); setError(""); setFormMode("edit"); }}>Изменить</Button> : null}
               {selected.canDelete && onDelete ? <Button disabled={busy || Boolean(pendingDecision)} onClick={() => setConfirmDeleteId(selected.id)}>Удалить заявку</Button> : null}
               {selected.allowedActions.map((action) => <Button className={`trip-decision-action action-${action}`} disabled={busy || Boolean(pendingDecision) || ((action === "submit" || action === "resubmit") && needsBriefForSubmission(selected))} appearance={action === "approve" || action === "submit" || action === "resubmit" ? "primary" : "secondary"} key={action} onClick={() => void act(selected, action)}>{action === "approve" && (selected.workflowVersion ?? 1) >= 2 && selected.stage === "manager_approval" ? "Утвердить и выпустить приказ" : action === "approve" && selected.stage === "deputy_approval" ? "Согласовать и передать председателю" : action === "submit" && selected.workflowVersion === 3 ? "Отправить первому заместителю" : action === "submit" && selected.workflowVersion === 2 ? "Отправить председателю" : actionLabels[action]}</Button>)}
               {isAdministrator && (selected.workflowVersion ?? 1) === 1 ? displayTripColumns.filter((column) => column.key !== selected.stage).map((column) => <Button data-stage={column.key} disabled={busy || Boolean(pendingDecision)} key={`move:${column.key}`} onClick={() => void commitAction(selected, "move", `Перенос на этап «${column.label}»`, column.key)}>{column.label}</Button>) : null}
@@ -441,7 +446,8 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
           </form>) : null}
         </DialogSurface>
       </Dialog>
-      {documentPreview ? <Suspense fallback={<span role="status">Открываем документ…</span>}><ExternalFileViewer key={`${documentPreview.id}:${documentPreview.kind}:${documentPreview.updatedAt}`} attachment={documentPreview} onClose={() => setDocumentPreview(undefined)} onLoad={loadDocumentPreview} onLoadOffice={loadBriefOffice} onDownload={() => { const request = requests.find(item => item.id === documentPreview.id); if (request) return downloadDocument(request, documentPreview.kind); }} /></Suspense> : null}
+      {documentPreview ? <Suspense fallback={<span role="status">Открываем документ…</span>}><ExternalFileViewer key={`${documentPreview.id}:${documentPreview.kind}:${documentPreview.updatedAt}`} attachment={documentPreview} onClose={() => setDocumentPreview(undefined)} onLoad={loadDocumentPreview} onLoadOffice={loadBriefOffice} onDownload={() => { const request = requests.find(item => item.id === documentPreview.id); if (request) return downloadDocument(request, documentPreview.kind); }} onEdit={documentPreview.kind === "brief-preview" && selected?.id === documentPreview.id && selected.canEdit ? () => { setDocumentPreview(undefined); setBriefEditorRequest(selected); } : undefined} editLabel="Редактировать билдирги" /></Suspense> : null}
+      {briefEditorRequest && <TripBriefEditor key={briefEditorRequest.id} request={briefEditorRequest} onClose={() => setBriefEditorRequest(undefined)} onSave={onUpdate} onSaved={saved => { setBriefEditorRequest(undefined); setSelectedId(saved.id); openDocument(saved, "brief-preview"); }} />}
     </section>
   );
 }
