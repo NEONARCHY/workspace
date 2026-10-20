@@ -521,7 +521,7 @@ class OfflineWorkflow:
         auto_send: bool,
     ) -> dict[str, Any]:
         """Record compose readiness; a separate fenced operation owns physical send."""
-        actor = self._actor(telegram_id, "approve")
+        actor = self._actor(telegram_id, "edit")
         try:
             letter_id = str(UUID(letter_id))
             release_operation_id = str(UUID(release_operation_id))
@@ -554,7 +554,7 @@ class OfflineWorkflow:
             letter = self.read(telegram_id, letter_id)
             if (
                 letter["status"] != "queued" or letter["workflowKind"] != "delivery"
-                or letter["reviewerUserId"] != actor["userId"]
+                or letter["createdByUserId"] != actor["userId"]
                 or letter["revision"] != release["payload"]["expectedRevision"] + 1
                 or letter["finalPdfFileId"] is None
             ):
@@ -569,7 +569,7 @@ class OfflineWorkflow:
                     "autoSend": auto_send, "actorUserId": actor["userId"],
                     "actorName": actor["fullName"],
                     "creatorUserId": letter["createdByUserId"],
-                }, required_action="approve",
+                }, required_action="edit",
             )
             if not auto_send:
                 return {"id": letter_id, "status": "referent_review_pending",
@@ -1219,8 +1219,10 @@ class OfflineWorkflow:
                     action == "return_for_revision"
                     and letter["status"] == "referent_review_pending"
                 )
-                else "approve" if action in {
-                    "approve", "return_for_revision", "release_delivery"
+                else "edit" if action == "release_delivery" or (
+                    action == "return_for_revision" and letter["status"] == "awaiting_final_send"
+                ) else "approve" if action in {
+                    "approve", "return_for_revision"
                 } else "edit"
             )
             if required not in actor["moduleActions"]:
@@ -1259,10 +1261,9 @@ class OfflineWorkflow:
                 next_status = "queued"
             elif action == "release_delivery":
                 if (
-                    not reviewer or letter["status"] != "awaiting_final_send"
+                    not creator or letter["status"] != "awaiting_final_send"
                     or letter["workflowKind"] != "delivery"
                     or letter["finalPdfFileId"] is None
-                    or not actor.get("reviewerKeys")
                 ):
                     raise WorkspaceError("Итоговый PDF не ожидает подтверждения.", 409)
                 next_status = "queued"
@@ -1311,16 +1312,24 @@ class OfflineWorkflow:
                     raise WorkspaceError("Проверка подписи ещё не пройдена.", 409)
                 next_status = "pending_review"
             elif action == "cancel":
-                if not creator or letter["status"] not in _EDITABLE | {"pending_review"}:
+                if not creator or letter["status"] not in _EDITABLE | {
+                    "pending_review", "awaiting_final_send", "approved", "failed"
+                }:
                     raise WorkspaceError("Отменить письмо на этом этапе нельзя.", 403)
                 next_status = "cancelled"
             else:
+                if letter["status"] == "awaiting_final_send" and not creator:
+                    raise WorkspaceError("Итоговый PDF подтверждает отправитель письма.", 403)
                 operator_return = (
                     action == "return_for_revision"
                     and letter["status"] == "referent_review_pending"
                     and "admin" in actor["moduleActions"]
                 )
-                if not operator_return and (not reviewer or not actor.get("reviewerKeys")):
+                sender_return = (action == "return_for_revision"
+                                 and letter["status"] == "awaiting_final_send" and creator)
+                if not operator_return and not sender_return and (
+                    not reviewer or not actor.get("reviewerKeys")
+                ):
                     raise WorkspaceError("Решение доступно назначенному согласующему.", 403)
                 if letter["status"] not in (
                     {"pending_review", "awaiting_final_send", "referent_review_pending"}
@@ -1812,7 +1821,8 @@ class OfflineWorkflow:
             )
         else:
             visible = bool(
-                actor["userId"] in participant_ids
+                actor.get("role") in {"admin", "superadmin"}
+                or actor["userId"] in participant_ids
                 or ("admin" in actor["moduleActions"] and (
                     letter["status"] in operator_statuses or operator_send_queued
                 ))
@@ -1885,17 +1895,21 @@ class OfflineWorkflow:
                 letter["submissionBlockReason"] = reason
                 if not reason:
                     actions.append("submit")
-            if letter["status"] in _EDITABLE | {"pending_review"}:
+            if letter["status"] in _EDITABLE | {
+                "pending_review", "awaiting_final_send", "approved", "failed"
+            }:
                 actions.append("cancel")
         if (
             actor["userId"] == letter["reviewerUserId"]
             and "approve" in actor["moduleActions"]
             and actor.get("reviewerKeys")
+            and letter["status"] == "pending_review"
         ):
-            if letter["status"] == "pending_review":
-                actions.extend(("approve", "return_for_revision"))
-            elif letter["status"] == "awaiting_final_send":
-                actions.extend(("release_delivery", "return_for_revision"))
+            actions.extend(("approve", "return_for_revision"))
+        if creator and "edit" in actor["moduleActions"] and (
+            letter["status"] == "awaiting_final_send"
+        ):
+            actions.extend(("release_delivery", "return_for_revision"))
         if letter["status"] == "referent_review_pending" and "admin" in actor["moduleActions"]:
             actions.extend(("send", "return_for_revision"))
         if letter["status"] == "delivery_unknown" and "admin" in actor["moduleActions"]:

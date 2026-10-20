@@ -272,7 +272,7 @@ def test_bot_uses_real_private_actor_and_server_revision(modules, tmp_path):
     assert "Stale revision" in telegram.send_message.call_args.args[1]
 
 
-def test_shared_bot_history_is_sent_only_and_archive_is_unavailable(modules, tmp_path):
+def test_shared_bot_history_includes_closed_letters_and_archive_is_unavailable(modules, tmp_path):
     api, telegram = Mock(), Mock()
     telegram.send_message.return_value = {"ok": True}
     api.request.return_value = {"letters": [{
@@ -283,7 +283,7 @@ def test_shared_bot_history_is_sent_only_and_archive_is_unavailable(modules, tmp
         telegram, api, modules.state.State(tmp_path / "state.sqlite")
     )
     bot.history("123", "sent", 0)
-    assert "sentOnly=true" in api.request.call_args.args[0]
+    assert "sentOnly=true" not in api.request.call_args.args[0]
     history_markup = telegram.send_message.call_args.kwargs["reply_markup"]
     assert history_markup["inline_keyboard"][0][0]["text"].startswith("✉️ ")
 
@@ -317,6 +317,8 @@ def test_administrator_pending_menu_shows_only_other_letter_stage(modules, tmp_p
     }
 
     def request(path, *args, **kwargs):
+        if path.endswith("/letters/" + letter_id):
+            raise modules.client.WorkspaceError("Operator has status-only access", 403)
         if "/letters/progress/" in path:
             return stage
         if "/letters/progress?" in path:

@@ -457,8 +457,10 @@ async def _replay_action(
             action == "return_for_revision"
             and letter["status"] == "referent_review_pending"
         )
-        else "approve" if action in {
-            "approve", "return_for_revision", "release_delivery"
+        else "edit" if action == "release_delivery" or (
+            action == "return_for_revision" and letter["status"] == "awaiting_final_send"
+        ) else "approve" if action in {
+            "approve", "return_for_revision"
         } else "edit"
     )
     if operation.required_action != expected_right:
@@ -480,10 +482,9 @@ async def _replay_action(
         next_status, command_kind = "queued", "send"
     elif action == "release_delivery":
         if (
-            not reviewer or letter["status"] != "awaiting_final_send"
+            not creator or letter["status"] != "awaiting_final_send"
             or letter["workflow_kind"] != "delivery"
             or letter["final_pdf_file_id"] is None
-            or letter["reviewer_key"] not in reviewer_keys
         ):
             raise HTTPException(409, "Итоговый PDF не ожидает подтверждения.")
         next_status, command_kind = "queued", "dispatch"
@@ -514,24 +515,31 @@ async def _replay_action(
         next_status = "pending_review"
     elif action == "cancel":
         if not creator or letter["status"] not in {
-            "draft", "needs_revision", "pending_review"
+            "draft", "needs_revision", "pending_review", "awaiting_final_send", "approved", "failed"
         }:
             raise HTTPException(403, "Отменить письмо на этом этапе может только автор.")
         next_status = "cancelled"
     else:
+        if letter["status"] == "awaiting_final_send" and not creator:
+            raise HTTPException(403, "Итоговый PDF подтверждает отправитель письма.")
         operator_return = (
             action == "return_for_revision"
             and letter["status"] == "referent_review_pending"
             and operation.required_action == "admin"
         )
-        if not operator_return and (not reviewer or not reviewer_keys):
+        sender_return = (action == "return_for_revision"
+                         and letter["status"] == "awaiting_final_send" and creator)
+        if not operator_return and not sender_return and (not reviewer or not reviewer_keys):
             raise HTTPException(403, "Решение доступно назначенному согласующему.")
         if letter["status"] not in (
             {"pending_review", "awaiting_final_send", "referent_review_pending"}
             if action == "return_for_revision" else {"pending_review"}
         ) or (letter["status"] == "referent_review_pending" and not operator_return):
             raise HTTPException(409, "Письмо не ожидает этого решения.")
-        if not operator_return and letter["reviewer_key"] not in reviewer_keys:
+        if (
+            not operator_return and not sender_return
+            and letter["reviewer_key"] not in reviewer_keys
+        ):
             raise HTTPException(403, "Нет подтверждённого права этого согласующего.")
         if action == "return_for_revision":
             if len(comment) < 3 and audio_id is None:
@@ -953,8 +961,7 @@ async def _replay_dispatched(
     if (
         letter is None or letter["status"] != "queued" or letter["revision"] != revision
         or letter["workflow_kind"] != "delivery" or letter["final_pdf_file_id"] is None
-        or letter["reviewer_user_id"] != UUID(str(actor["userId"]))
-        or letter["reviewer_key"] not in reviewer_keys
+        or letter["created_by_user_id"] != UUID(str(actor["userId"]))
     ):
         raise HTTPException(409, "Письмо не ожидает автономной подготовки отправки.")
     command = (
@@ -1037,7 +1044,7 @@ async def _replay_external_result(
     if (
         operation.operation_id != uuid5(NAMESPACE_URL, "ai-offline-result:" + str(effect_id))
         or effect_id != uuid5(NAMESPACE_URL, "ai-offline-effect:" + str(source_id))
-        or operation.required_action not in {"approve", "admin"}
+        or operation.required_action not in {"edit", "admin"}
         or type(manual) is not bool or (manual and operation.required_action != "admin")
         or (not sent and not manual)
         or type(sent) is not bool or type(revision) is not int or revision < 2
@@ -1059,7 +1066,7 @@ async def _replay_external_result(
         raise HTTPException(409, "Исходная операция отправки не сверена.")
     if (
         (not manual and operation.required_action != (
-            "approve" if source["kind"] == "letter.dispatched" else "admin"
+            "edit" if source["kind"] == "letter.dispatched" else "admin"
         ))
         or command_id != uuid5(
             NAMESPACE_URL,
@@ -1078,14 +1085,10 @@ async def _replay_external_result(
         or letter["workflow_kind"] != "delivery" or letter["final_pdf_file_id"] is None
     ):
         raise HTTPException(409, "Письмо не ожидает квитанцию отправки.")
-    if operation.required_action == "approve":
-        reviewer_keys = actor.get("reviewerKeys")
-        if (
-            letter["reviewer_user_id"] != UUID(str(actor["userId"]))
-            or not isinstance(reviewer_keys, list)
-            or letter["reviewer_key"] not in reviewer_keys
-        ):
-            raise HTTPException(403, "Квитанция не относится к итоговому согласующему.")
+    if operation.required_action == "edit" and (
+        letter["created_by_user_id"] != UUID(str(actor["userId"]))
+    ):
+        raise HTTPException(403, "Квитанция не относится к отправителю письма.")
     command = (
         await connection.execute(select(ai_referent_delivery_commands).where(
             ai_referent_delivery_commands.c.id == command_id
@@ -1237,8 +1240,8 @@ async def replay_offline_operation(
         ("letter.document_check", "edit"),
         ("letter.comment_audio", "approve"), ("letter.comment_audio", "admin"),
         ("letter.prepared", "approve"), ("letter.signed", "approve"),
-        ("letter.dispatched", "approve"),
-        ("letter.external_result", "approve"), ("letter.external_result", "admin"),
+        ("letter.dispatched", "edit"),
+        ("letter.external_result", "edit"), ("letter.external_result", "admin"),
         ("letter.action", "edit"), ("letter.action", "approve"),
         ("letter.action", "admin"),
     }:

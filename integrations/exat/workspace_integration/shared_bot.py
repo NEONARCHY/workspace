@@ -31,7 +31,7 @@ ACTIONS = {
     "s": ("submit", "На согласование"),
     "a": ("approve", "Согласовать"),
     "r": ("return_for_revision", "Вернуть на доработку"),
-    "c": ("cancel", "Отклонить отправку"),
+    "c": ("cancel", "Отменить письмо"),
     "p": ("queue_delivery", "Подготовить PDF"),
     "t": ("retry_delivery", "Повторить подготовку"),
     "l": ("release_delivery", "Отправить"),
@@ -50,7 +50,7 @@ STATUSES = {
     "approved": "Согласовано",
     "queued": "В очереди робота",
     "sending": "Робот выполняет задание",
-    "awaiting_final_send": "Подписанный PDF ожидает финального решения",
+    "awaiting_final_send": "Подписанный PDF ожидает отправки автором",
     "referent_review_pending": "Готово к отправке референтом",
     "delivery_unknown": "Результат доставки требует проверки",
     "sent": "Отправлено",
@@ -477,6 +477,13 @@ class SharedBot:
                 f"Адрес: {letter.get('recipientAddress') or 'Не указан'}\n"
             )
         )
+        route_names = list(dict.fromkeys(
+            [event["actorName"] for event in sorted(
+                letter.get("events", []), key=lambda event: event.get("createdAt", "")
+            ) if event.get("eventType") == "letter.approve" and event.get("actorName")]
+            + [name for name in (letter.get("reviewerName"), letter.get("finalReviewerName"))
+               if name]
+        ))
         self.system(
             actor,
             "letter-" + letter["id"],
@@ -487,7 +494,11 @@ class SharedBot:
             + f"{number} · {STATUSES[letter['status']]}\n"
             f"{letter['subject'] or letter.get('displayNumber') or 'Тема — исходящий номер'}\n"
             f"{destination}"
-            f"Согласующий: {letter.get('reviewerName') or 'Не назначен'}"
+            f"Отправитель: {letter.get('createdByName') or 'Не указан'}\n"
+            f"Канал: {letter.get('route', '—').upper()}\n"
+            f"Маршрут: {' → '.join(route_names) or 'Не назначен'}"
+            + (" → отправитель (финальная отправка)"
+               if letter.get("workflowKind") != "sign_only" else "")
             + (f"\nКомментарий: {latest}" if latest else "")
             + (f"\nСлужебная заметка: {letter['note']}" if letter.get("note") else "")
             + (f"\n{letter['submissionBlockReason']}"
@@ -503,7 +514,7 @@ class SharedBot:
         result = self.request(
             actor,
             f"/letters?offset={page * 10}&limit=10"
-            + ("&activeOnly=true" if kind == "pending" else "&sentOnly=true"),
+            + ("&activeOnly=true" if kind == "pending" else ""),
         )
         list_offline = self.offline_read
         progress = (
@@ -554,6 +565,12 @@ class SharedBot:
         )
 
     def show_progress(self, actor: str, letter_id: str) -> None:
+        try:
+            self.show(actor, letter_id)
+            return
+        except WorkspaceError as error:
+            if error.status not in {403, 404}:
+                raise
         item = self.request(actor, f"/letters/progress/{UUID(letter_id)}")
         offline_read = self.offline_read or self.offline_active()
         date = item["createdAt"][:16].replace("T", " ")
@@ -686,9 +703,7 @@ class SharedBot:
                     reader, operation["letter_id"]
                 )
                 recipient_ids = [letter["createdByUserId"]]
-                if kind == "letter.prepared" and letter["status"] == "awaiting_final_send":
-                    recipient_ids.append(letter["reviewerUserId"])
-                elif (
+                if (
                     (kind in {"letter.prepared", "letter.dispatched"}
                      and letter["status"] == "referent_review_pending")
                     or kind == "letter.external_result"
@@ -1099,7 +1114,8 @@ class SharedBot:
                         actor,
                         "delete-" + str(UUID(data[1])),
                         "Удалить письмо из общей базы? Оно исчезнет и в Workspace, и в Telegram. "
-                        "Отправленные письма и выполняемую отправку удалять нельзя. "
+                        "Робот очистит локальный журнал. "
+                        "Доставленное письмо у адресата не отзывается. "
                         "Сохраняется журнал удаления.",
                         [
                             [

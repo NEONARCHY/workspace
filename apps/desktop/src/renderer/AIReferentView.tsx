@@ -262,6 +262,12 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
   const replacementFile = replacement?.letterId === selectedId ? replacement.file : undefined;
 
   const selected = detail?.id === selectedId ? detail : registry?.letters.find((letter) => letter.id === selectedId);
+  const selectedReviewRoute = selected ? [...new Set([
+    reviewerConfig?.reviewers.find((reviewer) => reviewer.userId === selected.initialReviewerUserId)?.fullName,
+    ...[...selected.events].sort((first, second) => first.createdAt.localeCompare(second.createdAt))
+      .filter((event) => event.eventType === "letter.approve").map((event) => event.actorName),
+    selected.reviewerName, selected.finalReviewerName,
+  ].filter(Boolean))].join(" → ") : "";
   const selectedAudio = decisionAudio?.letterId === selected?.id && decisionAudio?.revision === selected?.revision ? decisionAudio?.audio : undefined;
   const activeCheck = documentCheck?.file === form.file ? documentCheck : undefined;
   const checkingFile = Boolean(form.file && (!activeCheck?.result || ["pending", "checking"].includes(activeCheck.result.status)));
@@ -923,6 +929,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
                     personName={selected.reviewerName ?? "Не назначен"}
                   ><strong>{selected.reviewerName ?? "Не назначен"}</strong></EmployeeProfileLink></div>
                 </section>
+                <section className="ai-referent-detail-card"><h3>Маршрут согласования</h3><p>{selectedReviewRoute || "Согласующий не назначен"}{selected.workflowKind === "delivery" ? " → отправитель (финальная отправка)" : ""}</p></section>
                 {selected.note ? <section className="ai-referent-detail-card"><h3>Заметка</h3><p>{selected.note}</p></section> : null}
                 </> : null}
                 {detailTab === "files" ?
@@ -987,7 +994,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
                   )) : null}
                 </DialogActions>
                 <div className="ai-referent-detail-confirmations">
-                {!readOnly && deleteConfirmation === selected.id ? <section className="ai-referent-detail-card" aria-label="Подтверждение удаления"><p>Удалить письмо из общей базы Workspace и Telegram? Отправленные письма и выполняемую отправку удалить нельзя. Журнал удаления и резервные файлы сохранятся.</p><Button disabled={busy} onClick={() => {
+                {!readOnly && deleteConfirmation === selected.id ? <section className="ai-referent-detail-card" aria-label="Подтверждение удаления"><p>Удалить письмо из общей базы Workspace, Telegram и локального журнала Exat? Для подготовленного письма робот сначала завершит очистку. Удаление записи не отзывает уже доставленное письмо у адресата. Журнал удаления и резервные файлы сохранятся.</p><Button disabled={busy} onClick={() => {
                   if (busyRef.current) return;
                   busyRef.current = true; setBusy(true); setError("");
                   void deleteAIReferentLetter(token, selected).then(() => { setSelectedId(""); setDeleteConfirmation(""); void refresh(); })

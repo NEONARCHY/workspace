@@ -81,11 +81,14 @@ async def request_deletion(
     )
     if row is None:
         return {"queued": False}
-    if row["created_by_user_id"] != user.id:
+    administrator = user.role in {"admin", "superadmin"}
+    if row["created_by_user_id"] != user.id and not administrator:
         raise HTTPException(403, "Удалить письмо может только автор.")
     if row["revision"] != revision:
         raise HTTPException(409, "Письмо изменилось. Проверьте актуальное состояние.")
-    if row["status"] in {"sent", "signed", "sending", "queued", "delivery_unknown"}:
+    if not administrator and row["status"] in {
+        "sent", "signed", "sending", "queued", "delivery_unknown"
+    }:
         raise HTTPException(
             409,
             "Удаление сейчас небезопасно: письмо исполняется или доставка уже произошла. "
@@ -103,15 +106,29 @@ async def request_deletion(
             created_at=now,
         )
     )
-    if row["outgoing_number"] is None:
+    active_job = await connection.scalar(
+        select(ai_referent_delivery_commands.c.id).where(
+            ai_referent_delivery_commands.c.letter_id == letter_id,
+            ai_referent_delivery_commands.c.status == "claimed",
+        ).limit(1)
+    )
+    if row["outgoing_number"] is None and active_job is None:
         await purge_letter(connection, letter_id)
         return {"queued": False}
     # Robot first closes its compose window and withdraws the local registry row.
+    # Withdraw work that has not started. A claimed job finishes its fenced result
+    # before the single executor can take the cleanup command.
+    await connection.execute(
+        update(ai_referent_delivery_commands).where(
+            ai_referent_delivery_commands.c.letter_id == letter_id,
+            ai_referent_delivery_commands.c.status == "pending",
+        ).values(status="cancelled", updated_at=now)
+    )
     await connection.execute(
         update(ai_referent_letters)
         .where(ai_referent_letters.c.id == letter_id)
         .values(
-            status="queued",
+            status="sending" if active_job is not None else "queued",
             revision=revision + 1,
             updated_at=now,
         )

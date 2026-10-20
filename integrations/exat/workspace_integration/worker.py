@@ -423,7 +423,7 @@ class DeliveryWorker:
             matches = [
                 item
                 for item in self.service.database.list_outgoing_letters()
-                if json.loads(item.get("dry_run_json") or "{}").get("workspace_letter_id")
+                if json.loads(dict(item).get("dry_run_json") or "{}").get("workspace_letter_id")
                 == job["letterId"]
             ]
             if len(matches) > 1:
@@ -431,10 +431,9 @@ class DeliveryWorker:
             if matches:
                 row = matches[0]
                 local_id = row["id"]
-            elif not self.state.get("deleted-local:" + job["letterId"]):
-                raise WorkspaceError(
-                    "Локальная запись не найдена. Удаление требует сверки референта."
-                )
+            else:
+                # A queued prepare can be withdrawn before a local row exists.
+                self.state.put("deleted-local:" + job["letterId"], {"localId": None})
         if job["kind"] == "record_sent":
             if row is None:
                 raise WorkspaceError("Локальный журнал письма отсутствует. Нужна ручная сверка.")
@@ -457,11 +456,13 @@ class DeliveryWorker:
                 job, "sent", "Ручная отправка подтверждена референтом; робот не нажимал Отправить."
             )
         if row is not None:
-            if row["status"] in {"exat_sent", "webmail_sent"}:
+            delivered = row["status"] in {"exat_sent", "webmail_sent", "edo_sent"}
+            if delivered and job["kind"] != "delete":
                 raise WorkspaceError(
                     "Локальный журнал уже содержит отправку. Отмена заблокирована."
                 )
-            close_prepared(self.service, row, self.prepared_handles.get(local_id))
+            if not delivered:
+                close_prepared(self.service, row, self.prepared_handles.get(local_id))
             if job["kind"] == "delete":
                 self.service.database.delete_outgoing_letter(local_id)
                 self.state.put("deleted-local:" + job["letterId"], {"localId": local_id})
