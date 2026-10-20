@@ -48,9 +48,11 @@ describe("WorkspaceSelect", () => {
       <option value="high">Высокий</option><option value="urgent">Срочный</option>
     </WorkspaceSelect>);
     expect(document.querySelector(".workspace-priority-select.priority-normal")).not.toBeNull();
+    expect(document.querySelector(".workspace-priority-select-mark .task-priority-icon.priority-normal")).not.toBeNull();
     fireEvent.click(screen.getByRole("combobox", { name: "Приоритет задачи" }));
     for (const tone of ["low", "normal", "high", "urgent"]) {
       expect(document.querySelector(`.workspace-priority-option.priority-${tone}`)).not.toBeNull();
+      expect(document.querySelector(`.workspace-priority-option-content .task-priority-icon.priority-${tone}`)).not.toBeNull();
     }
   });
 });

@@ -33,6 +33,7 @@ import { RecordComposer, RecordSection, RecordSummary } from "./RecordComposer";
 import { PersonPicker } from "./PersonPicker";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import { WorkspaceSelect } from "./WorkspaceSelect";
+import { TaskPriorityIcon, taskPriorityLabels } from "./TaskPriority";
 import { workspacePlatform } from "./platform-adapter";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { DepartmentIcon } from "./DepartmentIcon";
@@ -65,13 +66,6 @@ interface TaskComposerProps {
     payload: WorkspaceTaskCreateInput,
   ) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
 }
-
-const priorityLabels: Readonly<Record<WorkspaceTask["priority"], string>> = {
-  low: "Низкий",
-  normal: "Обычный",
-  high: "Высокий",
-  urgent: "Срочный",
-};
 
 const cycleLabels: Readonly<Record<TaskCycleInput["scheduleKind"], string>> = {
   daily: "Каждые несколько дней",
@@ -445,7 +439,8 @@ export function TaskComposer({
                 <RecordSummary title="Предварительный просмотр">
                   <div className="task-composer-preview">
                     <span className={`task-priority priority-${priority}`}>
-                      {priorityLabels[priority]} приоритет
+                      <TaskPriorityIcon priority={priority} />
+                      {taskPriorityLabels[priority]} приоритет
                     </span>
                     <strong>{title.trim() || "Название новой задачи"}</strong>
                     <p>{description.trim() || "Добавьте ожидаемый результат и важные детали."}</p>
@@ -549,7 +544,7 @@ export function TaskComposer({
                     value={priority}
                     onChange={(event) => setPriority(event.target.value as WorkspaceTask["priority"])}
                   >
-                    {Object.entries(priorityLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                    {Object.entries(taskPriorityLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                   </WorkspaceSelect>
                 </label>
               </div>
