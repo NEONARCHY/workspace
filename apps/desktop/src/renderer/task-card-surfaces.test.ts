@@ -5,11 +5,16 @@ const css = readFileSync("src/renderer/workspace-2-tasks.css", "utf8");
 const darkSection = css.match(/html\[data-color-theme="dark"\] \.task-record-dialog \.task-detail > :is\([^}]+\{([^}]+)\}/)?.[1] ?? "";
 
 describe("task card surfaces", () => {
-  it("uses the next roughly one-third-larger native avatar sizes in both palettes", () => {
+  it("shows the author before the assignee, compact co-assignees and photo-capable avatars", () => {
     const source = readFileSync("src/renderer/TasksView.tsx", "utf8");
     const participant = source.slice(source.indexOf("function ParticipantChip("));
-    expect(participant).toMatch(/className="task-person-avatar"><Avatar[^>]+size=\{32\}/);
-    expect(source.slice(source.indexOf('<div className="detail-meta">'), source.indexOf('<div ref={lifecycleRef}'))).toMatch(/className="task-person-avatar"><Avatar[^>]+size=\{48\}/);
+    const header = source.slice(source.indexOf('<div className="detail-meta">'), source.indexOf('<div ref={lifecycleRef}'));
+    expect(header.indexOf('label="Постановщик"')).toBeLessThan(header.indexOf('label="Ответственный"'));
+    expect(header).toContain('className="task-detail-co-assignee-list"');
+    expect(header).toContain('role === "co_assignee"');
+    expect(source).toMatch(/className="task-person-avatar"><TaskPersonAvatar[^>]+size=\{48\}/);
+    expect(participant).toMatch(/className="task-person-avatar"><TaskPersonAvatar[^>]+size=\{32\}/);
+    expect(readFileSync("src/renderer/TaskPersonAvatar.tsx", "utf8")).toContain("<ProfileAvatar person={person} token={token}");
   });
   it("paints recessed sections only in dark mode and reserves the shared border box", () => {
     expect(darkSection).toContain("border-color: transparent");
