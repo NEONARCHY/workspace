@@ -1,4 +1,5 @@
 import type { OfficePreviewResult } from "./file-viewer-kind";
+import type { GrantAction, GrantDetail, GrantFields, GrantSettings, GrantSummary } from "@yuksalish/contracts";
 import type {
   ReferenceDirectory, ReferenceExpert, ReferenceExpertFields,
   ReferencePartner, ReferencePartnerFields, ReferenceProfile, ReferenceProfileFields,
@@ -2147,6 +2148,31 @@ export function changeWorkspaceProjectStage(
 
 export function loadProjectHub(token: string): Promise<ProjectHubOverview> {
   return apiRequest<ProjectHubOverview>("/project-hub", {}, token);
+}
+
+export function loadGrants(token: string): Promise<readonly GrantSummary[]> {
+  return apiRequest("/grants", {}, token);
+}
+export function loadGrant(token: string, id: string): Promise<GrantDetail> {
+  return apiRequest(`/grants/${id}`, {}, token);
+}
+export function createGrant(token: string, fields: GrantFields, requestId: string): Promise<GrantDetail> {
+  return apiRequest("/grants", { method: "POST", body: JSON.stringify({ ...fields, requestId }) }, token);
+}
+export function editGrant(token: string, id: string, fields: GrantFields, expectedRevision: number): Promise<GrantDetail> {
+  return apiRequest(`/grants/${id}`, { method: "PUT", body: JSON.stringify({ ...fields, expectedRevision }) }, token);
+}
+export function actOnGrant(token: string, id: string, action: GrantAction): Promise<GrantDetail> {
+  return apiRequest(`/grants/${id}/actions`, { method: "POST", body: JSON.stringify(action) }, token);
+}
+export function loadGrantSettings(token: string): Promise<GrantSettings> {
+  return apiRequest("/grants/settings", {}, token);
+}
+export function changeGrantReviewers(token: string, id: string, leaderUserId: string, chairUserId: string, reason: string, expectedRevision: number): Promise<GrantDetail> {
+  return apiRequest(`/grants/${id}/reviewers`, { method: "PUT", body: JSON.stringify({ leaderUserId, chairUserId, reason, expectedRevision }) }, token);
+}
+export function saveGrantSettings(token: string, leaderUserId: string, chairUserId: string, expectedRevision: number): Promise<GrantSettings> {
+  return apiRequest("/grants/settings", { method: "PUT", body: JSON.stringify({ leaderUserId, chairUserId, expectedRevision }) }, token);
 }
 
 export function loadReferenceDirectory(token: string): Promise<ReferenceDirectory> {

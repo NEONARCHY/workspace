@@ -52,6 +52,7 @@ describe("corporate workspace authentication alpha", () => {
     expect(labels).toEqual([
       "Главная",
       "Задачи",
+      "Гранты",
       "Заявки на оплату",
       "ИИ-модули",
       "Входящие письма",

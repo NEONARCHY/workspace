@@ -64,6 +64,7 @@ async def test_module_catalog_has_all_locales() -> None:
     assert [module["key"] for module in payload["modules"]] == [
         "home",
         "tasks",
+        "grants",
         "team_overview",
         "payment_requests",
         "ai_referent",

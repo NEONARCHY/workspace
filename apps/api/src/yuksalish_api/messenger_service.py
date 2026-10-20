@@ -167,6 +167,10 @@ async def chat_access(
     ) is not None)
     if chat is None or member is None or left_context:
         raise WorkspaceRepositoryError(404, "Чат недоступен")
+    if chat["context_type"] == "grant":
+        from .grant_service import access_grant
+
+        await access_grant(connection, user, chat["context_id"])
     return chat, member
 
 
@@ -180,6 +184,11 @@ def require_group(chat: Record) -> None:
 async def context_chat_finished(connection: AsyncConnection, chat: Record,
                                 *, lock: bool = False) -> bool:
     """Approval finished_at is NOT the trip's actual end date."""
+    if chat["context_type"] == "grant":
+        from .grant_tables import grant_requests
+
+        query = select(grant_requests.c.status).where(grant_requests.c.id == chat["context_id"])
+        return await connection.scalar(query.with_for_update() if lock else query) == "completed"
     if chat["context_type"] == "project":
         query = select(workspace_projects.c.status).where(
             workspace_projects.c.id == chat["context_id"],

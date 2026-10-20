@@ -187,11 +187,19 @@ def request_module_action(path: str, method: str) -> tuple[str, ModuleAction] | 
         return "survey_analytics", "view"
     if normalized.startswith("/hisobot") and not normalized.startswith("/hisobot/bridge"):
         return "ai_hisobot", "create" if upper_method in {"POST", "PUT"} else "view"
+    if normalized == "/grants/settings" and upper_method != "GET":
+        return "grants", "admin"
+    if normalized.startswith("/grants/") and normalized.endswith("/reviewers"):
+        return "grants", "admin"
+    if normalized.startswith("/grants/") and normalized.endswith("/actions"):
+        # The service selects edit/approve from the typed action, then checks its named actor.
+        return "grants", "view"
     prefixes = (
         (("/home",), "home"),
         (("/survey-analyses",), "survey_analytics"),
         (("/messenger/", "/chats/", "/messages/"), "messenger"),
         (("/tasks",), "tasks"),
+        (("/grants",), "grants"),
         (("/task-plans",), "tasks"),
         (("/task-proposals",), "tasks"),
         (("/approval-templates",), "payment_requests"),
@@ -245,6 +253,7 @@ def request_module_action(path: str, method: str) -> tuple[str, ModuleAction] | 
     collection_paths = {
         "/survey-analyses",
         "/tasks",
+        "/grants",
         "/task-plans",
         "/task-proposals",
         "/task-plans/import/preview",

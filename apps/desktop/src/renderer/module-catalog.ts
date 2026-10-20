@@ -8,6 +8,7 @@ export const fallbackModules: readonly ModuleDescriptor[] = [
     route: "/tasks",
     status: "available",
   },
+  { key: "grants", label: { ru: "Гранты", uz_cyrl: "Грантлар", uz_latn: "Grantlar" }, route: "/grants", status: "available" },
   {
     key: "team_overview",
     label: { ru: "Обзор команды", uz_cyrl: "Жамоа шарҳи", uz_latn: "Jamoa sharhi" },

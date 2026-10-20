@@ -2,11 +2,13 @@ export * from "./project-imports";
 export * from "./file-preview";
 export * from "./project-budget";
 export * from "./reference";
+export * from "./grants";
 import type { ProjectBudgetArticle } from "./project-budget";
 
 export const moduleKeys = [
   "home",
   "tasks",
+  "grants",
   "team_overview",
   "payment_requests",
   "ai_referent",
@@ -897,6 +899,7 @@ export type NotificationKind =
 export type NotificationPriority = "normal" | "attention" | "urgent";
 export type NotificationSection = Extract<
   WorkspaceSection,
+  | "grants"
   | "messenger"
   | "tasks"
   | "payment_requests"
@@ -1116,6 +1119,7 @@ export interface ZoomAvailability {
 }
 
 export type AttachmentOwnerType =
+  | "grant"
   | "message"
   | "task"
   | "approval_request"

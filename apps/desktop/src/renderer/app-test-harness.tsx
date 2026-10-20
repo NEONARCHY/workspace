@@ -3,7 +3,7 @@ import { createDOMRenderer, RendererProvider } from "@fluentui/react-components"
 import type { ReactElement } from "react";
 import { disposeTabster, getTabster } from "tabster";
 import { afterEach, vi } from "vitest";
-import type { AIReferentLetter, ApprovalRequestSummary, CalendarEvent, CalendarEventInput, ChatMessage, FeedPost, NotificationPreferences, PaymentRequestDetails, TripRequest, WorkspaceAttachment, WorkspaceProject, WorkspaceNotification, WorkspaceTask } from "@yuksalish/contracts";
+import type { AIReferentLetter, ApprovalRequestSummary, CalendarEvent, CalendarEventInput, ChatMessage, FeedPost, GrantDetail, NotificationPreferences, PaymentRequestDetails, TripRequest, WorkspaceAttachment, WorkspaceProject, WorkspaceNotification, WorkspaceTask } from "@yuksalish/contracts";
 import { initialChats, initialMessages, initialTasks, people } from "./test-fixtures/demo-data";
 import { homeEfficiency, homeRecognition } from "./test-fixtures/personal-home-fixture";
 import { changeField } from "./test-fixtures/rich-editor";
@@ -164,6 +164,7 @@ export function mockServer(
     readonly withSubsidyRequest?: boolean;
     readonly superadminLogin?: boolean;
     readonly chairmanLogin?: boolean;
+    readonly grant?: GrantDetail;
   } = {},
 ) {
   let failApprovalActionOnce = serverOptions.failApprovalActionOnce ?? false;
@@ -353,6 +354,13 @@ export function mockServer(
   };
   const fetchMock = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
     const url = String(input);
+    if (url.endsWith("/grants/settings")) {
+      return response({ leaderUserId: people[1]!.id, chairUserId: people[2]!.id, revision: 1 });
+    }
+    if (url.endsWith("/grants")) return response(serverOptions.grant ? [serverOptions.grant] : []);
+    if (serverOptions.grant && url.endsWith(`/grants/${serverOptions.grant.id}`)) {
+      return response(serverOptions.grant);
+    }
     if (url.endsWith("/auth/login")) {
       const payload = JSON.parse(String(options?.body)) as { username: string };
       const selectedUser = people.find((person) => person.username === payload.username) ?? people[0]!;

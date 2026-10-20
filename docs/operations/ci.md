@@ -66,7 +66,8 @@ node scripts/ci/update-test-timings.mjs RUN_ID
 shell/auth, messaging, notifications, task planning, task review, approvals и
 modules. Общий `app-test-harness.tsx` сохраняет серверные fixtures, renderer и
 одинаковый afterEach (cleanup, Tabster, Griffel, storage,
-globals/mocks). Все 57 исходных объявлений (58 случаев с `it.each`) перенесены
+globals/mocks). Все 57 исходных объявлений (58 случаев с `it.each`) и добавленный
+параллельно сценарий уведомления о гранте (итого 59 случаев) перенесены
 без сокращения проверок. Тест удаления задачи ожидает появление карточки и
 действия удаления при первом холодном открытии раздела, а не зависит от
 предыдущего сценария, прогревшего React.lazy. Первые сценарии создания/удаления
