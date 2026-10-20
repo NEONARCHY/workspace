@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { FluentProvider, webLightTheme } from "@fluentui/react-components";
 import type { LeaveRequest } from "@yuksalish/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -100,7 +100,8 @@ describe("LeaveView", () => {
 
   it("lets HR select organization-only tenure days and preview edited order before approval", async () => {
     api.loadLeaves.mockResolvedValue([{ ...request, organizationEmploymentDate: "2019-11-01" }]);
-    api.previewHrOrder.mockResolvedValue(new Blob(["pdf"], { type: "application/pdf" }));
+    let resolvePreview!: (blob: Blob) => void;
+    api.previewHrOrder.mockReturnValue(new Promise<Blob>(resolve => { resolvePreview = resolve; }));
     view("hr");
     fireEvent.click(await screen.findByRole("button", { name: /Тестова Зебо.*На проверке/ }));
     expect(screen.getByText(/положено 2 дн/)).toBeInTheDocument();
@@ -109,7 +110,10 @@ describe("LeaveView", () => {
     fireEvent.click(screen.getByRole("button", { name: "Посмотреть проект приказа PDF" }));
     await waitFor(() => expect(api.previewHrOrder).toHaveBeenCalledWith("test-token", "leave-1",
       expect.objectContaining({ tenureAdditionalDays: 2, orderClause2: "Исправленный пункт" })));
-    expect(screen.getByText("Встроенный просмотр")).toBeInTheDocument();
+    expect(screen.queryByText("Встроенный просмотр")).not.toBeInTheDocument();
+    expect(api.reviewHr).not.toHaveBeenCalled();
+    await act(async () => { resolvePreview(new Blob(["pdf"], { type: "application/pdf" })); });
+    expect(await screen.findByText("Встроенный просмотр")).toBeInTheDocument();
     expect(api.reviewHr).not.toHaveBeenCalled();
   });
 
