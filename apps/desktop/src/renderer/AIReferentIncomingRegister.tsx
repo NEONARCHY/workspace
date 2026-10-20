@@ -1,6 +1,6 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { SkeletonBlock, SkeletonTableRows } from "./LoadingSkeleton";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState, type RefObject } from "react";
 
 import type {
   AIReferentIncomingLetter,
@@ -45,15 +45,13 @@ function statusLabel(letter: AIReferentIncomingLetter): string {
   return labels[letter.status] ?? letter.status;
 }
 
+const dateTimeFormatter = new Intl.DateTimeFormat("ru-RU", {
+  day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit",
+});
+
 function dateTime(value?: string | null): string {
   if (!value) return "—";
-  return new Intl.DateTimeFormat("ru-RU", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
+  return dateTimeFormatter.format(new Date(value));
 }
 
 function isAttention(letter: AIReferentIncomingLetter): boolean {
@@ -91,7 +89,16 @@ export function AIReferentIncomingRegister({ token, focusLetterId }: AIReferentI
     if (!quiet) { setLoading(true); setError(""); }
     try {
       const next = await loadAIReferentIncomingRegistry(token, { query: search, category: filter, offset: page * 100 });
-      if (sequence === requestSequence.current) setRegistry(next);
+      if (sequence === requestSequence.current) setRegistry(previous => {
+        // Poll/search responses contain fresh objects even when every row is unchanged.
+        // Compare all fields, not only revision: resolved employee names can change too.
+        const sameRows = previous?.letters.length === next.letters.length && previous.letters.every((letter, index) => {
+          const candidate = next.letters[index]!;
+          return Object.keys(letter).length === Object.keys(candidate).length
+            && Object.entries(letter).every(([key, value]) => Object.is(candidate[key as keyof AIReferentIncomingLetter], value));
+        });
+        return sameRows ? { ...next, letters: previous.letters } : next;
+      });
     } catch (reason) {
       if (sequence === requestSequence.current) {
         setError(reason instanceof Error ? reason.message : "Не удалось загрузить входящие письма.");
@@ -206,39 +213,50 @@ export function AIReferentIncomingRegister({ token, focusLetterId }: AIReferentI
                 <th scope="col">Статус</th>
               </tr>
             </thead>
-            {loading && !registry ? <SkeletonTableRows columns={4} rows={7} label="Загружаем входящие письма" /> : <tbody>
-              {letters.map((letter) => (
-                <tr key={letter.id} ref={letter.id === focusLetterId ? focusedRow : undefined}
-                  tabIndex={letter.id === focusLetterId ? -1 : undefined}
-                  aria-label={letter.id === focusLetterId ? "Выбранное входящее письмо" : undefined}
-                  className={`${isAttention(letter) ? "needs-attention" : ""} ${letter.id === focusLetterId ? "is-focused" : ""}`}>
-                  <td>
-                    <strong>{letter.platformIncomingNumber || `№ ${letter.sequenceNumber}`}</strong>
-                    <small>{dateTime(letter.receivedAt)} · {letter.source === "webmail" ? "Webmail" : "E-XAT"}</small>
-                    {letter.senderLetterNumber ? <small title={letter.senderLetterNumber}>Исх. {letter.senderLetterNumber}</small> : null}
-                  </td>
-                  <td className="ai-incoming-subject">
-                    <strong>{letter.subject || "Без темы"}</strong>
-                    <small>{letter.senderOrganization || letter.senderPerson || "Отправитель не определён"} · Ответственный: {letter.responsibleUserName ?? (letter.responsibleDisplayName || "не назначен")}</small>
-                  </td>
-                  <td>
-                    <AIReferentFiles token={token} kind="incoming" ownerId={letter.id}
-                      triggerLabel={fileCountLabel(letter.attachmentsCount)}
-                      letterLabel={`${letter.platformIncomingNumber || letter.sequenceNumber} — ${letter.subject || "Без темы"}`} />
-                    {letter.mainDocumentFilename ? <small title={letter.mainDocumentFilename}>{letter.mainDocumentFilename}</small> : null}
-                  </td>
-                  <td>
-                    <span className={`ai-incoming-status status-${isAttention(letter) ? "attention" : "ok"}`}>
-                      {isAttention(letter) ? <Warning20Regular /> : null}{statusLabel(letter)}
-                    </span>
-                    {letter.errorMessage ? <small title={letter.errorMessage}>{letter.errorMessage}</small> : null}
-                  </td>
-                </tr>
-              ))}
-            </tbody>}
+            {loading && !registry ? <SkeletonTableRows columns={4} rows={7} label="Загружаем входящие письма" /> : <IncomingLetterRows
+              letters={letters} token={token} focusLetterId={focusLetterId} focusedRow={focusedRow} />}
           </table>
         </div>
       ) : null}
     </div>
   );
 }
+
+// Search text, loading and toolbar focus must not rebuild the loaded file dialogs/rows.
+const IncomingLetterRows = memo(function IncomingLetterRows({ letters, token, focusLetterId, focusedRow }: {
+  readonly letters: readonly AIReferentIncomingLetter[];
+  readonly token: string;
+  readonly focusLetterId?: string;
+  readonly focusedRow: RefObject<HTMLTableRowElement | null>;
+}) {
+  return <tbody>
+    {letters.map((letter) => (
+      <tr key={letter.id} ref={letter.id === focusLetterId ? focusedRow : undefined}
+        tabIndex={letter.id === focusLetterId ? -1 : undefined}
+        aria-label={letter.id === focusLetterId ? "Выбранное входящее письмо" : undefined}
+        className={`${isAttention(letter) ? "needs-attention" : ""} ${letter.id === focusLetterId ? "is-focused" : ""}`}>
+        <td>
+          <strong>{letter.platformIncomingNumber || `№ ${letter.sequenceNumber}`}</strong>
+          <small>{dateTime(letter.receivedAt)} · {letter.source === "webmail" ? "Webmail" : "E-XAT"}</small>
+          {letter.senderLetterNumber ? <small title={letter.senderLetterNumber}>Исх. {letter.senderLetterNumber}</small> : null}
+        </td>
+        <td className="ai-incoming-subject">
+          <strong>{letter.subject || "Без темы"}</strong>
+          <small>{letter.senderOrganization || letter.senderPerson || "Отправитель не определён"} · Ответственный: {letter.responsibleUserName ?? (letter.responsibleDisplayName || "не назначен")}</small>
+        </td>
+        <td>
+          <AIReferentFiles token={token} kind="incoming" ownerId={letter.id}
+            triggerLabel={fileCountLabel(letter.attachmentsCount)}
+            letterLabel={`${letter.platformIncomingNumber || letter.sequenceNumber} — ${letter.subject || "Без темы"}`} />
+          {letter.mainDocumentFilename ? <small title={letter.mainDocumentFilename}>{letter.mainDocumentFilename}</small> : null}
+        </td>
+        <td>
+          <span className={`ai-incoming-status status-${isAttention(letter) ? "attention" : "ok"}`}>
+            {isAttention(letter) ? <Warning20Regular /> : null}{statusLabel(letter)}
+          </span>
+          {letter.errorMessage ? <small title={letter.errorMessage}>{letter.errorMessage}</small> : null}
+        </td>
+      </tr>
+    ))}
+  </tbody>;
+});

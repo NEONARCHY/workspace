@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { FluentProvider } from "@fluentui/react-components";
 import { Alert20Regular, Calendar20Regular, Chat20Regular, ReceiptMoney20Regular, Grid20Regular, Video20Regular } from "@fluentui/react-icons";
-import type { ApprovalRequestSummary, CalendarEvent, CalendarEventInput, ChatMessage, OfficeFilePreview, WorkspaceAttachment, WorkspaceDepartment, WorkspaceNotification } from "@yuksalish/contracts";
+import type { ApprovalRequestSummary, CalendarEvent, CalendarEventInput, ChatMessage, OfficeFilePreview, TripRequest, WorkspaceAttachment, WorkspaceDepartment, WorkspaceNotification } from "@yuksalish/contracts";
 import FileViewer from "../src/renderer/FileViewer";
 import { ApprovalsView } from "../src/renderer/ApprovalsView";
 import { CalendarView } from "../src/renderer/CalendarView";
@@ -11,6 +11,7 @@ import { IncomingLettersView } from "../src/renderer/IncomingLettersView";
 import { NotificationCenter } from "../src/renderer/NotificationCenter";
 import { ZoomView } from "../src/renderer/ZoomView";
 import { TripApprovalsView } from "../src/renderer/TripApprovalsView";
+import { AIReferentView } from "../src/renderer/AIReferentView";
 import { SectionJump } from "../src/renderer/SectionJump";
 import { TaskRecords } from "../src/renderer/TaskRecords";
 import { ScrollbarEdges } from "../src/renderer/ScrollbarEdges";
@@ -145,6 +146,14 @@ const requests: ApprovalRequestSummary[] = Array.from({ length: 14 }, (_, i) => 
     requestPriority: "normal", deadline: null, comment: "", tripPurpose: "", tripStartDate: null, tripEndDate: null, employeeIds: [], paymentPurpose: "Оплата за услуги", paymentReason: "Рабочие расходы", responsibleUserId: people[0]!.id },
   createdAt: "2026-10-07T10:00:00Z", updatedAt: "2026-10-07T10:00:00Z", revision: 1, versions: [], actions: [],
 }));
+// Opt-in, read-only lane overflow sample; the default empty-trip preview is unchanged.
+const tripRequests: TripRequest[] = new URLSearchParams(location.search).has("boardStress") ? Array.from({ length: 20 }, (_, i) => ({
+  id: `canvas-trip-${i}`, number: `TR-QA-${i + 1}`, requesterUserId: people[0]!.id,
+  purpose: "Проверка высоты колонок · без серверных записей", destination: "Самарканд",
+  startDate: "2026-10-20", endDate: "2026-10-22", employeeIds: [people[0]!.id],
+  stage: "manager_approval", stageLabel: "Утверждение руководителем", status: "running", statusLabel: "На согласовании",
+  canEdit: false, allowedActions: [], actions: [], createdAt: "2026-10-19T09:00:00Z", updatedAt: "2026-10-19T09:00:00Z",
+})) : [];
 const roots = [
   ["Главная", "workspace-view personal-home"],
   ["Задачи", "workspace-view tasks-view bp5-tasks"], ["Обзор команды", "team-dashboard"],
@@ -257,6 +266,7 @@ function Preview() {
     { id: "tasks", label: "Задачи", icon: <Grid20Regular /> },
     { id: "files", label: "Просмотр файлов", icon: <Grid20Regular /> },
     { id: "letters", label: "Входящие письма", icon: <ReceiptMoney20Regular /> },
+    { id: "referent", label: "AI Referent", icon: <ReceiptMoney20Regular /> },
     { id: "samples", label: "Компоновка разделов", icon: <Grid20Regular /> },
   ];
   return <FluentProvider theme={workspaceTheme} className="app-provider">
@@ -286,12 +296,13 @@ function Preview() {
               chatActions={{ create: async () => initialChats[0]!, update: async () => initialChats[0]!, add: async () => initialChats[0]!, setMember: async () => initialChats[0]!, transfer: async () => initialChats[0]!, remove: nothing, delete: nothing }}
               onSendMessage={sendPreviewMessage} onSendVoiceMessage={nothing} onReactMessage={nothing} onPinMessage={nothing} onEditMessage={nothing} onDeleteMessage={nothing} onCreateTaskFromMessage={nothing} onDownloadAttachment={nothing} onLoadAttachment={async () => new Blob()} onMarkRead={nothing} />
             : section === "zoom" ? <ZoomView token="qa-only" people={zoomPeople} departments={zoomDepartments} currentUserId={people[0]!.id} registry={{ configured: true, timezone: "Asia/Tashkent", reminderMinutes: 30, bookingHorizonDays: 180, slotMinutes: 15, meetings: [] }} loading={false} onRefresh={nothing} />
-             : section === "trips" ? <TripApprovalsView requests={[]} people={people} currentUser={people[0]!} onCreate={nothing} onUpdate={nothing} onAction={nothing} />
+             : section === "trips" ? <TripApprovalsView requests={tripRequests} people={people} currentUser={people[0]!} onCreate={nothing} onUpdate={nothing} onAction={nothing} />
               : section === "team" ? <section className="workspace-view tasks-view bp5-tasks dashboard-mode"><TeamDashboardView token="qa-only" currentUserId={people[0]!.id} people={people} tasks={initialTasks} efficiencyLoading={false} onSelectTask={nothing} /></section>
               : section === "tasks" ? <section className="workspace-view tasks-view bp5-tasks"><TaskRecords tasks={taskSamples} people={people} filterKey="qa" selectedId={selectedTask} onSelect={setSelectedTask} /></section>
               : section === "home" ? <PersonalHomeView token="qa-only" workspace={homeFixture("aziza")} canView={() => true} onOpen={() => undefined} onOpenNotification={() => undefined} onRefresh={nothing} />
               : section === "survey" ? <div style={{ display: "contents" }}><SurveyAnalyticsView token="qa-only" canCreate={false} canEdit={false} /></div>
               : section === "letters" ? <QaIncomingLetters />
+               : section === "referent" ? <AIReferentView token="qa-only" people={people} canCreate />
               : section === "files" ? <section className="qa-canvas-sample-card"><h2>Встроенный просмотрщик · тестовые данные</h2>{previewSamples.map(file => <button key={file.id} onClick={() => setPreviewFile(file)}>{file.fileName}</button>)}</section>
             : <section className={roots[sample]![1]} aria-label={`Макет: ${roots[sample]![0]}`}>
               <WorkspaceSectionHeader motif="tasks"><div><h1>{roots[sample]![0]}</h1><p>Проверка внешнего контейнера, не рабочая страница раздела.</p></div></WorkspaceSectionHeader>
