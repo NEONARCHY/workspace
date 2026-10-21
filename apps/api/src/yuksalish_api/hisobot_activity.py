@@ -1,7 +1,8 @@
 """Private, factual daily report suggestions; never a submission or an AI inference."""
 
 from datetime import UTC, date, datetime, time
-from typing import Any
+from typing import Any, Literal
+from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel
@@ -81,6 +82,10 @@ class ActivityFact(BaseModel):
     module: str
     key: str
     text: str
+    source_type: (
+        Literal["task", "payment", "trip", "project", "hub_project", "hub_funding"] | None
+    ) = None
+    source_id: str = ""
 
 
 def clean_title(value: object) -> str:
@@ -121,8 +126,20 @@ async def collect_activity(
     permissions = await module_permissions_for_user(connection, user)
     facts: dict[str, ActivityFact] = {}
 
-    def add(module: str, key: str, text: str) -> None:
-        facts[key] = ActivityFact(module=module, key=key, text=text)
+    def add(
+        module: str,
+        key: str,
+        text: str,
+        source_type: Literal["task", "payment", "trip", "project", "hub_project", "hub_funding"],
+        source_id: object,
+    ) -> None:
+        facts[key] = ActivityFact(
+            module=module,
+            key=key,
+            text=text,
+            source_type=source_type,
+            source_id=str(source_id),
+        )
 
     def allowed(module: str) -> bool:
         return permissions.get(module, {}).get("view", False)
@@ -171,7 +188,7 @@ async def collect_activity(
                 text = f"Взята в работу задача «{title}»."
             else:
                 continue
-            add("tasks", f"task:{event['task_id']}:{kind}", text)
+            add("tasks", f"task:{event['task_id']}:{kind}", text, "task", event["task_id"])
         checklist = (
             (
                 await connection.execute(
@@ -195,6 +212,8 @@ async def collect_activity(
                 f"checklist:{item['id']}",
                 f"Выполнен пункт «{clean_title(item['title'])}» "
                 f"в задаче «{clean_title(item['task_title'])}».",
+                "task",
+                item["task_id"],
             )
 
     if allowed("payment_requests"):
@@ -223,6 +242,8 @@ async def collect_activity(
                 "payment_requests",
                 key,
                 f"Заявка на оплату «{clean_title(action['title'])}»: {label}.",
+                "payment",
+                action["request_id"],
             )
 
     if allowed("trip_approvals"):
@@ -253,6 +274,8 @@ async def collect_activity(
                 key,
                 f"Заявка на поездку «{clean_title(action['destination'])} — "
                 f"{clean_title(action['purpose'])}»: {label}, стадия «{stage}».",
+                "trip",
+                action["request_id"],
             )
 
     if allowed("projects"):
@@ -283,6 +306,8 @@ async def collect_activity(
                 key,
                 f"Проект «{clean_title(action['title'])}»: "
                 f"{'создан' if action['action'] == 'created' else 'переведён на этап'} «{stage}».",
+                "project",
+                action["project_id"],
             )
 
     if allowed("project_hub"):
@@ -306,6 +331,8 @@ async def collect_activity(
                 "project_hub",
                 f"hub-created:{project['id']}",
                 f"Создан проект «{clean_title(project['title'])}».",
+                "hub_project",
+                project["id"],
             )
         actions = (
             (
@@ -313,6 +340,7 @@ async def collect_activity(
                     select(
                         project_hub_item_actions,
                         project_hub_items.c.title,
+                        project_hub_items.c.project_id,
                         project_hub_projects.c.title.label("project_title"),
                     )
                     .join(
@@ -342,6 +370,8 @@ async def collect_activity(
                 f"hub-item:{action['item_id']}:{action['to_status']}",
                 f"Работа «{clean_title(action['title'])}» в проекте "
                 f"«{clean_title(action['project_title'])}»: {stage.lower()}.",
+                "hub_project",
+                action["project_id"],
             )
         funding = (
             (
@@ -371,6 +401,8 @@ async def collect_activity(
                 "project_hub",
                 key,
                 f"Финансирование проекта «{clean_title(action['title'])}»: {label}.",
+                "hub_funding",
+                action["request_id"],
             )
     return list(facts.values())
 
@@ -408,6 +440,92 @@ async def ensure_activity_draft(
     )
 
 
+async def source_is_visible(
+    connection: AsyncConnection,
+    user: AuthenticatedUser,
+    fact: ActivityFact,
+) -> bool:
+    """Reuse domain guards; a daily diary must not restore revoked object access."""
+    from .project_hub_service import _require_project
+    from .repository import (
+        WorkspaceRepositoryError,
+        _active_stages_for_requests,
+        _task_access_row,
+        get_trip_request,
+    )
+
+    try:
+        source_id = UUID(fact.source_id)
+    except ValueError:
+        return False
+    try:
+        if fact.source_type == "task":
+            await _task_access_row(connection, user, source_id)
+            return True
+        if fact.source_type == "trip":
+            await get_trip_request(connection, user, source_id)
+            return True
+        if fact.source_type == "hub_project":
+            await _require_project(connection, user, source_id)
+            return True
+        if fact.source_type == "hub_funding":
+            row = (
+                (
+                    await connection.execute(
+                        select(project_hub_requests).where(
+                            project_hub_requests.c.id == source_id,
+                        )
+                    )
+                )
+                .mappings()
+                .first()
+            )
+            if row is None or (row["status"] == "draft" and row["requester_user_id"] != user.id):
+                return False
+            project = await _require_project(connection, user, row["project_id"])
+            return (
+                user.role in {"admin", "superadmin"}
+                or user.id in {project["manager_user_id"], row["requester_user_id"]}
+                or str(user.id) in row["approver_ids"]
+            )
+        if fact.source_type == "payment":
+            row = (
+                (
+                    await connection.execute(
+                        select(approval_requests).where(
+                            approval_requests.c.id == source_id,
+                        )
+                    )
+                )
+                .mappings()
+                .first()
+            )
+            if row is None:
+                return False
+            if user.role != "employee" or user.id in {
+                row["requester_user_id"],
+                row["responsible_user_id"],
+            }:
+                return True
+            stages = await _active_stages_for_requests(connection, [row], user)
+            return any(stage.can_act for stage in stages.get(source_id, []))
+        if fact.source_type == "project":
+            # Legacy projects have module-wide read access; still exclude deleted rows.
+            return (
+                await connection.scalar(
+                    select(workspace_projects.c.id).where(
+                        workspace_projects.c.id == source_id,
+                    )
+                )
+                is not None
+            )
+        return False
+    except WorkspaceRepositoryError as error:
+        if error.status_code in {403, 404}:
+            return False
+        raise
+
+
 async def read_activity_draft(
     connection: AsyncConnection,
     user: AuthenticatedUser,
@@ -430,13 +548,21 @@ async def read_activity_draft(
     permissions = await module_permissions_for_user(connection, user)
     if not permissions.get("ai_hisobot", {}).get("view", False):
         return None
-    # A personal work diary, not a way to regain access to a disabled module.
+    # Recheck module and object access after reassignment, deletion or team changes.
     raw_facts: list[dict[str, Any]] = row["facts"]
-    facts = [
+    candidates = [
         ActivityFact.model_validate(fact)
         for fact in raw_facts
         if permissions.get(fact["module"], {}).get("view", False)
     ]
+    facts: list[ActivityFact] = []
+    visible: dict[tuple[str | None, str], bool] = {}
+    for fact in candidates:
+        source = (fact.source_type, fact.source_id)
+        if source not in visible:
+            visible[source] = await source_is_visible(connection, user, fact)
+        if visible[source]:
+            facts.append(fact)
     content, omitted = render_report(day, facts)
     return HisobotActivityDraft(
         report_date=day,

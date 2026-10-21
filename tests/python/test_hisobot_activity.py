@@ -2,6 +2,7 @@
 
 import asyncio
 from datetime import UTC, date, datetime
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
@@ -27,6 +28,7 @@ def rows(value: list[dict[str, object]]) -> MagicMock:
     result = MagicMock()
     result.mappings.return_value.all.return_value = value
     result.mappings.return_value.one_or_none.return_value = value[0] if value else None
+    result.mappings.return_value.first.return_value = value[0] if value else None
     return result
 
 
@@ -101,7 +103,12 @@ def test_actor_history_differentiate_completed_review_and_checklist(
         rows(event_rows),
         rows(
             [
-                {"id": "point", "title": "Проверить договор", "task_title": "Поставка"},
+                {
+                    "id": "point",
+                    "task_id": "a",
+                    "title": "Проверить договор",
+                    "task_title": "Поставка",
+                },
             ]
         ),
     ]
@@ -159,6 +166,7 @@ def test_payments_trips_and_both_project_models_use_real_actions(
             [
                 {
                     "item_id": "item",
+                    "project_id": "hub",
                     "to_status": "completed",
                     "title": "Работа",
                     "project_title": "Проект",
@@ -212,6 +220,8 @@ def test_snapshot_insert_handles_concurrent_retry(monkeypatch: pytest.MonkeyPatc
 
 def test_read_is_private_and_redacts_revoked_module(monkeypatch: pytest.MonkeyPatch) -> None:
     owner = user()
+    visibility = AsyncMock(return_value=True)
+    monkeypatch.setattr(activity, "source_is_visible", visibility)
     connection = AsyncMock(spec=AsyncConnection)
     connection.execute.return_value = rows(
         [
@@ -219,7 +229,13 @@ def test_read_is_private_and_redacts_revoked_module(monkeypatch: pytest.MonkeyPa
                 "generated_at": datetime(2026, 10, 21, 12, 40, tzinfo=UTC),
                 "seen_at": None,
                 "facts": [
-                    {"module": "tasks", "key": "allowed", "text": "Своя задача"},
+                    {
+                        "module": "tasks",
+                        "key": "allowed",
+                        "text": "Своя задача",
+                        "source_type": "task",
+                        "source_id": str(owner.id),
+                    },
                     {"module": "payment_requests", "key": "revoked", "text": "Скрытая заявка"},
                 ],
             }
@@ -239,6 +255,10 @@ def test_read_is_private_and_redacts_revoked_module(monkeypatch: pytest.MonkeyPa
     assert draft is not None and draft.activity_count == 1
     assert "Своя задача" in draft.content and "Скрытая заявка" not in draft.content
     assert owner.id in connection.execute.await_args.args[0].compile().params.values()
+    visibility.assert_awaited_once()
+    visibility.return_value = False
+    hidden = asyncio.run(activity.read_activity_draft(connection, owner, date(2026, 10, 21)))
+    assert hidden is not None and hidden.activity_count == 0 and hidden.content == ""
     monkeypatch.setattr(
         activity,
         "module_permissions_for_user",
@@ -249,3 +269,96 @@ def test_read_is_private_and_redacts_revoked_module(monkeypatch: pytest.MonkeyPa
         ),
     )
     assert asyncio.run(activity.read_activity_draft(connection, owner, date(2026, 10, 21))) is None
+
+
+def test_object_guards_redact_reassignment_and_closed_project(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from yuksalish_api import project_hub_service, repository
+
+    connection = AsyncMock(spec=AsyncConnection)
+    owner = user()
+    guard = AsyncMock(side_effect=repository.WorkspaceRepositoryError(404, "Not visible"))
+    monkeypatch.setattr(repository, "_task_access_row", guard)
+    monkeypatch.setattr(project_hub_service, "_require_project", guard)
+    monkeypatch.setattr(repository, "get_trip_request", guard)
+    for source_type in ("task", "hub_project", "trip"):
+        fact = activity.ActivityFact.model_validate(
+            {
+                "module": "tasks",
+                "key": "a",
+                "text": "Private title",
+                "source_type": source_type,
+                "source_id": str(uuid4()),
+            }
+        )
+        assert not asyncio.run(activity.source_is_visible(connection, owner, fact))
+    guard.side_effect = repository.WorkspaceRepositoryError(409, "Real domain failure")
+    with pytest.raises(repository.WorkspaceRepositoryError):
+        asyncio.run(activity.source_is_visible(connection, owner, fact))
+    # Malformed/legacy snapshots must not silently bypass object checks.
+    assert not asyncio.run(
+        activity.source_is_visible(
+            connection,
+            owner,
+            activity.ActivityFact(
+                module="tasks",
+                key="legacy",
+                text="Unknown source",
+            ),
+        )
+    )
+
+
+@pytest.mark.parametrize("source_type", ["payment", "hub_funding", "project"])
+def test_request_and_project_snapshot_visibility(
+    monkeypatch: pytest.MonkeyPatch,
+    source_type: str,
+) -> None:
+    from yuksalish_api import project_hub_service, repository
+
+    owner = user()
+    other = uuid4()
+    source_id = uuid4()
+    connection = AsyncMock(spec=AsyncConnection)
+    fact = activity.ActivityFact.model_validate(
+        {
+            "module": "projects",
+            "key": "source",
+            "text": "Private title",
+            "source_type": source_type,
+            "source_id": str(source_id),
+        }
+    )
+    source = {
+        "requester_user_id": other,
+        "responsible_user_id": other,
+        "project_id": uuid4(),
+        "approver_ids": [],
+        "status": "pending",
+    }
+    connection.execute.return_value = rows([source])
+    connection.scalar.return_value = None
+    stages = AsyncMock(return_value={source_id: []})
+    monkeypatch.setattr(repository, "_active_stages_for_requests", stages)
+    monkeypatch.setattr(
+        project_hub_service,
+        "_require_project",
+        AsyncMock(
+            return_value={"manager_user_id": other},
+        ),
+    )
+    assert not asyncio.run(activity.source_is_visible(connection, owner, fact))
+    connection.scalar.return_value = source_id
+    source["requester_user_id"] = owner.id
+    assert asyncio.run(activity.source_is_visible(connection, owner, fact))
+    source["requester_user_id"] = other
+    source["approver_ids"] = [str(owner.id)]
+    stages.return_value = {source_id: [SimpleNamespace(can_act=True)]}
+    assert asyncio.run(activity.source_is_visible(connection, owner, fact))
+    if source_type == "hub_funding":
+        source["status"] = "draft"
+        assert not asyncio.run(activity.source_is_visible(connection, owner, fact))
+    connection.execute.return_value = rows([])
+    connection.scalar.return_value = None
+    assert not asyncio.run(activity.source_is_visible(connection, owner, fact))
