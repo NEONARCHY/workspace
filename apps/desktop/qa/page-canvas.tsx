@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { FluentProvider } from "@fluentui/react-components";
+import { Button, FluentProvider } from "@fluentui/react-components";
 import { Alert20Regular, Calendar20Regular, Chat20Regular, ReceiptMoney20Regular, Grid20Regular, Video20Regular } from "@fluentui/react-icons";
 import type { ApprovalRequestSummary, CalendarEvent, CalendarEventInput, ChatMessage, OfficeFilePreview, TripRequest, WorkspaceAttachment, WorkspaceDepartment, WorkspaceNotification } from "@yuksalish/contracts";
 import FileViewer from "../src/renderer/FileViewer";
@@ -95,6 +95,39 @@ import "../src/renderer/page-scroll-layout.css";
 import "./page-canvas.css";
 
 const nothing = async () => undefined;
+// Synthetic heading/action matrix exercises the production CSS cascade only.
+const headerSamples = [
+  { root: "approvals-view", motif: "payments", title: "Заявки на оплату", actions: ["Новая заявка"], tabs: ["Текущие заявки", "Конструктор маршрутов"] },
+  { root: "trips-view", motif: "trips", title: "Согласование поездок", actions: ["Интерактивная карта поездок", "Новая командировка"], tabs: ["Текущие поездки", "Конструктор маршрутов"] },
+  { root: "leave-view", motif: "absences", title: "Отпуска", actions: ["Обновить", "Новое заявление"] },
+  { root: "employees-view", motif: "employees", title: "Сотрудники", actions: ["Пригласить сотрудника"] },
+  { root: "absences-view", motif: "absences", title: "Отсутствия", actions: ["Сообщить об отсутствии"] },
+  { root: "hr-view", motif: "hr", title: "HR · Кадровое пространство", actions: ["Обновить"] },
+  { root: "members-view", motif: "members", title: "Работа с членами", actions: ["Обновить"] },
+  { root: "zoom-view", motif: "zoom", title: "Zoom-конференции", actions: ["Обновить", "Новая конференция"] },
+  { root: "telegram-access-view", motif: "telegram", title: "Доступ к Telegram-ботам", actions: ["Обновить список"] },
+] as const;
+
+function QaCompactHeaders() {
+  const [lastAction, setLastAction] = useState("");
+  return <div className="qa-header-matrix">
+    <output data-header-result>{lastAction}</output>
+    {headerSamples.map(sample => <section key={sample.root} className={`workspace-view ${sample.root}`} style={{ height: "auto", minHeight: 0, padding: 0, marginBottom: 16 }}>
+      <WorkspaceSectionHeader motif={sample.motif}>
+        <div><span className="view-kicker">Рабочее пространство · управление</span><h1>{sample.title}</h1>
+          <p>Описание раздела и рабочего процесса. В компактном режиме основное пространство отдано данным и действиям.</p>
+          {"tabs" in sample && <div className="process-view-tabs">{sample.tabs.map(tab => <button key={tab} onClick={() => setLastAction(tab)}>{tab}</button>)}</div>}
+        </div>
+        <div className="toolbar-actions">{sample.actions.map(action => <Button key={action} onClick={() => setLastAction(action)}>{action}</Button>)}</div>
+      </WorkspaceSectionHeader>
+    </section>)}
+    {[["edo-incoming", "edo-incoming-header", "Входящие письма"], ["survey-analytics", "survey-heading", "Аналитика опросов"]].map(([root, header, title]) =>
+      <section key={root} className={`workspace-view ${root}`} style={{ height: "auto", minHeight: 0, padding: 0, marginBottom: 16 }}>
+        <header className={header}><div><span className="survey-eyebrow">ЛИЧНОЕ РАБОЧЕЕ ПРОСТРАНСТВО</span><h1>{title}</h1><p>Пояснение к разделу.</p></div>
+          <Button onClick={() => setLastAction("Обновить список")}>Обновить список</Button></header>
+      </section>)}
+  </div>;
+}
 const jumpItems = [
   ["home", "Главная"], ["tasks", "Задачи"], ["team_overview", "Обзор команды"],
   ["payment_requests", "Заявки на оплату"], ["ai_referent", "AI Referent"],
@@ -303,7 +336,8 @@ function Preview() {
               : section === "tasks" ? <section className="workspace-view tasks-view bp5-tasks"><TaskRecords tasks={taskSamples} people={people} filterKey="qa" selectedId={selectedTask} onSelect={setSelectedTask} /></section>
               : section === "home" ? <PersonalHomeView token="qa-only" workspace={homeFixture("aziza")} canView={() => true} onOpen={() => undefined} onOpenNotification={() => undefined} onRefresh={nothing} />
               : section === "survey" ? <div style={{ display: "contents" }}><SurveyAnalyticsView token="qa-only" canCreate={false} canEdit={false} /></div>
-              : section === "letters" ? <QaIncomingLetters />
+               : section === "headers" ? <QaCompactHeaders />
+               : section === "letters" ? <QaIncomingLetters />
                : section === "referent" ? <AIReferentView token="qa-only" people={people} canCreate />
               : section === "files" ? <section className="qa-canvas-sample-card"><h2>Встроенный просмотрщик · тестовые данные</h2>{previewSamples.map(file => <button key={file.id} onClick={() => setPreviewFile(file)}>{file.fileName}</button>)}</section>
             : <section className={roots[sample]![1]} aria-label={`Макет: ${roots[sample]![0]}`}>
