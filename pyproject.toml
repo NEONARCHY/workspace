@@ -19,7 +19,7 @@ dependencies = [
   "minio==7.2.20",
   "openpyxl==3.1.5",
   "xlrd==2.0.2",
-  "Pillow==12.3.0",
+  "Pillow==13.0.0",
   "pillow-heif==1.7.0",
   "python-multipart==0.0.32",
   "pydantic-settings==2.15.0",
