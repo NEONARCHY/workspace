@@ -10,6 +10,21 @@ cards, dialogs, login or account settings.
 
 ## Shared grammar
 
+### Compact web headers — 21 October 2026
+
+Phones/tablets use title-and-actions headers, not desktop hero proportions.
+At up to 1023 CSS px, or 1366 px with a coarse pointer, the shared banner loses
+its desktop 116 px minimum, uses 10 px vertical padding and 22 px titles, and
+hides decorative illustrations, kickers and explanatory copy. Existing actions
+and mode tabs remain mounted, wrap naturally and retain at least 44 px touch
+targets. Incoming letters and survey analytics use the same compact rhythm
+without gaining a decorative banner. Desktop geometry is unchanged.
+
+The global “Перейти в раздел” trigger is hidden only at phone widths up to
+600 CSS px (also short landscape touch viewports up to 1023×500). Tablets keep it;
+the navigation menu, local searches and keyboard
+command dialog are unchanged. No dropdown/extra tap is needed for header actions.
+
 - One page header, normally at least 148 px high; compact container layouts use
   138 px. The messenger keeps a smaller banner inside its existing chat pane.
 - White headings and pale supporting text on a bounded navy/teal gradient.

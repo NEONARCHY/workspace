@@ -47,6 +47,7 @@ import "../src/renderer/workspace-select-motion.css";
 import "../src/renderer/workspace-modal-backdrops.css";
 import "../src/renderer/notification-bell.css";
 import "../src/renderer/topbar-insights.css";
+import "../src/renderer/mobile-density.css";
 // Local synthetic responses; no live mutations or employee accounts.
 document.documentElement.classList.add("web-platform");
 const state = new URLSearchParams(location.search).get("state");
