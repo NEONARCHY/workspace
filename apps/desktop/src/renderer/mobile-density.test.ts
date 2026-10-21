@@ -30,6 +30,19 @@ describe("compact browser density", () => {
     expect(entry.indexOf('"./mobile-density.css"')).toBeGreaterThan(entry.indexOf('"./topbar-insights.css"'));
     expect(entry.indexOf('"./mobile-density.css"')).toBeGreaterThan(entry.indexOf('"./satin-surfaces.css"'));
   });
+  it("overrides the desktop banner height lock without shrinking touch targets", () => {
+    expect(css).toContain("html.web-platform:root body .app-provider :is(.workspace-view, .team-dashboard, .telegram-access-view) .ws-section-header");
+    expect(css).toContain("min-height: 0; height: auto; margin-bottom: 8px; padding: 10px 12px");
+    expect(css).toContain(".ws-section-header :is(button, .telegram-access-secondary) { min-width: 44px; min-height: 44px");
+    expect(css).toContain(".ws-section-header-art, .ws-illustrated-header-art) { display: none; }");
+    expect(css).toContain(":is(.edo-incoming-header, .survey-heading) h1");
+    expect(css).toContain(".hisobot-help-button { position: static; flex: none; align-self: center;");
+  });
+  it("hides only the global command trigger on phone widths, retaining tablet access", () => {
+    const phone = css.slice(css.indexOf("@media (max-width: 600px)"));
+    expect(phone).toContain(".web-platform .global-bar .section-jump-trigger { display: none; }");
+    expect(css.slice(0, css.indexOf("@media (max-width: 600px)"))).not.toContain(".section-jump-trigger { display: none");
+  });
   it("gives the production team wrapper a vertical scroll and keeps register tabs horizontal", () => {
     expect(css).toContain(".app-content > .tasks-view.dashboard-mode { display: block; min-height: 0; max-height: 100%; overflow-y: auto;");
     expect(css).toMatch(/ai-referent-register-tabs[^{}]*\{[^}]*flex-wrap: nowrap[^}]*overflow-x: auto/);

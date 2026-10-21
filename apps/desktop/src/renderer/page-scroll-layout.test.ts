@@ -34,6 +34,13 @@ describe("Shared page scroll rail", () => {
     expect(css).toContain("--ws-page-content-inset: 12px; padding: 12px");
     expect(css).toContain("contain: strict");
   });
+  it("keeps the bounded feed grid centered within the page scroll owner", () => {
+    const css = read("page-scroll-layout.css");
+    const feed = css.match(/\.app-shell \.app-content > \.feed-view \{([^}]+)\}/)?.[1];
+    expect(feed).toContain("justify-content: center");
+    expect(feed).not.toMatch(/justify-content:\s*(?:end|flex-end)/);
+    expect(read("styles.css")).toContain("grid-template-columns: minmax(0, 760px) 270px");
+  });
   it("does not re-style nested lists, mini messenger, dialogs, colours or motion", () => {
     const css = read("page-scroll-layout.css");
     expect(css).not.toMatch(/!important|background\s*:|border-radius\s*:|animation\s*:|transition\s*:/);
