@@ -110,6 +110,7 @@ from yuksalish_api.tables import (
     audit_events,
     chat_members,
     chats,
+    task_checklist_items,
     task_cycles,
     tasks,
     trip_requests,
@@ -598,6 +599,19 @@ async def _exercise_live_workspace(database_url: str) -> None:
                 UpdateChecklistItemRequest(is_completed=True),
             )
             assert task.checklist_done == 1
+            completion = (await connection.execute(select(task_checklist_items).where(
+                task_checklist_items.c.id == checklist_id,
+            ))).mappings().one()
+            # A retry by another authorized editor must retain the real actor and day.
+            await update_task_checklist_item(
+                connection, aziza, UUID(task.id), checklist_id,
+                UpdateChecklistItemRequest(is_completed=True),
+            )
+            repeated = (await connection.execute(select(task_checklist_items).where(
+                task_checklist_items.c.id == checklist_id,
+            ))).mappings().one()
+            assert repeated["completed_at"] == completion["completed_at"]
+            assert repeated["completed_by_user_id"] == dilshod_auth.id
             disposable = await add_task_checklist_item(
                 connection,
                 aziza,

@@ -11,7 +11,8 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from .auth import AuthenticatedUser
+from .auth import AuthenticatedUser, load_authenticated_user
+from .hisobot_activity import ensure_activity_draft, read_activity_draft
 from .hisobot_schemas import (
     BridgeReport,
     BridgeReportExemption,
@@ -172,6 +173,10 @@ async def profile(connection: AsyncConnection, user: AuthenticatedUser,
         unit=unit,
         today_unit_report=_unit_report(today_unit_report) if today_unit_report else None,
         covered_by_report=covered,
+        activity_draft=(await read_activity_draft(connection, user, current.date())
+                        if grant["report_required"] and not covered
+                        and absence_kind is None
+                        and report_window_status(current) != "closed" else None),
         is_overdue=bool(grant["report_required"] and not covered and not absence_kind
                         and report_window_status(current) == "late"),
     )
@@ -794,10 +799,16 @@ async def materialize_hisobot_reminders(connection: AsyncConnection,
             workspace_notifications.c.event_key == event_key,
         )):
             continue
+        draft_owner = await load_authenticated_user(connection, user_id)
+        if draft_owner is None:
+            continue
+        await ensure_activity_draft(connection, draft_owner, current)
         await _upsert_notification(
             connection, user_id=user_id, event_key=event_key, kind="hisobot",
-            priority="attention", title="AI Hisobot · отчёт не сдан",
-            body="Отправьте ежедневный отчёт до 18:30. После отправки напоминания прекратятся.",
+            priority="attention", title="AI Hisobot · черновик отчёта готов",
+            body=("Собрали черновик по вашим действиям в Workspace. "
+                  "Проверьте, дополните и отправьте отчёт до 18:30. "
+                  "Самостоятельно ничего не отправляется."),
             section="ai_hisobot", entity_id=None, requires_action=True,
             occurred_at=current, is_reminder=True,
         )

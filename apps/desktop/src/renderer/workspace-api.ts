@@ -1,4 +1,5 @@
 import type { OfficePreviewResult } from "./file-viewer-kind";
+import type { HisobotActivityDraft } from "@yuksalish/contracts";
 import type { MailConnection, MailConnect, MailConnectStatus, MailPage, MailThread, MailDraft, MailDraftSummary, MailDraftWrite, MailSignedFile, MailTaskExport } from "@yuksalish/contracts";
 import type { GrantAction, GrantDetail, GrantFields, GrantSettings, GrantSummary } from "@yuksalish/contracts";
 import type {
@@ -569,6 +570,16 @@ export function saveTelegramAccess(
 
 export function loadHisobotProfile(token: string): Promise<HisobotProfile> {
   return apiRequest<HisobotProfile>("/hisobot/me", {}, token);
+}
+
+export function loadHisobotActivityDraft(token: string): Promise<HisobotActivityDraft | null> {
+  return apiRequest<HisobotActivityDraft | null>("/hisobot/me/activity-draft", {}, token);
+}
+
+export function acknowledgeHisobotActivityDraft(token: string, reportDate: string): Promise<void> {
+  return apiRequest<void>("/hisobot/me/activity-draft/seen", {
+    method: "POST", body: JSON.stringify({ reportDate }),
+  }, token);
 }
 
 export function saveHisobotReport(token: string, content: string): Promise<HisobotReport> {

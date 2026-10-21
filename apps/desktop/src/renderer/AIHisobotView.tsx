@@ -16,9 +16,11 @@ import type { HisobotProfile, HisobotReport, HisobotUnitReport } from "@yuksalis
 import {
   loadHisobotHistory, loadHisobotProfile, loadHisobotReports, loadHisobotUnitHistory,
   loadHisobotUnitReports, saveHisobotReport, saveHisobotUnitReport,
+  acknowledgeHisobotActivityDraft,
 } from "./workspace-api";
 import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
 import { SlidingSegmented } from "./SlidingSegmented";
+import type { HisobotDraftHandoff } from "./HisobotDraftPrompt";
 
 const dateLabel = (value: string) => value.split("-").reverse().join(".");
 const errorText = (error: unknown) => error instanceof Error ? error.message : "Не удалось загрузить AI Hisobot.";
@@ -46,7 +48,11 @@ function UnitReportCard({ report }: { readonly report: HisobotUnitReport }) {
   </article>;
 }
 
-export function AIHisobotView({ token }: { readonly token: string }) {
+export function AIHisobotView({ token, incomingDraft, onDraftHandled }: {
+  readonly token: string;
+  readonly incomingDraft?: HisobotDraftHandoff;
+  readonly onDraftHandled?: () => void;
+}) {
   const [profile, setProfile] = useState<HisobotProfile>();
   const [history, setHistory] = useState<readonly HisobotReport[]>([]);
   const [unitHistory, setUnitHistory] = useState<readonly HisobotUnitReport[]>([]);
@@ -65,6 +71,9 @@ export function AIHisobotView({ token }: { readonly token: string }) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [helpOpen, setHelpOpen] = useState(false);
+  const [pendingDraftText, setPendingDraftText] = useState<string>();
+  const handledDraft = useRef<number | undefined>(undefined);
+  const reportTextRef = useRef<HTMLTextAreaElement>(null);
   const helpButtonRef = useRef<HTMLButtonElement>(null);
   const helpCloseRef = useRef<HTMLButtonElement>(null);
   const [startDate, setStartDate] = useState(() => {
@@ -72,6 +81,24 @@ export function AIHisobotView({ token }: { readonly token: string }) {
     return day.toLocaleDateString("sv-SE");
   });
   const [endDate, setEndDate] = useState(() => new Date().toLocaleDateString("sv-SE"));
+
+  useEffect(() => {
+    if (!profile || !incomingDraft || handledDraft.current === incomingDraft.revision) return undefined;
+    const timer = window.setTimeout(() => {
+      handledDraft.current = incomingDraft.revision;
+      if (incomingDraft.reportDate !== profile.today) {
+        setError("Черновик относится к другому дню. Ваш текст сохранён; проверьте дату отчёта.");
+      } else if (!dirty && !content.trim() && !profile.todayReport) {
+        setContent(incomingDraft.content); setDirty(Boolean(incomingDraft.content.trim()));
+        setTab("today"); reportTextRef.current?.focus();
+      } else {
+        setPendingDraftText(incomingDraft.content);
+        setNotice("Ваш текст сохранён. Подготовленный черновик можно добавить ниже.");
+      }
+      onDraftHandled?.();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [profile, incomingDraft, onDraftHandled, dirty, content]);
 
   const refresh = useCallback(async () => {
     const [nextProfile, nextHistory, nextUnitHistory] = await Promise.all([
@@ -143,6 +170,17 @@ export function AIHisobotView({ token }: { readonly token: string }) {
   ), [teamUnitReports, scope, query]);
   const ownUnitReport = profile && profile.todayUnitReport?.reporterTelegramId === profile.telegramId
     ? profile.todayUnitReport : null;
+  const offeredDraft = pendingDraftText ?? profile?.activityDraft?.content;
+  const useActivityDraft = () => {
+    if (!offeredDraft) return;
+    setContent(existing => existing.trim() ? `${existing.trimEnd()}\n\n${offeredDraft}` : offeredDraft);
+    setDirty(true); setPendingDraftText(undefined);
+    setNotice("Черновик добавлен. Проверьте текст перед отправкой.");
+    if (profile?.activityDraft) void acknowledgeHisobotActivityDraft(token, profile.today).catch(() => {
+      setError("Текст добавлен, но отметка о просмотре не сохранена. Предложение может появиться снова.");
+    });
+    reportTextRef.current?.focus();
+  };
 
   const save = async () => {
     setBusy(true); setError(""); setNotice("");
@@ -224,8 +262,18 @@ export function AIHisobotView({ token }: { readonly token: string }) {
           <div className="hisobot-panel-heading"><span><DocumentBulletList24Regular /> Отчёт за {dateLabel(profile.today)}</span><strong>{profile.todayReport || ownUnitReport ? "Получен" : "Ожидается"}</strong></div>
           <p className="hisobot-panel-description">{profile.reportScope === "hudud" ? `${profile.regionName} · ` : "Центральный аппарат · "}{employeeDisplayName(profile.fullName)}</p>
           {profile.reportRequired && !ownUnitReport ? <>
+            {(profile.activityDraft || pendingDraftText !== undefined) && <section className="hisobot-activity-draft" aria-label="Черновик по действиям в Workspace">
+              <DocumentBulletList24Regular aria-hidden="true" />
+              <div><strong>Черновик по вашим действиям в Workspace</strong><p>{profile.activityDraft?.activityCount === 0 && !pendingDraftText
+                ? "Подтверждённых действий за сегодня пока нет. Добавьте выполненную работу вручную."
+                : "Проверьте готовый текст и дополните работу вне системы. Ваш текущий текст не заменяется."}</p>
+                {Boolean(profile.activityDraft?.omittedCount) && <p>Не включено из-за ограничения длины: {profile.activityDraft?.omittedCount} действий.</p>}
+                {offeredDraft && <details><summary>Показать готовый текст</summary><pre>{offeredDraft}</pre></details>}
+              </div>
+              <button type="button" onClick={useActivityDraft} disabled={!offeredDraft || !profile.canSubmit || busy || content.includes(offeredDraft)}>{content.trim() ? "Добавить к моему тексту" : "Использовать черновик"}</button>
+            </section>}
             <label htmlFor="hisobot-report-text">{profile.todayReport ? "Чтобы исправить или дополнить, измените полный текст отчёта:" : "Опишите выполненные задачи одним текстовым сообщением:"}</label>
-            <textarea id="hisobot-report-text" value={content} onChange={(event) => { setContent(event.target.value); setDirty(true); }} disabled={!profile.canSubmit || busy} placeholder={"1. Текст первой выполненной задачи.\n2. Текст второй выполненной задачи.\n3. Текст третьей выполненной задачи."} />
+            <textarea ref={reportTextRef} id="hisobot-report-text" value={content} onChange={(event) => { setContent(event.target.value); setDirty(true); }} disabled={!profile.canSubmit || busy} placeholder={"1. Текст первой выполненной задачи.\n2. Текст второй выполненной задачи.\n3. Текст третьей выполненной задачи."} />
             <div className="hisobot-compose-footer"><span>{content.trim().length} символов</span><button type="button" onClick={() => void save()} disabled={!profile.canSubmit || busy || content.trim().length < 3 || content.length > 20_000 || !dirty}>{busy ? "Сохраняем…" : profile.todayReport ? "Сохранить изменения" : "Отправить отчёт"}</button></div>
             {notice ? <p className="hisobot-success" role="status">{notice}</p> : null}
           </> : !profile.reportRequired && !ownUnitReport ? <p className="hisobot-exempt">Для вас сдача ежедневного отчёта не обязательна. История и доступные сводки остаются в меню.</p> : null}

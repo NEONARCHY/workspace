@@ -1,12 +1,14 @@
 """Employee Hisobot UI API and authenticated bot-to-server bridge."""
 
 import hmac
-from datetime import date
+from datetime import UTC, date, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+from sqlalchemy import func, update
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+from ..access_control import ensure_module_action
 from ..auth import AuthenticatedUser, require_user
 from ..database import get_connection
 from ..hisobot_schemas import (
@@ -15,6 +17,8 @@ from ..hisobot_schemas import (
     BridgeRosterMember,
     BridgeUnitReportBatch,
     BridgeVacationSnapshot,
+    HisobotActivityDraft,
+    HisobotDraftSeenInput,
     HisobotProfile,
     HisobotReport,
     HisobotReportInput,
@@ -36,6 +40,7 @@ from ..hisobot_service import (
     submit_unit_report,
     unit_history,
 )
+from ..tables import hisobot_activity_drafts
 
 router = APIRouter(prefix="/hisobot", tags=["hisobot"])
 
@@ -55,6 +60,31 @@ async def get_me(
     connection: Annotated[AsyncConnection, Depends(get_connection)],
 ) -> HisobotProfile:
     return await profile(connection, user)
+
+
+@router.get("/me/activity-draft", response_model=HisobotActivityDraft | None)
+async def get_my_activity_draft(
+    user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> HisobotActivityDraft | None:
+    await ensure_module_action(connection, user, "ai_hisobot", "view")
+    return (await profile(connection, user)).activity_draft
+
+
+@router.post("/me/activity-draft/seen", status_code=204)
+async def acknowledge_activity_draft(
+    payload: HisobotDraftSeenInput,
+    user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> None:
+    await ensure_module_action(connection, user, "ai_hisobot", "view")
+    current_profile = await profile(connection, user)
+    if payload.report_date != current_profile.today:
+        raise HTTPException(409, "Черновик относится к другому дню. Обновите страницу.")
+    await connection.execute(update(hisobot_activity_drafts).where(
+        hisobot_activity_drafts.c.user_id == user.id,
+        hisobot_activity_drafts.c.report_date == payload.report_date,
+    ).values(seen_at=func.coalesce(hisobot_activity_drafts.c.seen_at, datetime.now(UTC))))
 
 
 @router.put("/me/report", response_model=HisobotReport)

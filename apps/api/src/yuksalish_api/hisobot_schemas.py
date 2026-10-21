@@ -64,6 +64,19 @@ class HisobotUnit(ApiModel):
     member_count: int
 
 
+class HisobotActivityDraft(ApiModel):
+    report_date: date
+    generated_at: datetime
+    seen_at: datetime | None
+    content: str
+    activity_count: int
+    omitted_count: int = 0
+
+
+class HisobotDraftSeenInput(ApiModel):
+    report_date: date
+
+
 class HisobotProfile(ApiModel):
     telegram_id: str
     full_name: str
@@ -84,6 +97,7 @@ class HisobotProfile(ApiModel):
     unit: HisobotUnit | None = None
     today_unit_report: HisobotUnitReport | None = None
     covered_by_report: bool = False
+    activity_draft: HisobotActivityDraft | None = None
 
 
 class BridgeReport(ApiModel):
