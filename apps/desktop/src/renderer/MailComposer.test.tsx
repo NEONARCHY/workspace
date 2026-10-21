@@ -3,6 +3,8 @@ import { FluentProvider, webLightTheme } from "@fluentui/react-components";
 import type { MailDraft } from "@yuksalish/contracts";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { MailComposer } from "./MailComposer";
+import { disposeTabster, getTabster } from "tabster";
+import { mockVisibleWindowLayout } from "./test-fixtures/visible-window";
 const api = vi.hoisted(() => ({ save: vi.fn(), send: vi.fn(), reconcile: vi.fn() }));
 vi.mock("./workspace-api", () => ({ saveMailDraft: api.save, sendMailDraft: api.send, reconcileMailDraft: api.reconcile }));
 vi.mock("./mail-preview", () => ({ MailAttachmentViewer: () => null, mailFilePreviewable: () => false }));
@@ -12,8 +14,13 @@ function show(value = draft) {
   render(<FluentProvider theme={webLightTheme}><MailComposer token="token" email="owner@gmail.com" seed={{ id: value.id, draft: value, fields: value }}
     canEdit sendingEnabled canUseSigned={false} onClose={vi.fn()} onSaved={vi.fn()} /></FluentProvider>);
 }
-beforeEach(() => { vi.clearAllMocks(); api.save.mockResolvedValue({ ...draft, revision: 3 }); });
-afterEach(cleanup);
+beforeEach(() => { mockVisibleWindowLayout(); vi.clearAllMocks(); api.save.mockResolvedValue({ ...draft, revision: 3 }); });
+afterEach(() => {
+  cleanup();
+  const tabster = getTabster(window);
+  if (tabster) disposeTabster(tabster, true);
+  vi.restoreAllMocks();
+});
 it("requires a separate full preview and blocks duplicate send clicks; a timeout is not success", async () => {
   api.send.mockRejectedValue(new Error("Результат запроса неизвестен")); show();
   expect(api.send).not.toHaveBeenCalled(); fireEvent.click(screen.getByRole("button", { name: "Предпросмотр и отправка" }));

@@ -5,21 +5,13 @@ import { App } from "./App";
 import { people } from "./test-fixtures/demo-data";
 import { render, mockServer, loginToWorkspace, clickWithFocus } from "./app-test-harness";
 import type { NotificationNavigation } from "./platform-adapter";
+import { mockVisibleWindowLayout } from "./test-fixtures/visible-window";
 import "./GrantsView";
 
 // Native window activation and modal focus need a fresh isolated document.
 describe("corporate workspace authentication alpha", () => {
   it.each([1, 2, 3])("reopens the same grant from its notification after closing the card (session %i)", async () => {
-    // Tabster treats a zero-sized body as a hidden iframe. jsdom has no layout;
-    // model the visible native window without bypassing its focus/ARIA logic.
-    vi.spyOn(document.body, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 1440, 900));
-    vi.spyOn(HTMLElement.prototype, "offsetParent", "get").mockImplementation(function (this: HTMLElement) {
-      if (!this.isConnected || this === document.body || this.hidden || getComputedStyle(this).display === "none") return null;
-      for (let node: HTMLElement | null = this.parentElement; node; node = node.parentElement) {
-        if (node.hidden || getComputedStyle(node).display === "none") return null;
-      }
-      return getComputedStyle(this).position === "fixed" ? null : this.parentElement;
-    });
+    mockVisibleWindowLayout();
     let openDesktopNotification: ((payload: NotificationNavigation) => void) | undefined;
     vi.stubGlobal("yuksalish", { ...window.yuksalish,
       onNotificationOpen: (listener: (payload: NotificationNavigation) => void) => {

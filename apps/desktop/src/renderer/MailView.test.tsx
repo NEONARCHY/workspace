@@ -1,8 +1,10 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { FluentProvider, webLightTheme } from "@fluentui/react-components";
 import type { MailConnection, MailMessage } from "@yuksalish/contracts";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { MailView } from "./MailView";
+import { disposeTabster, getTabster } from "tabster";
+import { mockVisibleWindowLayout } from "./test-fixtures/visible-window";
 
 const api = vi.hoisted(() => ({ connection: vi.fn(), messages: vi.fn(), thread: vi.fn(), drafts: vi.fn(), projects: vi.fn() }));
 vi.mock("./workspace-api", () => ({ loadMailConnection: api.connection, loadMailMessages: api.messages,
@@ -21,22 +23,29 @@ function show() {
     canCreate canEdit canCreateTask canUseSigned onTaskCreated={vi.fn()} /></FluentProvider>);
 }
 beforeEach(() => {
+  mockVisibleWindowLayout();
   vi.clearAllMocks(); api.connection.mockResolvedValue(connection); api.messages.mockResolvedValue({ messages: [message], nextPageToken: null });
   api.thread.mockResolvedValue({ messages: [message], truncated: false }); api.drafts.mockResolvedValue([]); api.projects.mockResolvedValue([]);
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  const tabster = getTabster(window);
+  if (tabster) disposeTabster(tabster, true);
+  vi.restoreAllMocks();
+});
 it("explains missing server setup without pretending the employee is connected", async () => {
   api.connection.mockResolvedValue({ ...connection, configured: false, accountId: null, email: null }); show();
   expect(await screen.findByText(/Почта ещё не настроена/)).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Подключить Gmail" })).toBeDisabled();
   expect(api.messages).not.toHaveBeenCalled();
 });
-it("renders mail as inert text and asks which content to share before composing a task", async () => {
+it.each([1, 2, 3])("renders inert mail and asks which content to share before composing a task (session %i)", async () => {
   show(); fireEvent.click(await screen.findByRole("button", { name: /donor@example.com.*Бюджет проекта/ }));
   expect(await screen.findByText(message.body)).toBeInTheDocument();
   expect(document.querySelector('img[src*="tracking.example"]')).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Создать задачу" }));
   const selection = await screen.findByRole("dialog", { name: "Что передать в задачу" });
+  await waitFor(() => expect(within(selection).getByRole("checkbox", { name: "Включить текст выбранного письма" })).toHaveFocus());
   expect(within(selection).getByRole("checkbox", { name: "budget.xlsx" })).not.toBeChecked();
   fireEvent.click(within(selection).getByRole("checkbox", { name: "Включить текст выбранного письма" }));
   fireEvent.click(within(selection).getByRole("button", { name: "Перейти к созданию задачи" }));
