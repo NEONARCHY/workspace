@@ -16,6 +16,7 @@ export interface DesktopNotificationNavigation {
 }
 
 export interface DesktopBridge {
+  readonly openMailAuthorization?: (url: string) => Promise<boolean>;
   readonly openZoomMeeting?: (url: string) => Promise<boolean>;
   readonly platform: NodeJS.Platform;
   readonly version: string;
@@ -44,6 +45,7 @@ export interface DesktopUpdateStatus {
 }
 
 const bridge: DesktopBridge = Object.freeze({
+  openMailAuthorization: (url: string) => ipcRenderer.invoke("mail:authorize", url) as Promise<boolean>,
   openZoomMeeting: (url: string) => ipcRenderer.invoke("zoom:join", url) as Promise<boolean>,
   platform: process.platform,
   version: ipcRenderer.sendSync("app:version") as string,

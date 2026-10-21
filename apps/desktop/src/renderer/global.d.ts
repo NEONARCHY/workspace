@@ -1,5 +1,6 @@
 interface Window {
   yuksalish?: {
+    readonly openMailAuthorization?: (url: string) => Promise<boolean>;
     readonly openZoomMeeting?: (url: string) => Promise<boolean>;
     readonly platform: string;
     readonly version: string;

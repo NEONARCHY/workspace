@@ -194,7 +194,11 @@ def request_module_action(path: str, method: str) -> tuple[str, ModuleAction] | 
     if normalized.startswith("/grants/") and normalized.endswith("/actions"):
         # The service selects edit/approve from the typed action, then checks its named actor.
         return "grants", "view"
+    # Read-only search uses a body so private search terms never enter URL logs.
+    if normalized in {"/mail/messages/search", "/mail/tasks"}:
+        return "mail", "view"
     prefixes = (
+        (("/mail",), "mail"),
         (("/home",), "home"),
         (("/survey-analyses",), "survey_analytics"),
         (("/messenger/", "/chats/", "/messages/"), "messenger"),
@@ -251,6 +255,7 @@ def request_module_action(path: str, method: str) -> tuple[str, ModuleAction] | 
     if upper_method == "GET":
         return module_key, "view"
     collection_paths = {
+        "/mail/drafts",
         "/survey-analyses",
         "/tasks",
         "/grants",

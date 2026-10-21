@@ -60,6 +60,11 @@ class Settings(BaseSettings):
     ai_referent_journal_max_bytes: int = 25 * 1024 * 1024
     ai_referent_packet_max_bytes: int = 200 * 1024 * 1024
     zoom_account_id: str = ""
+    gmail_client_id: str = ""
+    gmail_client_secret: SecretStr = SecretStr("")
+    gmail_redirect_uri: str = ""
+    gmail_encryption_key: SecretStr = SecretStr("")
+    gmail_sending_enabled: bool = False
     zoom_client_id: str = ""
     zoom_client_secret: SecretStr = SecretStr("")
     zoom_host_user_id: str = ""

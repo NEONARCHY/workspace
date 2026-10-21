@@ -152,6 +152,10 @@ MODULE_CATALOG = (
         status="available",
     ),
     ModuleDescriptor(
+        key="mail", label=LocalizedLabel(ru="Почта", uz_cyrl="Почта", uz_latn="Pochta"),
+        route="/mail", status="available",
+    ),
+    ModuleDescriptor(
         key="calendar",
         label=LocalizedLabel(ru="Календарь", uz_cyrl="Тақвим", uz_latn="Taqvim"),
         route="/calendar",

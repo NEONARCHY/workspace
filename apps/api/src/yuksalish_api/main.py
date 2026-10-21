@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager, suppress
 
 import structlog
 import uvicorn
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import ValidationError
 from sqlalchemy.exc import SQLAlchemyError
@@ -18,11 +18,14 @@ from .context_service import ContextDataService
 from .database import create_database_engine
 from .edo_employee_sync import run_employee_sync_cycle
 from .efficiency_service import materialize_efficiency_digest_notifications
+from .errors import WorkspaceRepositoryError
 from .events import WorkspaceEventBus
+from .gmail_client import GmailClient
 from .hisobot_service import materialize_hisobot_reminders
 from .hr_service import materialize_previous_month_register
 from .logging import configure_logging
-from .object_storage import InMemoryObjectStorage, MinioObjectStorage
+from .mail_delivery import process_one as process_mail_delivery
+from .object_storage import InMemoryObjectStorage, MinioObjectStorage, ObjectStorageError
 from .project_hub_service import materialize_project_reminders
 from .repository import materialize_due_notifications
 from .routers import (
@@ -41,6 +44,7 @@ from .routers import (
     hr,
     hr_hiring,
     leaves,
+    mail,
     members,
     messenger,
     modules,
@@ -90,6 +94,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # One client keeps the OAuth token and the connection pool shared.
         zoom_client = ZoomClient(runtime_settings)
         lifespan_app.state.zoom_client = zoom_client
+        gmail_client = GmailClient(runtime_settings)
+        lifespan_app.state.gmail_client = gmail_client
         # Demo fixtures are allowed only in the isolated test environment. A stale
         # production/development flag must never recreate sample employees.
         if runtime_settings.environment == "test" and runtime_settings.seed_demo_data:
@@ -140,10 +146,26 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         employee_sync_task = asyncio.create_task(
             employee_sync_scheduler(), name="workspace-edo-employee-sync"
         )
+        async def mail_scheduler() -> None:
+            while True:
+                try:
+                    await process_mail_delivery(engine, runtime_settings, gmail_client)
+                except (
+                    SQLAlchemyError, ValidationError, WorkspaceRepositoryError,
+                    HTTPException, ObjectStorageError,
+                ) as error:
+                    logger.error("mail_delivery_failed", error_type=type(error).__name__)
+                await asyncio.sleep(3)
+
+        mail_task = asyncio.create_task(mail_scheduler(), name="workspace-mail-delivery")
         logger.info("api_started", environment=runtime_settings.environment, version=__version__)
         try:
             yield
         finally:
+            mail_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await mail_task
+            await gmail_client.aclose()
             employee_sync_task.cancel()
             with suppress(asyncio.CancelledError):
                 await employee_sync_task
@@ -184,6 +206,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @application.middleware("http")
     async def security_headers(request: Request, call_next: RequestResponseEndpoint) -> Response:
+        if request.url.path == f"{runtime_settings.api_prefix}/mail/oauth/callback":
+            request.state.mail_oauth_query = request.query_params
+            # Uvicorn formats its access log from scope on response. Never log OAuth codes/state.
+            request.scope["query_string"] = b""
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
@@ -207,6 +233,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(task_plans.router, prefix=runtime_settings.api_prefix)
     application.include_router(task_proposals.router, prefix=runtime_settings.api_prefix)
     application.include_router(grants.router, prefix=runtime_settings.api_prefix)
+    application.include_router(mail.router, prefix=runtime_settings.api_prefix)
     application.include_router(project_hub.router, prefix=runtime_settings.api_prefix)
     application.include_router(project_imports.router, prefix=runtime_settings.api_prefix)
     application.include_router(reference.router, prefix=runtime_settings.api_prefix)
