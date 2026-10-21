@@ -168,14 +168,14 @@ describe("corporate workspace authentication alpha", () => {
       name: "Открыть заявку №503: Оплата по субсидии",
     }).closest("article");
     expect(card).toHaveClass("subsidy-route");
-    expect(card).toHaveTextContent("Субсидия · первый исполнительный директор");
+    expect(card).toHaveTextContent("Субсидия · первый заместитель председателя");
     fireEvent.click(screen.getByRole("button", { name: "Новая заявка" }));
     fireEvent.click(screen.getByLabelText("проект"));
     fireEvent.click(await screen.findByRole("option", { name: "SUB · Субсидия" }));
-    expect(screen.getByText(/этап руководства согласует первый исполнительный директор Аскар Маматханов/)).toBeInTheDocument();
+    expect(screen.getByText(/этап руководства согласует первый заместитель председателя Аскар Маматханов/)).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText("проект"));
     fireEvent.click(screen.getByRole("option", { name: "WS-26 · Workspace" }));
-    expect(screen.queryByText(/этап руководства согласует первый исполнительный директор Аскар Маматханов/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/этап руководства согласует первый заместитель председателя Аскар Маматханов/)).not.toBeInTheDocument();
   });
 
   it("keeps a payment card in place after a rejected board move and allows retry", async () => {

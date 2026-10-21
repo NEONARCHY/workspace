@@ -156,7 +156,7 @@ from .workspace_schemas import (
 PERSON_COLORS = ("#0f6cbd", "#6b5b95", "#0e7a0d", "#9b3a4d", "#8a4f12")
 SUBSIDY_ROUTE_VARIANT: Literal["subsidy"] = "subsidy"
 SUBSIDY_APPROVAL_NODE = "deputy_chair"
-SUBSIDY_APPROVAL_LABEL = "Утверждение первым исполнительным директором"
+SUBSIDY_APPROVAL_LABEL = "Утверждение первым заместителем председателя"
 STATUS_LABELS = {
     "draft": "Черновик",
     "running": "Ожидает решения",

@@ -12,6 +12,7 @@ from yuksalish_api.project_hub_schemas import ProjectHubWrite, ProjectWorkstream
 from yuksalish_api.project_hub_service import save_project, save_workstream
 from yuksalish_api.repository import (
     WorkspaceRepositoryError,
+    _active_stages_for_requests,
     _can_act_from_config,
     _payment_route_variant_payload,
     act_on_request,
@@ -56,6 +57,55 @@ def test_subsidy_approver_does_not_change_other_stages_or_projects() -> None:
         askar, {"payload": {"payment_route_variant": "subsidy"}, "actor_overrides": {}},
         "deputy_chair", config,
     )
+
+
+@pytest.mark.anyio
+async def test_subsidy_stage_label_keeps_approvers_and_ordinary_stage_unchanged() -> None:
+    connection = AsyncMock()
+    template_id, askar_id, deputy_id = uuid4(), uuid4(), uuid4()
+    askar = _actor(askar_id, "askar_mamatxanov")
+    deputy = _actor(deputy_id, "deputy", uuid4())
+    node = {
+        "template_id": template_id,
+        "node_key": "deputy_chair",
+        "title": "Утверждение заместителя председателя",
+        "kind": "approval",
+        "config": {"approverPositionId": str(deputy.position_id)},
+    }
+    node_rows = Mock()
+    node_rows.mappings.return_value.all.return_value = [node]
+    connection.execute.return_value = node_rows
+    subsidy_id, ordinary_id = uuid4(), uuid4()
+    requests = [
+        {
+            "id": subsidy_id,
+            "template_id": template_id,
+            "active_node_keys": ["deputy_chair"],
+            "payload": {
+                "payment_route_variant": "subsidy",
+                "subsidy_approver_user_id": str(askar_id),
+            },
+            "actor_overrides": {},
+        },
+        {
+            "id": ordinary_id,
+            "template_id": template_id,
+            "active_node_keys": ["deputy_chair"],
+            "payload": {},
+            "actor_overrides": {},
+        },
+    ]
+
+    for actor in (askar, deputy):
+        stages = await _active_stages_for_requests(connection, requests, actor)
+        subsidy_stage = stages[subsidy_id][0]
+        assert subsidy_stage.label == "Утверждение первым заместителем председателя"
+        assert subsidy_stage.key == "deputy_chair"
+        assert subsidy_stage.can_act is (actor.id == askar_id)
+        ordinary_stage = stages[ordinary_id][0]
+        assert ordinary_stage.label == node["title"]
+        assert ordinary_stage.key == "deputy_chair"
+        assert ordinary_stage.can_act is (actor.id == deputy_id)
 
 
 @pytest.mark.anyio
@@ -153,7 +203,7 @@ async def test_subsidy_payment_uses_askar_and_other_projects_keep_deputy() -> No
                     connection, admin, UUID(subsidy.id),
                     ApprovalActionRequest(action="move", node_key="deputy_chair"),
                 )
-                assert subsidy.stage_label == "Утверждение первым исполнительным директором"
+                assert subsidy.stage_label == "Утверждение первым заместителем председателя"
                 with pytest.raises(WorkspaceRepositoryError) as forbidden:
                     await act_on_request(
                         connection, deputy, UUID(subsidy.id),
