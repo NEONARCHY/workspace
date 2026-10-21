@@ -6,6 +6,7 @@ import type { ApprovalRequestSummary, CalendarEvent, CalendarEventInput, ChatMes
 import FileViewer from "../src/renderer/FileViewer";
 import { ApprovalsView } from "../src/renderer/ApprovalsView";
 import { CalendarView } from "../src/renderer/CalendarView";
+import { FeedView } from "../src/renderer/FeedView";
 import { MessengerView } from "../src/renderer/MessengerView";
 import { IncomingLettersView } from "../src/renderer/IncomingLettersView";
 import { NotificationCenter } from "../src/renderer/NotificationCenter";
@@ -291,6 +292,7 @@ function Preview() {
           <WorkspaceSectionContent authorityKey="qa-layout" section={`${section}:${sample}`}>
             {section === "notifications" ? <NotificationCenter notifications={notifications} preferences={{ desktopEnabled: true, messagesEnabled: true, tasksEnabled: true, approvalsEnabled: true, tripsEnabled: true, calendarEnabled: true, absencesEnabled: true, zoomEnabled: true, remindersEnabled: true }} onOpen={nothing} onMarkRead={nothing} onMarkAllRead={nothing} onUpdatePreferences={nothing} />
             : section === "calendar" ? <CalendarView events={scheduleEvents} people={zoomPeople} departments={zoomDepartments} canInviteCalendarAudience currentUserId={people[0]!.id} onCreate={createPreviewEvent} onUpdate={nothing} onCancel={nothing} />
+            : section === "feed" ? <FeedView posts={[{ id: "qa-feed", authorUserId: people[0]!.id, title: "Новости команды", body: "Тестовая публикация для проверки центрирования ленты и доступности её действий.", isPinned: false, likedByCurrentUser: false, likeCount: 0, reactions: [], comments: [], canEdit: false, canPin: false, createdAt: "2026-10-21T09:00:00Z", updatedAt: "2026-10-21T09:00:00Z" }]} people={people} token="qa-only" currentUserId={people[0]!.id} onCreate={nothing} onComment={nothing} onReact={nothing} onDeleteComment={nothing} onPin={nothing} onDelete={async () => false} />
             : section === "payments" ? <ApprovalsView token="qa-only" canManage={false} canCreateRequest={false} isSuperadmin={false} currentUserId={people[0]!.id} people={people} positions={[]} requests={requests} calendarEvents={[]} attachments={[]} onSaveWorkflow={nothing} onPublishWorkflow={nothing} onCreateRequest={nothing} onAction={nothing} onDeleteRequest={nothing} onReviseRequest={nothing} onUploadAttachments={nothing} onDownloadAttachment={nothing} />
             : section === "messenger" ? <MessengerView token="qa-only" currentUserId="aziza" currentUserRole="employee" chats={initialChats} messages={messages} tasks={[]} attachments={[]} people={people}
               chatActions={{ create: async () => initialChats[0]!, update: async () => initialChats[0]!, add: async () => initialChats[0]!, setMember: async () => initialChats[0]!, transfer: async () => initialChats[0]!, remove: nothing, delete: nothing }}

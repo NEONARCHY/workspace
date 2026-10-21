@@ -47,7 +47,8 @@ html body .app-provider .app-shell .app-stage > .app-content > div > .survey-ana
 }
 .app-shell .app-content .personal-home-embedded { padding-inline-end: 0; }
 .app-shell .app-content > .members-view .member-inspector { margin-inline-end: 0; }
-.app-shell .app-content > .feed-view { justify-content: end; }
+/* The page rail positions the viewport, not the bounded feed composition. */
+.app-shell .app-content > .feed-view { justify-content: center; }
 /* The full messenger may live in a persistent portal; its slot already owns
    the page rail. Never apply page geometry to the floating mini window. */
 .floating-messenger-panel.is-full-page > .messenger-view { padding-inline-end: 0; }
