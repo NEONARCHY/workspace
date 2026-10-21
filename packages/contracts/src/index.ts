@@ -1607,6 +1607,15 @@ export interface HisobotUnit {
   readonly memberCount: number;
 }
 
+export interface HisobotActivityDraft {
+  readonly reportDate: string;
+  readonly generatedAt: string;
+  readonly seenAt: string | null;
+  readonly content: string;
+  readonly activityCount: number;
+  readonly omittedCount: number;
+}
+
 export interface HisobotProfile {
   readonly telegramId: string;
   readonly fullName: string;
@@ -1627,6 +1636,7 @@ export interface HisobotProfile {
   readonly unit?: HisobotUnit | null;
   readonly todayUnitReport?: HisobotUnitReport | null;
   readonly coveredByReport?: boolean;
+  readonly activityDraft?: HisobotActivityDraft | null;
 }
 
 export interface AIReferentIncomingRegistry {

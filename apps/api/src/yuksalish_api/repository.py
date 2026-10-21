@@ -5618,16 +5618,18 @@ async def update_task_checklist_item(
     payload: UpdateChecklistItemRequest,
 ) -> TaskResponse:
     await _task_access_row(connection, current_user, task_id, edit=True)
-    exists = await connection.scalar(
-        select(func.count())
-        .select_from(task_checklist_items)
+    completed = await connection.scalar(
+        select(task_checklist_items.c.is_completed)
         .where(
             task_checklist_items.c.id == item_id,
             task_checklist_items.c.task_id == task_id,
-        )
+        ).with_for_update()
     )
-    if not exists:
+    if completed is None:
         raise WorkspaceRepositoryError(404, "Checklist item was not found")
+    if completed == payload.is_completed:
+        # A retried check must not move yesterday's work into today's report.
+        return await _task_response(connection, task_id)
     now = datetime.now(UTC)
     await connection.execute(
         update(task_checklist_items)

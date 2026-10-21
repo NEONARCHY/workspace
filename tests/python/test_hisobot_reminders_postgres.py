@@ -25,6 +25,7 @@ from yuksalish_api.repository import (
 from yuksalish_api.seed import seed_demo_data
 from yuksalish_api.tables import (
     departments,
+    hisobot_activity_drafts,
     hisobot_live_reports,
     hisobot_live_vacations,
     hisobot_unit_reports,
@@ -80,6 +81,7 @@ async def exercise_backlog(url: str) -> None:
                 await connection.execute(delete(workspace_notifications).where(
                     workspace_notifications.c.kind == "hisobot"
                 ))
+                await connection.execute(delete(hisobot_activity_drafts))
                 actor_ids: list[UUID] = []
                 telegram_ids: list[str] = []
                 for index, username in enumerate(("dilshod", "baxtiyor", "aziza", "malika")):
@@ -107,6 +109,13 @@ async def exercise_backlog(url: str) -> None:
                 owner, submitted, exempt, not_required = actor_ids
                 assert await materialize_hisobot_reminders(connection, at(5, 17, 39)) == 0
                 assert await materialize_hisobot_reminders(connection, at(5, 17, 40)) == 3
+                drafts = (
+                    await connection.execute(select(hisobot_activity_drafts))
+                ).mappings().all()
+                assert len(drafts) == 3
+                assert {row["user_id"] for row in drafts} == set(actor_ids[:3])
+                assert all(row["seen_at"] is None for row in drafts)
+                assert all(row["generated_at"] == at(5, 17, 40) for row in drafts)
                 await connection.execute(insert(hisobot_live_reports).values(
                     id=uuid4(), user_id=submitted, telegram_id=telegram_ids[1],
                     employee_key=str(submitted), full_name="Проверочный сотрудник",
@@ -127,6 +136,13 @@ async def exercise_backlog(url: str) -> None:
                     ))).mappings().all()
                     assert len(active) == 1 and active[0]["user_id"] == owner
                 assert await materialize_hisobot_reminders(connection, at(5, 18, 29, 59)) == 0
+                draft_time = await connection.scalar(select(
+                    hisobot_activity_drafts.c.generated_at,
+                ).where(
+                    hisobot_activity_drafts.c.user_id == owner,
+                    hisobot_activity_drafts.c.report_date == date(2026, 10, 5),
+                ))
+                assert draft_time == at(5, 17, 40)
                 # Upgrade an old backlog even when reports/exemptions arrived while offline.
                 for recipient in (submitted, exempt, not_required):
                     await legacy_reminder(connection, recipient, 5)

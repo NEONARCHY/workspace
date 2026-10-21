@@ -15,6 +15,7 @@ vi.mock("./workspace-api", () => ({
   loadHisobotUnitHistory: vi.fn(),
   loadHisobotUnitReports: vi.fn(),
   saveHisobotReport: vi.fn(),
+  acknowledgeHisobotActivityDraft: vi.fn().mockResolvedValue(undefined),
   saveHisobotUnitReport: vi.fn(),
 }));
 
@@ -58,6 +59,49 @@ describe("AI Hisobot", () => {
   it("shows a varied report illustration in the header", () => {
     const { container } = render(<AIHisobotView token="token" />);
     expect(container.querySelectorAll(".ai-hisobot-header-art svg")).toHaveLength(7);
+  });
+
+  it("inserts a handed-off draft into an empty editor but never submits automatically", async () => {
+    render(<AIHisobotView token="token" incomingDraft={{ content: "Готовый черновик", reportDate: profile.today, revision: 1 }} />);
+    expect(await screen.findByDisplayValue("Готовый черновик")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Отправить отчёт" })).toBeEnabled();
+    expect(saveHisobotReport).not.toHaveBeenCalled();
+  });
+
+  it("preserves the employee's draft and appends the suggestion only on explicit request", async () => {
+    const { rerender } = render(<AIHisobotView token="token" />);
+    fireEvent.change(await screen.findByRole("textbox", { name: /Опишите выполненные задачи/ }), { target: { value: "Моя ручная работа" } });
+    rerender(<AIHisobotView token="token" incomingDraft={{ content: "Автоматические факты", reportDate: profile.today, revision: 2 }} />);
+    expect(await screen.findByText(/Ваш текст сохранён. Подготовленный черновик/)).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: /Опишите выполненные задачи/ })).toHaveValue("Моя ручная работа");
+    fireEvent.click(screen.getByRole("button", { name: "Добавить к моему тексту" }));
+    expect(screen.getByRole("textbox", { name: /Опишите выполненные задачи/ })).toHaveValue("Моя ручная работа\n\nАвтоматические факты");
+    expect(saveHisobotReport).not.toHaveBeenCalled();
+  });
+
+  it("keeps an already submitted report and rejects a different-day handoff", async () => {
+    vi.mocked(loadHisobotProfile).mockResolvedValue({ ...profile, todayReport: report });
+    const { rerender } = render(<AIHisobotView token="token" incomingDraft={{ content: "Предложение", reportDate: profile.today, revision: 3 }} />);
+    expect(await screen.findByDisplayValue(report.content)).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Добавить к моему тексту" })).toBeInTheDocument();
+    rerender(<AIHisobotView token="token" incomingDraft={{ content: "Вчерашнее", reportDate: "2026-09-24", revision: 4 }} />);
+    expect(await screen.findByText(/Черновик относится к другому дню/)).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: /Чтобы исправить или дополнить/ })).toHaveValue(report.content);
+    expect(saveHisobotReport).not.toHaveBeenCalled();
+  });
+
+  it("offers server-generated facts without replacing the editor during refresh", async () => {
+    vi.mocked(loadHisobotProfile).mockResolvedValue({ ...profile, activityDraft: {
+      reportDate: profile.today, generatedAt: "2026-09-25T12:40:00Z", seenAt: null,
+      content: "Системные факты", activityCount: 2, omittedCount: 0,
+    } });
+    render(<AIHisobotView token="token" />);
+    fireEvent.click(await screen.findByRole("button", { name: "Использовать черновик" }));
+    const field = screen.getByRole("textbox", { name: /Опишите выполненные задачи/ });
+    expect(field).toHaveValue("Системные факты");
+    fireEvent.change(field, { target: { value: "Системные факты плюс мой текст" } });
+    await waitFor(() => expect(loadHisobotProfile).toHaveBeenCalledTimes(2));
+    expect(field).toHaveValue("Системные факты плюс мой текст");
   });
 
   it("allows a voluntary report during confirmed sick leave", async () => {

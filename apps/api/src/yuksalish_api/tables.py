@@ -1653,6 +1653,15 @@ telegram_bot_grants = sa.Table(
     sa.Column("updated_at", sa.DateTime(timezone=True)),
 )
 
+hisobot_activity_drafts = sa.Table(
+    "hisobot_activity_drafts", metadata,
+    sa.Column("user_id", uuid_type, primary_key=True),
+    sa.Column("report_date", sa.Date(), primary_key=True),
+    sa.Column("generated_at", sa.DateTime(timezone=True)),
+    sa.Column("facts", postgresql.JSONB()),
+    sa.Column("seen_at", sa.DateTime(timezone=True)),
+)
+
 hisobot_live_reports = sa.Table(
     "hisobot_live_reports", metadata,
     sa.Column("id", uuid_type, primary_key=True),

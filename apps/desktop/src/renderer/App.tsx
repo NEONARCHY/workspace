@@ -107,6 +107,7 @@ import { EmbeddedConversation, type MessengerViewProps } from "./MessengerView";
 import { FloatingMessenger } from "./FloatingMessenger";
 import { NotificationCenter } from "./NotificationCenter";
 import { WorkdayControl } from "./WorkdayControl";
+import { HisobotDraftPrompt, type HisobotDraftHandoff } from "./HisobotDraftPrompt";
 import { TopbarInsights } from "./TopbarInsights";
 import { WorkingUserIdsContext } from "./TaskParticipantAvatar";
 import { AdaptiveNavigation } from "./AdaptiveNavigation";
@@ -418,6 +419,7 @@ export function App() {
   const [previewAttachment, setPreviewAttachment] = useState<WorkspaceAttachment>();
   const [forwardPhoto, setForwardPhoto] = useState<GalleryImage<WorkspaceAttachment>>();
   const [activeSection, setActiveSection] = useState<WorkspaceSection | "notifications">("home");
+  const [hisobotIncoming, setHisobotIncoming] = useState<{ userId: string; draft: HisobotDraftHandoff }>();
   const [connectionDetail, setConnectionDetail] = useState("Сервер подключён");
   const [session, setSession] = useState<AuthenticationSession>();
   const [surveyVisitedBy, setSurveyVisitedBy] = useState<string>();
@@ -2255,6 +2257,15 @@ export function App() {
               </div></div>
           </header>
 
+          <HisobotDraftPrompt key={workspace.currentUser.id} token={session.accessToken}
+            userId={workspace.currentUser.id} notifications={workspace.notifications}
+            enabled={modulePermissions.ai_hisobot?.view === true}
+            editingReport={displayedSection === "ai_hisobot"}
+            onEdit={(draft) => {
+              setHisobotIncoming({ userId: workspace.currentUser.id, draft });
+              setFocusTarget(undefined); setFocusNotification(undefined); setActiveSection("ai_hisobot");
+            }} />
+
           {backgroundError ? <WorkspaceNotice tone="warning" className="workspace-feedback" role="alert" actions={<><Button size="small" onClick={() => void refreshWorkspace(session.accessToken).catch(reportError)}>Обновить данные</Button><Button size="small" appearance="subtle" aria-label="Закрыть сообщение об ошибке" onClick={() => setBackgroundError("")}>×</Button></>}>
             <span>{backgroundError}</span>
           </WorkspaceNotice> : null}
@@ -2480,7 +2491,9 @@ export function App() {
               />
             ) : null}
             {displayedSection === "ai_hisobot" ? (
-              <AIHisobotView token={session.accessToken} />
+              <AIHisobotView token={session.accessToken}
+                incomingDraft={hisobotIncoming?.userId === workspace.currentUser.id ? hisobotIncoming.draft : undefined}
+                onDraftHandled={() => setHisobotIncoming(undefined)} />
             ) : null}
             {displayedSection === "telegram_access" && isAdmin ? (
               <TelegramAccessView token={session.accessToken} departments={workspace.departments} />
