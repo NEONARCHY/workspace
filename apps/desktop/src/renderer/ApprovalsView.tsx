@@ -825,7 +825,7 @@ export function PaymentFields({ form, targets, calendarEvents, people, departmen
           <p className="payment-currency-hint">Валюта оплаты отличается от валюты плана статьи. Расход сохранится в выбранной валюте; автоматического пересчёта и уменьшения остатка плана не будет.</p>
         ) : null}
         {isSubsidyProjectSelection(form.projectId, targets) ? (
-          <p className="payment-subsidy-route-hint">Для проекта «Субсидия» этап руководства согласует первый исполнительный директор Аскар Маматханов.</p>
+          <p className="payment-subsidy-route-hint">Для проекта «Субсидия» этап руководства согласует первый заместитель председателя Аскар Маматханов.</p>
         ) : null}
       </section>
 
@@ -1820,7 +1820,7 @@ export function ApprovalsView({
                                 <Attach16Regular /> {requestAttachments}
                               </span>
                             </span>
-                            {request.routeVariant === "subsidy" ? <span className="approval-card-route-note">Субсидия · первый исполнительный директор</span> : null}
+                            {request.routeVariant === "subsidy" ? <span className="approval-card-route-note">Субсидия · первый заместитель председателя</span> : null}
                             <span className="approval-card-meta">
                               <span>#{request.number}</span>
                               <span>Версия {request.revision}{request.sourceTaskId ? " · создана из задачи" : ""}</span>
@@ -1905,7 +1905,7 @@ export function ApprovalsView({
                   stages={<div className="record-stages" tabIndex={0} role="region" aria-label="Стадии процесса оплаты">{boardColumns.map((column) => {
                     const subsidy = isSubsidyProjectSelection(requestDetails.projectId, paymentTargets);
                     return <span key={column.key} style={{ "--record-stage-color": subsidy && column.key === "deputy_chair" ? "#b78a53" : approvalStagePalette(column).background } as CSSProperties}>
-                      {subsidy && column.key === "deputy_chair" ? "Утверждение первым исполнительным директором" : column.label}
+                      {subsidy && column.key === "deputy_chair" ? "Утверждение первым заместителем председателя" : column.label}
                     </span>;
                   })}</div>}
                   aside={<>
@@ -2041,7 +2041,7 @@ export function ApprovalsView({
                             : ""
                       }
                     >
-                      {selectedRequest.routeVariant === "subsidy" && column.key === "deputy_chair" ? "Утверждение первым исполнительным директором" : column.label}
+                      {selectedRequest.routeVariant === "subsidy" && column.key === "deputy_chair" ? "Утверждение первым заместителем председателя" : column.label}
                     </span>
                   ))}
                 </div> : null}
