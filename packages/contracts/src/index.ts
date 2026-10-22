@@ -4,6 +4,7 @@ export * from "./project-budget";
 export * from "./reference";
 export * from "./grants";
 export * from "./mail";
+export * from "./hr-dossiers";
 import type { ProjectBudgetArticle } from "./project-budget";
 
 export const moduleKeys = [

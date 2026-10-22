@@ -2,6 +2,28 @@
 name: yuksalish-personal-dev
 
 services:
+  office-preview:
+    build:
+      context: ..
+      dockerfile: services/office-preview/Dockerfile
+    restart: unless-stopped
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 768m
+    cpus: 1.0
+    pids_limit: 128
+    tmpfs:
+      - /tmp:size=192m,mode=1777,noexec,nosuid,nodev
+    volumes:
+      - office-preview-socket:/run/office-preview
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.socket(socket.AF_UNIX); s.settimeout(3); s.connect('/run/office-preview/preview.sock'); s.sendall(b'GET /ready HTTP/1.0\\r\\n\\r\\n'); assert b'200' in s.recv(256)"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   postgres:
     image: postgres:17-alpine
     restart: unless-stopped
@@ -62,6 +84,9 @@ services:
       - ../scripts/dev:/workspace/scripts/dev:ro
       - ${YUKSALISH_LOCAL_TLS_DIR:?Use the local development launcher}:/workspace/local-tls
       - desktop-updates:/workspace/var/desktop-updates
+      - office-preview-socket:/run/office-preview:ro
+    environment:
+      YUKSALISH_OFFICE_PREVIEW_SOCKET: /run/office-preview/preview.sock
     command:
       - /bin/sh
       - -c
@@ -71,6 +96,8 @@ services:
         && uvicorn yuksalish_api.main:app --host 0.0.0.0 --port 8000
         --reload --reload-dir apps/api/src --reload-dir modules
     depends_on:
+      office-preview:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       redis:
@@ -91,6 +118,7 @@ networks:
   api-egress:
 
 volumes:
+  office-preview-socket:
   postgres-data:
   redis-data:
   minio-data:

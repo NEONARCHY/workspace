@@ -36,6 +36,7 @@ from .routers import (
     authentication,
     context,
     directory,
+    dossiers,
     edo_incoming,
     grants,
     health,
@@ -222,6 +223,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(home.router, prefix=runtime_settings.api_prefix)
     application.include_router(members.router, prefix=runtime_settings.api_prefix)
     application.include_router(hr.router, prefix=runtime_settings.api_prefix)
+    application.include_router(dossiers.router, prefix=runtime_settings.api_prefix)
     application.include_router(hr_hiring.router, prefix=runtime_settings.api_prefix)
     application.include_router(leaves.router, prefix=runtime_settings.api_prefix)
     application.include_router(modules.router, prefix=runtime_settings.api_prefix)

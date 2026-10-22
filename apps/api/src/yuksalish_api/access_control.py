@@ -155,6 +155,10 @@ async def module_permissions_for_user(
 def request_module_action(path: str, method: str) -> tuple[str, ModuleAction] | None:
     normalized = path.removeprefix("/api/v1")
     upper_method = method.upper()
+    if normalized == "/personnel-dossiers" or normalized.startswith("/personnel-dossiers/"):
+        # Own questionnaire is available without access to HR payroll. The dedicated
+        # service checks every target, scope and operation, including administrator settings.
+        return None
     if normalized in {"/auth/invitations", "/auth/password-resets"}:
         return "employees", "admin"
     if normalized.startswith("/auth/users/") and normalized.endswith("/password"):
