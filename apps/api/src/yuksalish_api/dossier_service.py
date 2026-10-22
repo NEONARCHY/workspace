@@ -14,6 +14,7 @@ from .access_control import module_permissions_for_user
 from .auth import AuthenticatedUser
 from .dossier_documents import render_dossier_docx
 from .dossier_import import parse_dossier
+from .dossier_reminders import record_self_update
 from .dossier_schemas import (
     DossierAccessRule,
     DossierAccessSettings,
@@ -212,6 +213,8 @@ async def save(
     ))
     await _audit(connection, actor, target_id, "saved", {"revision": revision + 1,
                                                        "changedFields": changed})
+    if target_id == actor.id and payload.status == "saved":
+        await record_self_update(connection, actor, revision + 1)
     return await detail(connection, actor, target_id)
 
 

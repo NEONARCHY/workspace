@@ -1,5 +1,5 @@
 import type { OfficePreviewResult } from "./file-viewer-kind";
-import type { DossierAccessSettings, DossierContext, DossierDetail, DossierFields, DossierHistory, DossierImportPreview, DossierPermissions, DossierSummary, PersonnelPhotoCard } from "@yuksalish/contracts";
+import type { DossierAccessSettings, DossierContext, DossierDetail, DossierFields, DossierHistory, DossierImportPreview, DossierPermissions, DossierReminder, DossierReminderAnswer, DossierSummary, PersonnelPhotoCard } from "@yuksalish/contracts";
 import { validateGrantSourceFiles } from "./grant-source-files";
 import type { HisobotActivityDraft } from "@yuksalish/contracts";
 import type { MailConnection, MailConnect, MailConnectStatus, MailPage, MailThread, MailDraft, MailDraftSummary, MailDraftWrite, MailSignedFile, MailTaskExport } from "@yuksalish/contracts";
@@ -621,6 +621,8 @@ export function loadHrOverview(token: string): Promise<HrOverview> {
 }
 
 export const loadDossierContext = (token: string) => apiRequest<DossierContext>("/personnel-dossiers/context", {}, token);
+export const loadDossierReminder = (token: string) => apiRequest<DossierReminder>("/personnel-dossiers/reminder", {}, token);
+export const answerDossierReminder = (token: string, payload: DossierReminderAnswer) => apiRequest<DossierReminder>("/personnel-dossiers/reminder", { method: "POST", body: JSON.stringify(payload) }, token);
 export const loadDossierList = (token: string) => apiRequest<readonly DossierSummary[]>("/personnel-dossiers", {}, token);
 export const loadPersonnelPhotos = (token: string) => apiRequest<readonly PersonnelPhotoCard[]>("/personnel-dossiers/photos", {}, token);
 export const loadDossierPermissions = (token: string, id: string) => apiRequest<DossierPermissions>(`/personnel-dossiers/${encodeURIComponent(id)}/permissions`, {}, token);

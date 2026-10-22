@@ -1,0 +1,19 @@
+.dossier-reminder-dialog.fui-DialogSurface { width: min(620px, calc(100vw - 32px)); max-width: none; max-height: calc(100dvh - 32px); }
+.dossier-reminder-dialog .fui-DialogBody { max-height: calc(100dvh - 82px); min-height: 0; }
+.dossier-reminder-dialog .fui-DialogContent { overflow: auto; scrollbar-width: thin; }
+.dossier-reminder-dialog .fui-DialogContent, .dossier-reminder-dialog .fui-DialogActions { grid-column: 1 / -1; }
+.dossier-reminder-dialog .fui-DialogContent:focus-visible { outline: 2px solid var(--ws-link); outline-offset: -2px; border-radius: 12px; }
+.dossier-reminder-dialog .fui-DialogActions { display: flex; flex-direction: row; flex-wrap: wrap; gap: 8px; justify-content: flex-start; justify-self: stretch; }
+.dossier-reminder-intro { display: flex; align-items: center; gap: 14px; margin: 12px 0 18px; }
+.dossier-reminder-intro h3 { margin: 6px 0 0; color: var(--ws-text); font-size: 20px; line-height: 1.35; }
+.dossier-reminder-icon { display: grid; place-items: center; flex: none; width: 52px; height: 52px; border: 1px solid var(--ws-line); border-radius: 16px; color: var(--ws-link); background: var(--ws-muted-surface); }
+.dossier-reminder-kicker { color: var(--ws-muted); font-size: 12px; font-weight: 600; }
+.dossier-reminder-dialog p { line-height: 1.6; }
+.dossier-reminder-explanation { padding: 14px 16px; margin: 16px 0; border-radius: 14px; background: var(--ws-muted-surface); border: 1px solid var(--ws-line); }
+.dossier-reminder-explanation p { margin: 8px 0 0; color: var(--ws-muted); }
+.dossier-reminder-resume { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin: 8px 0; padding: 12px 16px; color: var(--ws-text); border: 1px solid var(--ws-line); border-radius: 14px; background: var(--ws-surface); }
+@media (max-width: 680px) {
+  .dossier-reminder-dialog.fui-DialogSurface { padding: 18px; width: calc(100vw - 16px); max-height: calc(100dvh - 16px); }
+  .dossier-reminder-dialog .fui-DialogBody { max-height: calc(100dvh - 54px); }
+  .dossier-reminder-dialog .fui-DialogActions > button { flex: 1 1 160px; min-height: 40px; }
+}

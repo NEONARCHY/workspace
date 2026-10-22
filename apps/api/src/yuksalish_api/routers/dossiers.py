@@ -7,6 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+from .. import dossier_reminders
 from .. import dossier_service as service
 from ..auth import AuthenticatedUser, require_user
 from ..database import get_connection
@@ -20,6 +21,8 @@ from ..dossier_schemas import (
     DossierHistory,
     DossierImportPreview,
     DossierPermissions,
+    DossierReminder,
+    DossierReminderAnswer,
     DossierSummary,
     DossierWrite,
     PhotoCard,
@@ -52,6 +55,18 @@ async def _call(operation: Awaitable[Result]) -> Result:
 @router.get("/context", response_model=DossierContext)
 async def context(user: User, connection: Connection) -> DossierContext:
     return await _call(service.context(connection, user))
+
+
+@router.get("/reminder", response_model=DossierReminder)
+async def reminder(user: User, connection: Connection) -> DossierReminder:
+    return await _call(dossier_reminders.reminder(connection, user))
+
+
+@router.post("/reminder", response_model=DossierReminder)
+async def answer_reminder(
+    payload: DossierReminderAnswer, user: User, connection: Connection,
+) -> DossierReminder:
+    return await _call(dossier_reminders.answer(connection, user, payload))
 
 
 @router.get("", response_model=list[DossierSummary])
