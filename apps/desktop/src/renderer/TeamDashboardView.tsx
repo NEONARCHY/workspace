@@ -37,6 +37,7 @@ import { SlidingSegmented } from "./SlidingSegmented";
 import { isTaskOverdue as deadlineIsOverdue } from "./task-deadline";
 import { WorkspaceDialog } from "./WorkspaceDialog";
 import { useTeamTaskProposals } from "./useTeamTaskProposals";
+import { useTeamGrantInbox } from "./useTeamGrantInbox";
 
 interface TeamDashboardViewProps {
   readonly children?: ReactNode;
@@ -52,13 +53,14 @@ interface TeamDashboardViewProps {
   readonly onSelectPaymentRequest?: (requestId: string) => void;
   readonly onSelectSignatureLetter?: (letterId: string) => void;
   readonly onSelectTaskProposal?: (proposalId: string) => void;
+  readonly onSelectGrant?: (grantId: string) => void;
   readonly calendarEvents?: readonly CalendarEvent[];
   readonly onCalendarResponse?: (event: CalendarEvent, status: "accepted" | "declined") => Promise<CalendarEvent | undefined>;
   readonly onDecideDeadline?: (task: WorkspaceTask, requestId: string, approved: boolean) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
 }
 
 type TeamFilter = "all" | "risk" | "review";
-type DecisionPanel = "overdue" | "review" | "payments" | "extensions" | "invitations" | "signatures" | "proposals";
+type DecisionPanel = "overdue" | "review" | "payments" | "extensions" | "invitations" | "signatures" | "proposals" | "grants" | "grant_launches";
 type AttentionTone = "danger" | "review" | "today" | "priority" | "soon";
 type FlowStatusKey = "new" | "progress" | "review" | "overdue";
 type FlowSelection =
@@ -180,6 +182,7 @@ export function TeamDashboardView({
   onSelectPaymentRequest,
   onSelectSignatureLetter,
   onSelectTaskProposal,
+  onSelectGrant,
   calendarEvents = [],
   onCalendarResponse,
   onDecideDeadline,
@@ -188,6 +191,7 @@ export function TeamDashboardView({
   const [decisionPanel, setDecisionPanel] = useState<DecisionPanel>();
   const signatureInbox = useSignatureInbox(token, currentUserId, Boolean(onSelectSignatureLetter));
   const proposalInbox = useTeamTaskProposals(token, currentUserId, Boolean(onSelectTaskProposal));
+  const grantInbox = useTeamGrantInbox(token, currentUserId, Boolean(onSelectGrant));
   const [selectedDeadlineTaskId, setSelectedDeadlineTaskId] = useState<string>();
   const [invitationBusyId, setInvitationBusyId] = useState<string>();
   const [invitationError, setInvitationError] = useState("");
@@ -311,6 +315,8 @@ export function TeamDashboardView({
     invitations: "Приглашения на мероприятия и встречи",
     signatures: "Письма, ожидающие вашей подписи",
     proposals: "Запросы на постановку задач",
+    grants: "Гранты на вашей проверке",
+    grant_launches: "Запросы на запуск грантов",
   };
   const openTask = (taskId: string) => { setDecisionPanel(undefined); setSelectedPersonId(undefined); onSelectTask(taskId); };
 
@@ -354,11 +360,22 @@ export function TeamDashboardView({
       <MetricCard active={decisionPanel === "invitations"} onSelect={() => setDecisionPanel("invitations")} icon={<CalendarClock24Regular />} label="Приглашения" value={pendingInvitations.length} note="ожидают вашего ответа" tone="brand" />
       {onSelectSignatureLetter ? <MetricCard active={decisionPanel === "signatures"} onSelect={() => setDecisionPanel("signatures")} icon={<Mail24Regular />} label="Письма на подпись" value={signatureInbox.registry?.totalCount} loading={signatureInbox.loading} note={signatureInbox.error ? "не удалось загрузить · подробнее" : signatureInbox.loading ? "загружаем письма…" : "ждут вашей подписи"} tone="review" /> : null}
       {onSelectTaskProposal ? <MetricCard active={decisionPanel === "proposals"} onSelect={() => setDecisionPanel("proposals")} icon={<ClipboardTask24Regular />} label="Постановка задач" value={proposalInbox.proposals?.length} loading={proposalInbox.loading} note={proposalInbox.error ? "не удалось загрузить · подробнее" : "запросы сотрудников на ваше решение"} tone="brand" /> : null}
+      {onSelectGrant ? <div className="team-dash-grant-metric" role="group" aria-label="Гранты: проверка и запуск">
+        <MetricCard active={decisionPanel === "grants"} onSelect={() => setDecisionPanel("grants")} icon={<ClipboardTask24Regular />} label="Заявки на гранты" value={grantInbox.reviews?.length} loading={grantInbox.loading} note={grantInbox.error ? "не удалось загрузить · подробнее" : "результаты на вашей проверке"} tone="brand" />
+        <MetricCard active={decisionPanel === "grant_launches"} onSelect={() => setDecisionPanel("grant_launches")} icon={<CheckmarkCircle24Regular />} label="Запросы на постановку грантов" value={grantInbox.launches?.length} loading={grantInbox.loading} note={grantInbox.error ? "не удалось загрузить · подробнее" : "инициативы ждут разрешения запуска"} tone="review" />
+      </div> : null}
     </section>
     <WorkspaceDialog open={Boolean(decisionPanel)} onOpenChange={(_, data) => { if (!data.open) setDecisionPanel(undefined); }}>
       <DialogSurface className="team-dash-dialog" aria-label={decisionPanel ? decisionTitles[decisionPanel] : "Решения команды"}>
       {decisionPanel ? <section className="team-dash-decisions" role="region" aria-label={decisionTitles[decisionPanel]}>
       <header><div><span>Входящие решения</span><h3>{decisionTitles[decisionPanel]}</h3></div><Button appearance="subtle" onClick={() => setDecisionPanel(undefined)}>Закрыть</Button></header>
+      {(decisionPanel === "grants" || decisionPanel === "grant_launches") && onSelectGrant ? <>
+        <p>{decisionPanel === "grant_launches" ? "После вашего разрешения вы станете постановщиком, а сотрудник сохранится инициатором." : "Результаты после проверки заместителя. Откройте заявку для принятия решения."}</p>
+        {grantInbox.error ? <WorkspaceNotice tone="error" role="alert" actions={<Button onClick={grantInbox.refresh}>Повторить загрузку</Button>}>{grantInbox.error}</WorkspaceNotice> : null}
+        {grantInbox.loading ? <p role="status">Загружаем гранты…</p> : null}
+        {(decisionPanel === "grant_launches" ? grantInbox.launches : grantInbox.reviews)?.map((grant) => <button type="button" className="team-dash-payment-item" key={grant.id} onClick={() => { setDecisionPanel(undefined); onSelectGrant(grant.id); }}><strong>{grant.title}</strong><span>Инициатор: {personById.get(grant.initiatorUserId)?.name ?? "Сотрудник"} · Срок: {new Date(grant.dueAt).toLocaleString("ru-RU")}</span><ArrowRight20Regular aria-hidden="true" /></button>)}
+        {(decisionPanel === "grant_launches" ? grantInbox.launches : grantInbox.reviews)?.length === 0 ? <p>{decisionPanel === "grant_launches" ? "Запросов на запуск грантов нет." : "Грантов, ожидающих вашей проверки, нет."}</p> : null}
+      </> : null}
       {decisionPanel === "overdue" || decisionPanel === "review" ? (decisionPanel === "overdue" ? overdueTasks : reviewTasks).length ? (decisionPanel === "overdue" ? overdueTasks : reviewTasks).map((task) => <button type="button" className="team-dash-payment-item" key={task.id} onClick={() => openTask(task.id)}><strong>{task.title}</strong><span>{personById.get(task.assigneeId)?.name ?? "Сотрудник"} · {task.dueLabel} · {decisionPanel === "overdue" ? overdueLabel(task, now) : "Вы постановщик"}</span><ArrowRight20Regular aria-hidden="true" /></button>) : <p>{decisionPanel === "overdue" ? "Задач с истёкшим сроком нет." : "Ваших задач, ожидающих проверки, нет."}</p> : null}
       {decisionPanel === "signatures" && onSelectSignatureLetter ? <TeamSignatureLetters inbox={signatureInbox} onSelect={(id) => { setDecisionPanel(undefined); onSelectSignatureLetter(id); }} /> : null}
       {decisionPanel === "payments" ? pendingPayments.length ? pendingPayments.map((request) => <button type="button" className="team-dash-payment-item" key={request.id} onClick={() => onSelectPaymentRequest?.(request.id)}><strong>{request.title}</strong><span>№ {request.number} · {request.stageLabel}</span><ArrowRight20Regular aria-hidden="true" /></button>) : <p>Заявок на оплату, ожидающих вашего решения, нет.</p>

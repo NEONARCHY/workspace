@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import insert, or_, select, update
+from sqlalchemy import func, insert, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncConnection
@@ -33,6 +33,9 @@ from .repository import _active_user_id, _attachment, _sync_context_chat, _upser
 from .tables import attachments, audit_events, hr_settings, users, workspace_notifications
 
 WORKING = {"in_progress", "needs_revision"}
+LAUNCH_STAGES = {"launch_review", "launch_revision", "launch_rejected"}
+TERMINAL = {"completed", "launch_rejected"}
+REVIEW_ACTIONS = {"approve", "return", "approve_launch", "return_launch", "reject_launch"}
 REVIEW_ACTORS = {
     "author_review": "author_user_id",
     "leader_review": "leader_user_id",
@@ -47,7 +50,8 @@ NEXT_STATUS: dict[str, GrantStatus] = {
 
 def participants(row: RowMapping) -> set[UUID]:
     return {
-        row["author_user_id"],
+        row["initiator_user_id"],
+        *([row["author_user_id"]] if row["author_user_id"] else []),
         row["assignee_id"],
         row["leader_user_id"],
         row["chair_user_id"],
@@ -60,8 +64,15 @@ def allowed_actions(row: RowMapping, user: AuthenticatedUser) -> list[str]:
     actions: list[str] = []
     if user.id not in participants(row):
         return actions
-    if row["status"] != "completed":
+    if row["status"] not in TERMINAL:
         actions.append("comment")
+    if row["status"] in {"launch_review", "launch_revision"}:
+        if user.id == row["initiator_user_id"]:
+            actions.extend(["edit", "upload"])
+            if row["status"] == "launch_revision":
+                actions.append("submit_launch")
+        if row["status"] == "launch_review" and user.id == row["chair_user_id"]:
+            actions.extend(["approve_launch", "return_launch", "reject_launch"])
     if row["status"] in WORKING:
         if user.id == row["author_user_id"]:
             actions.extend(["edit", "upload"])
@@ -106,7 +117,7 @@ async def _actions(
     return [
         action
         for action in allowed_actions(row, user)
-        if rights["approve" if action in {"approve", "return"} else "edit"]
+        if rights["approve" if action in REVIEW_ACTIONS else "edit"]
     ]
 
 
@@ -120,7 +131,13 @@ async def _summary(
         id=str(row["id"]),
         title=row["title"],
         description=row["description"],
-        author_user_id=str(row["author_user_id"]),
+        author_user_id=str(row["author_user_id"]) if row["author_user_id"] else None,
+        initiator_user_id=str(row["initiator_user_id"]),
+        workflow_version=row["workflow_version"],
+        launch_approved_at=row["launch_approved_at"],
+        launch_approved_by_user_id=(
+            str(row["launch_approved_by_user_id"]) if row["launch_approved_by_user_id"] else None
+        ),
         assignee_id=str(row["assignee_id"]),
         co_assignee_ids=row["co_assignee_ids"],
         leader_user_id=str(row["leader_user_id"]),
@@ -147,6 +164,7 @@ async def list_grants(
         statement = statement.where(
             or_(
                 grant_requests.c.author_user_id == user.id,
+                grant_requests.c.initiator_user_id == user.id,
                 grant_requests.c.assignee_id == user.id,
                 grant_requests.c.leader_user_id == user.id,
                 grant_requests.c.chair_user_id == user.id,
@@ -409,14 +427,16 @@ async def _notify(connection: AsyncConnection, row: RowMapping) -> None:
         )
         .values(resolved_at=now, requires_action=False)
     )
-    actor_field = REVIEW_ACTORS.get(row["status"])
+    actor_field = (
+        "chair_user_id" if row["status"] == "launch_review" else REVIEW_ACTORS.get(row["status"])
+    )
     next_actors = (
         {row[actor_field]}
         if actor_field
         else (
             {row["assignee_id"], *(UUID(item) for item in row["co_assignee_ids"])}
             if row["status"] in WORKING
-            else set()
+            else {row["initiator_user_id"]} if row["status"] == "launch_revision" else set()
         )
     )
     for person_id in participants(row):
@@ -426,7 +446,12 @@ async def _notify(connection: AsyncConnection, row: RowMapping) -> None:
             event_key=f"grant:{row['id']}:{row['revision']}",
             kind="approval",
             priority="normal",
-            title="Грант завершён" if row["status"] == "completed" else "Заявка на грант",
+            title={
+                "completed": "Грант завершён",
+                "launch_review": "Запрос на запуск гранта",
+                "launch_revision": "Уточните заявку на запуск гранта",
+                "launch_rejected": "Запуск гранта отклонён",
+            }.get(row["status"], "Заявка на грант"),
             body=row["title"],
             section="grants",
             entity_id=row["id"],
@@ -442,20 +467,31 @@ async def _sync_chat(connection: AsyncConnection, row: RowMapping) -> UUID:
         context_id=row["id"],
         title=row["title"],
         description=row["description"],
-        owner_user_id=row["author_user_id"],
+        owner_user_id=row["author_user_id"] or row["initiator_user_id"],
         member_user_ids=list(participants(row)),
     )
+
+
+async def lock_grant_creation(connection: AsyncConnection, request_id: UUID) -> None:
+    # Serialize all create variants before checking the idempotency fingerprint.
+    await connection.execute(select(func.pg_advisory_xact_lock(request_id.int % (1 << 63))))
 
 
 async def create_grant(
     connection: AsyncConnection,
     user: AuthenticatedUser,
     payload: GrantCreate,
+    *,
+    initial_files_digest: str | None = None,
 ) -> GrantDetail:
     await ensure_module_action(connection, user, "grants", "create")
+    await lock_grant_creation(connection, payload.request_id)
+    fingerprint_data = payload.model_dump(mode="json")
+    if initial_files_digest is not None:
+        fingerprint_data["initial_files_digest"] = initial_files_digest
     fingerprint = hashlib.sha256(
         json.dumps(
-            payload.model_dump(mode="json"),
+            fingerprint_data,
             sort_keys=True,
             ensure_ascii=False,
         ).encode()
@@ -472,7 +508,7 @@ async def create_grant(
         .first()
     )
     if existing:
-        if existing["author_user_id"] != user.id or existing["creation_hash"] != fingerprint:
+        if existing["initiator_user_id"] != user.id or existing["creation_hash"] != fingerprint:
             raise WorkspaceRepositoryError(409, "Номер отправки уже использован другой заявкой")
         return await get_grant(connection, user, payload.request_id)
     await _validate_fields(connection, payload)
@@ -494,13 +530,15 @@ async def create_grant(
             creation_hash=fingerprint,
             title=payload.title,
             description=payload.description,
-            author_user_id=user.id,
+            initiator_user_id=user.id,
+            author_user_id=None,
+            workflow_version=2,
             assignee_id=payload.assignee_id,
             co_assignee_ids=[str(item) for item in payload.co_assignee_ids],
             leader_user_id=UUID(settings.leader_user_id),
             chair_user_id=UUID(settings.chair_user_id),
             due_at=payload.due_at,
-            status="in_progress",
+            status="launch_review",
             revision=1,
             result_text="",
             chat_id=None,
@@ -517,7 +555,9 @@ async def create_grant(
         .returning(grant_requests.c.id)
     )
     if inserted is None:
-        return await create_grant(connection, user, payload)
+        return await create_grant(
+            connection, user, payload, initial_files_digest=initial_files_digest
+        )
     row = await access_grant(connection, user, payload.request_id, lock=True)
     chat_id = await _sync_chat(connection, row)
     await connection.execute(
@@ -527,7 +567,7 @@ async def create_grant(
         )
         .values(chat_id=chat_id)
     )
-    await _event(connection, row, user, "created", "", "in_progress")
+    await _event(connection, row, user, "created", "", "launch_review")
     await _notify(connection, row)
     return await get_grant(connection, user, payload.request_id)
 
@@ -550,7 +590,7 @@ async def edit_grant(
     row = await access_grant(connection, user, grant_id, lock=True)
     _check_revision(row, payload.expected_revision)
     if "edit" not in allowed_actions(row, user):
-        raise WorkspaceRepositoryError(403, "Постановщик редактирует заявку только до проверки")
+        raise WorkspaceRepositoryError(403, "Редактирование недоступно на этом этапе заявки")
     await _validate_fields(connection, payload)
     old_items = {item["title"]: item for item in row["checklist"]}
     checklist = [
@@ -593,7 +633,7 @@ async def act_on_grant(
         connection,
         user,
         "grants",
-        "approve" if payload.action in {"approve", "return"} else "edit",
+        "approve" if payload.action in REVIEW_ACTIONS else "edit",
     )
     row = await access_grant(connection, user, grant_id, lock=True)
     _check_revision(row, payload.expected_revision)
@@ -605,13 +645,34 @@ async def act_on_grant(
     text = payload.text.strip()
     to_status = row["status"]
     values: dict[str, object] = {"revision": row["revision"] + 1, "updated_at": datetime.now(UTC)}
-    if payload.action in {"return", "comment", "submit"} and not text:
+    if (
+        payload.action in {"return", "comment", "submit", "return_launch", "reject_launch"}
+        and not text
+    ):
         raise WorkspaceRepositoryError(422, "Введите результат, комментарий или причину доработки")
-    if payload.action == "submit":
-        await _validate_reviewer(connection, row["author_user_id"])
+    if payload.action == "approve_launch":
+        await _validate_fields(connection, GrantFields(
+            title=row["title"], description=row["description"], assignee_id=row["assignee_id"],
+            co_assignee_ids=row["co_assignee_ids"], due_at=row["due_at"],
+            checklist=[item["title"] for item in row["checklist"]],
+        ))
+        await _validate_reviewer(connection, row["leader_user_id"])
+        to_status = "in_progress"
+        values["author_user_id"] = user.id
+        values["launch_approved_at"] = datetime.now(UTC)
+        values["launch_approved_by_user_id"] = user.id
+    elif payload.action == "return_launch":
+        to_status = "launch_revision"
+    elif payload.action == "reject_launch":
+        to_status = "launch_rejected"
+    elif payload.action == "submit_launch":
+        await _validate_reviewer(connection, row["chair_user_id"])
+        to_status = "launch_review"
+    elif payload.action == "submit":
+        to_status = "leader_review" if row["workflow_version"] == 2 else "author_review"
+        await _validate_reviewer(connection, row[REVIEW_ACTORS[to_status]])
         if any(not item["completed"] for item in row["checklist"]):
             raise WorkspaceRepositoryError(409, "Сначала выполните все пункты чек-листа")
-        to_status = "author_review"
         values["result_text"] = text
     elif payload.action == "approve":
         to_status = NEXT_STATUS[row["status"]]
@@ -648,7 +709,9 @@ async def act_on_grant(
         )
     )
     await _event(connection, row, user, payload.action, text, to_status)
-    if payload.action in {"submit", "approve", "return"}:
+    if payload.action == "approve_launch":
+        await _sync_chat(connection, await access_grant(connection, user, grant_id))
+    if payload.action in {"submit", "approve", "return", "submit_launch", *REVIEW_ACTIONS}:
         await _notify(connection, await access_grant(connection, user, grant_id))
     return await get_grant(connection, user, grant_id)
 
@@ -682,13 +745,20 @@ async def change_reviewers(
         raise WorkspaceRepositoryError(403, "Согласующих меняет администратор")
     row = await access_grant(connection, user, grant_id, lock=True)
     _check_revision(row, payload.expected_revision)
-    if row["status"] == "completed":
+    if row["status"] in TERMINAL:
         raise WorkspaceRepositoryError(409, "Завершённую заявку изменять нельзя")
     if len(payload.reason.strip()) < 3 or payload.leader_user_id == payload.chair_user_id:
         raise WorkspaceRepositoryError(422, "Укажите причину и разных согласующих")
     for person_id in (payload.leader_user_id, payload.chair_user_id):
         await _validate_reviewer(connection, person_id)
-    new_status = row["status"] if row["status"] in WORKING else "author_review"
+    new_status = row["status"] if row["status"] in WORKING | LAUNCH_STAGES else (
+        "leader_review" if row["workflow_version"] == 2 else "author_review"
+    )
+    # A launch decision belongs to its named chairman, not to an administrative role.
+    owner_values = (
+        {"author_user_id": payload.chair_user_id}
+        if row["workflow_version"] == 2 and row["launch_approved_at"] else {}
+    )
     await connection.execute(
         update(grant_requests)
         .where(grant_requests.c.id == grant_id)
@@ -698,6 +768,7 @@ async def change_reviewers(
             status=new_status,
             revision=row["revision"] + 1,
             updated_at=datetime.now(UTC),
+            **owner_values,
         )
     )
     names: dict[UUID, str] = {

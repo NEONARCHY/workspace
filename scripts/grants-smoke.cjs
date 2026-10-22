@@ -12,11 +12,13 @@ async function main() {
   const errors = [];
   const checks = [];
   const creationAttempts = [];
+  const creationFiles = [];
   page.on("pageerror", (error) => errors.push(error.message));
   const grant = {
     id: "synthetic-grant", title: "Подготовка грантовой заявки: развитие местных инициатив",
     description: "Подготовить описание проекта, рабочий план и бюджет. Проверить комплектность документов для подачи на конкурс.",
     authorUserId: "actor-0", assigneeId: "actor-1", coAssigneeIds: ["actor-2"],
+    initiatorUserId: "actor-0", workflowVersion: 1, launchApprovedAt: null, launchApprovedByUserId: null,
     leaderUserId: "actor-3", chairUserId: "actor-4", dueAt: "2099-11-01T12:00:00Z",
     status: "author_review", revision: 4, resultText: "Подготовлены проектная заявка, календарный план и бюджет. Материалы переданы для проверки.",
     checklist: [{id:"item-1",title:"Подготовить описание проекта",completed:true,completedByUserId:"actor-1",completedAt:"2026-10-20T12:00:00Z"},
@@ -28,8 +30,12 @@ async function main() {
   await page.route("**/api/v1/**", async (route) => {
     const url = new URL(route.request().url());
     let data;
-    if (url.pathname === "/api/v1/grants" && route.request().method() === "POST") {
-      creationAttempts.push(route.request().postDataJSON());
+    if (["/api/v1/grants", "/api/v1/grants/with-files"].includes(url.pathname) && route.request().method() === "POST") {
+      if (url.pathname.endsWith("/with-files")) {
+        const form = await new Response(route.request().postDataBuffer(), {headers: {"content-type": await route.request().headerValue("content-type")}}).formData();
+        creationAttempts.push(JSON.parse(form.get("payload")));
+        creationFiles.push(form.getAll("files").map(file => file.name));
+      } else creationAttempts.push(route.request().postDataJSON());
       return route.fulfill({status:503,headers:{"Content-Type":"application/json","Access-Control-Allow-Origin":"*"},body:JSON.stringify({detail:"Synthetic retry test"})});
     }
     if (url.pathname === "/api/v1/grants/settings") data = {leaderUserId:"actor-3",chairUserId:"actor-4",revision:1};
@@ -70,17 +76,34 @@ async function main() {
     await page.getByRole("button",{name:"Новая заявка",exact:true}).click();
     const form=page.getByRole("dialog",{name:"Новая заявка на грант"});
     await form.waitFor();
+    for (const [width,height] of [[1440,1000],[1024,768],[640,480]]) {
+      await page.setViewportSize({width,height});
+      const bounds=await form.boundingBox();
+      const footer=await form.locator('.record-composer-footer').boundingBox();
+      assert(bounds.x>=0 && bounds.y>=0 && bounds.x+bounds.width<=width+1 && bounds.y+bounds.height<=height+1,"creation dialog contained");
+      assert(footer.y+footer.height<=height+1,"creation footer reachable");
+      await page.screenshot({path:path.join(output,`create-${width}-light.png`)});
+      checks.push(`${width}x${height}: creation bounds and fixed footer`);
+    }
+    await page.setViewportSize({width:1440,height:1000});
     await page.screenshot({path:path.join(output,"create-light.png")});
     await form.getByLabel("Название гранта *",{exact:true}).fill("Синтетическая заявка для проверки повтора");
-    await form.getByRole("combobox",{name:/Ответственный/}).selectOption("actor-1");
-    await form.getByLabel(/Срок/).fill("2099-11-01T09:00");
-    await form.getByRole("button",{name:"Сохранить заявку",exact:true}).click();
+    await form.getByRole("button",{name:"Ответственный гранта",exact:true}).click();
+    await page.locator('.person-picker-list').getByRole("button",{name:/Тестовый Бехруз/}).click();
+    await form.getByLabel("Срок *",{exact:true}).fill("2099-11-01T09:00");
+    await form.getByLabel("Файлы для ознакомления",{exact:true}).setInputFiles([
+      {name:"terms.txt",mimeType:"text/plain",buffer:Buffer.from("Synthetic terms")},
+      {name:"budget.csv",mimeType:"text/csv",buffer:Buffer.from("cost,100")},
+    ]);
+    await form.getByRole("button",{name:"Отправить на запуск",exact:true}).click();
     await form.getByRole("alert").filter({hasText:"Synthetic retry test"}).waitFor();
     assert.equal(await form.getByLabel("Название гранта *",{exact:true}).inputValue(),"Синтетическая заявка для проверки повтора");
-    await form.getByRole("button",{name:"Сохранить заявку",exact:true}).click();
-    await page.waitForFunction(()=>!document.querySelector('.grants-editor button[type="submit"]').disabled);
+    await form.getByRole("button",{name:"Отправить на запуск",exact:true}).click();
+    await page.waitForFunction(()=>!document.querySelector('.grant-composer button[type="submit"]').disabled);
     assert.equal(creationAttempts.length,2);
     assert.equal(creationAttempts[0].requestId,creationAttempts[1].requestId);
+    assert.deepEqual(creationFiles,[["terms.txt","budget.csv"],["terms.txt","budget.csv"]]);
+    await form.getByRole("button",{name:"Убрать файл terms.txt",exact:true}).waitFor();
     await form.getByRole("button",{name:"Отмена",exact:true}).click();
     await form.waitFor({state:"hidden"});
     checks.push("real browser: failed creation preserves input, retries the same request, and cancels without another request");

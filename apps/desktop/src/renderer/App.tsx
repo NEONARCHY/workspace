@@ -2081,7 +2081,7 @@ export function App() {
   };
   const renderEmbeddedChat = (
     chatId: string,
-    contextLabel: "задачи" | "проекта" | "поездки",
+    contextLabel: "задачи" | "проекта" | "поездки" | "гранта",
   ) => <EmbeddedConversation
     canUseAssistant={canUseAssistant}
     chatId={chatId}
@@ -2140,7 +2140,7 @@ export function App() {
     onDownloadAttachment: handleDownloadAttachment, onLoadAttachment: handleLoadAttachment,
     onMarkRead: handleMarkChatRead,
     onOpenContext: (contextType, contextId) => {
-      const section = contextType === "task" ? "tasks" : contextType === "project" ? "projects" : contextType === "project_hub" ? "project_hub" : "trip_approvals";
+      const section = contextType === "task" ? "tasks" : contextType === "project" ? "projects" : contextType === "project_hub" ? "project_hub" : contextType === "grant" ? "grants" : "trip_approvals";
       setFocusTarget((current) => ({ section, entityId: contextId, revision: (current?.revision ?? 0) + 1 }));
       setActiveSection(section);
     },
@@ -2408,6 +2408,10 @@ export function App() {
                     setFocusTarget((current) => ({ section: "tasks", entityId: proposalId, revision: (current?.revision ?? 0) + 1 }));
                     setActiveSection("tasks");
                   }}
+                  onSelectGrant={chairmanHome && canView("grants") ? (grantId) => {
+                    setFocusTarget((current) => ({ section: "grants", entityId: grantId, revision: (current?.revision ?? 0) + 1 }));
+                    setActiveSection("grants");
+                  } : undefined}
                   paymentRequests={canView("payment_requests") && workspace.workflow ? workspace.requests : []}
                   onSelectSignatureLetter={canView("ai_referent") ? (letterId) => {
                     setFocusTarget((current) => ({ section: "ai_referent", entityId: letterId, revision: (current?.revision ?? 0) + 1 }));
@@ -2598,6 +2602,7 @@ export function App() {
               canAdmin={modulePermissions.grants?.admin === true && ["admin", "superadmin"].includes(workspace.currentUser.role)}
               focusId={focusTarget?.section === "grants" ? focusTarget.entityId : undefined}
               onOpenChat={canView("messenger") ? (chatId) => void handleOpenContextChat(chatId) : undefined}
+              renderGrantChat={canView("messenger") ? (grant) => renderEmbeddedChat(grant.chatId, "гранта") : undefined}
               onPreviewAttachment={setPreviewAttachment} onDownloadAttachment={handleSaveAttachment}
             /> : null}
             {displayedSection === "trip_approvals" ? (

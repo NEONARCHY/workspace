@@ -1877,6 +1877,7 @@ async def _sync_notifications_for_user(
     if current_user.role not in {"admin", "superadmin"}:
         accessible_grant_ids = accessible_grant_ids.where(or_(
             grant_requests.c.author_user_id == current_user.id,
+            grant_requests.c.initiator_user_id == current_user.id,
             grant_requests.c.assignee_id == current_user.id,
             grant_requests.c.leader_user_id == current_user.id,
             grant_requests.c.chair_user_id == current_user.id,
@@ -4257,6 +4258,14 @@ async def _sync_context_chat(
         ).model_dump(),
         "joined_at": now, "muted_until": None,
     } for user_id in sorted(desired_ids)]
+    if context_type == "grant":
+        # Release the unique owner slot before promoting the chairman. UUID sort
+        # order must not decide whether an atomic grant launch succeeds.
+        await connection.execute(update(chat_members).where(
+            chat_members.c.chat_id == chat_id,
+            chat_members.c.member_role == "owner",
+            chat_members.c.user_id != owner_user_id,
+        ).values(member_role="member", permissions=ChatPermissions().model_dump()))
     if not values:
         return cast(UUID, chat_id)
     member_insert = pg_insert(chat_members).values(values)

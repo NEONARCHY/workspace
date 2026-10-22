@@ -9,6 +9,9 @@ from pydantic import Field, field_validator
 from .workspace_schemas import ApiModel, AttachmentResponse
 
 GrantStatus = Literal[
+    "launch_review",
+    "launch_revision",
+    "launch_rejected",
     "in_progress",
     "needs_revision",
     "author_review",
@@ -58,7 +61,10 @@ class GrantEdit(GrantFields):
 
 
 class GrantAction(ApiModel):
-    action: Literal["submit", "approve", "return", "comment", "check"]
+    action: Literal[
+        "submit", "approve", "return", "comment", "check",
+        "approve_launch", "return_launch", "reject_launch", "submit_launch",
+    ]
     expected_revision: int = Field(ge=1)
     text: str = Field(default="", max_length=12000)
     item_id: UUID | None = None
@@ -94,7 +100,11 @@ class GrantSummary(ApiModel):
     id: str
     title: str
     description: str
-    author_user_id: str
+    author_user_id: str | None
+    initiator_user_id: str
+    workflow_version: Literal[1, 2]
+    launch_approved_at: datetime | None
+    launch_approved_by_user_id: str | None
     assignee_id: str
     co_assignee_ids: list[str]
     leader_user_id: str

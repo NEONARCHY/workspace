@@ -22,6 +22,7 @@ describe("corporate workspace authentication alpha", () => {
     const grant: GrantDetail = {
       id: "grant-notification", title: "Проверить грантовую заявку", description: "План и бюджет",
       authorUserId: people[0]!.id, assigneeId: people[1]!.id, coAssigneeIds: [],
+      initiatorUserId: people[0]!.id, workflowVersion: 1, launchApprovedAt: null, launchApprovedByUserId: null,
       leaderUserId: people[1]!.id, chairUserId: people[2]!.id, dueAt: "2099-11-01T12:00:00Z",
       status: "author_review", revision: 1, checklist: [], resultText: "Материалы готовы",
       chatId: "grant-chat", createdAt: "2026-10-20T12:00:00Z", updatedAt: "2026-10-20T12:00:00Z",

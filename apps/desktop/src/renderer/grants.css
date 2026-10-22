@@ -1,4 +1,4 @@
-.grants-view { gap: 16px; min-width: 0; overflow: auto; }
+.grants-view { display: flex; flex-direction: column; gap: 16px; min-width: 0; min-height: 0; overflow: auto; }
 .grants-actions, .grants-detail-command, .grants-filters { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .grants-toolbar { display: flex; gap: 16px; justify-content: space-between; align-items: end; flex-wrap: wrap; }
 .grants-search, .grants-form label, .grants-result label, .grants-comment label, .grants-return label, .grants-upload { display: grid; gap: 8px; }
@@ -21,6 +21,9 @@
 .grants-status[data-status="needs_revision"] { color: var(--colorPaletteRedForeground1); }
 .grants-person { display: flex; gap: 10px; align-items: center; }
 .grants-person small, .grants-overdue { display: block; margin-top: 4px; }
+.grants-owner { display: block; margin-top: 6px; color: var(--ws-muted); font-size: 12px; }
+.grants-status[data-status="launch_review"], .grants-status[data-status="launch_revision"] { color: var(--ws-link); }
+.grants-status[data-status="launch_rejected"] { color: var(--colorPaletteRedForeground1); }
 .grants-overdue { color: var(--colorPaletteRedForeground1); }
 .grants-empty { padding: 32px; text-align: center; color: var(--ws-muted); }
 .fui-DialogSurface.grants-dialog { width: min(1040px, calc(100vw - 40px)); max-width: 1040px; max-height: calc(100dvh - 40px); padding: 0; display: flex; flex-direction: column; overflow: hidden; color: var(--ws-text); background: var(--ws-surface); }
@@ -55,12 +58,94 @@
 .grants-review-actions > p { width: 100%; font-size: 12px; color: var(--ws-muted); margin: 0; }
 .fui-DialogSurface.grants-settings { max-width: 640px; }
 .grants-dialog :focus-visible, .grants-view :focus-visible { outline: 2px solid var(--ws-link); outline-offset: 3px; }
+.grants-record-workspace { display: flex; min-height: 0; width: 100%; }
+.grants-detail-pane { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; }
+.grants-detail-pane > .grants-dialog-body { flex: 1; }
+.fui-DialogSurface.grants-detail-dialog.has-chat { width: min(1600px, calc(100vw - 32px)); max-width: none; height: calc(100dvh - 32px); }
+.grants-detail-dialog.has-chat .grants-record-workspace { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); height: 100%; overflow: hidden; }
+.grants-record-workspace > .embedded-chat { display: block; min-width: 0; min-height: 0; padding: 0; border-inline-start: 1px solid var(--ws-line); }
+.grants-record-workspace .embedded-conversation { height: 100%; border-radius: 0; }
+.grants-record-workspace .conversation-header { flex-wrap: wrap; gap: 8px; padding: 16px; }
+.grant-participant { display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
+.grant-participant > :first-child { flex: none; }
+.grant-participant > span:last-child { display: grid; min-width: 0; gap: 4px; overflow-wrap: anywhere; }
+.grant-participant small, .grant-pending-owner small { color: var(--ws-muted); font-size: 12px; font-weight: 400; }
+.grant-participant strong { font-size: 14px; font-weight: 600; }
+.grant-primary-people { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.grant-primary-people > * { padding: 14px; border: 1px solid var(--ws-line); border-radius: 14px; background: var(--ws-canvas); }
+.grant-pending-owner { display: grid; gap: 6px; align-content: center; }
+.grant-team-roster { display: flex; align-items: center; flex-wrap: wrap; gap: 14px 20px; }
+.grants-route-person { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.grants-route-person > :first-child { flex: none; }
+.grant-composer .record-field-grid > label > :is(.person-picker-trigger, .ws-date-time-trigger, .fui-Input) { width: 100%; min-height: 40px; }
+.grant-composer-add-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; margin-bottom: 16px; }
+.grant-composer-add-row > .person-picker-trigger { width: 100%; }
+.grant-composer-person-chip { display: inline-flex; align-items: center; gap: 8px; padding: 10px; border: 1px solid var(--ws-line); border-radius: 14px; }
+.grant-composer-preview { display: grid; gap: 16px; }
+.grant-composer-preview > strong { font-size: 20px; overflow-wrap: anywhere; }
+.grant-composer-preview > p { white-space: pre-wrap; overflow-wrap: anywhere; }
+.grant-composer-checklist { display: grid; gap: 8px; padding: 0; margin: 0; list-style: none; }
+.grant-composer-checklist li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+.grant-composer-checklist strong { overflow-wrap: anywhere; font-weight: 500; }
+.grant-composer-checklist li > span { color: var(--ws-muted); font-variant-numeric: tabular-nums; }
+.grant-composer :focus-visible { outline: 2px solid var(--ws-link); outline-offset: 3px; }
+.grant-records { margin: 0; min-height: 240px; }
+.grant-record-table th:nth-child(1) { width: 31%; }
+.grant-record-table th:nth-child(2) { width: 27%; }
+.grant-record-table th:nth-child(3) { width: 12%; }
+.grant-record-table th:nth-child(4) { width: 14%; }
+.grant-record-table th:nth-child(5) { width: 16%; }
+.grant-record-owners { display: grid; gap: 12px; }
+.grant-record-decision { display: block; margin-top: 8px; color: var(--ws-link); font-size: 12px; }
+.grant-card-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; background: linear-gradient(112deg, var(--ws-surface) 0%, var(--ws-canvas) 100%); }
+.grant-card-heading { min-width: 0; }
+.grant-card-heading .eyebrow { display: flex; gap: 10px; align-items: center; font-size: 12px; color: var(--ws-muted); }
+.grant-card-heading .eyebrow > span { padding: 5px 9px; border-radius: 8px; background: var(--ws-selected); color: var(--ws-link); font-weight: 600; }
+.grant-card-header h2 { font-size: 28px; line-height: 1.2; margin: 10px 0 12px; }
+.grant-card-close { width: 36px; height: 36px; min-width: 36px; padding: 0; border: 1px solid var(--ws-line); background: var(--ws-surface); }
+.grant-card-meta { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.grant-card-meta > * { min-width: 0; padding: 14px; border: 1px solid var(--ws-line); border-radius: 14px; background: var(--ws-surface); }
+.grant-card-deadline { display: flex; align-items: center; gap: 12px; }
+.grant-card-deadline > svg { flex: none; color: var(--ws-muted); }
+.grant-card-deadline > span { display: grid; gap: 6px; overflow-wrap: anywhere; }
+.grant-card-deadline small { color: var(--ws-muted); font-size: 12px; }
+.grant-card-deadline strong { font-size: 14px; font-variant-numeric: tabular-nums; }
+.grant-card-initiator { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.grant-card-initiator > small { font-size: 12px; color: var(--ws-muted); }
+.grant-card-co-assignees { grid-column: 1 / -1; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.grant-card-co-assignees > span, .grant-card-co-assignees small { color: var(--ws-muted); font-size: 12px; }
+.grant-section { padding: 20px; border: 1px solid var(--ws-line); border-radius: 18px; background: var(--ws-surface); }
+.grant-result-section { border-color: var(--ws-control-line); background: var(--ws-canvas); }
+.grants-detail-dialog .grants-dialog-body { gap: 14px; background: var(--ws-canvas); }
+.grants-detail-dialog .grants-route li { position: relative; border: 0; padding: 8px 4px; justify-items: center; text-align: center; background: transparent; gap: 7px; }
+.grants-detail-dialog .grants-route li::before { position: absolute; content: ""; height: 1px; top: 22px; inset-inline: 0; background: var(--ws-line); }
+.grant-route-step { position: relative; display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid var(--ws-line); border-radius: 50%; background: var(--ws-surface); color: var(--ws-muted); font-variant-numeric: tabular-nums; }
+.grants-route li[aria-current="step"] .grant-route-step { border-color: var(--ws-link); color: var(--ws-link); background: var(--ws-selected); }
+.grants-route li small { font-size: 12px; color: var(--ws-muted); }
+.grant-source-file-list { display: grid; gap: 8px; margin: 14px 0 0; padding: 0; list-style: none; }
+.grant-source-file-list li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border: 1px solid var(--ws-line); border-radius: 12px; }
+.grant-source-file-list li > span { display: grid; gap: 4px; overflow-wrap: anywhere; min-width: 0; }
+.grant-source-file-list strong { font-size: 14px; font-weight: 500; }
+.grant-source-file-list small { color: var(--ws-muted); font-size: 12px; }
+@media (max-height: 700px) {
+  .grant-card-header { max-height: 42dvh; overflow-y: auto; }
+}
+@media (max-width: 700px) {
+  .grant-card-meta { grid-template-columns: minmax(0, 1fr); }
+  .grant-card-header h2 { font-size: 24px; }
+}
+@media (max-width: 1100px) {
+  .grants-detail-dialog.has-chat .grants-record-workspace { grid-template-columns: minmax(0, 1fr); overflow-y: auto; align-content: start; }
+  .grants-detail-dialog.has-chat .grants-detail-pane { height: calc(100dvh - 64px); min-height: 280px; }
+  .grants-record-workspace > .embedded-chat { height: min(640px, calc(100dvh - 64px)); min-height: 280px; border-inline-start: 0; border-block-start: 1px solid var(--ws-line); }
+}
 @media (max-width: 700px) {
   .fui-DialogSurface.grants-dialog { width: calc(100vw - 16px); max-height: calc(100dvh - 16px); }
   .grants-route { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .grants-form-columns, .grants-metadata { grid-template-columns: minmax(0, 1fr); }
   .grants-dialog-header, .grants-dialog-body { padding: 16px; }
   .grants-dialog-footer { padding: 12px 16px; }
+  .grant-primary-people, .grant-composer-add-row { grid-template-columns: minmax(0, 1fr); }
 }
 @media (forced-colors: active) {
   .grants-status, .grants-route li[aria-current="step"] { border: 1px solid Highlight; color: CanvasText; }
