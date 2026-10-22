@@ -222,6 +222,10 @@ async def test_trip_full_cycle_documents_calendar_and_immutable_annulment(
     preview, _, _ = await read_document(connection, actors["chair"], storage,
                                         request_id, "order-preview")
     assert "IMZOLANMAGAN" in PdfReader(BytesIO(preview)).pages[0].extract_text()
+    assert "000-WS" not in PdfReader(BytesIO(preview)).pages[0].extract_text()
+    assert "Raqam tasdiqlangandan so'ng beriladi" in (
+        PdfReader(BytesIO(preview)).pages[0].extract_text()
+    )
     with pytest.raises(WorkspaceRepositoryError, match="подпись"):
         await issue_order(connection, actors["chair"], storage, request_id)
     assert await connection.scalar(select(func.count()).select_from(trip_order_counters)) == 0
@@ -233,6 +237,7 @@ async def test_trip_full_cycle_documents_calendar_and_immutable_annulment(
     order, _, _ = await read_document(connection, actors["employee"], storage, request_id, "order")
     page = PdfReader(BytesIO(order)).pages[0]
     assert len(page.images) == 2 and "2027-yil" in page.extract_text()
+    assert approved.order_number and f"{approved.order_number}-son a/f" in page.extract_text()
     await issue_order(connection, actors["chair"], storage, request_id)
     replay = await act_on_trip_request(connection, actors["chair"], request_id,
                                        TripActionRequest(action="approve"))

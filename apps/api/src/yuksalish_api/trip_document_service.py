@@ -293,7 +293,7 @@ async def prepare_signed_brief(
     # Reject layouts that cannot become a usable order before entering the chair's queue.
     await run_in_threadpool(
         order_pdf,
-        order_number="000-WS", issued=datetime.now(_LOCAL).date(),
+        order_number=None, issued=datetime.now(_LOCAL).date(),
         purpose=row["purpose"], destination=row["destination"],
         start=row["start_date"], end=row["end_date"], employees=names,
         expense_source=row["expense_source"], requester=str(requester),
@@ -415,7 +415,7 @@ async def read_document(
             raise Error(409, "Инициатор или председатель не найден")
         content = await run_in_threadpool(
             order_pdf,
-            order_number="000-WS", issued=datetime.now(_LOCAL).date(),
+            order_number=None, issued=datetime.now(_LOCAL).date(),
             purpose=row["purpose"], destination=row["destination"],
             start=row["start_date"], end=row["end_date"], employees=people,
             expense_source=row["expense_source"], requester=str(requester),
