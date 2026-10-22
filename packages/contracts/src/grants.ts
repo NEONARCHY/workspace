@@ -1,6 +1,6 @@
 import type { WorkspaceAttachment } from "./index";
 
-export type GrantStatus = "in_progress" | "needs_revision" | "author_review" | "leader_review" | "chair_review" | "completed";
+export type GrantStatus = "launch_review" | "launch_revision" | "launch_rejected" | "in_progress" | "needs_revision" | "author_review" | "leader_review" | "chair_review" | "completed";
 export interface GrantFields {
   readonly title: string;
   readonly description: string;
@@ -18,7 +18,11 @@ export interface GrantChecklistItem {
 }
 export interface GrantSummary extends Omit<GrantFields, "checklist"> {
   readonly id: string;
-  readonly authorUserId: string;
+  readonly authorUserId: string | null;
+  readonly initiatorUserId: string;
+  readonly workflowVersion: 1 | 2;
+  readonly launchApprovedAt: string | null;
+  readonly launchApprovedByUserId: string | null;
   readonly leaderUserId: string;
   readonly chairUserId: string;
   readonly status: GrantStatus;
@@ -49,7 +53,7 @@ export interface GrantSettings {
   readonly revision: number;
 }
 export interface GrantAction {
-  readonly action: "submit" | "approve" | "return" | "comment" | "check";
+  readonly action: "submit" | "approve" | "return" | "comment" | "check" | "approve_launch" | "return_launch" | "reject_launch" | "submit_launch";
   readonly expectedRevision: number;
   readonly text?: string;
   readonly itemId?: string;

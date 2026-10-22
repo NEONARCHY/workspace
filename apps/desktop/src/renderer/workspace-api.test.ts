@@ -3,6 +3,28 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 describe("web API addresses and session restore", () => {
   const defaultBridge = window.yuksalish;
   const cookieDescriptor = Object.getOwnPropertyDescriptor(Document.prototype, "cookie");
+  it("sends grant source files together with their idempotent payload and lets the browser set multipart boundaries", async () => {
+    window.yuksalish = undefined;
+    const fetchMock = vi.fn().mockImplementation(async () => Response.json({ id: "grant" }));
+    vi.stubGlobal("fetch", fetchMock);
+    const api = await import("./workspace-api");
+    const fields = { title: "Grant", description: "", assigneeId: "executor", coAssigneeIds: [], dueAt: "2099-11-01T09:00:00Z", checklist: [] };
+    const files = [new File(["terms"], "terms.txt"), new File(["budget"], "budget.csv")];
+    await api.createGrant("grant-token", fields, "request-id", files);
+    const [url, request] = fetchMock.mock.calls[0]! as [string, RequestInit];
+    expect(url).toContain("/grants/with-files");
+    expect(new Headers(request.headers).get("Content-Type")).toBeNull();
+    expect(new Headers(request.headers).get("Authorization")).toBe("Bearer grant-token");
+    expect(request.body).toBeInstanceOf(FormData);
+    const body = request.body as FormData;
+    expect(JSON.parse(String(body.get("payload")))).toEqual({ ...fields, requestId: "request-id" });
+    expect(body.getAll("files").map((file) => (file as File).name)).toEqual(["terms.txt", "budget.csv"]);
+    fetchMock.mockClear();
+    expect(() => api.createGrant("grant-token", fields, "bad", [new File([], "empty.txt")])).toThrow("Пустые файлы");
+    expect(fetchMock).not.toHaveBeenCalled();
+    await api.createGrant("grant-token", fields, "json-request");
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringMatching(/\/grants$/), expect.objectContaining({body: JSON.stringify({...fields, requestId: "json-request"})}));
+  });
   it("loads the personal signature inbox and does not fall back to the general registry on an old server", async () => {
     window.yuksalish = undefined;
     const fetchMock = vi.fn().mockResolvedValueOnce(Response.json({ letters: [], totalCount: 0 }))

@@ -1,4 +1,5 @@
 import type { OfficePreviewResult } from "./file-viewer-kind";
+import { validateGrantSourceFiles } from "./grant-source-files";
 import type { HisobotActivityDraft } from "@yuksalish/contracts";
 import type { MailConnection, MailConnect, MailConnectStatus, MailPage, MailThread, MailDraft, MailDraftSummary, MailDraftWrite, MailSignedFile, MailTaskExport } from "@yuksalish/contracts";
 import type { GrantAction, GrantDetail, GrantFields, GrantSettings, GrantSummary } from "@yuksalish/contracts";
@@ -2234,7 +2235,19 @@ export function loadGrants(token: string): Promise<readonly GrantSummary[]> {
 export function loadGrant(token: string, id: string): Promise<GrantDetail> {
   return apiRequest(`/grants/${id}`, {}, token);
 }
-export function createGrant(token: string, fields: GrantFields, requestId: string): Promise<GrantDetail> {
+export function createGrant(token: string, fields: GrantFields, requestId: string, files: readonly File[] = []): Promise<GrantDetail> {
+  if (files.length) {
+    validateGrantSourceFiles(files);
+    const form = new FormData();
+    form.append("payload", JSON.stringify({ ...fields, requestId }));
+    for (const file of files) {
+      validateWorkspaceAttachmentFile(file);
+      form.append("files", file);
+    }
+    return boundedRequest(`${getApiBaseUrl()}/api/v1/grants/with-files`, {
+      method: "POST", headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, body: form,
+    }, async (response) => await response.json() as GrantDetail, 120_000);
+  }
   return apiRequest("/grants", { method: "POST", body: JSON.stringify({ ...fields, requestId }) }, token);
 }
 export function editGrant(token: string, id: string, fields: GrantFields, expectedRevision: number): Promise<GrantDetail> {

@@ -188,7 +188,9 @@ async def context_chat_finished(connection: AsyncConnection, chat: Record,
         from .grant_tables import grant_requests
 
         query = select(grant_requests.c.status).where(grant_requests.c.id == chat["context_id"])
-        return await connection.scalar(query.with_for_update() if lock else query) == "completed"
+        return await connection.scalar(query.with_for_update() if lock else query) in {
+            "completed", "launch_rejected",
+        }
     if chat["context_type"] == "project":
         query = select(workspace_projects.c.status).where(
             workspace_projects.c.id == chat["context_id"],

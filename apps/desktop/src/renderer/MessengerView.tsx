@@ -190,7 +190,7 @@ export interface MessengerViewProps {
   ) => void | Promise<void>;
   readonly onLoadAttachment: (attachment: WorkspaceAttachment) => Promise<Blob>;
   readonly onMarkRead: (chatId: string) => void | Promise<void>;
-  readonly onOpenContext?: (contextType: "task" | "project" | "project_hub" | "trip", contextId: string) => void;
+  readonly onOpenContext?: (contextType: "task" | "project" | "project_hub" | "trip" | "grant", contextId: string) => void;
   readonly onOpenPersonProfile?: (userId: string) => void;
 }
 
@@ -955,8 +955,8 @@ function Conversation({
             </PopoverSurface>
           </Popover>
           {!embedded ? <>
-          {chat.contextId && (chat.contextType === "task" || chat.contextType === "project" || chat.contextType === "project_hub" || chat.contextType === "trip") ? <Button appearance="secondary" onClick={() => onOpenContext?.(chat.contextType as "task" | "project" | "project_hub" | "trip", chat.contextId!)}>
-            {chat.contextType === "task" ? "Открыть задачу" : chat.contextType === "trip" ? "Открыть поездку" : "Открыть проект"}
+          {chat.contextId && (chat.contextType === "task" || chat.contextType === "project" || chat.contextType === "project_hub" || chat.contextType === "trip" || chat.contextType === "grant") ? <Button appearance="secondary" onClick={() => onOpenContext?.(chat.contextType as "task" | "project" | "project_hub" | "trip" | "grant", chat.contextId!)}>
+            {chat.contextType === "task" ? "Открыть задачу" : chat.contextType === "trip" ? "Открыть поездку" : chat.contextType === "grant" ? "Открыть грант" : "Открыть проект"}
           </Button> : null}
           {onCreateCalendarEventFromChat ? <Button
             className="conversation-calendar-action"
@@ -1491,7 +1491,7 @@ function Conversation({
 
 export function EmbeddedConversation(props: MessengerViewProps & {
   readonly chatId: string;
-  readonly contextLabel?: "задачи" | "проекта" | "поездки";
+  readonly contextLabel?: "задачи" | "проекта" | "поездки" | "гранта";
 }) {
   useMessengerFileNavigationGuard();
   const { onMarkRead, contextLabel = "задачи" } = props;

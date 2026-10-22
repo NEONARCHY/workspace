@@ -76,6 +76,16 @@ function openMessageMenu(text: string) {
   fireEvent.contextMenu(message);
 }
 
+it("opens the grant card from its managed conversation without confusing it with a trip", () => {
+  const chat: ChatSummary = { ...initialChats[0]!, contextType: "grant", contextId: "grant-request", unread: 0 };
+  const onOpenContext = vi.fn();
+  const view = renderMessenger({ chats: [chat], focusChatId: chat.id, onOpenContext });
+  fireEvent.click(screen.getByRole("button", { name: "Открыть грант" }));
+  expect(onOpenContext).toHaveBeenCalledWith("grant", "grant-request");
+  expect(screen.queryByRole("button", { name: "Открыть поездку" })).not.toBeInTheDocument();
+  view.unmount();
+});
+
 it.each([false, true])("keeps an unread divider before the captured first unread (system=%s) after mark-read", (system) => {
   const rects = vi.spyOn(HTMLElement.prototype, "getClientRects").mockReturnValue({ length: 1 } as DOMRectList);
   const height = vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(600);
@@ -624,7 +634,7 @@ describe("Private messenger", () => {
     expect(fireEvent.drop(root, { dataTransfer: { types: ["text/plain"] } })).toBe(true);
   });
 
-  it.each(["задачи", "проекта", "поездки"] as const)("accepts files into an embedded %s chat draft without sending", contextLabel => {
+  it.each(["задачи", "проекта", "поездки", "гранта"] as const)("accepts files into an embedded %s chat draft without sending", contextLabel => {
     const { props, unmount } = renderMessenger();
     unmount();
     const chat = initialChats[0]!;

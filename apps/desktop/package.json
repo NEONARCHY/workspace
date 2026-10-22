@@ -47,13 +47,13 @@
     "@vitejs/plugin-react": "6.1.1",
     "concurrently": "10.0.5",
     "cross-env": "10.1.0",
-    "electron": "44.1.1",
+    "electron": "44.3.0",
     "electron-builder": "26.15.3",
     "jsdom": "26.1.0",
     "tabster": "8.8.0",
     "tsup": "8.5.1",
     "vite": "8.2.4",
-    "vitest": "4.1.11",
+    "vitest": "4.1.12",
     "wait-on": "9.1.0"
   },
   "build": {

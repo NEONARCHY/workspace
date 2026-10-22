@@ -16,6 +16,7 @@ from yuksalish_api import grant_service, messenger_service
 from yuksalish_api.access_control import request_module_action
 from yuksalish_api.auth import AuthenticatedUser
 from yuksalish_api.errors import WorkspaceRepositoryError
+from yuksalish_api.grant_files_service import GrantInitialFile, create_with_files
 from yuksalish_api.grant_schemas import (
     GrantAction,
     GrantCreate,
@@ -24,6 +25,7 @@ from yuksalish_api.grant_schemas import (
     GrantSettingsWrite,
 )
 from yuksalish_api.grant_tables import grant_events, grant_requests
+from yuksalish_api.object_storage import InMemoryObjectStorage, ObjectStorageError
 from yuksalish_api.repository import (
     create_attachment,
     get_attachment,
@@ -157,7 +159,40 @@ def test_full_route_coexecutor_revision_and_only_named_acceptance():
             payload = draft(assignee, coexecutor)
             grant = await grant_service.create_grant(connection, author, payload)
             grant_id = UUID(grant.id)
+            assert grant.status == "launch_review"
+            assert grant.author_user_id is None
+            assert grant.initiator_user_id == str(author.id)
+            assert grant.workflow_version == 2
+            for forbidden in (author, assignee, coexecutor, leader, admin):
+                with pytest.raises(WorkspaceRepositoryError) as denied:
+                    await grant_service.act_on_grant(
+                        connection, forbidden, grant_id,
+                        GrantAction(action="approve_launch", expected_revision=grant.revision),
+                    )
+                assert denied.value.status_code == 403
+            for action in ("submit", "check"):
+                with pytest.raises(WorkspaceRepositoryError) as denied:
+                    await grant_service.act_on_grant(
+                        connection, assignee, grant_id,
+                        GrantAction(
+                            action=action, text="Cannot start", expected_revision=grant.revision
+                        ),
+                    )
+                assert denied.value.status_code == 403
+            launch_workspace = await load_workspace(connection, chair)
+            assert any(
+                item.entity_id == grant.id and item.requires_action and not item.resolved_at
+                for item in launch_workspace.notifications
+            )
+            grant = await grant_service.act_on_grant(
+                connection, chair, grant_id,
+                GrantAction(action="approve_launch", expected_revision=grant.revision),
+            )
             assert grant.status == "in_progress"
+            assert grant.author_user_id == str(chair.id)
+            assert grant.initiator_user_id == str(author.id)
+            assert grant.launch_approved_by_user_id == str(chair.id)
+            assert grant.launch_approved_at is not None
             assert (await grant_service.create_grant(connection, author, payload)).id == grant.id
             assert (
                 await connection.scalar(
@@ -180,6 +215,10 @@ def test_full_route_coexecutor_revision_and_only_named_acceptance():
                 ).scalars()
             )
             assert members == {actor.id for actor in actors[:5]}
+            assert await connection.scalar(select(chat_members.c.user_id).where(
+                chat_members.c.chat_id == UUID(grant.chat_id),
+                chat_members.c.member_role == "owner",
+            )) == chair.id
             with pytest.raises(WorkspaceRepositoryError, match="чек-листа"):
                 await grant_service.act_on_grant(
                     connection,
@@ -212,8 +251,8 @@ def test_full_route_coexecutor_revision_and_only_named_acceptance():
                     action="submit", text="Complete proposal", expected_revision=grant.revision
                 ),
             )
-            assert grant.status == "author_review"
-            for forbidden in (assignee, coexecutor, leader, chair, admin):
+            assert grant.status == "leader_review"
+            for forbidden in (author, assignee, coexecutor, chair, admin):
                 with pytest.raises(WorkspaceRepositoryError) as denied:
                     await grant_service.act_on_grant(
                         connection,
@@ -222,8 +261,8 @@ def test_full_route_coexecutor_revision_and_only_named_acceptance():
                         GrantAction(action="approve", expected_revision=grant.revision),
                     )
                 assert denied.value.status_code == 403
-            # Bootstrap reconciliation must keep the author's action alive.
-            workspace = await load_workspace(connection, author)
+            # Bootstrap reconciliation must keep the deputy's action alive.
+            workspace = await load_workspace(connection, leader)
             assert any(
                 item.entity_id == grant.id and item.requires_action and not item.resolved_at
                 for item in workspace.notifications
@@ -231,18 +270,11 @@ def test_full_route_coexecutor_revision_and_only_named_acceptance():
             with pytest.raises(WorkspaceRepositoryError) as stale:
                 await grant_service.act_on_grant(
                     connection,
-                    author,
+                    leader,
                     grant_id,
                     GrantAction(action="approve", expected_revision=submitted_revision),
                 )
             assert stale.value.status_code == 409
-            grant = await grant_service.act_on_grant(
-                connection,
-                author,
-                grant_id,
-                GrantAction(action="approve", expected_revision=grant.revision),
-            )
-            assert grant.status == "leader_review"
             with pytest.raises(WorkspaceRepositoryError) as empty_reason:
                 await grant_service.act_on_grant(
                     connection,
@@ -269,9 +301,8 @@ def test_full_route_coexecutor_revision_and_only_named_acceptance():
                     action="submit", text="Revised budget", expected_revision=grant.revision
                 ),
             )
-            assert grant.status == "author_review"
+            assert grant.status == "leader_review"
             for actor, expected in (
-                (author, "leader_review"),
                 (leader, "chair_review"),
                 (chair, "completed"),
             ):
@@ -304,6 +335,87 @@ def test_full_route_coexecutor_revision_and_only_named_acceptance():
                 await validate_attachment_owner(connection, assignee, "grant", grant_id, write=True)
             with pytest.raises(WorkspaceRepositoryError):
                 await grant_service.get_grant(connection, outsider, grant_id)
+
+    asyncio.run(run())
+
+
+@pytest.mark.postgres
+def test_initial_files_are_private_atomic_and_retries_do_not_duplicate_them():
+    async def run():
+        async with scenario() as (connection, actors):
+            initiator, assignee, coexecutor, _leader, chair, _admin, outsider = actors
+            storage = InMemoryObjectStorage()
+            payload = draft(assignee, coexecutor, checklist=[])
+            files = [GrantInitialFile("terms.txt", "text/plain", b"Terms of the grant"),
+                     GrantInitialFile("budget.csv", "text/csv", b"cost,100")]
+            grant = await create_with_files(connection, initiator, payload, storage, files)
+            assert grant.status == "launch_review"
+            assert {item.file_name for item in grant.attachments} == {"terms.txt", "budget.csv"}
+            assert sum(event.action == "file_uploaded" for event in grant.events) == 2
+            for attachment in grant.attachments:
+                # Resolve by filename: storage listing order is deliberately not assumed.
+                original = next(item for item in files if item.file_name == attachment.file_name)
+                _, key = await get_attachment(connection, coexecutor, UUID(attachment.id))
+                assert await storage.get(key) == original.content
+                with pytest.raises(WorkspaceRepositoryError):
+                    await get_attachment(connection, outsider, UUID(attachment.id))
+            first_ids = {item.id for item in grant.attachments}
+            replay = await create_with_files(connection, initiator, payload, storage, files)
+            assert {item.id for item in replay.attachments} == first_ids
+            grant = await grant_service.act_on_grant(
+                connection, chair, payload.request_id,
+                GrantAction(action="approve_launch", expected_revision=grant.revision),
+            )
+            replay = await create_with_files(connection, initiator, payload, storage, files)
+            assert replay.author_user_id == str(chair.id)
+            assert {item.id for item in replay.attachments} == first_ids
+            with pytest.raises(WorkspaceRepositoryError) as changed:
+                await create_with_files(connection, initiator, payload, storage, [
+                    GrantInitialFile("terms.txt", "text/plain", b"Changed terms"), files[1],
+                ])
+            assert changed.value.status_code == 409
+
+    asyncio.run(run())
+
+
+@pytest.mark.postgres
+def test_failed_source_file_rolls_back_the_grant_chat_events_and_notifications():
+    class FailingStorage(InMemoryObjectStorage):
+        def __init__(self):
+            super().__init__()
+            self.keys = []
+
+        async def put(self, key, content, content_type):
+            self.keys.append(key)
+            if len(self.keys) == 2:
+                raise ObjectStorageError("Synthetic storage failure")
+            await super().put(key, content, content_type)
+
+    async def run():
+        async with scenario() as (connection, actors):
+            initiator, assignee, coexecutor, *_ = actors
+            payload = draft(assignee, coexecutor)
+            storage = FailingStorage()
+            files = [GrantInitialFile("one.txt", "text/plain", b"one"),
+                     GrantInitialFile("two.txt", "text/plain", b"two")]
+            with pytest.raises(ObjectStorageError):
+                await create_with_files(connection, initiator, payload, storage, files)
+            assert await connection.scalar(select(grant_requests.c.id).where(
+                grant_requests.c.id == payload.request_id,
+            )) is None
+            for table, owner in ((chats, chats.c.context_id),
+                                 (grant_events, grant_events.c.grant_id),
+                                 (workspace_notifications, workspace_notifications.c.entity_id)):
+                assert await connection.scalar(
+                    select(func.count()).select_from(table).where(owner == payload.request_id)
+                ) == 0
+            for key in storage.keys:
+                with pytest.raises(ObjectStorageError):
+                    await storage.get(key)
+            retry = await create_with_files(
+                connection, initiator, payload, InMemoryObjectStorage(), files,
+            )
+            assert len(retry.attachments) == 2
 
     asyncio.run(run())
 
@@ -402,7 +514,7 @@ def test_settings_snapshots_edit_membership_and_attachment_privacy():
 def test_bad_creation_is_atomic_and_review_cannot_edit_submission():
     async def run():
         async with scenario() as (connection, actors):
-            author, assignee, coexecutor, leader, _chair, _admin, _outsider = actors
+            author, assignee, coexecutor, leader, chair, _admin, _outsider = actors
             before = await connection.scalar(select(func.count()).select_from(grant_requests))
             for payload in (
                 draft(assignee, coexecutor, coAssigneeIds=[str(assignee.id)]),
@@ -418,25 +530,29 @@ def test_bad_creation_is_atomic_and_review_cannot_edit_submission():
             )
             grant_id = UUID(grant.id)
             grant = await grant_service.act_on_grant(
+                connection, chair, grant_id,
+                GrantAction(action="approve_launch", expected_revision=grant.revision),
+            )
+            grant = await grant_service.act_on_grant(
                 connection,
                 assignee,
                 grant_id,
                 GrantAction(action="submit", text="Evidence", expected_revision=grant.revision),
             )
             await connection.execute(
-                update(users).where(users.c.id == leader.id).values(status="archived")
+                update(users).where(users.c.id == chair.id).values(status="archived")
             )
             event_count = await connection.scalar(select(func.count()).select_from(grant_events))
             with pytest.raises(WorkspaceRepositoryError):
                 await grant_service.act_on_grant(
                     connection,
-                    author,
+                    leader,
                     grant_id,
                     GrantAction(action="approve", expected_revision=grant.revision),
                 )
             assert (
                 await grant_service.get_grant(connection, author, grant_id)
-            ).status == "author_review"
+            ).status == "leader_review"
             assert (
                 await connection.scalar(select(func.count()).select_from(grant_events))
                 == event_count
@@ -470,6 +586,10 @@ def test_explicit_admin_reassignment_restarts_review_and_reconciles_access():
             )
             grant_id = UUID(grant.id)
             grant = await grant_service.act_on_grant(
+                connection, chair, grant_id,
+                GrantAction(action="approve_launch", expected_revision=grant.revision),
+            )
+            grant = await grant_service.act_on_grant(
                 connection,
                 assignee,
                 grant_id,
@@ -477,7 +597,7 @@ def test_explicit_admin_reassignment_restarts_review_and_reconciles_access():
             )
             grant = await grant_service.act_on_grant(
                 connection,
-                author,
+                leader,
                 grant_id,
                 GrantAction(action="approve", expected_revision=grant.revision),
             )
@@ -490,7 +610,7 @@ def test_explicit_admin_reassignment_restarts_review_and_reconciles_access():
             with pytest.raises(HTTPException):
                 await grant_service.change_reviewers(connection, author, grant_id, payload)
             grant = await grant_service.change_reviewers(connection, admin, grant_id, payload)
-            assert grant.status == "author_review"
+            assert grant.status == "leader_review"
             assert grant.leader_user_id == str(replacement.id)
             assert any(event.action == "reviewers_changed" for event in grant.events)
             with pytest.raises(WorkspaceRepositoryError):
@@ -508,13 +628,17 @@ def test_explicit_admin_reassignment_restarts_review_and_reconciles_access():
 def test_result_files_are_private_revisioned_and_frozen_during_review():
     async def run():
         async with scenario() as (connection, actors):
-            author, assignee, coexecutor, _leader, _chair, _admin, outsider = actors
+            author, assignee, coexecutor, _leader, chair, _admin, outsider = actors
             grant = await grant_service.create_grant(
                 connection,
                 author,
                 draft(assignee, coexecutor, checklist=[]),
             )
             grant_id = UUID(grant.id)
+            grant = await grant_service.act_on_grant(
+                connection, chair, grant_id,
+                GrantAction(action="approve_launch", expected_revision=grant.revision),
+            )
             attachment = await create_attachment(
                 connection,
                 assignee,
@@ -549,5 +673,119 @@ def test_result_files_are_private_revisioned_and_frozen_during_review():
             assert "upload" not in submitted.allowed_actions
             with pytest.raises(WorkspaceRepositoryError):
                 await validate_attachment_owner(connection, assignee, "grant", grant_id, write=True)
+
+    asyncio.run(run())
+
+
+@pytest.mark.postgres
+def test_launch_return_rejection_and_initiator_survives_owner_change():
+    async def run():
+        async with scenario() as (connection, actors):
+            initiator, assignee, coexecutor, _leader, chair, admin, replacement = actors
+            grant = await grant_service.create_grant(
+                connection, initiator, draft(assignee, coexecutor, checklist=[])
+            )
+            grant_id = UUID(grant.id)
+            with pytest.raises(WorkspaceRepositoryError) as empty:
+                await grant_service.act_on_grant(
+                    connection, chair, grant_id,
+                    GrantAction(action="return_launch", expected_revision=grant.revision),
+                )
+            assert empty.value.status_code == 422
+            grant = await grant_service.act_on_grant(
+                connection, chair, grant_id,
+                GrantAction(action="return_launch", text="Уточните бюджет",
+                            expected_revision=grant.revision),
+            )
+            assert grant.status == "launch_revision"
+            assert grant.author_user_id is None
+            initiator_view = await grant_service.get_grant(connection, initiator, grant_id)
+            assert "submit_launch" in initiator_view.allowed_actions
+            grant = await grant_service.act_on_grant(
+                connection, initiator, grant_id,
+                GrantAction(action="submit_launch", expected_revision=grant.revision),
+            )
+            pending_revision = grant.revision
+            grant = await grant_service.act_on_grant(
+                connection, chair, grant_id,
+                GrantAction(action="approve_launch", expected_revision=pending_revision),
+            )
+            with pytest.raises(WorkspaceRepositoryError) as repeated:
+                await grant_service.act_on_grant(
+                    connection, chair, grant_id,
+                    GrantAction(action="approve_launch", expected_revision=pending_revision),
+                )
+            assert repeated.value.status_code == 409
+            assert sum(event.action == "approve_launch" for event in grant.events) == 1
+            initiator_view = await grant_service.get_grant(connection, initiator, grant_id)
+            assert "edit" not in initiator_view.allowed_actions
+            assert any(item.id == grant.id for item in
+                       await grant_service.list_grants(connection, initiator))
+            await messenger_service.chat_access(connection, initiator, UUID(grant.chat_id))
+            original_approval = grant.launch_approved_at
+            grant = await grant_service.change_reviewers(
+                connection, admin, grant_id, GrantReviewersWrite(
+                    expected_revision=grant.revision, leader_user_id=actors[3].id,
+                    chair_user_id=replacement.id, reason="Назначен новый председатель",
+                ),
+            )
+            assert grant.author_user_id == str(replacement.id)
+            assert grant.initiator_user_id == str(initiator.id)
+            assert grant.launch_approved_by_user_id == str(chair.id)
+            assert grant.launch_approved_at == original_approval
+            assert await connection.scalar(select(chat_members.c.user_id).where(
+                chat_members.c.chat_id == UUID(grant.chat_id),
+                chat_members.c.member_role == "owner",
+            )) == replacement.id
+            declined = await grant_service.create_grant(
+                connection, initiator, draft(assignee, coexecutor, checklist=[])
+            )
+            declined = await grant_service.act_on_grant(
+                connection, chair, UUID(declined.id), GrantAction(
+                    action="reject_launch", text="Конкурс не соответствует приоритетам",
+                    expected_revision=declined.revision,
+                ),
+            )
+            assert declined.status == "launch_rejected"
+            assert declined.author_user_id is None
+            assert not declined.allowed_actions
+            assert declined.events[-1].text == "Конкурс не соответствует приоритетам"
+            finished_chat, _ = await messenger_service.chat_access(
+                connection, initiator, UUID(declined.chat_id)
+            )
+            assert await messenger_service.context_chat_finished(connection, finished_chat)
+
+    asyncio.run(run())
+
+
+@pytest.mark.postgres
+def test_existing_legacy_grant_retains_its_author_review_route():
+    async def run():
+        async with scenario() as (connection, actors):
+            author, assignee, coexecutor, leader, chair, _admin, _outsider = actors
+            grant = await grant_service.create_grant(
+                connection, author, draft(assignee, coexecutor, checklist=[])
+            )
+            grant_id = UUID(grant.id)
+            # Represent an existing pre-upgrade record; do not fabricate launch approval.
+            await connection.execute(update(grant_requests).where(
+                grant_requests.c.id == grant_id,
+            ).values(workflow_version=1, author_user_id=author.id, status="in_progress"))
+            grant = await grant_service.act_on_grant(
+                connection, assignee, grant_id,
+                GrantAction(
+                    action="submit", text="Legacy result", expected_revision=grant.revision
+                ),
+            )
+            assert grant.status == "author_review"
+            assert grant.author_user_id == str(author.id)
+            assert grant.launch_approved_at is None
+            for actor, expected in ((author, "leader_review"), (leader, "chair_review"),
+                                    (chair, "completed")):
+                grant = await grant_service.act_on_grant(
+                    connection, actor, grant_id,
+                    GrantAction(action="approve", expected_revision=grant.revision),
+                )
+                assert grant.status == expected
 
     asyncio.run(run())
