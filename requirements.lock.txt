@@ -60,7 +60,7 @@ pydantic-settings==2.15.0
 pydantic_core==2.46.5
 Pygments==2.21.0
 pyparsing==3.3.2
-pypdf==6.19.0
+pypdf==6.21.1
 pytest==9.1.1
 pytest-cov==7.1.0
 python-dotenv==1.2.3

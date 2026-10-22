@@ -26,7 +26,7 @@ dependencies = [
   "pydantic-settings==2.15.0",
   "redis==8.1.0",
   "reportlab==5.0.1",
-  "pypdf==6.19.0",
+  "pypdf==6.21.1",
   "sqlalchemy==2.0.52",
   "structlog==26.1.0",
   "tzdata==2026.3",
