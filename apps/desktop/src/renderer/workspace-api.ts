@@ -1,4 +1,5 @@
 import type { OfficePreviewResult } from "./file-viewer-kind";
+import type { DossierAccessSettings, DossierContext, DossierDetail, DossierFields, DossierHistory, DossierImportPreview, DossierPermissions, DossierSummary, PersonnelPhotoCard } from "@yuksalish/contracts";
 import { validateGrantSourceFiles } from "./grant-source-files";
 import type { HisobotActivityDraft } from "@yuksalish/contracts";
 import type { MailConnection, MailConnect, MailConnectStatus, MailPage, MailThread, MailDraft, MailDraftSummary, MailDraftWrite, MailSignedFile, MailTaskExport } from "@yuksalish/contracts";
@@ -618,6 +619,22 @@ export function loadHisobotUnitReports(token: string, startDate: string, endDate
 export function loadHrOverview(token: string): Promise<HrOverview> {
   return apiRequest<HrOverview>("/hr", {}, token);
 }
+
+export const loadDossierContext = (token: string) => apiRequest<DossierContext>("/personnel-dossiers/context", {}, token);
+export const loadDossierList = (token: string) => apiRequest<readonly DossierSummary[]>("/personnel-dossiers", {}, token);
+export const loadPersonnelPhotos = (token: string) => apiRequest<readonly PersonnelPhotoCard[]>("/personnel-dossiers/photos", {}, token);
+export const loadDossierPermissions = (token: string, id: string) => apiRequest<DossierPermissions>(`/personnel-dossiers/${encodeURIComponent(id)}/permissions`, {}, token);
+export const loadDossier = (token: string, id: string) => apiRequest<DossierDetail>(`/personnel-dossiers/${encodeURIComponent(id)}`, {}, token);
+export const loadDossierHistory = (token: string, id: string) => apiRequest<readonly DossierHistory[]>(`/personnel-dossiers/${encodeURIComponent(id)}/history`, {}, token);
+export const downloadDossierWord = (token: string, id: string, revision: number): Promise<Blob> => boundedRequest(`${getApiBaseUrl()}/api/v1/personnel-dossiers/${encodeURIComponent(id)}/word?revision=${revision}`, { headers: { Authorization: `Bearer ${token}` } }, (response) => response.blob(), 120_000);
+export const downloadDossierPdf = (token: string, id: string, revision: number): Promise<Blob> => boundedRequest(`${getApiBaseUrl()}/api/v1/personnel-dossiers/${encodeURIComponent(id)}/pdf?revision=${revision}`, { headers: { Authorization: `Bearer ${token}` } }, (response) => response.blob(), 120_000);
+export function previewDossierImport(token: string, id: string, file: File): Promise<DossierImportPreview> {
+  if (!file.name.toLowerCase().endsWith(".docx") || file.size < 1 || file.size > 5 * 1024 * 1024) throw new Error("Выберите DOCX размером до 5 МБ. Старый DOC сначала сохраните как DOCX в Word.");
+  return boundedRequest(`${getApiBaseUrl()}/api/v1/personnel-dossiers/${encodeURIComponent(id)}/import-preview`, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }, body: file }, (response) => response.json() as Promise<DossierImportPreview>, 60_000);
+}
+export const saveDossier = (token: string, id: string, payload: { readonly revision: number; readonly status: "draft" | "saved"; readonly fields: DossierFields }) => apiRequest<DossierDetail>(`/personnel-dossiers/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(payload) }, token);
+export const loadDossierAccess = (token: string) => apiRequest<DossierAccessSettings>("/personnel-dossiers/access", {}, token);
+export const saveDossierAccess = (token: string, payload: DossierAccessSettings & { readonly reason: string }) => apiRequest<DossierAccessSettings>("/personnel-dossiers/access", { method: "PUT", body: JSON.stringify(payload) }, token);
 
 export function loadHiringRegistry(token: string, offset = 0): Promise<HiringRegistry> {
   return apiRequest<HiringRegistry>(`/hr/hiring?offset=${offset}`, {}, token);

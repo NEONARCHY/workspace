@@ -1,4 +1,5 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
+import { DossierProfileEntry } from "./DossierProfileEntry";
 import { LoadingSkeleton } from "./LoadingSkeleton";
 import {
   Button,
@@ -660,6 +661,7 @@ export function EmployeeProfileDialog({
                     <span className="employee-profile-eyebrow">Рабочий профиль</span>
                     <h2>{showFullName ? profile.person.name : employeeDisplayName(profile.person.name)}</h2>
                     <p>{profile.person.jobTitle ?? "Должность не указана"}</p>
+                    <DossierProfileEntry key={`${token}:${profile.person.id}`} token={token} userId={profile.person.id} people={people} />
                     {profile.departmentName ? <small className="employee-profile-department">{profile.departmentName}</small> : null}
                     {profile.person.id === currentUserId ? <Button ref={personalTriggerRef} className="employee-profile-chat-action" size="small" icon={<DataTrending24Regular />} onClick={() => {
                       profileScrollRef.current = profileContentRef.current?.scrollTop ?? 0;

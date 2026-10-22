@@ -9,6 +9,7 @@ import { createHrProfile, loadHrOverview, saveHrProfile } from "./workspace-api"
 
 vi.mock("./workspace-api", async (original) => ({ ...await original<typeof WorkspaceApi>(),
   createHrProfile: vi.fn(), loadHrOverview: vi.fn(), saveHrProfile: vi.fn(),
+  loadDossierContext: vi.fn().mockResolvedValue({ canManageAccess: false, canViewPhotoRoster: false }),
 }));
 const admin: WorkspacePerson = { id: "qa", name: "Тестовый администратор", initials: "ТА", role: "superadmin", color: "brand" };
 const data: HrOverview = { calculatedAt: "2026-10-13", settings: { hrUserId: "hr" }, profiles: [], registers: [] };

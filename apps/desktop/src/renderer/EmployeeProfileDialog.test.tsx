@@ -19,6 +19,7 @@ vi.mock("./workspace-api", () => ({
   loadWorkspaceEfficiency: vi.fn(),
   loadPersonalEfficiency: vi.fn(),
   loadProfileAvatar: vi.fn(),
+  loadDossierPermissions: vi.fn().mockResolvedValue({ canView: false, canEdit: false }),
 }));
 
 const profile: EmployeeRecognitionProfile = {
