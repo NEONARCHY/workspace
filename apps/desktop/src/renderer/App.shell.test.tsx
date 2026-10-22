@@ -221,7 +221,11 @@ describe("corporate workspace authentication alpha", () => {
     const metrics = screen.getByRole("region", { name: "Ключевые показатели команды" });
     const signatures = within(metrics).getByRole("button", { name: /Письма на подпись/ });
     await waitFor(() => expect(signatures).toHaveTextContent("1"));
-    expect(within(metrics).getAllByRole("button")).toHaveLength(7);
+    expect(within(metrics).getAllByRole("button")).toHaveLength(9);
+    const grants = within(metrics).getByRole("group", { name: "Гранты: проверка и запуск" });
+    expect(within(grants).getAllByRole("button")).toHaveLength(2);
+    expect(within(grants).getByRole("button", { name: /Заявки на гранты/ })).toBeInTheDocument();
+    expect(within(grants).getByRole("button", { name: /Запросы на постановку грантов/ })).toBeInTheDocument();
     fireEvent.click(signatures);
     fireEvent.click(within(screen.getByRole("region", { name: "Письма, ожидающие вашей подписи" })).getByRole("button", { name: /Письмо из обзора команды/ }));
     expect(await screen.findByRole("dialog", { name: /Письмо из обзора команды/ })).toBeInTheDocument();
