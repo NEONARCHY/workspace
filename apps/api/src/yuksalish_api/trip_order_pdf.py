@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import date
 from html import escape
 from io import BytesIO
@@ -26,6 +27,7 @@ from reportlab.platypus import (  # type: ignore[import-untyped]
 )
 
 from .hr_hiring_templates import _latin
+from .trip_document_text import trip_destination_text
 
 _ASSETS = Path(__file__).parent / "hr_assets"
 _LOGO = Path(__file__).parent / "trip_assets" / "yuksalish-logo-color.png"
@@ -163,7 +165,8 @@ def brief_pdf(
                 story.append(Paragraph(_text(paragraph), brief_body))
     else:
         story.append(Paragraph(
-            f"{start:%d.%m.%Y} - {end:%d.%m.%Y} kunlari {_text(destination)}ga "
+            f"{start:%d.%m.%Y} - {end:%d.%m.%Y} kunlari "
+            f"{escape(trip_destination_text(destination))}ga "
             "xizmat safariga yuborishga ruxsat berishingizni soʻrayman.", brief_body,  # noqa: RUF001
         ))
     if employees:
@@ -184,11 +187,22 @@ def brief_pdf(
 
 
 def order_pdf(
-    *, order_number: str, issued: date, purpose: str, destination: str,
+    *, order_number: str | None, issued: date, purpose: str, destination: str,
     start: date, end: date, employees: list[tuple[str, str]],
     expense_source: str, requester: str, chair: str, signature: bytes | None,
 ) -> bytes:
     """Issue an Uzbek-Latin order with a separate Workspace registration number."""
+    # Purpose remains in the request and authoritative brief, not a duplicate
+    # paragraph transliterated from a legacy Russian field into pseudo-Uzbek.
+    del purpose
+    number = (order_number or "").strip()
+    unregistered = not number or re.fullmatch(r"0+-WS", number, re.IGNORECASE) is not None
+    if unregistered and signature is not None:
+        raise ValueError("Нельзя подписать приказ без зарегистрированного номера")
+    registration = (
+        "Raqam tasdiqlangandan so'ng beriladi" if unregistered else f"{_text(number)}-son a/f"
+    )
+    place = escape(trip_destination_text(destination))
     _fonts()
     body = _style("order-body", size=11, leading=18)
     bold = _style("order-bold", size=11, leading=18, bold=True)
@@ -214,25 +228,23 @@ def order_pdf(
     ]))
     story: list[object] = [
         Paragraph("BUYRUQ", centered),
-        Paragraph(f"{_text(order_number)}-son a/f", centered),
+        Paragraph(registration, centered),
         Spacer(1, 12), date_line, Spacer(1, 8),
         Paragraph("“Xizmat safariga yuborish toʻgʻrisida”", bold),  # noqa: RUF001
         Spacer(1, 8),
     ]
-    if purpose.strip():
-        story.append(Paragraph(_text(purpose), body))
     story.extend([Spacer(1, 8), Paragraph("B U Y U R A M A N :", centered), Spacer(1, 6)])
     if len(employees) == 1:
         name, job_title = employees[0]
         person = f"{_text(job_title)} {_text(name)}" if job_title else _text(name)
         story.append(Paragraph(
             f"1. Harakatning {person} {period} "
-            f"{_text(destination)}ga xizmat safariga yuborilsin.", body,
+            f"{place}ga xizmat safariga yuborilsin.", body,
         ))
     else:
         story.append(Paragraph(
             f"1. Harakatning quyidagi xodimlari {period} "
-            f"{_text(destination)}ga xizmat safariga yuborilsin:", body,
+            f"{place}ga xizmat safariga yuborilsin:", body,
         ))
         for index, (name, job_title) in enumerate(employees, start=1):
             suffix = f" — {_text(job_title)}" if job_title else ""

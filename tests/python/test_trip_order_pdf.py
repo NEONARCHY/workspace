@@ -22,6 +22,7 @@ from yuksalish_api.repository import (
     delete_trip_request,
 )
 from yuksalish_api.trip_document_service import validate_attachment
+from yuksalish_api.trip_document_text import trip_destination_text
 from yuksalish_api.trip_order_pdf import _signature_image, brief_pdf, order_pdf
 from yuksalish_api.workspace_schemas import CreateTripRequest, TripActionRequest, TripWriteRequest
 
@@ -82,6 +83,9 @@ def test_employee_cover_and_chair_order_keep_separate_signatures() -> None:
     assert len(PdfReader(BytesIO(cover)).pages) == 1
     assert len(PdfReader(BytesIO(issued)).pages) == 1
     assert "original.pdf" in text_of(cover)
+    assert "000-WS" not in text_of(preview)
+    assert "Raqam tasdiqlangandan so'ng beriladi" in text_of(preview)
+    assert "LOYIHA" in text_of(preview)
     assert "001-WS-son a/f" in text_of(issued)
     assert "Nukus" in text_of(issued) and "loyiha mablagʻlari" in text_of(issued)  # noqa: RUF001
     assert "B U Y U R A M A N" in text_of(issued)
@@ -156,6 +160,82 @@ def test_legacy_brief_does_not_transliterate_russian_purpose_before_authored_tex
     assert "Yuridik klinika doirasida sayyor qabul o'tkaziladi." in text
     assert "Safar maqsadi:" not in text
     assert "Provedenie konsultatsiy" not in text
+
+
+@pytest.mark.parametrize("number", [None, "", "000-WS"])
+def test_order_preview_has_no_fictitious_number_or_duplicate_purpose(number: str | None) -> None:
+    values = dict(
+        order_number=number, issued=date(2026, 10, 22),
+        purpose="Проведение консультаций в рамках юридической клиники",
+        destination="Кашкадарьинская область", start=date(2026, 10, 22),
+        end=date(2026, 10, 22), employees=[("Testova Zebo", "mutaxassis")],
+        expense_source="", requester="Testova Zebo", chair="Testov Rais",
+    )
+    text = text_of(order_pdf(**values, signature=None))
+    assert "Raqam tasdiqlangandan so'ng beriladi" in text
+    assert "000-WS" not in text
+    assert "Provedenie" not in text and "Проведение" not in text
+    assert "Qashqadaryo viloyatiga xizmat safariga yuborilsin" in " ".join(text.split())
+    assert "Kashkadar" not in text
+    assert "Asos: Testova Zeboning bildirgisi" in text
+    with pytest.raises(ValueError, match="зарегистрированного номера"):
+        order_pdf(**values, signature=signature())
+
+
+@pytest.mark.parametrize(("value", "expected"), [
+    ("Кашкадарьинская область", "Qashqadaryo viloyati"),
+    ("  КАШКАДАРЬИНСКАЯ   ОБЛАСТЬ  ", "Qashqadaryo viloyati"),
+    ("Kashkadarinskaya oblast", "Qashqadaryo viloyati"),
+    ("Қашқадарё вилояти, Деҳқонобод тумани", "Qashqadaryo viloyati, Dehqonobod tumani"),
+    ("Ташкентская область", "Toshkent viloyati"),
+    ("город Ташкент", "Toshkent shahri"),
+    ("Surxondaryo viloyati", "Surxondaryo viloyati"),
+    ("Unknown place, district 17", "Unknown place, district 17"),
+    ("Kashkadarİnskaya oblast", "Kashkadarİnskaya oblast"),
+])
+def test_trip_destination_uses_known_names_without_guessing_unknown_places(
+    value: str, expected: str,
+) -> None:
+    assert trip_destination_text(value) == expected
+
+
+def test_order_preview_read_does_not_register_or_sign_a_document(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    requester_id, chair_id = uuid4(), uuid4()
+    row = {
+        "requester_user_id": requester_id, "workflow_version": 3,
+        "stage": "manager_approval", "status": "running",
+        "deputy_approver_user_id": uuid4(),
+        "purpose": "Проведение консультаций в рамках юридической клиники",
+        "destination": "Кашкадарьинская область", "start_date": date(2026, 10, 22),
+        "end_date": date(2026, 10, 22), "expense_source": "",
+    }
+    monkeypatch.setattr(trip_document_service, "_row", AsyncMock(return_value=row))
+    monkeypatch.setattr(trip_document_service, "_people", AsyncMock(return_value=[
+        ("Testova Zebo", "mutaxassis"),
+    ]))
+    connection, storage = AsyncMock(), AsyncMock()
+    connection.scalar.side_effect = [chair_id, "Testova Zebo", "Testov Rais"]
+    result = MagicMock()
+    result.scalars.return_value.all.return_value = []
+    connection.execute.return_value = result
+    requester = AuthenticatedUser(requester_id, "requester", "Requester", None, None, "employee")
+    content, media_type, name = asyncio.run(trip_document_service.read_document(
+        connection, requester, storage, uuid4(), "order-preview",
+    ))
+    assert (media_type, name) == ("application/pdf", "trip-order-preview.pdf")
+    assert "Qashqadaryo viloyatiga" in text_of(content)
+    assert "000-WS" not in text_of(content)
+    assert connection.execute.await_count == 1  # participants lookup only, no writes/counter
+    storage.put.assert_not_awaited()
+    connection.scalar.side_effect = [chair_id]
+    stranger = AuthenticatedUser(uuid4(), "other", "Other", None, None, "employee")
+    with pytest.raises(WorkspaceRepositoryError) as denied:
+        asyncio.run(trip_document_service.read_document(
+            connection, stranger, storage, uuid4(), "order-preview",
+        ))
+    assert denied.value.status_code == 404
 
 
 def test_new_trip_needs_deputy_then_chair_without_hr_access() -> None:
@@ -380,10 +460,11 @@ def test_generated_text_is_not_interpreted_as_markup() -> None:
         purpose="<b>Чиқиш</b> & учрашув", destination="Навои",
         start=date(2026, 10, 15), end=date(2026, 10, 15),
         employees=[("Тест <i>Али</i>", "мутахассис")],
-        expense_source="лойиҳа", requester="Testova Zebo",
+        expense_source="<b>лойиҳа</b> & манба", requester="Testova Zebo",
         chair="Testov Rais", signature=signature(),
     )
-    assert "<b>Chiqish</b> & uchrashuv" in text_of(content)
+    assert "<b>Chiqish</b> & uchrashuv" not in text_of(content)  # purpose is not duplicated
+    assert "<b>loyiha</b> & manba" in text_of(content)
     assert "Test <i>Ali</i>" in text_of(content)
 
 
