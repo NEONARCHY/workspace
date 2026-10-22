@@ -28,3 +28,12 @@ dossier_access_rules = sa.Table(
     sa.Column("view", sa.Boolean()), sa.Column("edit", sa.Boolean()),
     sa.Column("photo_roster", sa.Boolean()),
 )
+
+dossier_monthly_reviews = sa.Table(
+    "hr_dossier_monthly_reviews", metadata,
+    sa.Column("user_id", uuid_type, primary_key=True),
+    sa.Column("period", sa.Date(), primary_key=True),
+    sa.Column("status", sa.String(24)),
+    sa.Column("responded_at", sa.DateTime(timezone=True)),
+    sa.Column("dossier_revision", sa.Integer()),
+)

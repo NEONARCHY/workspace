@@ -192,3 +192,16 @@ class DossierAccessWrite(DossierModel):
 class DossierAccessSettings(DossierModel):
     revision: int
     rules: list[DossierAccessRule]
+
+
+class DossierReminder(DossierModel):
+    period: str
+    due_date: date
+    due: bool
+    status: Literal["pending", "update_requested", "no_changes", "skipped", "updated"]
+    responded_at: datetime | None = None
+
+
+class DossierReminderAnswer(DossierModel):
+    period: str = Field(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")
+    action: Literal["update_requested", "no_changes", "skipped"]

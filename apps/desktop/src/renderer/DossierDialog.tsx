@@ -17,7 +17,7 @@ const message = (error: unknown) => error instanceof Error ? error.message : "Н
 
 export function DossierDialog({ token, userId, people, onClose, onSaved }: {
   readonly token: string; readonly userId: string; readonly people: readonly WorkspacePerson[];
-  readonly onClose: () => void; readonly onSaved?: () => void;
+  readonly onClose: () => void; readonly onSaved?: (record: DossierDetail) => void;
 }) {
   const prefix = useId();
   const [record, setRecord] = useState<DossierDetail>();
@@ -33,6 +33,14 @@ export function DossierDialog({ token, userId, people, onClose, onSaved }: {
   const [retry, setRetry] = useState(0);
   const saving = useRef(false);
   const downloadingRef = useRef(false);
+  const feedbackRef = useRef<HTMLDivElement>(null);
+  const focusSaveResult = useRef(false);
+  useEffect(() => {
+    if (!busy && focusSaveResult.current) {
+      focusSaveResult.current = false;
+      feedbackRef.current?.focus({ preventScroll: true });
+    }
+  }, [busy]);
   useEffect(() => {
     let active = true;
     loadDossier(token, userId).then((value) => {
@@ -58,10 +66,10 @@ export function DossierDialog({ token, userId, people, onClose, onSaved }: {
     saving.current = true; setBusy(true); setError(undefined); setSuccess(false);
     try {
       const updated = await saveDossier(token, userId, { revision: record.revision, status, fields });
-      setRecord(updated); setFields(updated.fields); setDirty(false); setSuccess(true); onSaved?.();
+      setRecord(updated); setFields(updated.fields); setDirty(false); setSuccess(true); onSaved?.(updated);
       loadDossierHistory(token, userId).then((value) => { setHistory(value); setHistoryError(false); }).catch(() => setHistoryError(true));
     } catch (value) { setError(message(value)); }
-    finally { saving.current = false; setBusy(false); }
+    finally { saving.current = false; focusSaveResult.current = true; setBusy(false); }
   };
   const download = async (format: "word" | "pdf") => {
     if (!record || dirty || saving.current || downloadingRef.current) return;
@@ -123,7 +131,7 @@ export function DossierDialog({ token, userId, people, onClose, onSaved }: {
           <p className="dossier-next-stage">Word и PDF формируются из одного макета: основная справка с фото и таблица родственников на отдельной странице. Скачивается сохранённая версия. {dirty ? "Сначала сохраните изменения." : !record.revision ? "Сначала сохраните анкету или черновик." : "При большом объёме данных документ продолжится на следующих страницах."}</p>
         </> : null}
       </DialogContent>
-      <div className="dossier-feedback">
+      <div className="dossier-feedback" ref={feedbackRef} tabIndex={-1}>
         {downloading ? <p role="status">Готовим файл для скачивания…</p> : null}
         {error ? <WorkspaceNotice tone="error" role="alert" actions={!record ? <Button onClick={() => { setError(undefined); setRetry((value) => value + 1); }}>Повторить</Button> : undefined}>{error}</WorkspaceNotice> : null}
         {success ? <WorkspaceNotice tone="success" role="status">Объективка сохранена. Версия {record?.revision}.</WorkspaceNotice> : null}

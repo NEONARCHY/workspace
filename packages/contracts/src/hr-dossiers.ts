@@ -95,3 +95,15 @@ export interface DossierAccessSettings {
   readonly revision: number;
   readonly rules: readonly DossierAccessRule[];
 }
+
+export interface DossierReminder {
+  readonly period: string;
+  readonly dueDate: string;
+  readonly due: boolean;
+  readonly status: "pending" | "update_requested" | "no_changes" | "skipped" | "updated";
+  readonly respondedAt: string | null;
+}
+export interface DossierReminderAnswer {
+  readonly period: string;
+  readonly action: "update_requested" | "no_changes" | "skipped";
+}

@@ -108,6 +108,7 @@ import { FloatingMessenger } from "./FloatingMessenger";
 import { NotificationCenter } from "./NotificationCenter";
 import { WorkdayControl } from "./WorkdayControl";
 import { HisobotDraftPrompt, type HisobotDraftHandoff } from "./HisobotDraftPrompt";
+import { DossierReminderPrompt } from "./DossierReminderPrompt";
 import { TopbarInsights } from "./TopbarInsights";
 import { WorkingUserIdsContext } from "./TaskParticipantAvatar";
 import { AdaptiveNavigation } from "./AdaptiveNavigation";
@@ -2257,6 +2258,9 @@ export function App() {
               </div></div>
           </header>
 
+          <DossierReminderPrompt key={`${session.user.id}:${activeApiOrigin}`} token={session.accessToken}
+            userId={session.user.id} people={displayPeople}
+            paused={accountOpen || Boolean(profileUserId) || supportOpen || Boolean(previewAttachment) || Boolean(forwardPhoto) || switchingNetwork} />
           <HisobotDraftPrompt key={workspace.currentUser.id} token={session.accessToken}
             userId={workspace.currentUser.id} notifications={workspace.notifications}
             enabled={modulePermissions.ai_hisobot?.view === true}
