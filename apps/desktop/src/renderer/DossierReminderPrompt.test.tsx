@@ -123,10 +123,17 @@ it("refreshes completion only after a successful final save, not a draft or fail
   fireEvent.click(screen.getByRole("button", { name: "Сохранить черновик" }));
   await screen.findByText("Объективка сохранена. Версия 2.");
   expect(loadDossierReminder).toHaveBeenCalledTimes(1);
-  fireEvent.click(screen.getByRole("button", { name: "Сохранить объективку" }));
+  // Tabster restores the modal's accessibility after focus moves off the disabled form.
+  // Text may already be rendered before that asynchronous focus lifecycle completes.
+  const finalSave = await screen.findByRole("button", { name: "Сохранить объективку" });
+  expect(finalSave).toBeEnabled();
+  expect(screen.getByRole("dialog", { name: "Объективка сотрудника" })).not.toHaveAttribute("aria-hidden", "true");
+  fireEvent.click(finalSave);
   expect(await screen.findByRole("alert")).toHaveTextContent("Ошибка сохранения анкеты");
   expect(loadDossierReminder).toHaveBeenCalledTimes(1);
-  fireEvent.click(screen.getByRole("button", { name: "Сохранить объективку" }));
+  const retrySave = await screen.findByRole("button", { name: "Сохранить объективку" });
+  expect(retrySave).toBeEnabled();
+  fireEvent.click(retrySave);
   await screen.findByText("Объективка сохранена. Версия 3.");
   await waitFor(() => expect(loadDossierReminder).toHaveBeenCalledTimes(2));
   fireEvent.click(screen.getByRole("button", { name: "Закрыть объективку" }));
