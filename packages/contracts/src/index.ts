@@ -723,6 +723,21 @@ export interface LeaveContext {
   readonly canEditTenureRules: boolean;
 }
 
+export type TeamApprovalInboxKind = "trips" | "leaves";
+
+export interface TeamApprovalItem {
+  readonly id: string;
+  readonly title: string;
+  readonly requesterName: string;
+  readonly startsOn: string;
+  readonly endsOn: string | null;
+}
+
+export interface TeamApprovalInbox {
+  readonly enabled: boolean;
+  readonly items: readonly TeamApprovalItem[];
+}
+
 export interface LeaveTenureRule {
   readonly afterYears: number;
   readonly extraDays: number;

@@ -10,7 +10,7 @@ import type {
   WorkspacePerson,
   WorkspaceTask,
 } from "@yuksalish/contracts";
-import { Button, DialogSurface } from "@fluentui/react-components";
+import { Button, DialogSurface, useRestoreFocusTarget } from "@fluentui/react-components";
 import { EmployeeAvatar as Avatar } from "./EmployeeAvatar";
 import {
   ArrowRight20Regular,
@@ -23,6 +23,8 @@ import {
   PeopleTeam24Regular,
   Warning24Regular,
   ClipboardTask24Regular,
+  Airplane24Regular,
+  Beach24Regular,
 } from "@fluentui/react-icons";
 
 import { TeamPresencePanel } from "./TeamPresencePanel";
@@ -38,6 +40,7 @@ import { isTaskOverdue as deadlineIsOverdue } from "./task-deadline";
 import { WorkspaceDialog } from "./WorkspaceDialog";
 import { useTeamTaskProposals } from "./useTeamTaskProposals";
 import { useTeamGrantInbox } from "./useTeamGrantInbox";
+import { useTeamApprovalInbox } from "./useTeamApprovalInbox";
 
 interface TeamDashboardViewProps {
   readonly children?: ReactNode;
@@ -54,13 +57,15 @@ interface TeamDashboardViewProps {
   readonly onSelectSignatureLetter?: (letterId: string) => void;
   readonly onSelectTaskProposal?: (proposalId: string) => void;
   readonly onSelectGrant?: (grantId: string) => void;
+  readonly onSelectTrip?: (requestId: string) => void;
+  readonly onSelectLeave?: (requestId: string) => void;
   readonly calendarEvents?: readonly CalendarEvent[];
   readonly onCalendarResponse?: (event: CalendarEvent, status: "accepted" | "declined") => Promise<CalendarEvent | undefined>;
   readonly onDecideDeadline?: (task: WorkspaceTask, requestId: string, approved: boolean) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
 }
 
 type TeamFilter = "all" | "risk" | "review";
-type DecisionPanel = "overdue" | "review" | "payments" | "extensions" | "invitations" | "signatures" | "proposals" | "grants" | "grant_launches";
+type DecisionPanel = "overdue" | "review" | "payments" | "extensions" | "invitations" | "signatures" | "proposals" | "grants" | "grant_launches" | "trips" | "leaves";
 type AttentionTone = "danger" | "review" | "today" | "priority" | "soon";
 type FlowStatusKey = "new" | "progress" | "review" | "overdue";
 type FlowSelection =
@@ -161,7 +166,8 @@ function MetricCard({ icon, label, value, note, tone, active, onSelect, loading 
   readonly active: boolean;
   readonly onSelect: () => void;
 }) {
-  return <button type="button" onClick={onSelect} aria-haspopup="dialog" aria-pressed={active} aria-busy={loading || undefined} className={`team-dash-metric tone-${tone}`}>
+  const restoreFocusTarget = useRestoreFocusTarget();
+  return <button {...restoreFocusTarget} type="button" onClick={onSelect} aria-haspopup="dialog" aria-pressed={active} aria-busy={loading || undefined} className={`team-dash-metric tone-${tone}`}>
     <div className="team-dash-metric-icon" aria-hidden="true">{icon}</div>
     <div className="team-dash-metric-copy"><span>{label}</span><small>{note}</small></div>
     <strong>{loading ? <SkeletonBlock width="32px" height="1em" /> : value?.toLocaleString("ru-RU") ?? "—"}</strong>
@@ -183,6 +189,8 @@ export function TeamDashboardView({
   onSelectSignatureLetter,
   onSelectTaskProposal,
   onSelectGrant,
+  onSelectTrip,
+  onSelectLeave,
   calendarEvents = [],
   onCalendarResponse,
   onDecideDeadline,
@@ -192,6 +200,9 @@ export function TeamDashboardView({
   const signatureInbox = useSignatureInbox(token, currentUserId, Boolean(onSelectSignatureLetter));
   const proposalInbox = useTeamTaskProposals(token, currentUserId, Boolean(onSelectTaskProposal));
   const grantInbox = useTeamGrantInbox(token, currentUserId, Boolean(onSelectGrant));
+  const tripInbox = useTeamApprovalInbox(token, currentUserId, "trips", Boolean(onSelectTrip));
+  const leaveInbox = useTeamApprovalInbox(token, currentUserId, "leaves", Boolean(onSelectLeave));
+  const approvalInbox = decisionPanel === "trips" ? tripInbox : leaveInbox;
   const [selectedDeadlineTaskId, setSelectedDeadlineTaskId] = useState<string>();
   const [invitationBusyId, setInvitationBusyId] = useState<string>();
   const [invitationError, setInvitationError] = useState("");
@@ -317,6 +328,8 @@ export function TeamDashboardView({
     proposals: "Запросы на постановку задач",
     grants: "Гранты на вашей проверке",
     grant_launches: "Запросы на запуск грантов",
+    trips: "Поездки на вашем согласовании",
+    leaves: "Отпуска на вашем согласовании",
   };
   const openTask = (taskId: string) => { setDecisionPanel(undefined); setSelectedPersonId(undefined); onSelectTask(taskId); };
 
@@ -360,6 +373,8 @@ export function TeamDashboardView({
       <MetricCard active={decisionPanel === "invitations"} onSelect={() => setDecisionPanel("invitations")} icon={<CalendarClock24Regular />} label="Приглашения" value={pendingInvitations.length} note="ожидают вашего ответа" tone="brand" />
       {onSelectSignatureLetter ? <MetricCard active={decisionPanel === "signatures"} onSelect={() => setDecisionPanel("signatures")} icon={<Mail24Regular />} label="Письма на подпись" value={signatureInbox.registry?.totalCount} loading={signatureInbox.loading} note={signatureInbox.error ? "не удалось загрузить · подробнее" : signatureInbox.loading ? "загружаем письма…" : "ждут вашей подписи"} tone="review" /> : null}
       {onSelectTaskProposal ? <MetricCard active={decisionPanel === "proposals"} onSelect={() => setDecisionPanel("proposals")} icon={<ClipboardTask24Regular />} label="Постановка задач" value={proposalInbox.proposals?.length} loading={proposalInbox.loading} note={proposalInbox.error ? "не удалось загрузить · подробнее" : "запросы сотрудников на ваше решение"} tone="brand" /> : null}
+      {tripInbox.visible ? <MetricCard active={decisionPanel === "trips"} onSelect={() => setDecisionPanel("trips")} icon={<Airplane24Regular />} label="Поездки на согласование" value={tripInbox.items?.length} loading={tripInbox.loading} note={tripInbox.error ? "не удалось загрузить · подробнее" : "ждут вашего решения"} tone="brand" /> : null}
+      {leaveInbox.visible ? <MetricCard active={decisionPanel === "leaves"} onSelect={() => setDecisionPanel("leaves")} icon={<Beach24Regular />} label="Отпуска на согласование" value={leaveInbox.items?.length} loading={leaveInbox.loading} note={leaveInbox.error ? "не удалось загрузить · подробнее" : "ждут вашего решения"} tone="review" /> : null}
       {onSelectGrant ? <div className="team-dash-grant-metric" role="group" aria-label="Гранты: проверка и запуск">
         <MetricCard active={decisionPanel === "grants"} onSelect={() => setDecisionPanel("grants")} icon={<ClipboardTask24Regular />} label="Заявки на гранты" value={grantInbox.reviews?.length} loading={grantInbox.loading} note={grantInbox.error ? "не удалось загрузить · подробнее" : "результаты на вашей проверке"} tone="brand" />
         <MetricCard active={decisionPanel === "grant_launches"} onSelect={() => setDecisionPanel("grant_launches")} icon={<CheckmarkCircle24Regular />} label="Запросы на постановку грантов" value={grantInbox.launches?.length} loading={grantInbox.loading} note={grantInbox.error ? "не удалось загрузить · подробнее" : "инициативы ждут разрешения запуска"} tone="review" />
@@ -369,6 +384,16 @@ export function TeamDashboardView({
       <DialogSurface className="team-dash-dialog" aria-label={decisionPanel ? decisionTitles[decisionPanel] : "Решения команды"}>
       {decisionPanel ? <section className="team-dash-decisions" role="region" aria-label={decisionTitles[decisionPanel]}>
       <header><div><span>Входящие решения</span><h3>{decisionTitles[decisionPanel]}</h3></div><Button appearance="subtle" onClick={() => setDecisionPanel(undefined)}>Закрыть</Button></header>
+      {decisionPanel === "trips" || decisionPanel === "leaves" ? <>
+        <p>Только заявки на текущем этапе вашего согласования. Откройте карточку, чтобы проверить документы и принять решение.</p>
+        <Button onClick={approvalInbox.refresh} disabled={approvalInbox.loading}>Обновить список</Button>
+        {approvalInbox.error ? <WorkspaceNotice tone="error" role="alert" actions={<Button onClick={approvalInbox.refresh}>Повторить загрузку</Button>}>{approvalInbox.error}</WorkspaceNotice> : null}
+        {approvalInbox.loading ? <p role="status">Загружаем согласования…</p> : null}
+        {approvalInbox.visible ? approvalInbox.items?.map((item) => <button type="button" className="team-dash-payment-item" key={item.id} onClick={() => { setDecisionPanel(undefined); (decisionPanel === "trips" ? onSelectTrip : onSelectLeave)?.(item.id); }}>
+          <strong>{item.title}</strong><span>{item.requesterName} · {new Date(`${item.startsOn}T00:00:00`).toLocaleDateString("ru-RU")}{item.endsOn ? ` — ${new Date(`${item.endsOn}T00:00:00`).toLocaleDateString("ru-RU")}` : ""}</span><ArrowRight20Regular aria-hidden="true" />
+        </button>) : null}
+        {!approvalInbox.visible ? <p>Очередь согласования вам больше недоступна.</p> : approvalInbox.items?.length === 0 ? <p>Заявок, ожидающих вашего согласования, нет.</p> : null}
+      </> : null}
       {(decisionPanel === "grants" || decisionPanel === "grant_launches") && onSelectGrant ? <>
         <p>{decisionPanel === "grant_launches" ? "После вашего разрешения вы станете постановщиком, а сотрудник сохранится инициатором." : "Результаты после проверки заместителя. Откройте заявку для принятия решения."}</p>
         {grantInbox.error ? <WorkspaceNotice tone="error" role="alert" actions={<Button onClick={grantInbox.refresh}>Повторить загрузку</Button>}>{grantInbox.error}</WorkspaceNotice> : null}

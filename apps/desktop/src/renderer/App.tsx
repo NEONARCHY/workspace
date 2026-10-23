@@ -2417,6 +2417,14 @@ export function App() {
                     setActiveSection("grants");
                   } : undefined}
                   paymentRequests={canView("payment_requests") && workspace.workflow ? workspace.requests : []}
+                  onSelectTrip={canView("trip_approvals") && modulePermissions.trip_approvals?.approve ? (requestId) => {
+                    setFocusTarget((current) => ({ section: "trip_approvals", entityId: requestId, revision: (current?.revision ?? 0) + 1 }));
+                    setActiveSection("trip_approvals");
+                  } : undefined}
+                  onSelectLeave={canView("leave_approvals") && modulePermissions.leave_approvals?.approve ? (requestId) => {
+                    setFocusTarget((current) => ({ section: "leave_approvals", entityId: requestId, revision: (current?.revision ?? 0) + 1 }));
+                    setActiveSection("leave_approvals");
+                  } : undefined}
                   onSelectSignatureLetter={canView("ai_referent") ? (letterId) => {
                     setFocusTarget((current) => ({ section: "ai_referent", entityId: letterId, revision: (current?.revision ?? 0) + 1 }));
                     setActiveSection("ai_referent");

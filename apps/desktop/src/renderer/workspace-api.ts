@@ -1,4 +1,5 @@
 import type { OfficePreviewResult } from "./file-viewer-kind";
+import type { TeamApprovalInbox, TeamApprovalInboxKind } from "@yuksalish/contracts";
 import type { DossierAccessSettings, DossierContext, DossierDetail, DossierFields, DossierHistory, DossierImportPreview, DossierPermissions, DossierReminder, DossierReminderAnswer, DossierSummary, PersonnelPhotoCard } from "@yuksalish/contracts";
 import { validateGrantSourceFiles } from "./grant-source-files";
 import type { HisobotActivityDraft } from "@yuksalish/contracts";
@@ -2623,6 +2624,10 @@ export function createWorkspaceAbsence(token: string, payload: AbsenceRequestInp
 
 export function loadWorkspaceLeaves(token: string, signal?: AbortSignal): Promise<readonly LeaveRequest[]> {
   return apiRequest<readonly LeaveRequest[]>("/leave-requests", { signal }, token);
+}
+
+export function loadTeamApprovalInbox(token: string, kind: TeamApprovalInboxKind, signal?: AbortSignal): Promise<TeamApprovalInbox> {
+  return apiRequest<TeamApprovalInbox>(`/home/approval-inbox/${kind}`, { signal }, token);
 }
 
 export function loadWorkspaceLeaveContext(token: string, signal?: AbortSignal): Promise<LeaveContext> {
