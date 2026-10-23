@@ -10,10 +10,10 @@ from pathlib import PurePath
 from typing import Annotated, Literal
 from urllib.parse import quote
 from uuid import NAMESPACE_URL, UUID, uuid5
-from xml.etree.ElementTree import ParseError
 from zipfile import BadZipFile, ZipFile
 
 from defusedxml.common import DefusedXmlException
+from defusedxml.ElementTree import ParseError
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
 from fastapi.routing import APIRoute
 from pydantic import Field
