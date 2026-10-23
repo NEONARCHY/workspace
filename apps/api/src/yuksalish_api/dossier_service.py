@@ -285,7 +285,9 @@ async def import_preview(
     return result
 
 
-async def photos(connection: AsyncConnection, actor: AuthenticatedUser) -> list[PhotoCard]:
+async def photos(
+    connection: AsyncConnection, actor: AuthenticatedUser, *, audit: bool = True,
+) -> list[PhotoCard]:
     access = await policy(connection, actor)
     if not access.photo_all and not any(r.photo_roster for r in access.rules):
         raise WorkspaceRepositoryError(403, "Нет доступа к реестру фотокарточек")
@@ -296,13 +298,14 @@ async def photos(connection: AsyncConnection, actor: AuthenticatedUser) -> list[
         dossiers.c.data["education"].label("education"),
     ).select_from(users.outerjoin(dossiers, dossiers.c.user_id == users.c.id)).where(
         users.c.status == "active", access.condition("photo_roster"),
-    ).order_by(users.c.full_name))).mappings()
+    ).order_by(users.c.full_name, users.c.id))).mappings()
     result = [PhotoCard(user_id=r["id"], full_name=r["full_name"], job_title=r["job_title"],
                         department_id=r["department_id"],
                         birth_year=int(r["birth_date"][:4]) if r["birth_date"] else None,
                         universities=[item["institution"] for item in r["education"] or []])
               for r in rows]
-    await _audit(connection, actor, None, "photo_roster_viewed", {"count": len(result)})
+    if audit:
+        await _audit(connection, actor, None, "photo_roster_viewed", {"count": len(result)})
     return result
 
 

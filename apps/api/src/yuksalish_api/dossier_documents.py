@@ -45,7 +45,7 @@ def _replace(root: ET.Element, values: dict[str, str]) -> None:
             node.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
 
 
-def _portrait(content: bytes) -> bytes:
+def portrait_jpeg(content: bytes) -> bytes:
     if len(content) > 15 * 1024 * 1024:
         raise ValueError("Фотография превышает допустимый размер")
     try:
@@ -146,6 +146,6 @@ def render_dossier_docx(record: DossierDetail, photo: bytes | None = None) -> by
                 if item.filename == "word/document.xml":
                     content = ET.tostring(root, encoding="utf-8", xml_declaration=True)
                 elif item.filename == "word/media/image1.jpeg" and photo is not None:
-                    content = _portrait(photo)
+                    content = portrait_jpeg(photo)
                 archive.writestr(item.filename, content)
     return output.getvalue()

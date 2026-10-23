@@ -1,6 +1,6 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import type {
@@ -197,6 +197,28 @@ export function TeamDashboardView({
 }: TeamDashboardViewProps) {
   const [teamFilter, setTeamFilter] = useState<TeamFilter>("all");
   const [decisionPanel, setDecisionPanel] = useState<DecisionPanel>();
+  const pendingApproval = useRef<{ kind: "trips" | "leaves"; id: string } | undefined>(undefined);
+  const approvalNavigationFrame = useRef<number | undefined>(undefined);
+  useEffect(() => () => {
+    pendingApproval.current = undefined;
+    if (approvalNavigationFrame.current !== undefined) window.cancelAnimationFrame(approvalNavigationFrame.current);
+    approvalNavigationFrame.current = undefined;
+  }, [token, currentUserId]);
+  const openApproval = (kind: "trips" | "leaves", id: string) => {
+    if (pendingApproval.current || approvalNavigationFrame.current !== undefined) return;
+    pendingApproval.current = { kind, id };
+    setDecisionPanel(undefined);
+  };
+  const finishApprovalExit = () => {
+    const target = pendingApproval.current;
+    pendingApproval.current = undefined;
+    if (!target) return;
+    // Let Fluent unmount the old modal and restore focus before opening another.
+    approvalNavigationFrame.current = window.requestAnimationFrame(() => {
+      approvalNavigationFrame.current = undefined;
+      (target.kind === "trips" ? onSelectTrip : onSelectLeave)?.(target.id);
+    });
+  };
   const signatureInbox = useSignatureInbox(token, currentUserId, Boolean(onSelectSignatureLetter));
   const proposalInbox = useTeamTaskProposals(token, currentUserId, Boolean(onSelectTaskProposal));
   const grantInbox = useTeamGrantInbox(token, currentUserId, Boolean(onSelectGrant));
@@ -380,7 +402,10 @@ export function TeamDashboardView({
         <MetricCard active={decisionPanel === "grant_launches"} onSelect={() => setDecisionPanel("grant_launches")} icon={<CheckmarkCircle24Regular />} label="Запросы на постановку грантов" value={grantInbox.launches?.length} loading={grantInbox.loading} note={grantInbox.error ? "не удалось загрузить · подробнее" : "инициативы ждут разрешения запуска"} tone="review" />
       </div> : null}
     </section>
-    <WorkspaceDialog open={Boolean(decisionPanel)} onOpenChange={(_, data) => { if (!data.open) setDecisionPanel(undefined); }}>
+    <WorkspaceDialog open={Boolean(decisionPanel)} onOpenChange={(_, data) => { if (!data.open) setDecisionPanel(undefined); }}
+      surfaceMotion={{ outScale: 1, inScale: 1, duration: 240, exitDuration: 160,
+        easing: "cubic-bezier(0.2, 0, 0, 1)", exitEasing: "cubic-bezier(0.4, 0, 1, 1)",
+        onMotionFinish: (_, data) => { if (data.direction === "exit") finishApprovalExit(); } }}>
       <DialogSurface className="team-dash-dialog" aria-label={decisionPanel ? decisionTitles[decisionPanel] : "Решения команды"}>
       {decisionPanel ? <section className="team-dash-decisions" role="region" aria-label={decisionTitles[decisionPanel]}>
       <header><div><span>Входящие решения</span><h3>{decisionTitles[decisionPanel]}</h3></div><Button appearance="subtle" onClick={() => setDecisionPanel(undefined)}>Закрыть</Button></header>
@@ -389,7 +414,7 @@ export function TeamDashboardView({
         <Button onClick={approvalInbox.refresh} disabled={approvalInbox.loading}>Обновить список</Button>
         {approvalInbox.error ? <WorkspaceNotice tone="error" role="alert" actions={<Button onClick={approvalInbox.refresh}>Повторить загрузку</Button>}>{approvalInbox.error}</WorkspaceNotice> : null}
         {approvalInbox.loading ? <p role="status">Загружаем согласования…</p> : null}
-        {approvalInbox.visible ? approvalInbox.items?.map((item) => <button type="button" className="team-dash-payment-item" key={item.id} onClick={() => { setDecisionPanel(undefined); (decisionPanel === "trips" ? onSelectTrip : onSelectLeave)?.(item.id); }}>
+        {approvalInbox.visible ? approvalInbox.items?.map((item) => <button type="button" className="team-dash-payment-item" key={item.id} onClick={() => openApproval(decisionPanel, item.id)}>
           <strong>{item.title}</strong><span>{item.requesterName} · {new Date(`${item.startsOn}T00:00:00`).toLocaleDateString("ru-RU")}{item.endsOn ? ` — ${new Date(`${item.endsOn}T00:00:00`).toLocaleDateString("ru-RU")}` : ""}</span><ArrowRight20Regular aria-hidden="true" />
         </button>) : null}
         {!approvalInbox.visible ? <p>Очередь согласования вам больше недоступна.</p> : approvalInbox.items?.length === 0 ? <p>Заявок, ожидающих вашего согласования, нет.</p> : null}

@@ -1,15 +1,64 @@
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import type { SurveyAnalysisDetail } from "@yuksalish/contracts";
+import type { LeaveRequest, SurveyAnalysisDetail, TripRequest } from "@yuksalish/contracts";
 import { App } from "./App";
 import { initialTasks, people, initialChats } from "./test-fixtures/demo-data";
 import { changeField } from "./test-fixtures/rich-editor";
-import { render, response, mockServer, loginToWorkspace } from "./app-test-harness";
+import { render, response, mockServer, loginToWorkspace, clickWithFocus } from "./app-test-harness";
 import "./SurveyAnalyticsView";
 import "./TeamDashboardView";
 import "./AIReferentView";
 import "./TasksView";
 import "./ApprovalsView";
+import "./TripApprovalsView";
+import "./LeaveView";
+
+function deputyApprovalServer() {
+  const server = mockServer();
+  const original = server.getMockImplementation()!;
+  const trip: TripRequest = {
+    id: "deputy-trip", number: "TR-QA", requesterUserId: "aziza", workflowVersion: 3,
+    purpose: "Тестовая рабочая встреча", destination: "Тестовый Самарканд",
+    startDate: "2026-11-01", endDate: "2026-11-03", employeeIds: ["aziza"],
+    stage: "deputy_approval", stageLabel: "Согласование первого заместителя",
+    status: "running", statusLabel: "На согласовании", canEdit: false,
+    allowedActions: ["approve", "return", "reject"], actions: [],
+    createdAt: "2026-10-23T06:00:00Z", updatedAt: "2026-10-23T06:00:00Z",
+  };
+  const leave: LeaveRequest = {
+    id: "deputy-leave", requesterUserId: "aziza", applicationText: "Тестовое заявление на отпуск.",
+    requestedStartsOn: "2026-11-10", requestedEndsOn: "2026-11-30",
+    startsOn: "2026-11-10", endsOn: "2026-11-30", workYearStartsOn: "2025-11-10", workYearEndsOn: "2026-11-09",
+    calendarDays: 21, paidDays: 21, tenureAdditionalDays: 0, organizationEmploymentDate: "2024-01-01",
+    returnOn: "2026-12-01", accountingOfficer: null, orderEmployeeName: "Тестовый сотрудник", orderJobTitle: "Специалист",
+    orderSignerName: "Тестовый заместитель", orderClause1: null, orderClause2: null, orderClause3: null,
+    status: "pending_deputy", statusLabel: "На утверждении первого заместителя", orderNumber: "QA-1", orderYear: 2026,
+    signedByUserId: null, approvedAt: null, canRevise: false, canReviewHr: false,
+    canReviewDeputy: true, canWithdraw: false, hasOrder: false, actions: [],
+    createdAt: "2026-10-23T06:00:00Z", updatedAt: "2026-10-23T06:00:00Z",
+  };
+  server.mockImplementation(async (input, options) => {
+    const url = String(input);
+    if (url.includes("/home/approval-inbox/")) {
+      const isTrip = url.endsWith("trips");
+      return response({ enabled: true, items: [{
+        id: isTrip ? trip.id : leave.id, title: isTrip ? trip.destination : "Заявление на отпуск",
+        requesterName: "Тестовый сотрудник", startsOn: isTrip ? trip.startDate : leave.startsOn,
+        endsOn: isTrip ? trip.endDate : leave.endsOn,
+      }] });
+    }
+    if (url.endsWith("/workspace/bootstrap")) {
+      const bootstrap: Record<string, unknown> = await (await original(input, options)).json();
+      return response({ ...bootstrap, tripRequests: [trip] });
+    }
+    if (url.endsWith("/leave-requests/context")) return response({
+      hrUserId: "hr", deputyUserId: "malika", canConfigureSignature: false,
+      signatureReady: true, tenureRules: [], canEditTenureRules: false,
+    });
+    if (url.endsWith("/leave-requests")) return response([leave]);
+    return original(input, options);
+  });
+}
 
 describe("corporate workspace authentication alpha", () => {
   it("uses the real mobile web menu without losing the current section", async () => {
@@ -214,6 +263,29 @@ describe("corporate workspace authentication alpha", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Заявки на оплату" })).toHaveAttribute("aria-current", "page"));
   });
 
+  it.each(["trips", "leaves"] as const)("opens the server-authorized deputy %s inbox and exact request", async (kind) => {
+    deputyApprovalServer();
+    render(<App />);
+    await loginToWorkspace("malika", "home");
+    fireEvent.click(screen.getByRole("button", { name: "Обзор команды" }));
+    const metric = await screen.findByRole("button", { name: kind === "trips" ? /Поездки на согласование/ : /Отпуска на согласование/ });
+    await waitFor(() => expect(metric).toHaveTextContent("1"));
+    clickWithFocus(metric);
+    const queue = await screen.findByRole("dialog", { name: kind === "trips" ? "Поездки на вашем согласовании" : "Отпуска на вашем согласовании" });
+    clickWithFocus(within(queue).getByRole("button", { name: kind === "trips" ? /Тестовый Самарканд/ : /Заявление на отпуск/ }));
+    if (kind === "trips") {
+      // The real shell retains the old section until its lazy destination is ready.
+      await screen.findByRole("heading", { name: "Согласование поездок" }, { timeout: 10_000 });
+      expect(await screen.findByRole("heading", { name: "Тестовый Самарканд" })).toBeInTheDocument();
+      expect(await screen.findByRole("button", { name: "Закрыть карточку поездки" })).toBeInTheDocument();
+      expect(await screen.findByRole("button", { name: "Согласовать и передать председателю" })).toBeInTheDocument();
+      expect(screen.getByRole("dialog", { name: "Тестовый Самарканд" })).toBeInTheDocument();
+    } else {
+      expect(await screen.findByRole("heading", { name: "Решение первого заместителя" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Утвердить и подписать приказ" })).toBeInTheDocument();
+    }
+  });
+
   it("opens the chairman's signature letter from the team metrics", async () => {
     mockServer({ chairmanLogin: true });
     render(<App />);
@@ -221,6 +293,8 @@ describe("corporate workspace authentication alpha", () => {
     const metrics = screen.getByRole("region", { name: "Ключевые показатели команды" });
     const signatures = within(metrics).getByRole("button", { name: /Письма на подпись/ });
     await waitFor(() => expect(signatures).toHaveTextContent("1"));
+    await waitFor(() => expect(within(metrics).queryByRole("button", { name: /Поездки на согласование/ })).not.toBeInTheDocument());
+    expect(within(metrics).queryByRole("button", { name: /Отпуска на согласование/ })).not.toBeInTheDocument();
     expect(within(metrics).getAllByRole("button")).toHaveLength(9);
     const grants = within(metrics).getByRole("group", { name: "Гранты: проверка и запуск" });
     expect(within(grants).getAllByRole("button")).toHaveLength(2);

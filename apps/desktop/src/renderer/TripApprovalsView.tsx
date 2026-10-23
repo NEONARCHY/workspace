@@ -1,7 +1,7 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { LoadingSkeleton } from "./LoadingSkeleton";
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
-import { lazy, Suspense, useCallback, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { SpatialBoard, SpatialCard, SpatialLane } from "./SpatialBoard";
 import { useMiddleMousePan } from "./useMiddleMousePan";
 import { ProcessWorkflowDesigner } from "./ProcessWorkflowDesigner";
@@ -97,6 +97,12 @@ const exampleTripFacts = {
 export function TripApprovalsView({ focusRequestId, requests, people, departments, currentUser, onCreate, onUpdate, onDelete, onAction, onLoadBriefOffice, onDownloadDocument, onOpenChat, renderTripChat, workflow, positions = [], canManageWorkflow = false, onSaveWorkflow, onPublishWorkflow, assistantDraft }: TripApprovalsViewProps) {
   const boardPan = useMiddleMousePan<HTMLDivElement>();
   const restoreFocusTarget = useRestoreFocusTarget();
+  const detailSurfaceRef = useRef<HTMLDivElement>(null);
+  const detailCloseRef = useRef<HTMLButtonElement>(null);
+  const detailFocusFrame = useRef<number | undefined>(undefined);
+  useEffect(() => () => {
+    if (detailFocusFrame.current !== undefined) window.cancelAnimationFrame(detailFocusFrame.current);
+  }, []);
   const [selectedId, setSelectedId] = useState(focusRequestId ?? "");
   const [detailOpen, setDetailOpen] = useState(Boolean(focusRequestId));
   const [pendingDecision, setPendingDecision] = useState<{ id: string; action: "return" | "reject" | "withdraw" | "annul" }>();
@@ -355,10 +361,21 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
           if (formOpen) closeForm();
           else closeDetail();
         }
-      }}>
-        <DialogSurface className={`trip-dialog ${formMode !== null ? "record-composer-dialog" : "context-record-dialog"}`} aria-labelledby={formMode !== null ? "trip-composer-title" : undefined}>
+      }} surfaceMotion={{ outScale: 1, inScale: 1, duration: 240, exitDuration: 160,
+        easing: "cubic-bezier(0.2, 0, 0, 1)", exitEasing: "cubic-bezier(0.4, 0, 1, 1)",
+        onMotionFinish: (_, data) => {
+          if (data.direction !== "enter" || formMode !== null || !detailOpen) return;
+          // Deferred section loading may focus the surface before Tabster registers
+          // its controls. Resolve only that fallback, without stealing an input focus.
+          detailFocusFrame.current = window.requestAnimationFrame(() => {
+            detailFocusFrame.current = undefined;
+            const surface = detailSurfaceRef.current;
+            if (surface && surface.ownerDocument.activeElement === surface) detailCloseRef.current?.focus();
+          });
+        } }}>
+        <DialogSurface ref={detailSurfaceRef} className={`trip-dialog ${formMode !== null ? "record-composer-dialog" : "context-record-dialog"}`} {...(formMode !== null ? { "aria-labelledby": "trip-composer-title" } : {})}>
           {formMode === null && selected ? <div className="context-record-workspace"><article className="trip-detail">
-            <header><div><span>{selected.number}</span><DialogTitle>{selected.destination}</DialogTitle><p>{selected.startDate} — {selected.endDate}</p></div><Button autoFocus appearance="subtle" icon={<Dismiss20Regular />} disabled={busy} onClick={closeDetail} aria-label="Закрыть карточку поездки" /></header>
+            <header><div><span>{selected.number}</span><DialogTitle>{selected.destination}</DialogTitle><p>{selected.startDate} — {selected.endDate}</p></div><Button ref={detailCloseRef} appearance="subtle" icon={<Dismiss20Regular />} disabled={busy} onClick={closeDetail} aria-label="Закрыть карточку поездки" /></header>
             <Badge className="trip-detail-status" appearance="tint" color={selected.status === "rejected" ? "danger" : selected.status === "approved" ? "success" : "informative"}>{selected.statusLabel}</Badge>
             <div className="trip-detail-stages" aria-label="Маршрут согласования">{displayTripColumns.filter((column) => selected.workflowVersion === 3 || column.key !== "deputy_approval").filter((column) => column.key !== (selected.stage === "rejected" ? "approved" : "rejected")).map((column) => <span key={column.key} aria-current={selected.stage === column.key ? "step" : undefined} style={{ "--approval-stage-color": column.color } as CSSProperties}>{column.label}</span>)}</div>
             {feedback}

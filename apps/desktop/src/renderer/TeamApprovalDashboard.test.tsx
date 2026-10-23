@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { FluentProvider } from "@fluentui/react-components";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { TeamDashboardView } from "./TeamDashboardView";
@@ -10,7 +10,7 @@ vi.mock("./useTeamApprovalInbox", () => ({ useTeamApprovalInbox: inbox.use }));
 const selectTrip = vi.fn();
 const selectLeave = vi.fn();
 function show(enabled = true) {
-  render(<FluentProvider theme={workspaceTheme}><TeamDashboardView token="token" tasks={[]} people={[]}
+  return render(<FluentProvider theme={workspaceTheme}><TeamDashboardView token="token" tasks={[]} people={[]}
     currentUserId="deputy" efficiencyLoading={false} onSelectTask={vi.fn()}
     onSelectTrip={enabled ? selectTrip : undefined} onSelectLeave={enabled ? selectLeave : undefined} /></FluentProvider>);
 }
@@ -23,20 +23,26 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-it("shows two independent counters, opens separate windows and navigates to the exact request", async () => {
-  show();
-  const trips = screen.getByRole("button", { name: /Поездки на согласование/ });
-  expect(within(trips).getByText("1")).toBeInTheDocument();
-  fireEvent.click(trips);
+it("cancels a queued card transition when the source page unmounts", async () => {
+  const { unmount } = show();
+  fireEvent.click(screen.getByRole("button", { name: /Поездки на согласование/ }));
   const dialog = await screen.findByRole("dialog", { name: "Поездки на вашем согласовании" });
-  expect(within(dialog).queryByText("Заявление на отпуск")).not.toBeInTheDocument();
-  expect(within(dialog).getByText(/01.11.2026 — 10.11.2026/)).toBeInTheDocument();
   fireEvent.click(within(dialog).getByRole("button", { name: /Встреча в Самарканде/ }));
-  expect(selectTrip).toHaveBeenCalledWith("trips");
-  fireEvent.click(screen.getByRole("button", { name: /Отпуска на согласование/ }));
-  const leaves = await screen.findByRole("dialog", { name: "Отпуска на вашем согласовании" });
-  fireEvent.click(within(leaves).getByRole("button", { name: /Заявление на отпуск/ }));
-  expect(selectLeave).toHaveBeenCalledWith("leaves");
+  unmount();
+  await act(async () => { await new Promise<void>(resolve => window.requestAnimationFrame(() => window.requestAnimationFrame(() => resolve()))); });
+  expect(selectTrip).not.toHaveBeenCalled();
+});
+
+it.each(["trips", "leaves"] as const)("opens the %s queue and navigates to the exact request", async (kind) => {
+  show();
+  const metric = screen.getByRole("button", { name: kind === "trips" ? /Поездки на согласование/ : /Отпуска на согласование/ });
+  expect(within(metric).getByText("1")).toBeInTheDocument();
+  fireEvent.click(metric);
+  const dialog = await screen.findByRole("dialog", { name: kind === "trips" ? "Поездки на вашем согласовании" : "Отпуска на вашем согласовании" });
+  expect(within(dialog).queryByText(kind === "trips" ? "Заявление на отпуск" : "Встреча в Самарканде")).not.toBeInTheDocument();
+  expect(within(dialog).getByText(/01.11.2026 — 10.11.2026/)).toBeInTheDocument();
+  fireEvent.click(within(dialog).getByRole("button", { name: kind === "trips" ? /Встреча в Самарканде/ : /Заявление на отпуск/ }));
+  await waitFor(() => expect(kind === "trips" ? selectTrip : selectLeave).toHaveBeenCalledWith(kind));
 });
 
 it("hides unavailable queues, displays unknown counts on failure and allows retry", async () => {
