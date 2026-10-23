@@ -152,6 +152,16 @@ class PhotoCard(DossierModel):
     universities: list[str]
 
 
+class PhotoRosterExport(DossierModel):
+    user_ids: list[UUID] = Field(min_length=1, max_length=500)
+
+    @model_validator(mode="after")
+    def unique_users(self) -> "PhotoRosterExport":
+        if len(set(self.user_ids)) != len(self.user_ids):
+            raise ValueError("Сотрудники не должны повторяться")
+        return self
+
+
 class DossierContext(DossierModel):
     can_manage_access: bool
     can_view_photo_roster: bool

@@ -7,7 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from .. import dossier_reminders
+from .. import dossier_reminders, photo_roster_service
 from .. import dossier_service as service
 from ..auth import AuthenticatedUser, require_user
 from ..database import get_connection
@@ -26,10 +26,12 @@ from ..dossier_schemas import (
     DossierSummary,
     DossierWrite,
     PhotoCard,
+    PhotoRosterExport,
 )
 from ..errors import WorkspaceRepositoryError
 from ..object_storage import ObjectStorage, ObjectStorageError
 from ..office_pdf_preview import PRIVATE, render_word_pdf
+from ..photo_roster_documents import XLSX_TYPE
 
 
 def private_response(response: Response) -> None:
@@ -77,6 +79,40 @@ async def listing(user: User, connection: Connection) -> list[DossierSummary]:
 @router.get("/photos", response_model=list[PhotoCard])
 async def photos(user: User, connection: Connection) -> list[PhotoCard]:
     return await _call(service.photos(connection, user))
+
+
+@router.post("/photos/export/{kind}")
+async def export_photos(
+    kind: photo_roster_service.Format, payload: PhotoRosterExport, request: Request,
+    user: User, connection: Connection,
+) -> Response:
+    async with photo_roster_service.export_slots:
+        return await _photo_response(kind, payload, request, user, connection)
+
+
+async def _photo_response(
+    kind: photo_roster_service.Format, payload: PhotoRosterExport, request: Request,
+    user: AuthenticatedUser, connection: AsyncConnection,
+) -> Response:
+    try:
+        roster = await _call(photo_roster_service.source(
+            connection, user, payload, cast(ObjectStorage, request.app.state.object_storage),
+        ))
+    except ObjectStorageError as error:
+        raise HTTPException(503, "Фото профиля не загружено. Повторите скачивание.",
+                            headers=PRIVATE) from error
+    content = await _call(photo_roster_service.render(roster, kind))
+    if kind == "pdf":
+        response = await render_word_pdf(request.app.state.settings, "photo-roster.docx", content)
+    else:
+        response = Response(content, media_type=XLSX_TYPE if kind == "excel" else CONTENT_TYPE,
+                            headers=PRIVATE)
+    await _call(photo_roster_service.finish(connection, user, roster, kind))
+    response.headers.update(PRIVATE)
+    extension = {"word": "docx", "excel": "xlsx", "pdf": "pdf"}[kind]
+    response.headers["Content-Disposition"] = f'attachment; filename="photo-roster.{extension}"'
+    response.headers["Pragma"] = "no-cache"
+    return response
 
 
 @router.get("/access", response_model=DossierAccessSettings)

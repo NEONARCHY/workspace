@@ -85,15 +85,18 @@ it("only shows the profile entry after the server grants private view permission
   expect(await screen.findByRole("dialog", { name: "Объективка сотрудника" })).toBeInTheDocument();
 });
 
-it("shows a separate minimal photo roster, filters it and does not fabricate exports", async () => {
+it("shows a separate minimal photo roster with exports and filters it", async () => {
   show(<DossiersWorkspace token="token" people={[]} mode="photos" context={{ canManageAccess: false, canViewPhotoRoster: true }} />);
   expect(await screen.findByText("Тестовый университет")).toBeInTheDocument();
   expect(screen.getByText("1991")).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Настроить доступ" })).not.toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: /Скачать/ })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Скачать фотокарточки в Word" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "Скачать фотокарточки в Excel" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "Скачать фотокарточки в PDF" })).toBeEnabled();
   expect(within(screen.getByRole("region", { name: "Реестр фотокарточек" })).queryByRole("button")).not.toBeInTheDocument();
   fireEvent.change(screen.getByRole("searchbox"), { target: { value: "Другой сотрудник" } });
   expect(screen.getByText(/Сотрудники не найдены/)).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Скачать фотокарточки в Word" })).toBeDisabled();
 });
 
 it("retains the access change and reason after a server rejection", async () => {

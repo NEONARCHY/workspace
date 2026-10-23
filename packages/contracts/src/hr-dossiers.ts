@@ -79,6 +79,10 @@ export interface PersonnelPhotoCard {
   readonly birthYear: number | null;
   readonly universities: readonly string[];
 }
+export type PhotoRosterFormat = "word" | "excel" | "pdf";
+export interface PhotoRosterExport {
+  readonly userIds: readonly string[];
+}
 export interface DossierContext {
   readonly canManageAccess: boolean;
   readonly canViewPhotoRoster: boolean;

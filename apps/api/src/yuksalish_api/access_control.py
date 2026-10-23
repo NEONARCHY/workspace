@@ -201,6 +201,8 @@ def request_module_action(path: str, method: str) -> tuple[str, ModuleAction] | 
     # Read-only search uses a body so private search terms never enter URL logs.
     if normalized in {"/mail/messages/search", "/mail/tasks"}:
         return "mail", "view"
+    if normalized.startswith("/home/approval-inbox/"):
+        return "team_overview", "view"
     prefixes = (
         (("/mail",), "mail"),
         (("/home",), "home"),

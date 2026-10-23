@@ -3,6 +3,20 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 describe("web API addresses and session restore", () => {
   const defaultBridge = window.yuksalish;
   const cookieDescriptor = Object.getOwnPropertyDescriptor(Document.prototype, "cookie");
+  it("loads separate personal trip and leave inboxes without falling back on an old server", async () => {
+    window.yuksalish = undefined;
+    const fetchMock = vi.fn().mockResolvedValueOnce(Response.json({ enabled: true, items: [] }))
+      .mockResolvedValueOnce(Response.json({ detail: "Not Found" }, { status: 404 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const api = await import("./workspace-api");
+    await expect(api.loadTeamApprovalInbox("approval-token", "trips")).resolves.toEqual({ enabled: true, items: [] });
+    const [url, options] = fetchMock.mock.calls[0]! as [string, RequestInit];
+    expect(url).toContain("/home/approval-inbox/trips");
+    expect(new Headers(options.headers).get("Authorization")).toBe("Bearer approval-token");
+    await expect(api.loadTeamApprovalInbox("approval-token", "leaves")).rejects.toThrow();
+    expect(fetchMock.mock.calls[1]?.[0]).toContain("/home/approval-inbox/leaves");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
   it("sends grant source files together with their idempotent payload and lets the browser set multipart boundaries", async () => {
     window.yuksalish = undefined;
     const fetchMock = vi.fn().mockImplementation(async () => Response.json({ id: "grant" }));

@@ -14,6 +14,12 @@
 .dossier-photo-table th:nth-child(4) { width: 120px; }
 .dossier-person { display: flex; align-items: center; gap: 12px; min-width: 250px; }
 .dossier-person strong { white-space: normal; overflow-wrap: anywhere; }
+.photo-roster-exports { display: grid; gap: 10px; padding: 16px; border: 1px solid var(--ws-line); border-radius: 16px; background: var(--ws-surface); min-width: 0; }
+.photo-roster-export-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
+.photo-roster-export-row > :first-child { flex: 1 1 320px; min-width: 0; }
+.photo-roster-exports h3 { margin: 0 0 6px; font-size: 16px; }
+.photo-roster-exports p { margin: 0; color: var(--ws-muted); line-height: 1.5; }
+.photo-roster-exports .dossier-actions { gap: 8px; }
 .dossier-dialog.fui-DialogSurface { width: min(920px, calc(100vw - 32px)); max-width: none; max-height: calc(100dvh - 32px); padding: 20px; }
 .dossier-dialog .fui-DialogBody { min-height: 0; max-height: calc(100dvh - 72px); grid-template-rows: auto minmax(0, 1fr) auto auto; }
 .dossier-dialog .fui-DialogTitle, .dossier-dialog .fui-DialogContent, .dossier-dialog .fui-DialogActions, .dossier-dialog .dossier-feedback { grid-column: 1 / -1; }

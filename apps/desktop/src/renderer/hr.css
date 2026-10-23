@@ -4,7 +4,7 @@
 .hr-kicker { color: var(--ws-link); font-size: 12px; font-weight: 700; letter-spacing: .06em; }
 .hr-command-bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; color: var(--ws-muted); font-size: 13px; }
 .hr-command-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.hr-tabs { display: flex; flex-wrap: wrap; gap: 4px; background: var(--ws-surface); border-radius: 16px; padding: 6px; width: fit-content; max-width: calc(100% - 2 * var(--ws-view-edge)); }
+.hr-view .hr-tabs { display: flex; flex-wrap: wrap; gap: 4px; background: var(--ws-surface); border-radius: 16px; padding: 6px; width: fit-content; max-width: calc(100% - 2 * var(--ws-view-edge)); box-sizing: border-box; }
 .hr-tabs .fui-Tab { border-radius: 12px; min-height: 40px; }
 .hr-tabs .fui-Tab[aria-selected="true"] { background: var(--ws-selected); }
 .hr-alert { display: grid; gap: 6px; padding: 16px; border: 1px solid var(--ws-theme-line-warning, #f1c466); border-radius: 16px; background: var(--ws-theme-surface, #fffaf0); color: var(--ws-text); font-size: 13px; }

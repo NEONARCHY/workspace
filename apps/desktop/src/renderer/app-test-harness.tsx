@@ -354,6 +354,7 @@ export function mockServer(
   };
   const fetchMock = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
     const url = String(input);
+    if (url.includes("/home/approval-inbox/")) return response({ enabled: false, items: [] });
     if (url.endsWith("/grants/settings")) {
       return response({ leaderUserId: people[1]!.id, chairUserId: people[2]!.id, revision: 1 });
     }

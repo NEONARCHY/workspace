@@ -1,5 +1,6 @@
 import type { OfficePreviewResult } from "./file-viewer-kind";
-import type { DossierAccessSettings, DossierContext, DossierDetail, DossierFields, DossierHistory, DossierImportPreview, DossierPermissions, DossierReminder, DossierReminderAnswer, DossierSummary, PersonnelPhotoCard } from "@yuksalish/contracts";
+import type { TeamApprovalInbox, TeamApprovalInboxKind } from "@yuksalish/contracts";
+import type { DossierAccessSettings, DossierContext, DossierDetail, DossierFields, DossierHistory, DossierImportPreview, DossierPermissions, DossierReminder, DossierReminderAnswer, DossierSummary, PersonnelPhotoCard, PhotoRosterExport, PhotoRosterFormat } from "@yuksalish/contracts";
 import { validateGrantSourceFiles } from "./grant-source-files";
 import type { HisobotActivityDraft } from "@yuksalish/contracts";
 import type { MailConnection, MailConnect, MailConnectStatus, MailPage, MailThread, MailDraft, MailDraftSummary, MailDraftWrite, MailSignedFile, MailTaskExport } from "@yuksalish/contracts";
@@ -632,6 +633,7 @@ export const loadDossierReminder = (token: string) => apiRequest<DossierReminder
 export const answerDossierReminder = (token: string, payload: DossierReminderAnswer) => apiRequest<DossierReminder>("/personnel-dossiers/reminder", { method: "POST", body: JSON.stringify(payload) }, token);
 export const loadDossierList = (token: string) => apiRequest<readonly DossierSummary[]>("/personnel-dossiers", {}, token);
 export const loadPersonnelPhotos = (token: string) => apiRequest<readonly PersonnelPhotoCard[]>("/personnel-dossiers/photos", {}, token);
+export const downloadPersonnelPhotos = (token: string, format: PhotoRosterFormat, payload: PhotoRosterExport): Promise<Blob> => boundedRequest(`${getApiBaseUrl()}/api/v1/personnel-dossiers/photos/export/${format}`, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(payload) }, (response) => response.blob(), 120_000);
 export const loadDossierPermissions = (token: string, id: string) => apiRequest<DossierPermissions>(`/personnel-dossiers/${encodeURIComponent(id)}/permissions`, {}, token);
 export const loadDossier = (token: string, id: string) => apiRequest<DossierDetail>(`/personnel-dossiers/${encodeURIComponent(id)}`, {}, token);
 export const loadDossierHistory = (token: string, id: string) => apiRequest<readonly DossierHistory[]>(`/personnel-dossiers/${encodeURIComponent(id)}/history`, {}, token);
@@ -2623,6 +2625,10 @@ export function createWorkspaceAbsence(token: string, payload: AbsenceRequestInp
 
 export function loadWorkspaceLeaves(token: string, signal?: AbortSignal): Promise<readonly LeaveRequest[]> {
   return apiRequest<readonly LeaveRequest[]>("/leave-requests", { signal }, token);
+}
+
+export function loadTeamApprovalInbox(token: string, kind: TeamApprovalInboxKind, signal?: AbortSignal): Promise<TeamApprovalInbox> {
+  return apiRequest<TeamApprovalInbox>(`/home/approval-inbox/${kind}`, { signal }, token);
 }
 
 export function loadWorkspaceLeaveContext(token: string, signal?: AbortSignal): Promise<LeaveContext> {
