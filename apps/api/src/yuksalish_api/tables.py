@@ -150,6 +150,13 @@ edo_employee_sync = sa.Table(
     sa.Column("updated_at", sa.DateTime(timezone=True)),
 )
 
+release_read_entries = sa.Table(
+    "workspace_release_read_entries", metadata,
+    sa.Column("user_id", uuid_type, primary_key=True),
+    sa.Column("entry_id", sa.String(220), primary_key=True),
+    sa.Column("acknowledged_at", sa.DateTime(timezone=True)),
+)
+
 personal_preferences = sa.Table(
     "workspace_personal_preferences", metadata,
     sa.Column("user_id", uuid_type, primary_key=True),
