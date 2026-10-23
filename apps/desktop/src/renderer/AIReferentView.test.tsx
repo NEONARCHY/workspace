@@ -10,6 +10,9 @@ import { actOnAIReferentLetter, addAIReferentManualRecipient, createAIReferentLe
 import type { AIReferentLetter } from "@yuksalish/contracts";
 import { loadAIReferentVisibility } from "./workspace-api";
 import { previewAIReferentLocalFile } from "./workspace-api";
+import { downloadAIReferentPacket, previewAIReferentPacketFile } from "./workspace-api";
+
+vi.mock("./PdfFilePreview", () => ({ default: () => <div data-testid="letter-preview-pdf">PDF</div> }));
 
 vi.mock("./workspace-api", () => ({
   actOnAIReferentLetter: vi.fn(),
@@ -29,6 +32,7 @@ vi.mock("./workspace-api", () => ({
   loadAIReferentLetter: vi.fn(),
   loadAIReferentPacket: vi.fn(),
   downloadAIReferentPacket: vi.fn(),
+  previewAIReferentPacketFile: vi.fn(),
   loadAIReferentReviewers: vi.fn(),
   loadAIReferentRecipients: vi.fn(),
   loadAIReferentManualRecipients: vi.fn(),
@@ -716,6 +720,31 @@ describe("AIReferentView", () => {
     ));
     expect(totalCard).toHaveTextContent("1");
     expect(screen.getByText("Страница 1 · Найдено 0")).toBeInTheDocument();
+  });
+
+  it("opens a saved DOCX through the letter route without requiring a global attachment callback", async () => {
+    const attachment = { id: "original-1", ownerType: "ai_referent_letter" as const, ownerId: "letter-1", fileName: "original.docx", contentType: "application/docx", byteSize: 1024, sha256: "a".repeat(64), documentRole: "primary" as const, uploadedByUserId: "user-1", createdAt: "2026-09-22T08:00:00Z" };
+    vi.mocked(loadAIReferentLetter).mockResolvedValue({ ...registry.letters[0]!, attachments: [attachment] });
+    vi.mocked(previewAIReferentPacketFile).mockResolvedValue(new Blob(["%PDF-1.7"], { type: "application/pdf" }));
+    render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate={false} focusRequestId="letter-1" /></FluentProvider>);
+    fireEvent.click(await screen.findByRole("button", { name: "Открыть в Workspace" }));
+    await screen.findByTestId("letter-preview-pdf");
+    expect(previewAIReferentPacketFile).toHaveBeenCalledWith("token", "outgoing", "letter-1", expect.objectContaining({ id: "original-1", source: "attachment" }), 0, 0, expect.any(AbortSignal));
+  });
+
+  it("opens only the published final PDF and reports when it is not available", async () => {
+    const pdf = { id: "signed-1", source: "packet" as const, name: "signed.pdf", byteSize: 1024, sha256: "a".repeat(64), createdAt: "2026-09-22T08:00:00Z" };
+    vi.mocked(loadAIReferentLetter).mockResolvedValue({ ...registry.letters[0]!, finalPdfFileId: "signed-1" });
+    vi.mocked(loadAIReferentPacket).mockResolvedValueOnce({ files: [] }).mockResolvedValue({ files: [pdf] });
+    vi.mocked(downloadAIReferentPacket).mockResolvedValue(new Blob(["%PDF-1.7"], { type: "application/pdf" }));
+    render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate={false} focusRequestId="letter-1" /></FluentProvider>);
+    const detail = await screen.findByRole("dialog", { name: /Ответ партнёру/ });
+    fireEvent.click(within(detail).getByRole("button", { name: "Открыть в Workspace" }));
+    expect(await within(detail).findByRole("alert")).toHaveTextContent("Итоговый PDF ещё недоступен");
+    expect(downloadAIReferentPacket).not.toHaveBeenCalled();
+    fireEvent.click(within(detail).getByRole("button", { name: "Открыть в Workspace" }));
+    await screen.findByTestId("letter-preview-pdf");
+    expect(downloadAIReferentPacket).toHaveBeenCalledWith("token", "outgoing", "letter-1", pdf, expect.any(AbortSignal));
   });
 
   it("prioritizes the signed letter and keeps attachments inside the packet", async () => {

@@ -22,6 +22,17 @@ PROFILE = b"""<?xml version="1.0" encoding="UTF-8"?>
 </item></oor:items>"""
 
 
+def has_process_capacity() -> bool:
+    """Reserve helper/thread headroom without relaxing the container's PID limit."""
+    try:
+        current = int(Path("/sys/fs/cgroup/pids.current").read_text().strip())
+        limit = Path("/sys/fs/cgroup/pids.max").read_text().strip()
+        return limit == "max" or current + 24 <= int(limit)
+    except (OSError, ValueError):
+        # Non-cgroup development environments still use the converter semaphore.
+        return True
+
+
 def convert(content: bytes, extension: str) -> bytes:
     with tempfile.TemporaryDirectory(prefix="word-preview-") as directory:
         work = Path(directory)
@@ -93,11 +104,15 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(body)
 
     def do_GET(self) -> None:
-        self.reply(200 if self.path == "/ready" else 404, b"ready")
+        status = (200 if has_process_capacity() else 503) if self.path == "/ready" else 404
+        self.reply(status, b"ready" if status == 200 else b"unavailable")
 
     def do_POST(self) -> None:
         if self.path not in {"/doc", "/docx"}:
             self.reply(415, b"Unsupported document")
+            return
+        if not has_process_capacity():
+            self.reply(503, b"Converter resources exhausted; retry later")
             return
         try:
             length = int(self.headers.get("Content-Length", "0"))

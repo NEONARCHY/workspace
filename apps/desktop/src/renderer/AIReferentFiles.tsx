@@ -1,10 +1,28 @@
-import { memo, useCallback, useEffect, useState } from "react";
+import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import type { AIReferentPacketFile, AIReferentPacketKind } from "@yuksalish/contracts";
-import { Button, DialogBody, DialogContent, DialogSurface, DialogTitle, DialogTrigger } from "@fluentui/react-components";
+import { Button, DialogBody, DialogContent, DialogSurface, DialogTitle, DialogTrigger, useRestoreFocusTarget } from "@fluentui/react-components";
 import { LoadingSkeleton } from "./LoadingSkeleton";
 import { ArrowDownload20Regular, Dismiss20Regular, Document20Regular, FolderOpen20Regular } from "@fluentui/react-icons";
 import { WorkspaceDialog } from "./WorkspaceDialog";
-import { downloadAIReferentPacket, loadAIReferentPacket } from "./workspace-api";
+import { downloadAIReferentPacket, loadAIReferentPacket, previewAIReferentPacketFile } from "./workspace-api";
+import { fileViewerKind } from "./file-viewer-kind";
+
+const ExternalFileViewer = lazy(() => import("./FileViewer").then(module => ({ default: module.ExternalFileViewer })));
+
+export function AIReferentPacketViewer({ token, kind, ownerId, file, onClose }: {
+  readonly token: string; readonly kind: AIReferentPacketKind; readonly ownerId: string;
+  readonly file: AIReferentPacketFile; readonly onClose: () => void;
+}) {
+  const attachment = useMemo(() => ({ id: `${kind}:${ownerId}:${file.source}:${file.id}`,
+    fileName: file.name.split("/").at(-1) || file.name, byteSize: file.byteSize,
+    contentType: "application/octet-stream" }), [file, kind, ownerId]);
+  return <Suspense fallback={<LoadingSkeleton layout="rows" rows={3} label="Открываем документ" />}>
+    <ExternalFileViewer attachment={attachment} onClose={onClose}
+      onLoad={(_attachment, signal) => downloadAIReferentPacket(token, kind, ownerId, file, signal)}
+      onLoadOffice={(_attachment, sheet, offset, signal) => previewAIReferentPacketFile(token, kind, ownerId, file, sheet, offset, signal)}
+      onDownload={async () => saveReferentBlob(await downloadAIReferentPacket(token, kind, ownerId, file), attachment.fileName)} />
+  </Suspense>;
+}
 
 export function referentDownloadName(label: string, extension: string): string {
   const stem = label.replace(/[/\\]/g, "-").replace(/[<>:"|?*\p{Cc}]+/gu, " ").replace(/\s+/g, " ").trim().replace(/[. -]+$/g, "").slice(0, 112);
@@ -32,6 +50,8 @@ export const AIReferentFiles = memo(function AIReferentFiles({ token, kind, owne
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [preview, setPreview] = useState<AIReferentPacketFile>();
+  const previewFocusTarget = useRestoreFocusTarget();
   const refresh = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -54,7 +74,7 @@ export const AIReferentFiles = memo(function AIReferentFiles({ token, kind, owne
     catch (reason) { setError(reason instanceof Error ? reason.message : "Не удалось скачать файл."); }
     finally { setBusy(false); }
   };
-  return <WorkspaceDialog open={open} onOpenChange={(_event, data) => setOpen(data.open)}>
+  return <WorkspaceDialog open={open} onOpenChange={(_event, data) => { setOpen(data.open); if (!data.open) setPreview(undefined); }}>
       <DialogTrigger disableButtonEnhancement>
         <Button className="ai-referent-packet-trigger" aria-label={triggerLabel ? "Пакет документов" : undefined}
           title={triggerLabel ? "Открыть письмо и вложения" : undefined}
@@ -70,16 +90,20 @@ export const AIReferentFiles = memo(function AIReferentFiles({ token, kind, owne
             {loading && !files.length ? <LoadingSkeleton layout="rows" rows={3} label="Загружаем файлы" /> : null}
             {error ? <p role="alert">{error}</p> : null}
             {!loading && !error && files.length === 0 ? <p>Робот ещё не передал файлы этого письма.</p> : null}
-            {files.map((file) => <button type="button" className="ai-referent-file" key={file.id} disabled={busy} onClick={() => void download(file)}>
+            {files.map((file) => <div className="ai-referent-file ai-referent-packet-file" key={`${file.source}:${file.id}`}>
               <Document20Regular aria-hidden="true" />
               <span className="ai-referent-file-info"><strong>{file.name.split("/").at(-1)}</strong><small>{Math.max(1, Math.round(file.byteSize / 1024))} КБ · {new Date(file.createdAt).toLocaleString("ru-RU")}</small></span>
-              <ArrowDownload20Regular aria-hidden="true" />
-            </button>)}
+              <div className="ai-referent-packet-file-actions">
+                {fileViewerKind({ fileName: file.name, contentType: "" }) !== "unsupported" && <Button {...previewFocusTarget} disabled={busy} onClick={() => setPreview(file)} aria-label={`Открыть в Workspace: ${file.name.split("/").at(-1)}`}>Открыть в Workspace</Button>}
+                <Button disabled={busy} icon={<ArrowDownload20Regular />} aria-label={`Скачать ${file.name.split("/").at(-1)}`} onClick={() => void download(file)} />
+              </div>
+            </div>)}
             <div className="ai-referent-detail-actions">
               <Button disabled={busy || loading} onClick={() => void refresh()}>Обновить</Button>
               <Button appearance="primary" disabled={busy || files.length === 0} onClick={() => void download()}>Скачать пакет ZIP</Button>
             </div>
           </DialogContent>
+          {open && preview ? <AIReferentPacketViewer token={token} kind={kind} ownerId={ownerId} file={preview} onClose={() => setPreview(undefined)} /> : null}
         </DialogBody>
       </DialogSurface>
     </WorkspaceDialog>;

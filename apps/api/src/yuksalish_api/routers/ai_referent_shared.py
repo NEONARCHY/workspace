@@ -1,20 +1,25 @@
 # ruff: noqa: RUF001
 """Narrow agent API with Russian errors; Telegram is never a general Workspace session."""
 
+import asyncio
 import hashlib
 from collections.abc import Callable, Coroutine
 from datetime import UTC, datetime, timedelta
 from io import BytesIO
+from pathlib import PurePath
 from typing import Annotated, Literal
 from urllib.parse import quote
 from uuid import NAMESPACE_URL, UUID, uuid5
+from xml.etree.ElementTree import ParseError
 from zipfile import BadZipFile, ZipFile
 
+from defusedxml.common import DefusedXmlException
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
 from fastapi.routing import APIRoute
 from pydantic import Field
 from sqlalchemy import String, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from ..access_control import ensure_module_action
@@ -103,7 +108,10 @@ from ..ai_referent_shared_service import (
 )
 from ..auth import AuthenticatedUser, require_user
 from ..database import get_connection
+from ..file_preview import OfficePreview, preview_office
 from ..object_storage import ObjectStorageError
+from ..office_pdf_preview import render_word_pdf
+from ..project_import_documents import MAX_FILE_BYTES
 from ..tables import (
     ai_referent_archive,
     ai_referent_configuration,
@@ -770,6 +778,28 @@ async def download_packet(
     )
 
 
+async def _read_packet_file(
+    kind: Kind,
+    owner_id: UUID,
+    file_id: UUID,
+    request: Request,
+    connection: Connection,
+    user: User,
+    source: Literal["packet", "attachment"],
+    max_bytes: int | None = None,
+) -> tuple[RowMapping, bytes]:
+    await require_packet_access(connection, user, kind, owner_id)
+    row = await file_metadata(connection, kind, owner_id, file_id, source)
+    if max_bytes is not None and row["byte_size"] > max_bytes:
+        raise HTTPException(413, "Документ больше 25 МБ. Скачайте оригинал.")
+    content = await _storage(request).get(row["storage_key"])
+    if max_bytes is not None and len(content) > max_bytes:
+        raise HTTPException(413, "Документ больше 25 МБ. Скачайте оригинал.")
+    if hashlib.sha256(content).hexdigest() != row["sha256"]:
+        raise HTTPException(503, "Контрольная сумма файла не совпала.")
+    return row, content
+
+
 @router.get("/packets/{kind}/{owner_id}/files/{file_id}")
 async def download_packet_file(
     kind: Kind,
@@ -780,11 +810,9 @@ async def download_packet_file(
     user: User,
     source: Literal["packet", "attachment"] = "packet",
 ) -> Response:
-    await require_packet_access(connection, user, kind, owner_id)
-    row = await file_metadata(connection, kind, owner_id, file_id, source)
-    content = await _storage(request).get(row["storage_key"])
-    if hashlib.sha256(content).hexdigest() != row["sha256"]:
-        raise HTTPException(503, "Контрольная сумма файла не совпала.")
+    row, content = await _read_packet_file(
+        kind, owner_id, file_id, request, connection, user, source
+    )
     name = row.get("file_name") or row.get("relative_path")
     return Response(
         content,
@@ -792,6 +820,7 @@ async def download_packet_file(
         headers={
             "Content-Disposition": "attachment; filename*=UTF-8''"
             + quote(str(name).split("/")[-1]),
+            "Cache-Control": "private, no-store",
             "X-Content-Type-Options": "nosniff",
         },
     )
@@ -810,6 +839,37 @@ async def agent_download_file(
     if kind == "archive":
         raise HTTPException(403, "Архив доступен только в Workspace.")
     return await download_packet_file(kind, owner_id, file_id, request, connection, actor, source)
+
+
+@router.get("/packets/{kind}/{owner_id}/files/{file_id}/preview", response_model=OfficePreview)
+async def preview_packet_file(
+    kind: Kind,
+    owner_id: UUID,
+    file_id: UUID,
+    request: Request,
+    connection: Connection,
+    user: User,
+    source: Literal["packet", "attachment"] = "packet",
+    sheet: Annotated[int, Query(ge=0, le=1000)] = 0,
+    offset: Annotated[int, Query(ge=0, le=150000)] = 0,
+) -> OfficePreview | Response:
+    # Reuse the download authorization, publication and integrity checks. In
+    # particular, packet IDs are not general Workspace attachment IDs.
+    row, content = await _read_packet_file(
+        kind, owner_id, file_id, request, connection, user, source, MAX_FILE_BYTES
+    )
+    name = str(row.get("file_name") or row.get("relative_path"))
+    try:
+        if PurePath(name).suffix.lower() in {".doc", ".docx"}:
+            return await render_word_pdf(request.app.state.settings, name, content)
+        result = await asyncio.to_thread(preview_office, name, content, sheet, offset)
+    except (ValueError, BadZipFile, ParseError, DefusedXmlException, KeyError) as error:
+        raise HTTPException(422, "Документ недоступен для просмотра. Скачайте оригинал.") from error
+    return Response(
+        result.model_dump_json(by_alias=True),
+        media_type="application/json",
+        headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"},
+    )
 
 
 @router.put(

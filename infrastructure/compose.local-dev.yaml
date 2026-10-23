@@ -3,6 +3,7 @@ name: yuksalish-personal-dev
 
 services:
   office-preview:
+    init: true
     build:
       context: ..
       dockerfile: services/office-preview/Dockerfile
