@@ -1,4 +1,6 @@
 import type { OfficePreviewResult } from "./file-viewer-kind";
+import type { ReleaseReadState, ReleaseReadInput } from "@yuksalish/contracts";
+
 import type { TeamApprovalInbox, TeamApprovalInboxKind } from "@yuksalish/contracts";
 import type { DossierAccessSettings, DossierContext, DossierDetail, DossierFields, DossierHistory, DossierImportPreview, DossierPermissions, DossierReminder, DossierReminderAnswer, DossierSummary, PersonnelPhotoCard, PhotoRosterExport, PhotoRosterFormat } from "@yuksalish/contracts";
 import { validateGrantSourceFiles } from "./grant-source-files";
@@ -810,6 +812,16 @@ export function setMandatoryDesktopUpdate(token: string, mandatory: boolean): Pr
 export function changePersonalChat(token: string, chatId: string, action: PersonalChatAction) {
   return apiRequest<PersonalPreferences>(`/personal-preferences/chats/${chatId}`, {
     method: "PATCH", body: JSON.stringify({ action }),
+  }, token);
+}
+
+export function loadReleaseReads(token: string): Promise<ReleaseReadState> {
+  return apiRequest<ReleaseReadState>("/personal-preferences/release-history", {}, token);
+}
+
+export function acknowledgeReleaseReads(token: string, payload: ReleaseReadInput): Promise<ReleaseReadState> {
+  return apiRequest<ReleaseReadState>("/personal-preferences/release-history", {
+    method: "POST", body: JSON.stringify(payload),
   }, token);
 }
 

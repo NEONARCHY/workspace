@@ -1,0 +1,48 @@
+.release-timeline-dialog.fui-DialogSurface {
+  width: min(900px, calc(100vw - 32px)); max-width: 900px;
+  max-height: calc(100dvh - 32px);
+}
+.release-timeline-dialog .fui-DialogBody { display: flex; flex-direction: column; min-height: 0; max-height: calc(100dvh - 84px); gap: 16px; overflow: hidden; }
+.release-timeline-dialog .fui-DialogTitle, .release-history-intro, .release-history-counts, .release-history-actions { flex-shrink: 0; }
+.release-history-intro { display: flex; align-items: flex-start; gap: 16px; }
+.release-history-symbol { display: grid; place-items: center; flex: 0 0 48px; height: 48px; border-radius: 16px; background: var(--ws-theme-surface-soft, var(--ws-muted-surface)); color: var(--ws-link); }
+.release-history-intro p { margin: 0 0 10px; color: var(--ws-muted); }
+.release-history-range { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; font-variant-numeric: tabular-nums; }
+.release-history-range strong { color: var(--ws-link); }
+.release-history-counts { display: flex; flex-wrap: wrap; gap: 8px 20px; color: var(--ws-muted); font-size: 12px; }
+.release-history-counts b { color: var(--ws-text); font-variant-numeric: tabular-nums; }
+.release-timeline-dialog .release-timeline-scroll { flex: 1 1 auto; min-height: 0; max-height: min(56dvh, 640px); overflow: auto; overscroll-behavior: contain; padding: 8px 12px 8px 0; scrollbar-gutter: stable; }
+.release-timeline-dialog .release-timeline-scroll:focus-visible { outline: 2px solid var(--ws-link); outline-offset: -2px; border-radius: 12px; }
+.release-timeline { display: grid; gap: 4px; }
+.release-timeline-scroll .release-timeline-entry { display: grid; grid-template-columns: 20px minmax(0, 1fr); column-gap: 16px; padding: 0; border: 0; background: transparent; }
+.release-timeline-rail { position: relative; display: flex; justify-content: center; }
+.release-timeline-rail::before { content: ""; position: absolute; top: 12px; bottom: -4px; width: 1px; background: var(--ws-line); }
+.release-timeline-entry:last-child .release-timeline-rail::before { display: none; }
+.release-timeline-rail span { z-index: 1; margin-top: 8px; width: 10px; height: 10px; border: 3px solid var(--ws-surface); border-radius: 50%; background: var(--ws-link); box-sizing: content-box; }
+.release-timeline-body { min-width: 0; padding: 0 0 24px; overflow-wrap: anywhere; }
+.release-timeline-body header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 8px 16px; }
+.release-version-label { font-size: 12px; font-weight: 600; color: var(--ws-link); font-variant-numeric: tabular-nums; }
+.release-timeline-body h3 { margin: 4px 0 8px; font-size: 16px; line-height: 1.4; color: var(--ws-text); }
+.release-timeline-body time { margin-top: 4px; color: var(--ws-muted); font-size: 12px; }
+.release-timeline .release-timeline-body ul { display: grid; gap: 10px; list-style: none; padding: 12px 16px; margin: 0; border-radius: 16px; background: var(--ws-theme-surface-soft, var(--ws-muted-surface)); }
+.release-timeline .release-timeline-body li { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; line-height: 1.55; color: var(--ws-text); }
+.release-timeline-body li svg { flex-shrink: 0; margin-top: 2px; color: var(--ws-link); }
+.release-timeline-dialog .release-history-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; align-self: stretch; padding-top: 12px; border-top: 1px solid var(--ws-line); }
+.release-read-check-error { position: fixed; bottom: 24px; right: 24px; z-index: 25; width: min(440px, calc(100vw - 32px)); }
+@media (max-width: 600px) {
+  .release-timeline-dialog.fui-DialogSurface { width: calc(100vw - 16px); max-height: calc(100dvh - 16px); padding: 16px; }
+  .release-timeline-dialog .fui-DialogBody { max-height: calc(100dvh - 48px); gap: 12px; }
+  .release-timeline-scroll .release-timeline-entry { grid-template-columns: 12px minmax(0, 1fr); column-gap: 10px; }
+  .release-history-symbol { display: none; }
+  .release-timeline .release-timeline-body ul { padding: 12px; }
+}
+@media (forced-colors: active) {
+  .release-timeline-rail::before, .release-timeline-rail span { background: CanvasText; }
+  .release-timeline .release-timeline-body ul { border: 1px solid CanvasText; }
+}
+@media (max-height: 560px) {
+  .release-timeline-dialog .fui-DialogBody { gap: 10px; }
+  .release-timeline-dialog .release-history-symbol { display: none; }
+  .release-timeline-dialog .release-history-intro p { margin-bottom: 4px; }
+  .release-timeline-dialog .release-history-actions { padding-top: 8px; }
+}

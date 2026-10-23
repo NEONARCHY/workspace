@@ -92,6 +92,7 @@ import { workspacePlatform } from "./platform-adapter";
 import { useNotificationSounds } from "./useNotificationSounds";
 import { resolveAssistantForm } from "./assistant-form-handoff";
 import { WebUpdateNotice } from "./WebUpdateNotice";
+import { AccountReleaseUpdates } from "./AccountReleaseUpdates";
 import { WorkspaceFluentProvider } from "./WorkspaceFluentProvider";
 import { ColorThemeToggle } from "./ColorThemeToggle";
 import { NotificationBell } from "./NotificationBell";
@@ -2850,6 +2851,7 @@ export function App() {
       {forwardPhoto?.messageId && <ForwardDialog source={{ kind: "message", id: forwardPhoto.messageId }} preview={forwardPhoto.caption || forwardPhoto.attachment.fileName}
         chats={displayChats} excludeChatId={forwardPhoto.chatId} onForward={handleForwardContent} onClose={() => setForwardPhoto(undefined)} />}
       <WebUpdateNotice mandatory={Boolean(updatePolicy?.mandatory)} onAvailabilityChange={setWebUpdateAvailable} />
+      <AccountReleaseUpdates key={`${session.user.id}:${activeApiOrigin}`} token={session.accessToken} />
       </EmployeeProfileProvider>
       </WorkspacePeopleProvider>
       </UndoActionsProvider>

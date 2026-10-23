@@ -5,10 +5,12 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from yuksalish_api import personal_preferences as service
+from yuksalish_api import release_read_service
 from yuksalish_api.auth import AuthenticatedUser, require_user
 from yuksalish_api.database import get_connection
 from yuksalish_api.errors import WorkspaceRepositoryError
 from yuksalish_api.events import WorkspaceEventBus
+from yuksalish_api.release_read_schemas import ReleaseReadInput, ReleaseReadState
 from yuksalish_api.workspace_schemas import (
     InterfaceLocaleUpdate,
     NavigationOrder,
@@ -33,6 +35,20 @@ async def changed(connection: AsyncConnection, request: Request, user: Authentic
 @router.get("", response_model=PersonalPreferencesResponse)
 async def get_preferences(user: User, connection: Connection) -> PersonalPreferencesResponse:
     return await service.get_preferences(connection, user)
+
+
+@router.get("/release-history", response_model=ReleaseReadState)
+async def get_release_reads(user: User, connection: Connection) -> ReleaseReadState:
+    return await release_read_service.load_reads(connection, user)
+
+
+@router.post("/release-history", response_model=ReleaseReadState)
+async def acknowledge_release_reads(
+    payload: ReleaseReadInput, user: User, connection: Connection,
+) -> ReleaseReadState:
+    result = await release_read_service.acknowledge_reads(connection, user, payload)
+    await connection.commit()
+    return result
 
 
 @router.patch("/chats/{chat_id}", response_model=PersonalPreferencesResponse)
