@@ -15,6 +15,7 @@ import type {
   AIReferentAction,
   AIReferentLetter,
   AIReferentLetterInput,
+  AIReferentPacketFile,
   AIReferentRegistry,
   AIReferentVisibility,
   WorkspacePerson,
@@ -31,6 +32,7 @@ import {
   Input,
   Spinner,
   Textarea,
+  useRestoreFocusTarget,
 } from "@fluentui/react-components";
 import {
   Add20Regular,
@@ -53,7 +55,7 @@ import { WorkspaceSelect as Select } from "./WorkspaceSelect";
 import { AIReferentIncomingRegister } from "./AIReferentIncomingRegister";
 import { AIReferentSettings } from "./AIReferentSettings";
 import { AIReferentIncomingAccess } from "./AIReferentIncomingAccess";
-import { AIReferentFiles, referentDownloadName, saveReferentBlob } from "./AIReferentFiles";
+import { AIReferentFiles, AIReferentPacketViewer, referentDownloadName, saveReferentBlob } from "./AIReferentFiles";
 import { AIReferentPagination } from "./AIReferentPagination";
 import { AIReferentAudioComposer, AIReferentAudioPlayer } from "./AIReferentAudioComment";
 import { AIReferentRecipientPicker } from "./AIReferentRecipientPicker";
@@ -193,6 +195,8 @@ function dateTime(value: string): string {
 }
 
 export function AIReferentView({ token, people, canCreate, canAdmin = false, focusRequestId, focusIncomingId, focusRevision, onPreviewAttachment }: AIReferentViewProps) {
+  const [letterPreview, setLetterPreview] = useState<{ readonly ownerId: string; readonly file: AIReferentPacketFile }>();
+  const letterPreviewFocusTarget = useRestoreFocusTarget();
   const [localPreview, setLocalPreview] = useState<File>();
   const loadLocalOffice = useCallback((file: File, sheet: number, offset: number, signal?: AbortSignal) =>
     previewAIReferentLocalFile(token, file, sheet, offset, signal), [token]);
@@ -563,6 +567,19 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
 
   const selectedAdditionalFiles = form.additionalFiles ?? [];
   const primaryDocument = selected?.attachments.find((attachment) => attachment.documentRole === "primary");
+  const showFinalPdf = async (letter: AIReferentLetter, mode: "preview" | "download") => {
+    if (busyRef.current) return;
+    busyRef.current = true; setBusy(true); setError("");
+    try {
+      const packet = await loadAIReferentPacket(token, "outgoing", letter.id);
+      const pdf = packet.files.find(entry => entry.id === letter.finalPdfFileId && entry.source === "packet");
+      if (!pdf) throw new Error("Итоговый PDF ещё недоступен. Обновите письмо.");
+      if (mode === "preview") setLetterPreview({ ownerId: letter.id, file: pdf });
+      else saveReferentBlob(await downloadAIReferentPacket(token, "outgoing", letter.id, pdf), referentDownloadName(letter.displayNumber || letter.subject || "Подписанное письмо", "pdf"));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Не удалось открыть PDF.");
+    } finally { busyRef.current = false; setBusy(false); }
+  };
   const visibleDocumentCount = selected?.workflowKind === "delivery" && selected.finalPdfFileId
     ? 1 + (selected.attachments.filter((attachment) => attachment.documentRole !== "primary").length)
     : selected?.attachments.length ?? 0;
@@ -879,7 +896,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
         </DialogSurface>
       </Dialog>
 
-      <Dialog open={Boolean(selected)} onOpenChange={(_event, data) => !data.open && !busy && setSelectedId("")}>
+      <Dialog open={Boolean(selected)} onOpenChange={(_event, data) => { if (!data.open && !busy) { setSelectedId(""); setLetterPreview(undefined); } }}>
         <DialogSurface className="ai-referent-detail-dialog">
           {selected ? (
             <DialogBody>
@@ -906,14 +923,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
                     <button type="button" role="tab" key={key} aria-selected={detailTab === key} className={detailTab === key ? "active" : ""} onClick={() => setDetailTab(key)}>{label}</button>)}
                 </SlidingSegmented>
                 {detailTab === "overview" ? <>
-                {selected.finalPdfFileId ? <section className="ai-referent-detail-card"><h3>Письмо · подписанный PDF</h3><p>Это актуальная версия письма. Вложения доступны в пакете документов.</p><Button disabled={busy} icon={<ArrowDownload20Regular />} onClick={() => {
-                  setError("");
-                  void loadAIReferentPacket(token, "outgoing", selected.id).then(async (packet) => {
-                    const pdf = packet.files.find((entry) => entry.id === selected.finalPdfFileId);
-                    if (!pdf) throw new Error("Итоговый PDF ещё недоступен. Обновите письмо.");
-                    saveReferentBlob(await downloadAIReferentPacket(token, "outgoing", selected.id, pdf), referentDownloadName(selected.displayNumber || selected.subject || "Подписанное письмо", "pdf"));
-                  }).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Не удалось загрузить PDF."));
-                }}>Скачать подписанное письмо</Button></section> : primaryDocument ? <section className="ai-referent-detail-card"><h3>Письмо · {primaryDocument.fileName}</h3><p>Пока письмо не подписано, доступен исходный документ. После подписи его заменит PDF.</p>{onPreviewAttachment && <Button disabled={busy} onClick={() => onPreviewAttachment(primaryDocument)}>Открыть в Workspace</Button>}<Button disabled={busy} icon={<ArrowDownload20Regular />} onClick={() => void download(primaryDocument.id, primaryDocument.fileName)}>Скачать письмо</Button></section> : null}
+                {selected.finalPdfFileId ? <section className="ai-referent-detail-card"><h3>Письмо · подписанный PDF</h3><p>Это актуальная версия письма. Вложения доступны в пакете документов.</p><Button {...letterPreviewFocusTarget} disabled={busy} onClick={() => void showFinalPdf(selected, "preview")}>Открыть в Workspace</Button><Button disabled={busy} icon={<ArrowDownload20Regular />} onClick={() => void showFinalPdf(selected, "download")}>Скачать подписанное письмо</Button></section> : primaryDocument ? <section className="ai-referent-detail-card"><h3>Письмо · {primaryDocument.fileName}</h3><p>Пока письмо не подписано, доступен исходный документ. После подписи его заменит PDF.</p><Button {...letterPreviewFocusTarget} disabled={busy} onClick={() => setLetterPreview({ ownerId: selected.id, file: { id: primaryDocument.id, name: primaryDocument.fileName, byteSize: primaryDocument.byteSize, sha256: primaryDocument.sha256, createdAt: primaryDocument.createdAt, source: "attachment" } })}>Открыть в Workspace</Button><Button disabled={busy} icon={<ArrowDownload20Regular />} onClick={() => void download(primaryDocument.id, primaryDocument.fileName)}>Скачать письмо</Button></section> : null}
                 {selected.workflowKind === "delivery" ? <section className="ai-referent-detail-card ai-referent-recipient">
                   <h3>Получатель</h3>
                   <strong>{selected.recipientOrganization}</strong>
@@ -1003,6 +1013,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
                 }}>Подтвердить удаление</Button><Button disabled={busy} onClick={() => setDeleteConfirmation("")}>Не удалять</Button></section> : null}
                 {!readOnly && confirmAction && selected.availableActions.includes(confirmAction) ? <div className="ai-referent-detail-card" role="group" aria-label="Подтверждение действия"><p>{confirmAction === "send" ? "Робот отправит письмо внешнему получателю. Подтверждаете?" : confirmAction === "prepare_replacement" ? "Применить замену без повторного согласования? Номер сохранится. Готовый PDF используется как есть — проверьте подпись и содержимое." : confirmAction === "replace_document" ? "Робот закроет подготовленное окно. Затем вы сможете заменить документ без повторного согласования." : confirmAction === "mark_sent" ? "Подтверждаете, что письмо уже отправлено вручную? Робот запишет результат без повторной отправки." : "Подтвердите изменение состояния письма."}</p><Button appearance="primary" disabled={busy} onClick={() => void act(selected, confirmAction)}>Подтвердить</Button><Button disabled={busy} onClick={() => setConfirmAction(undefined)}>Отмена</Button></div> : null}
                 </div>
+                {letterPreview?.ownerId === selected.id ? <AIReferentPacketViewer token={token} kind="outgoing" ownerId={letterPreview.ownerId} file={letterPreview.file} onClose={() => setLetterPreview(undefined)} /> : null}
             </DialogBody>
           ) : null}
         </DialogSurface>

@@ -94,6 +94,7 @@ it("offers retry after a failed load",async()=>{
   render(wrap(<FileViewer {...p}/>));
   expect(await screen.findByRole("alert")).toHaveTextContent("Сервер недоступен");
   fireEvent.click(screen.getByRole("button",{name:"Повторить"}));
+  expect(screen.getByRole("button",{name:"Закрыть просмотрщик"})).toHaveFocus();
   await screen.findByText("<script>не исполнять</script>");
   expect(p.onLoadOffice).toHaveBeenCalledTimes(2);
 });

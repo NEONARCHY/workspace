@@ -12,6 +12,8 @@ x-python-service: &python-service
 
 services:
   office-preview:
+    # Reap orphaned LibreOffice/GPG helpers; otherwise zombies exhaust pids_limit.
+    init: true
     build:
       context: ..
       dockerfile: services/office-preview/Dockerfile

@@ -85,6 +85,7 @@ function FileViewer<T extends FileViewerSource>({ attachment, onClose, onLoad, o
   const visibleBlocks = office?.blocks.filter(block => matches(block.text) || block.rows.some(row => row.some(matches))) ?? [];
   const visibleRows = office?.rows.map((row, index) => ({row, index})).filter(({row}) => row.some(matches)) ?? [];
   const videoRef = useRef<HTMLVideoElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
   // A parent refresh may replace callback identities without changing the file.
   // Keep the latest authorized routes, but load only when the source key changes.
   const sourceRef = useRef({ attachment, onLoad, onLoadOffice });
@@ -143,7 +144,7 @@ function FileViewer<T extends FileViewerSource>({ attachment, onClose, onLoad, o
       <header className="file-viewer-header"><div className="file-viewer-heading"><DialogTitle>
         <span className="file-viewer-title" title={attachment.fileName}>{attachment.fileName}</span>
       </DialogTitle><span className="file-viewer-file-meta">{kind === "unsupported" ? "Файл" : {word:"Word",excel:"Excel",pdf:"PDF",image:"Изображение",video:"Видео",audio:"Аудио"}[kind]}{size ? ` · ${size}` : ""}</span></div>
-        <div className="file-viewer-tools">{onEdit && <Button appearance="primary" onClick={onEdit}>{editLabel ?? "Редактировать"}</Button>}<Button appearance="subtle" icon={<ArrowDownload20Regular />} disabled={saving} onClick={() => void download()}>Скачать</Button><Button className="file-viewer-close" appearance="subtle" icon={<Dismiss20Regular />} aria-label="Закрыть просмотрщик" onClick={onClose} /></div></header>
+        <div className="file-viewer-tools">{onEdit && <Button appearance="primary" onClick={onEdit}>{editLabel ?? "Редактировать"}</Button>}<Button appearance="subtle" icon={<ArrowDownload20Regular />} disabled={saving} onClick={() => void download()}>Скачать</Button><Button ref={closeButtonRef} className="file-viewer-close" appearance="subtle" icon={<Dismiss20Regular />} aria-label="Закрыть просмотрщик" onClick={onClose} /></div></header>
       {office?.kind === "word" && !busy && <div className="file-viewer-toolbar" aria-label="Масштаб текстового просмотра Word">
         <span>Текстовый просмотр</span><div className="file-viewer-tools">
             <Button appearance="subtle" icon={<Subtract20Regular />} aria-label="Уменьшить" disabled={zoom <= .5} onClick={() => setZoom(value => Math.max(.5, value - .25))} />
@@ -157,7 +158,7 @@ function FileViewer<T extends FileViewerSource>({ attachment, onClose, onLoad, o
         onChange={(_, data) => setQuery(data.value)} />}
       {office?.kind === "excel" && <nav className="file-viewer-sheets" aria-label="Листы Excel">{office.sheets.map((name, index) => <Button key={index} appearance={index === sheet ? "primary" : "subtle"} aria-pressed={index === sheet} onClick={() => { setSheet(index); setOffset(0); }}>{name}</Button>)}</nav>}
       <DialogContent className={`file-viewer-content file-viewer-${wordPdf ? "pdf" : kind}`} aria-busy={busy}>
-        {busy ? <div className="file-viewer-state" role="status"><Spinner size="small" /><strong>Открываем файл…</strong><span>Загружается только выбранное вложение</span></div> : error ? <div className="file-viewer-state" role="alert"><strong>Не удалось открыть файл</strong><p>{error}</p><Button onClick={() => setAttempt(value => value + 1)}>Повторить</Button></div> : <>
+        {busy ? <div className="file-viewer-state" role="status"><Spinner size="small" /><strong>Открываем файл…</strong><span>Загружается только выбранное вложение</span></div> : error ? <div className="file-viewer-state" role="alert"><strong>Не удалось открыть файл</strong><p>{error}</p><Button onClick={() => { closeButtonRef.current?.focus({ preventScroll: true }); setAttempt(value => value + 1); }}>Повторить</Button></div> : <>
           {mediaBlob && (kind === "pdf" || wordPdf) && <Suspense fallback={<LoadingSkeleton layout="form" rows={5} label="Открываем документ…" />}><PdfFilePreview blob={mediaBlob} onError={setError} /></Suspense>}
           {url && kind === "video" && <video ref={videoRef} src={url} controls playsInline preload="metadata" aria-label={attachment.fileName} onError={() => setError("Видеоформат не поддерживается браузером. Скачайте оригинал.")} />}
           {url && mediaBlob && kind === "audio" && <div className="file-viewer-audio-stage"><div className="file-viewer-audio-art" aria-hidden="true">♪</div><InlineAudioPlayer url={url} blob={mediaBlob} fileName={attachment.fileName} onError={() => setError("Аудиоформат не поддерживается браузером. Скачайте оригинал.")} /></div>}
@@ -166,7 +167,7 @@ function FileViewer<T extends FileViewerSource>({ attachment, onClose, onLoad, o
           {kind === "unsupported" && <div className="file-viewer-state"><strong>Просмотр этого формата недоступен</strong><p>Для Word и Excel используйте DOCX и XLSX. Можно скачать исходный файл.</p></div>}
         </>}
       </DialogContent>
-      <footer className="file-viewer-footer"><span>{wordPdf ? "Страничный просмотр Word · оригинал не изменяется · возможна замена отсутствующих шрифтов" : office?.truncated ? "Показана часть содержимого. Полная версия — в оригинале." : kind === "word" || kind === "excel" ? "Упрощённый режим чтения · оформление может отличаться от оригинала" : "Режим просмотра · оригинал не изменяется"}</span>
+      <footer className="file-viewer-footer"><span>{error ? "Просмотр недоступен · оригинал можно скачать" : wordPdf ? "Страничный просмотр Word · оригинал не изменяется · возможна замена отсутствующих шрифтов" : office?.truncated ? "Показана часть содержимого. Полная версия — в оригинале." : kind === "word" || kind === "excel" ? "Упрощённый режим чтения · оформление может отличаться от оригинала" : "Режим просмотра · оригинал не изменяется"}</span>
         {office?.kind === "excel" && <div><Button appearance="subtle" icon={<ArrowLeft20Regular />} aria-label="Предыдущие строки" disabled={offset === 0 || busy} onClick={() => setOffset(value => Math.max(0, value - 200))} /><span>{office.rows.length ? `${offset + 1}–${offset + office.rows.length}` : "0"} из {office.totalRows}</span><Button appearance="subtle" icon={<ArrowRight20Regular />} aria-label="Следующие строки" disabled={offset + 200 >= office.totalRows || busy} onClick={() => setOffset(value => value + 200)} /></div>}
       </footer>
     </DialogBody></DialogSurface>

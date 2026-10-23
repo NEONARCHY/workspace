@@ -537,11 +537,18 @@ export function loadAIReferentPacket(token: string, kind: AIReferentPacketKind, 
   return apiRequest<{ readonly files: readonly AIReferentPacketFile[] }>(`/ai-referent/packets/${kind}/${owner}`, {}, token);
 }
 
-export function downloadAIReferentPacket(token: string, kind: AIReferentPacketKind, owner: string, file?: AIReferentPacketFile) {
+export function downloadAIReferentPacket(token: string, kind: AIReferentPacketKind, owner: string, file?: AIReferentPacketFile, signal?: AbortSignal) {
   const suffix = file ? `/files/${file.id}?source=${file.source}` : "/zip";
   return boundedRequest(`${getApiBaseUrl()}/api/v1/ai-referent/packets/${kind}/${owner}${suffix}`, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { Authorization: `Bearer ${token}` }, cache: "no-store", signal,
   }, (response) => response.blob(), 120_000);
+}
+
+export function previewAIReferentPacketFile(token: string, kind: AIReferentPacketKind, owner: string, file: AIReferentPacketFile, sheet = 0, offset = 0, signal?: AbortSignal): Promise<OfficePreviewResult> {
+  return apiRequest<OfficePreviewResult>(
+    `/ai-referent/packets/${kind}/${owner}/files/${file.id}/preview?${new URLSearchParams({ source: file.source, sheet: String(sheet), offset: String(offset) })}`,
+    { signal, cache: "no-store", headers: { Accept: "application/pdf, application/json" } }, token, 120_000, readOfficePreview,
+  );
 }
 
 export function loadAIReferentArchive(token: string, offset = 0, query = "") {
