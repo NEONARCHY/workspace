@@ -4,7 +4,9 @@ const assert = require('node:assert/strict');
 const http = require('node:http');
 const { createRequire } = require('node:module');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 
+const rootRequire = createRequire(path.resolve(__dirname, '../package.json'));
 const desktopRequire = createRequire(path.resolve(__dirname, '../apps/desktop/package.json'));
 const builderRequire = createRequire(desktopRequire.resolve('electron-builder'));
 const appBuilderRequire = createRequire(builderRequire.resolve('app-builder-lib'));
@@ -41,6 +43,48 @@ async function main() {
   try {
     const targetPort = await listen(target);
     const proxyPort = await listen(proxy);
+    const semver = getRequire('semver');
+    const electronPackage = desktopRequire('electron/package.json');
+    assert.equal(electronPackage.version, '44.9.1');
+    assert(semver.satisfies(process.version, electronPackage.engines.node), 'Node must support the Electron installer');
+    const installerRequire = createRequire(desktopRequire.resolve('electron/package.json'));
+    const installerGet = await import(pathToFileURL(installerRequire.resolve('@electron/get')).href);
+    assert.equal(typeof installerGet.downloadArtifact, 'function', 'Electron installer download API changed');
+
+    // Resolve exactly the transitive instances used by ESLint and electron-builder.
+    const hooksRequire = createRequire(rootRequire.resolve('eslint-plugin-react-hooks'));
+    assert.equal(hooksRequire('zod/package.json').version, '4.6.6');
+    const { z } = hooksRequire('zod');
+    const schema = z.object({ names: z.array(z.string()).max(2) });
+    assert.equal(schema.safeParse({ names: ['one'] }).success, true);
+    assert.equal(schema.safeParse({ names: ['one', 'two', 'three'] }).success, false);
+    assert.equal(schema.safeParse({ names: [1] }).success, false);
+
+    const ajvRequire = createRequire(appBuilderRequire.resolve('ajv'));
+    assert.equal(ajvRequire('fast-uri/package.json').version, '3.1.9');
+    const uri = ajvRequire('fast-uri');
+    assert.notEqual(uri.parse('%6Aavascript:alert(1)').scheme, 'javascript');
+    const Ajv = appBuilderRequire('ajv');
+    const validate = new Ajv().compile({
+      $id: 'https://workspace.example/schema', type: 'object',
+      properties: { name: { type: 'string' } }, required: ['name'], additionalProperties: false,
+    });
+    assert.equal(validate({ name: 'workspace' }), true);
+    assert.equal(validate({ name: 1 }), false);
+
+    const rebuildRequire = createRequire(appBuilderRequire.resolve('@electron/rebuild'));
+    const nodeGypRequire = createRequire(rebuildRequire.resolve('node-gyp'));
+    for (const [load, expected] of [[getRequire, '7.30.1'], [nodeGypRequire, '6.29.1']]) {
+      assert.equal(load('undici/package.json').version, expected);
+      const { Agent, fetch } = load('undici');
+      const dispatcher = new Agent();
+      try {
+        const result = await fetch(`http://127.0.0.1:${targetPort}/compatibility`, {
+          dispatcher, signal: AbortSignal.timeout(3000),
+        });
+        assert.equal(await result.text(), 'direct');
+      } finally { await dispatcher.close(); }
+    }
     // This validates wait-on's Joi options without reaching external endpoints.
     await desktopRequire('wait-on')({
       resources: [`tcp:127.0.0.1:${targetPort}`], timeout: 3000, interval: 50,
@@ -61,7 +105,7 @@ async function main() {
     global.GLOBAL_AGENT.NO_PROXY = '127.0.0.1';
     assert.equal(await request(targetUrl), 'direct');
     assert.equal(proxyRequests.length, 1, 'NO_PROXY must bypass the proxy');
-    console.log('Build dependencies: wait-on, Electron proxy bootstrap and NO_PROXY passed.');
+    console.log('Build dependencies: Electron installer, Zod, Ajv/fast-uri, both Undici versions, wait-on, proxy and NO_PROXY passed.');
   } finally {
     target.closeAllConnections();
     proxy.closeAllConnections();

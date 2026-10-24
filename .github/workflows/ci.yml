@@ -25,7 +25,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
-          node-version: "20.20.0"
+          node-version: "24.22.1"
       - name: Select checks from the complete pull request diff
         id: areas
         env:
@@ -134,7 +134,7 @@ jobs:
           version: 10.33.0
       - uses: actions/setup-node@v4
         with:
-          node-version: "20.20.0"
+          node-version: "24.22.1"
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Verify personal development configuration isolation
@@ -179,7 +179,7 @@ jobs:
           version: 10.33.0
       - uses: actions/setup-node@v4
         with:
-          node-version: "20.20.0"
+          node-version: "24.22.1"
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Prepare release numbering metadata for consistency tests
