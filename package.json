@@ -5,7 +5,7 @@
   "description": "Yuksalish corporate workspace monorepo",
   "packageManager": "pnpm@10.33.0",
   "engines": {
-    "node": ">=20.20.0"
+    "node": ">=22.12.0"
   },
   "scripts": {
     "build": "pnpm -r --if-present build",

@@ -8,7 +8,7 @@
 
 1. Владелец репозитория добавляет разработчика в GitHub-репозиторий
    `NEONARCHY/workspace` с ролью **Write**.
-2. Разработчик устанавливает Git, Node.js 20, pnpm 10, Python 3.11 и Docker
+2. Разработчик устанавливает Git, Node.js 24 LTS (24.22.1, минимум 22.12.0), pnpm 10, Python 3.11 и Docker
    Desktop, затем клонирует проект:
 
    ```powershell

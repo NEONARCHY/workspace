@@ -25,7 +25,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
-          node-version: "20.20.0"
+          node-version: "24.22.1"
       - name: Report shared files across open PRs
         env:
           GH_TOKEN: ${{ github.token }}

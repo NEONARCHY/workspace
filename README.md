@@ -113,7 +113,7 @@ docs/                  архитектура, дизайн, продуктов�
 
 - Windows 10/11 и PowerShell;
 - Git;
-- Node.js `20.20.0` или новее в рамках поддерживаемой major-версии;
+- Node.js `24.22.1` LTS для сборки и CI (технический минимум — `22.12.0`);
 - pnpm `10.33.0` через Corepack;
 - Python `3.11` (не 3.12+ для текущего backend-контракта);
 - Docker Desktop с Docker Compose;
