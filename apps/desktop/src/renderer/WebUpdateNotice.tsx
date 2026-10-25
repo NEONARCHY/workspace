@@ -5,6 +5,10 @@ import { ArrowClockwise24Regular, CheckmarkCircle24Filled } from "@fluentui/reac
 
 import { requestWebReload, workspacePlatform, type WebVersionManifest } from "./platform-adapter";
 import { hasPendingMutation } from "./workspace-api";
+import { ReleaseTimeline } from "./ReleaseTimeline";
+import { orderedReleaseEntries } from "./release-history";
+import { compareReleaseVersions } from "./release-versions.mts";
+import "./release-history.css";
 
 const SNOOZE_KEY = "yuksalish:web:update-snooze";
 
@@ -66,6 +70,10 @@ export function WebUpdateNotice({ mandatory = false, onAvailabilityChange }: {
   }, [available]);
 
   if (!available || !visible) return null;
+  const missed = orderedReleaseEntries((available.history ?? []).map(entry => ({
+    ...entry, id: entry.id ?? `release:${entry.version}`,
+  }))).filter(entry => compareReleaseVersions(entry.version, workspacePlatform.version) > 0
+    && compareReleaseVersions(entry.version, available.version) <= 0);
   const reload = () => {
     if (hasPendingMutation()) {
       setMutationPending(true);
@@ -89,7 +97,10 @@ export function WebUpdateNotice({ mandatory = false, onAvailabilityChange }: {
         <span className="web-update-kicker">Обновление Workspace</span>
         <h2 id="web-update-title">{available.title || "Доступна новая версия"}</h2>
         <p className="web-update-version"><span>Версия {workspacePlatform.version}</span><b>→</b><strong>{available.version}</strong></p>
-        {available.notes?.length ? <ul>{available.notes.map((note) => <li key={note}><CheckmarkCircle24Filled /> <span>{note}</span></li>)}</ul> : <p className="web-update-summary">В новой версии улучшены стабильность и удобство работы.</p>}
+        {missed.length ? <div className="release-timeline-scroll"><p className="web-update-summary">Все изменения между вашей и доступной версиями.</p>
+          <ReleaseTimeline entries={missed} /></div>
+          : available.notes?.length ? <ul>{available.notes.map((note, index) => <li key={index}><CheckmarkCircle24Filled /> <span>{note}</span></li>)}</ul>
+          : <p className="web-update-summary">В новой версии улучшены стабильность и удобство работы.</p>}
         {mutationPending ? <WorkspaceNotice tone="warning" className="web-update-warning" role="alert">Сначала дождитесь завершения текущей операции — введённые данные не потеряются.</WorkspaceNotice> : null}
       </div>
       <footer>
