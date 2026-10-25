@@ -11,7 +11,7 @@ import type {
   WorkspaceTask,
 } from "@yuksalish/contracts";
 import { Button, DialogSurface, useRestoreFocusTarget } from "@fluentui/react-components";
-import { EmployeeAvatar as Avatar } from "./EmployeeAvatar";
+import { TaskPersonAvatar as PersonAvatar } from "./TaskPersonAvatar";
 import {
   ArrowRight20Regular,
   ArrowLeft20Regular,
@@ -466,7 +466,7 @@ export function TeamDashboardView({
             return <button className={`team-dash-task tone-${attention.tone}`} key={task.id} type="button" onClick={() => onSelectTask(task.id)}>
               <span className="team-dash-task-signal" aria-hidden="true" />
               <span className="team-dash-task-copy"><strong>{task.title}</strong><small>{task.project} · {attention.label}</small>{deadlineContext(task, now) ? <small>{deadlineContext(task, now)}</small> : null}</span>
-              <EmployeeProfileLink userId={assignee?.id} personName={assignee?.name ?? "Сотрудник"} className="team-dash-task-person"><Avatar name={assignee?.name ?? "Сотрудник"} size={28} /><span>{assignee?.name ?? "Сотрудник"}</span></EmployeeProfileLink>
+              <EmployeeProfileLink userId={assignee?.id} personName={assignee?.name ?? "Сотрудник"} className="team-dash-task-person"><PersonAvatar person={assignee} token={token} size={28} /><span>{assignee?.name ?? "Сотрудник"}</span></EmployeeProfileLink>
               <ArrowRight20Regular aria-hidden="true" />
             </button>;
           })}
@@ -534,7 +534,7 @@ export function TeamDashboardView({
       </header>
       {drawerTask ? <div className="team-dash-drawer-detail" key={drawerTask.id}>
         <EmployeeProfileLink userId={drawerTask.assigneeId} personName={personById.get(drawerTask.assigneeId)?.name ?? "Сотрудник"} className="team-dash-drawer-person">
-          <Avatar name={personById.get(drawerTask.assigneeId)?.name ?? "Сотрудник"} size={40} color="colorful" />
+          <PersonAvatar person={personById.get(drawerTask.assigneeId)} token={token} size={40} />
           <span><small>Ответственный</small><strong>{personById.get(drawerTask.assigneeId)?.name ?? "Сотрудник"}</strong></span>
         </EmployeeProfileLink>
         <dl>
@@ -554,7 +554,7 @@ export function TeamDashboardView({
             return <button type="button" key={task.id} onClick={() => setDrawerTaskId(task.id)}>
               <span className={`team-dash-drawer-status status-${isTaskOverdue(task, now) ? "overdue" : task.status}`} aria-hidden="true" />
               <span><strong>{task.title}</strong><small>{task.project || "Без проекта"} · {task.dueLabel}</small>{deadlineContext(task, now) ? <small>{deadlineContext(task, now)}</small> : null}</span>
-              <EmployeeProfileLink userId={assignee?.id} personName={assignee?.name ?? "Сотрудник"}><Avatar name={assignee?.name ?? "Сотрудник"} size={32} color="colorful" /></EmployeeProfileLink>
+              <EmployeeProfileLink userId={assignee?.id} personName={assignee?.name ?? "Сотрудник"}><PersonAvatar person={assignee} token={token} size={32} /></EmployeeProfileLink>
               <ArrowRight20Regular aria-hidden="true" />
             </button>;
           })}
@@ -577,7 +577,7 @@ export function TeamDashboardView({
       {efficiencyError ? <WorkspaceNotice tone="warning" className="team-dash-data-note" role="status">Показана нагрузка по задачам. Данные эффективности временно недоступны: {efficiencyError}</WorkspaceNotice> : null}
       <div className="team-dash-people" ref={workloadMotion} role="region" aria-label="Нагрузка сотрудников" tabIndex={0}>
         {teamRows.map((row) => <button className="team-dash-person" key={row.person.id} type="button" aria-haspopup="dialog" aria-label={`Посмотреть нагрузку: ${row.person.name}, ${plural(row.active, ["активная задача", "активные задачи", "активных задач"])}`} onClick={() => setSelectedPersonId(row.person.id)}>
-          <span><Avatar name={row.person.name} size={40} color="colorful" /></span>
+          <span><PersonAvatar person={row.person} token={token} size={40} /></span>
           <span className="team-dash-person-name"><strong>{row.person.name}</strong><small>{row.person.jobTitle || "Должность не указана"}</small></span>
           <span className="team-dash-load"><span><i style={{ width: `${row.active / maximumActive * 100}%` }} /></span><small>{plural(row.active, ["активная задача", "активные задачи", "активных задач"])}</small></span>
           <span className="team-dash-person-facts">

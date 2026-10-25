@@ -13,7 +13,7 @@ import { currentTripWorkflow, tripColumns, tripDropAction } from "./trip-board";
 import type { AssistantActionDraft, TripAction, TripRequest, TripRequestInput, TripStage, WorkflowDefinition, WorkflowPosition, WorkspaceDepartment, WorkspacePerson } from "@yuksalish/contracts";
 import type { OfficePreviewResult } from "./file-viewer-kind";
 import { Badge, Button, Checkbox, DialogSurface, DialogTitle, Textarea, useRestoreFocusTarget } from "@fluentui/react-components";
-import { EmployeeAvatar as Avatar } from "./EmployeeAvatar";
+import { TaskPersonAvatar as PersonAvatar } from "./TaskPersonAvatar";
 import { Input } from "./WorkspaceInput";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import { workflowStageColor } from "./workflow-stage-colors";
@@ -52,6 +52,7 @@ const needsBriefForSubmission = (request: TripRequest) => {
 };
 
 interface TripApprovalsViewProps {
+  readonly token?: string;
   readonly assistantDraft?: AssistantActionDraft;
   readonly focusRequestId?: string;
   readonly requests: readonly TripRequest[];
@@ -94,7 +95,7 @@ const exampleTripFacts = {
   expenseSource: "loyiha mablagʻlari",
 };
 
-export function TripApprovalsView({ focusRequestId, requests, people, departments, currentUser, onCreate, onUpdate, onDelete, onAction, onLoadBriefOffice, onDownloadDocument, onOpenChat, renderTripChat, workflow, positions = [], canManageWorkflow = false, onSaveWorkflow, onPublishWorkflow, assistantDraft }: TripApprovalsViewProps) {
+export function TripApprovalsView({ token, focusRequestId, requests, people, departments, currentUser, onCreate, onUpdate, onDelete, onAction, onLoadBriefOffice, onDownloadDocument, onOpenChat, renderTripChat, workflow, positions = [], canManageWorkflow = false, onSaveWorkflow, onPublishWorkflow, assistantDraft }: TripApprovalsViewProps) {
   const boardPan = useMiddleMousePan<HTMLDivElement>();
   const restoreFocusTarget = useRestoreFocusTarget();
   const detailSurfaceRef = useRef<HTMLDivElement>(null);
@@ -338,7 +339,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
                       <strong>{request.purpose || request.destination}</strong>
                       {request.purpose ? <span className="trip-card-destination">{request.destination}</span> : null}
                       <span className="approval-card-project">{dateLabel(request.startDate)} — {dateLabel(request.endDate)}</span>
-                      {personLink(request.requesterUserId, <><Avatar size={24} name={personName(request.requesterUserId)} color="colorful" /><span>{personName(request.requesterUserId)}</span></>, "approval-card-owner")}
+                      {personLink(request.requesterUserId, <><PersonAvatar size={24} person={people.find((person) => person.id === request.requesterUserId)} token={token} /><span>{personName(request.requesterUserId)}</span></>, "approval-card-owner")}
                       <span className="approval-card-meta"><span>{request.stageLabel}</span><span>{request.employeeIds.length} участн.</span></span>
                     </button>
                     <footer><span>{movable ? "Можно перенести" : request.statusLabel}</span>{request.chatId && onOpenChat ? <Button size="small" className="context-chat-button" appearance="subtle" icon={<Chat24Regular />} aria-label={`Открыть чат поездки ${request.number}`} onClick={() => onOpenChat(request.chatId!)} /> : null}{forward ? <Button size="small" appearance="subtle" disabled={busy || ((forward === "submit" || forward === "resubmit") && needsBriefForSubmission(request))} aria-label={`${forward === "submit" && request.workflowVersion === 3 ? "Отправить первому заместителю" : actionLabels[forward]}: ${request.number}`} onClick={() => void act(request, forward)}>{moveLabels[forward]}</Button> : null}</footer>
@@ -381,8 +382,8 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
             {feedback}
             {pendingDecision?.id === selected.id ? <DecisionReason key={`${selected.id}:${pendingDecision.action}`} title={pendingDecision.action === "return" ? "Что нужно исправить?" : pendingDecision.action === "withdraw" ? "Причина отзыва заявки" : pendingDecision.action === "annul" ? "Причина аннулирования приказа" : "Причина отклонения"} onCancel={() => setPendingDecision(undefined)} onConfirm={(reason) => commitAction(selected, pendingDecision.action, reason)} /> : null}
             {selected.purpose ? <div className="trip-purpose"><span>Цель поездки</span><p>{selected.purpose}</p></div> : null}
-            <dl className="bp7-facts"><div><dt>Инициатор</dt><dd>{personLink(selected.requesterUserId, personName(selected.requesterUserId))}</dd></div><div><dt>Период</dt><dd>{selected.startDate} — {selected.endDate}</dd></div></dl>
-            <div className="trip-employees"><h3>Сотрудники</h3>{selected.employeeIds.map((id) => <span key={id}>{personLink(id, personName(id), "trip-employee-link")}</span>)}</div>
+            <dl className="bp7-facts"><div><dt>Инициатор</dt><dd>{personLink(selected.requesterUserId, <><PersonAvatar person={people.find((person) => person.id === selected.requesterUserId)} token={token} size={28} /><span>{personName(selected.requesterUserId)}</span></>, "trip-person")}</dd></div><div><dt>Период</dt><dd>{selected.startDate} — {selected.endDate}</dd></div></dl>
+            <div className="trip-employees"><h3>Сотрудники</h3>{selected.employeeIds.map((id) => <span key={id}>{personLink(id, <><PersonAvatar person={people.find((person) => person.id === id)} token={token} size={28} /><span>{personName(id)}</span></>, "trip-employee-link trip-person")}</span>)}</div>
             {(selected.workflowVersion ?? 1) >= 2 ? <section className="trip-document-panel" aria-label="Документы поездки">
               <div className="trip-document-heading"><div><h3>Билдирги и приказ</h3><p>Проверьте текст и PDF билдирги до отправки первому заместителю.</p></div>{selected.orderNumber ? <Badge appearance="tint" color="success">Приказ № {selected.orderNumber}</Badge> : null}</div>
               <dl className="trip-document-facts">{selected.expenseSource ? <div><dt>Источник расходов</dt><dd>{selected.expenseSource}</dd></div> : null}<div><dt>Текст билдирги</dt><dd>{selected.briefText || (selected.briefAttachmentName ? "См. приложенный оригинал" : "Не добавлен")}</dd></div></dl>
@@ -456,7 +457,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
               <RecordSection title="Участники поездки" description={canChooseOthers ? "Отметьте сотрудников, которые отправятся в поездку. Поиск не сбрасывает выбор." : "Вы можете создать поездку для себя."}>
                 {canChooseOthers && departments ? <EmployeeScopeSwitch value={employeeListScope} onChange={setEmployeeListScope} label="Группа участников поездки" /> : null}
                 {canChooseOthers ? <Input aria-label="Найти участника поездки" placeholder="Имя или должность" value={employeeQuery} onChange={(_, data) => setEmployeeQuery(data.value)} /> : null}
-                <fieldset className="employee-picker"><legend className="sr-only">Выбор участников</legend>{people.filter((person) => (canChooseOthers || person.id === currentUser.id) && (!canChooseOthers || !departments || employeeScope(person.departmentId, departments) === employeeListScope) && `${person.name} ${person.jobTitle ?? ""}`.toLocaleLowerCase("ru-RU").includes(employeeQuery.trim().toLocaleLowerCase("ru-RU"))).map((person) => <Checkbox checked={form.employeeIds.includes(person.id)} key={person.id} label={<span className="workspace-person-choice"><Avatar name={person.name} size={24} color="colorful" aria-hidden="true" /><span>{person.name}{person.jobTitle ? ` · ${person.jobTitle}` : ""}</span></span>} onChange={(_, data) => setForm({ ...form, employeeIds: data.checked ? [...form.employeeIds, person.id] : form.employeeIds.filter((id) => id !== person.id) })} />)}</fieldset>
+                <fieldset className="employee-picker"><legend className="sr-only">Выбор участников</legend>{people.filter((person) => (canChooseOthers || person.id === currentUser.id) && (!canChooseOthers || !departments || employeeScope(person.departmentId, departments) === employeeListScope) && `${person.name} ${person.jobTitle ?? ""}`.toLocaleLowerCase("ru-RU").includes(employeeQuery.trim().toLocaleLowerCase("ru-RU"))).map((person) => <Checkbox checked={form.employeeIds.includes(person.id)} key={person.id} label={<span className="workspace-person-choice"><PersonAvatar person={person} token={token} size={24} /><span>{person.name}{person.jobTitle ? ` · ${person.jobTitle}` : ""}</span></span>} onChange={(_, data) => setForm({ ...form, employeeIds: data.checked ? [...form.employeeIds, person.id] : form.employeeIds.filter((id) => id !== person.id) })} />)}</fieldset>
                 {canChooseOthers && !people.some((person) => (!departments || employeeScope(person.departmentId, departments) === employeeListScope) && `${person.name} ${person.jobTitle ?? ""}`.toLocaleLowerCase("ru-RU").includes(employeeQuery.trim().toLocaleLowerCase("ru-RU"))) ? <p role="status">Сотрудники не найдены. Измените поиск или группу.</p> : null}
               </RecordSection>
             </RecordComposer>
