@@ -2484,3 +2484,4 @@ export interface DesktopUpdatePolicy {
 }
 export type { HiringFields, HiringSignatureBox, HiringSummary, HiringDetail, HiringRegistry,
   HiringActionName, HiringActionRequest, HiringDocumentKind, IdentityRecognition } from "./hr-hiring";
+export type { ReleaseReadState, ReleaseReadInput } from "./release-history";

@@ -63,6 +63,21 @@ describe("WebUpdateNotice", () => {
     vi.useRealTimers();
   });
 
+  it("shows every intermediate release, but excludes already installed and future versions", async () => {
+    checkWebVersion.mockResolvedValue({ version: "1.0.1", buildId: "new", notes: ["Краткое описание"], history: [
+      { version: "1.0.1", title: "Последняя версия", items: ["Последний пункт"] },
+      { version: "1.0.0", title: "Промежуточная версия", items: ["Пропущенный пункт"] },
+      { version: "0.30.3", title: "Установлено", items: ["Уже установлено"] },
+      { version: "1.0.2", title: "Будущее", items: ["Ещё не выпущено"] },
+    ] });
+    render(<WebUpdateNotice />);
+    await screen.findByRole("dialog");
+    expect(screen.getByText("Последний пункт")).toBeInTheDocument();
+    expect(screen.getByText("Пропущенный пункт")).toBeInTheDocument();
+    expect(screen.queryByText("Уже установлено")).not.toBeInTheDocument();
+    expect(screen.queryByText("Ещё не выпущено")).not.toBeInTheDocument();
+  });
+
   it("does not allow postponing a mandatory update", async () => {
     render(<WebUpdateNotice mandatory />);
     expect(await screen.findByRole("dialog")).toBeInTheDocument();

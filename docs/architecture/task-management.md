@@ -113,7 +113,13 @@ Older tasks explicitly disclose incomplete early history; only their actual crea
 timestamp/author are projected from the task row, never a guessed original deadline.
 No schema migration or rewriting of stored history is required.
 
-- Managers, administrators and superadministrators can read and edit all tasks.
+- Managers, administrators and superadministrators can read and edit all tasks,
+  except a manager holding the exact executive chairman position: that position
+  grants visibility, not blanket editing/management rights. The chairman retains
+  author, assignee and co-assignee rights on tasks where he has those roles.
+  The desktop mirrors this existing API rule for editing, uploads, checklist,
+  Kanban dragging, participants, deadlines, return and efficiency controls.
+  The personal review inbox and result acceptance remain author-only for everyone.
 - An employee sees a task only when they are its author, primary assignee,
   co-assignee or observer. This rule is enforced by the workspace query and every
   task endpoint, not only by the desktop filters.

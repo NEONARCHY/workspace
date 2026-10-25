@@ -31,6 +31,8 @@ export interface WebVersionManifest {
 }
 
 export interface ReleaseHistoryEntry {
+  readonly id?: string;
+  readonly date?: string;
   readonly version: string;
   readonly title: string;
   readonly items: readonly string[];

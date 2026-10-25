@@ -1,4 +1,5 @@
 import { TaskPersonAvatar } from "./TaskPersonAvatar";
+import { canManageAnyTask } from "./task-permissions";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { LoadingSkeleton } from "./LoadingSkeleton";
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
@@ -478,7 +479,7 @@ export function TasksView(props: TasksViewProps) {
     return () => window.clearTimeout(timer);
   }, [sourceNoticeTaskId]);
   const currentUser = people.find((person) => person.id === currentUserId);
-  const privileged = ["manager", "admin", "superadmin"].includes(currentUser?.role ?? "");
+  const privileged = canManageAnyTask(currentUser);
   const coAssignee = selectedTask?.participants.some((item) => item.userId === currentUserId && item.role === "co_assignee") ?? false;
   const canEdit = selectedTask !== undefined && (privileged || selectedTask.authorId === currentUserId || selectedTask.assigneeId === currentUserId || coAssignee);
   const canDelete = selectedTask !== undefined

@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { workspaceTheme } from "./workspace-theme";
 import { ConnectionIndicator, WorkspaceIdentity } from "./WorkspaceIdentity";
 import * as profileAvatar from "./ProfileAvatar";
+import { bundledReleaseEntries } from "./release-history";
 
 const person = {
   id: "person-1",
@@ -74,22 +75,19 @@ describe("WorkspaceIdentity", () => {
     expect(onSupport).toHaveBeenCalledOnce();
   });
 
-  it("shows concise, sequential dates and versions in the connection history", () => {
+  it("shows every version and change in one scrollable connection history", () => {
     render(<FluentProvider theme={workspaceTheme}><ConnectionIndicator detail="Сервер подключён" error={false} /></FluentProvider>);
     fireEvent.click(screen.getByRole("button", { name: "Подключение: Сервер подключён" }));
     fireEvent.click(screen.getByRole("button", { name: "Ранние обновления" }));
     expect(screen.getByRole("dialog", { name: "Ранние обновления" })).toBeInTheDocument();
-    const versionPicker = screen.getByRole("combobox", { name: "Обновление" });
     const latestUpdate = __YUKSALISH_UPDATE_ENTRIES__[0]!;
-    expect(versionPicker).toHaveValue(`update:${latestUpdate.id}`);
-    fireEvent.click(versionPicker);
-    expect(screen.getAllByRole("option")[0]).toHaveTextContent(
-      new RegExp(`^\\d{2}\\.\\d{2}\\.\\d{4} · ${latestUpdate.version.replaceAll(".", "\\.")}$`),
+    expect(screen.getByRole("heading", { name: `Обновление ${latestUpdate.version}` })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Обновление 1.0.0" })).toBeInTheDocument();
+    const history = screen.getByLabelText("Полная история изменений");
+    expect(history).toHaveAttribute("tabindex", "0");
+    expect([...history.querySelectorAll(".release-timeline-body li")].map(item => item.textContent)).toEqual(
+      bundledReleaseEntries().flatMap(entry => entry.items),
     );
-    expect(screen.getByRole("option", { name: / · 1\.0\.17$/ })).toHaveTextContent(/^\d{2}\.\d{2}\.2026 · 1\.0\.17$/);
-    expect(screen.queryByRole("option", { name: /Добавлен HR-раздел/ })).not.toBeInTheDocument();
-    fireEvent.change(versionPicker, { target: { value: "release:1.0.0" } });
-    expect(versionPicker).toHaveValue("release:1.0.0");
-    expect(screen.getByRole("dialog", { name: "Ранние обновления" })).toHaveTextContent("Обновление 1.0.0");
+    expect(history.querySelectorAll("time").length).toBeGreaterThan(1);
   });
 });

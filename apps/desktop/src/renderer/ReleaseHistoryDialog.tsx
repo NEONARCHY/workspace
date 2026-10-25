@@ -1,73 +1,55 @@
-import {
-  Button,
-  DialogActions,
-  DialogBody,
-  DialogContent,
-  DialogSurface,
-  DialogTitle,
-} from "@fluentui/react-components";
-import { CheckmarkCircle20Filled } from "@fluentui/react-icons";
-import { useMemo, useState } from "react";
-
+import { Button, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle } from "@fluentui/react-components";
+import { ArrowRight20Regular, BookOpen24Regular } from "@fluentui/react-icons";
+import { useMemo } from "react";
 import { WorkspaceDialog } from "./WorkspaceDialog";
-import { WorkspaceSelect } from "./WorkspaceSelect";
-import { compareReleaseVersions } from "./release-versions.mts";
+import { WorkspaceNotice } from "./WorkspaceNotice";
+import { ReleaseTimeline } from "./ReleaseTimeline";
+import { bundledReleaseEntries, type ReleaseTimelineEntry } from "./release-history";
+import "./release-history.css";
 
-function formatUpdateDate(date: string): string {
-  return new Date(`${date}T12:00:00`).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric" });
+interface Props {
+  readonly open: boolean;
+  readonly onOpenChange: (open: boolean) => void;
+  readonly entries?: readonly ReleaseTimelineEntry[];
+  readonly previousVersion?: string;
+  readonly currentVersion?: string;
+  readonly onAcknowledge?: () => void;
+  readonly saving?: boolean;
+  readonly error?: string;
 }
 
-function formatLongDate(date: string): string {
-  return new Date(`${date}T12:00:00`).toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" });
-}
-
-export function ReleaseHistoryDialog({ open, onOpenChange }: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const entries = useMemo(() => [
-    ...__YUKSALISH_UPDATE_ENTRIES__.map((update) => ({
-      key: `update:${update.id}`,
-      label: `${formatUpdateDate(update.date)} · ${update.version}`,
-      title: `Обновление ${update.version}`,
-      detail: formatLongDate(update.date),
-      items: update.items,
-    })),
-    ...[...__YUKSALISH_RELEASE_HISTORY__]
-      .sort((left, right) => compareReleaseVersions(right.version, left.version))
-      .map((release) => ({
-        key: `release:${release.version}`,
-        label: `${formatUpdateDate(release.date)} · ${release.version}`,
-        title: `Обновление ${release.version}`,
-        detail: formatLongDate(release.date),
-        items: release.items,
-      })),
-  ], []);
-  const [selectedKey, setSelectedKey] = useState(entries[0]?.key ?? "");
-  const selectedEntry = entries.find((entry) => entry.key === selectedKey) ?? entries[0];
-
-  return <WorkspaceDialog open={open} onOpenChange={(_event, data) => onOpenChange(data.open)}>
-    <DialogSurface className="release-history-dialog">
+export function ReleaseHistoryDialog({ open, onOpenChange, entries: suppliedEntries, previousVersion,
+  currentVersion, onAcknowledge, saving = false, error }: Props) {
+  const bundled = useMemo(() => bundledReleaseEntries(), []);
+  const entries = suppliedEntries ?? bundled;
+  const catchUp = Boolean(onAcknowledge);
+  const current = currentVersion ?? entries[0]?.version;
+  const changes = entries.reduce((count, entry) => count + entry.items.length, 0);
+  return <WorkspaceDialog open={open} onOpenChange={(_event, data) => { if (!saving) onOpenChange(data.open); }}>
+    <DialogSurface className="release-history-dialog release-timeline-dialog" data-release-catchup={catchUp || undefined}>
       <DialogBody>
-        <DialogTitle>Ранние обновления</DialogTitle>
-        <DialogContent className="release-history-content">
-          {selectedEntry ? <>
-            <label className="release-version-picker">
-              <span>Обновление</span>
-              <WorkspaceSelect aria-label="Обновление" listboxClassName="release-history-options" value={selectedKey} onChange={(event) => setSelectedKey(event.target.value)}>
-                {entries.map((entry) => <option value={entry.key} key={entry.key}>{entry.label}</option>)}
-              </WorkspaceSelect>
-            </label>
-            <section key={selectedEntry.key}>
-            <div className="release-history-heading">
-              <h3>{selectedEntry.title}</h3>
-              <span>{selectedEntry.detail}</span>
-            </div>
-            <ul>{selectedEntry.items.map((item) => <li key={item}><CheckmarkCircle20Filled /><span>{item}</span></li>)}</ul>
-            </section>
-          </> : <p>История обновлений пока пуста.</p>}
+        <DialogTitle>{catchUp ? "Что изменилось в Workspace" : "Ранние обновления"}</DialogTitle>
+        <div className="release-history-intro">
+          <span className="release-history-symbol" aria-hidden="true"><BookOpen24Regular /></span>
+          <div>{catchUp ? <p>{previousVersion ? "Все изменения после последнего ознакомления — в одной истории."
+            : "Отметки в аккаунте ещё нет. Здесь собрана история этой сборки."}</p>
+            : <p>Полная история этой сборки — по версиям, без сокращения списка.</p>}
+            {current ? <div className="release-history-range"><span>{previousVersion ?? (catchUp ? "Первое ознакомление" : "История Workspace")}</span>
+              <ArrowRight20Regular aria-hidden="true" /><strong>{current}</strong></div> : null}
+          </div>
+        </div>
+        <div className="release-history-counts"><span>Версий: <b>{entries.length}</b></span><span>Изменений: <b>{changes}</b></span>
+          {catchUp ? <span>Отметка сохраняется в аккаунте</span> : null}</div>
+        <DialogContent className="release-history-content release-timeline-scroll" tabIndex={0} aria-label="Полная история изменений">
+          {entries.length ? <ReleaseTimeline entries={entries} /> : <p>Новых изменений нет.</p>}
         </DialogContent>
-        <DialogActions><Button appearance="primary" onClick={() => onOpenChange(false)}>Закрыть</Button></DialogActions>
+        {error ? <WorkspaceNotice tone="error" role="alert">{error}</WorkspaceNotice> : null}
+        <DialogActions className="release-history-actions">
+          <Button appearance={catchUp ? "secondary" : "primary"} disabled={saving} onClick={() => onOpenChange(false)}>
+            {catchUp ? "Позже" : "Закрыть"}</Button>
+          {catchUp ? <Button appearance="primary" disabled={saving || entries.length === 0} onClick={onAcknowledge}>
+            {saving ? "Сохраняем отметку…" : "Ознакомился"}</Button> : null}
+        </DialogActions>
       </DialogBody>
     </DialogSurface>
   </WorkspaceDialog>;
