@@ -2620,6 +2620,7 @@ export function App() {
             {displayedSection === "trip_approvals" ? (
               <TripApprovalsView
                 key={focusTarget?.revision}
+                token={session.accessToken}
                 assistantDraft={canUseAssistant && preparedAction?.kind === "trip" ? preparedAction : undefined}
                 requests={workspace.tripRequests}
                 people={displayPeople}

@@ -2,7 +2,7 @@ import type { WorkspacePerson } from "@yuksalish/contracts";
 import { EmployeeAvatar } from "./EmployeeAvatar";
 import { ProfileAvatar } from "./ProfileAvatar";
 
-type TaskAvatarSize = 24 | 28 | 32 | 36 | 48;
+type TaskAvatarSize = 24 | 28 | 32 | 36 | 40 | 48;
 
 export function TaskPersonAvatar({ person, token, size, fallbackName = "Сотрудник" }: {
   readonly person?: WorkspacePerson;

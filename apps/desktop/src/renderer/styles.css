@@ -1075,7 +1075,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .trip-purpose span { color: var(--ws-link, var(--ws-theme-ink-blue, #0f6cbd)); font-size: 11px; font-weight: 700; text-transform: uppercase; }
 .trip-purpose p { margin: 5px 0 0; color: var(--ws-theme-ink, #334b60); font-size: 11px; line-height: 1.5; }
 .trip-employees { margin: 16px 0; }
-.trip-employees span { display: inline-block; margin: 0 6px 6px 0; padding: 6px 9px; border-radius: 20px; color: var(--ws-theme-muted, #3d566d); background: var(--ws-theme-surface-soft, #eef2f6); font-size: 11px; }
+.trip-employees > span { display: inline-block; margin: 0 6px 6px 0; padding: 6px 9px; border-radius: 20px; color: var(--ws-theme-muted, #3d566d); background: var(--ws-theme-surface-soft, #eef2f6); font-size: 11px; }
 
 /* Trip approvals share payment board surfaces, but keep their own Bitrix palette. */
 .trip-view > .bp7-header { flex: none; }
