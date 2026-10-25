@@ -609,6 +609,42 @@ describe("AIReferentView", () => {
     expect(screen.queryByRole("button", { name: "Отправить на согласование" })).not.toBeInTheDocument();
   });
 
+  it("requires external delivery verification and confirmation for an administrative retry", async () => {
+    const letter: AIReferentLetter = { ...registry.letters[0]!, status: "failed", revision: 7,
+      displayNumber: "0487/26-AI", recipientAddress: "office@example.test",
+      availableActions: ["retry_failed_delivery"], canEdit: false };
+    vi.mocked(loadAIReferentLetter).mockResolvedValue(letter);
+    vi.mocked(actOnAIReferentLetter).mockRejectedValue(new Error("Результат отправки требует сверки"));
+    render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate={false} canAdmin focusRequestId="letter-1" /></FluentProvider>);
+    const comment = await screen.findByRole("textbox", { name: "Результат проверки доставки" });
+    act(() => comment.focus());
+    const retry = screen.getByRole("button", { name: "Повторить после ошибки" });
+    expect(retry).toBeDisabled();
+    fireEvent.change(comment, { target: { value: "В отправленных Webmail письма нет, журнал проверен" } });
+    fireEvent.click(retry);
+    expect(actOnAIReferentLetter).not.toHaveBeenCalled();
+    const confirmation = screen.getByRole("group", { name: "Подтверждение действия" });
+    expect(confirmation).toHaveTextContent("0487/26-AI");
+    expect(confirmation).toHaveTextContent("office@example.test");
+    expect(confirmation).toHaveTextContent("без нового согласования");
+    expect(confirmation).toHaveTextContent("робот может отправить письмо адресату");
+    fireEvent.click(within(confirmation).getByRole("button", { name: "Подтвердить" }));
+    await waitFor(() => expect(actOnAIReferentLetter).toHaveBeenCalledWith("token", letter,
+      "retry_failed_delivery", "В отправленных Webmail письма нет, журнал проверен", expect.any(String), undefined));
+    expect(await within(confirmation).findByRole("alert")).toHaveTextContent("Результат отправки требует сверки");
+    expect(comment).toHaveValue("В отправленных Webmail письма нет, журнал проверен");
+    expect(screen.queryByRole("button", { name: "Отправить на согласование" })).not.toBeInTheDocument();
+  });
+
+  it("explains a blocked retry instead of offering a duplicate send", async () => {
+    vi.mocked(loadAIReferentLetter).mockResolvedValue({ ...registry.letters[0]!, status: "failed",
+      availableActions: [], retryBlockReason: "Робот уже подтвердил отправку. Повтор заблокирован." });
+    render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate={false} canAdmin focusRequestId="letter-1" /></FluentProvider>);
+    expect(await screen.findByText("Робот уже подтвердил отправку. Повтор заблокирован.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Повторить после ошибки" })).not.toBeInTheDocument();
+    expect(actOnAIReferentLetter).not.toHaveBeenCalled();
+  });
+
   it("opens the incoming packet and offers retry without pretending files exist", async () => {
     vi.mocked(loadAIReferentPacket).mockRejectedValueOnce(new Error("Хранилище недоступно"))
       .mockResolvedValue({ files: [] });

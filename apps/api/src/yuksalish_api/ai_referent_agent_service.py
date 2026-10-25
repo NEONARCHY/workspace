@@ -410,6 +410,7 @@ async def complete_job(
         status = (
             "delivery_unknown"
             if job["kind"] in {"send", "record_sent"}
+            or (outcome == "unknown" and row["workflow_kind"] == "delivery")
             else "referent_review_pending"
             if job["kind"] in {"cancel", "replace"}
             else "operator_revision"

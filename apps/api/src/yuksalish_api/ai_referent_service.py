@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from .access_control import ensure_module_action, module_permissions_for_user
 from .ai_referent_audio import audio_response, decision_audio
 from .ai_referent_preflight import check_response, letter_check, require_passed
+from .ai_referent_retry import failed_delivery_retry_plan
 from .ai_referent_schemas import (
     AIReferentAction,
     AIReferentActionRequest,
@@ -400,6 +401,12 @@ async def _response(
         may_operate=permissions.get("ai_referent", {}).get("admin", False),
         replacement_file_ready=replacement_ready,
     )
+    retry_block = ""
+    if (row["status"] == "failed" and row["workflow_kind"] == "delivery"
+            and permissions.get("ai_referent", {}).get("admin", False)):
+        _, retry_block = await failed_delivery_retry_plan(connection, row)
+        if not retry_block:
+            actions.append("retry_failed_delivery")
     if not permissions.get("ai_referent", {}).get("edit", False):
         can_edit = False
         actions = [action for action in actions if action not in {"submit", "cancel"}]
@@ -408,6 +415,7 @@ async def _response(
     if "submit" in actions and submission_block:
         actions.remove("submit")
     return AIReferentLetterResponse(
+        retry_block_reason=retry_block,
         submission_block_reason=submission_block,
         id=str(row["id"]),
         display_number=_display_number(row),
@@ -930,6 +938,17 @@ async def act_on_letter(
             )
         await require_passed(connection, row)
         next_status = "pending_review"
+    elif action == "retry_failed_delivery":
+        await ensure_module_action(connection, current_user, "ai_referent", "admin")
+        command_kind, retry_block = await failed_delivery_retry_plan(connection, row)
+        if retry_block:
+            raise AIReferentServiceError(409, retry_block)
+        if len(payload.comment) < 12:
+            raise AIReferentServiceError(
+                422, "Укажите результат проверки журнала E-XAT/Webmail: письмо не отправлено."
+            )
+        next_status = "queued"
+        values["delivery_error"] = ""
     elif action == "prepare_replacement":
         await ensure_module_action(connection, current_user, "ai_referent", "admin")
         if current_status != "operator_revision" or not await _replacement_ready(connection, row):
@@ -1097,7 +1116,11 @@ async def act_on_letter(
             action=f"ai_referent.{action}",
             target_type="ai_referent_letter",
             target_id=letter_id,
-            details={"fromStatus": current_status, "toStatus": next_status},
+            details={
+                "fromStatus": current_status, "toStatus": next_status,
+                **({"verification": payload.comment, "commandKind": command_kind,
+                    "approvalPreserved": True} if action == "retry_failed_delivery" else {}),
+            },
             created_at=now,
         )
     )
@@ -1109,6 +1132,7 @@ async def act_on_letter(
         "return_for_revision": "Письмо возвращено с комментарием",
         "queue_delivery": "Подготовка подписанного письма",
         "retry_delivery": "Повторная подготовка письма",
+        "retry_failed_delivery": "Администратор повторяет отправку без нового согласования",
         "release_delivery": "Окончательный PDF подтверждён: подготовка отправки",
         "send": "Письмо передано на отправку",
         "cancel": "Письмо отменено",

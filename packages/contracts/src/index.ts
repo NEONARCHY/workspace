@@ -1186,6 +1186,7 @@ export type AIReferentAction =
   | "replace_document"
   | "mark_sent"
   | "prepare_replacement"
+  | "retry_failed_delivery"
   | "release_delivery"
   | "send"
   | "confirm_sent"
@@ -1224,6 +1225,7 @@ export interface AIReferentEvent {
 }
 
 export interface AIReferentLetter {
+  readonly retryBlockReason?: string;
   readonly submissionBlockReason?: string;
   readonly documentCheck?: AIReferentDocumentCheck | null;
   readonly finalPdfFileId?: string | null;
