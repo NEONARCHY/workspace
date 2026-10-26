@@ -11,8 +11,8 @@ function unionReads(current: ReleaseReadState | undefined, next: ReleaseReadStat
 }
 
 /** Mount keyed by account and server. Viewing or dismissing never writes receipts. */
-export function AccountReleaseUpdates({ token, entries: suppliedEntries }: {
-  readonly token: string; readonly entries?: readonly ReleaseTimelineEntry[];
+export function AccountReleaseUpdates({ token, entries: suppliedEntries, deferred = false }: {
+  readonly token: string; readonly entries?: readonly ReleaseTimelineEntry[]; readonly deferred?: boolean;
 }) {
   const entries = useMemo(() => suppliedEntries ?? bundledReleaseEntries(), [suppliedEntries]);
   const [reads, setReads] = useState<ReleaseReadState>();
@@ -50,7 +50,7 @@ export function AccountReleaseUpdates({ token, entries: suppliedEntries }: {
   }, [token, reload]);
 
   const unread = useMemo(() => reads ? unreadReleaseEntries(entries, reads.readEntryIds) : [], [entries, reads]);
-  const candidate = !dismissed && unread.length > 0;
+  const candidate = !deferred && !dismissed && unread.length > 0;
   useEffect(() => {
     if (!candidate) return;
     const check = () => setBlocked([...document.querySelectorAll('[role="dialog"][aria-modal="true"], [role="alertdialog"]')]
@@ -61,7 +61,7 @@ export function AccountReleaseUpdates({ token, entries: suppliedEntries }: {
   }, [candidate]);
 
   const acknowledge = async () => {
-    if (savingRef.current || unread.length === 0) return;
+    if (deferred || savingRef.current || unread.length === 0) return;
     savingRef.current = true; setSaving(true); setSaveError("");
     const entryIds = unread.map(entry => entry.id);
     try {
@@ -74,7 +74,7 @@ export function AccountReleaseUpdates({ token, entries: suppliedEntries }: {
   };
 
   return <>
-    {loadError && !dismissed && !candidate ? <aside className="release-read-check-error"><WorkspaceNotice tone="warning" role="status">
+    {loadError && !deferred && !dismissed && !candidate ? <aside className="release-read-check-error"><WorkspaceNotice tone="warning" role="status">
       {loadError}<Button size="small" onClick={() => setReload(value => value + 1)}>Повторить проверку</Button>
       <Button size="small" onClick={() => setDismissed(true)}>Позже</Button>
     </WorkspaceNotice></aside> : null}

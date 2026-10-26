@@ -91,8 +91,7 @@ import { requiresDesktopUpdate, type DesktopUpdateStatus } from "./desktop-updat
 import { workspacePlatform } from "./platform-adapter";
 import { useNotificationSounds } from "./useNotificationSounds";
 import { resolveAssistantForm } from "./assistant-form-handoff";
-import { WebUpdateNotice } from "./WebUpdateNotice";
-import { AccountReleaseUpdates } from "./AccountReleaseUpdates";
+import { WorkspaceReleaseUpdates } from "./WorkspaceReleaseUpdates";
 import { WorkspaceFluentProvider } from "./WorkspaceFluentProvider";
 import { ColorThemeToggle } from "./ColorThemeToggle";
 import { NotificationBell } from "./NotificationBell";
@@ -2853,8 +2852,8 @@ export function App() {
         onLoadOffice={handleLoadOffice} onDownload={handleSaveAttachment} /></Suspense> : null}
       {forwardPhoto?.messageId && <ForwardDialog source={{ kind: "message", id: forwardPhoto.messageId }} preview={forwardPhoto.caption || forwardPhoto.attachment.fileName}
         chats={displayChats} excludeChatId={forwardPhoto.chatId} onForward={handleForwardContent} onClose={() => setForwardPhoto(undefined)} />}
-      <WebUpdateNotice mandatory={Boolean(updatePolicy?.mandatory)} onAvailabilityChange={setWebUpdateAvailable} />
-      <AccountReleaseUpdates key={`${session.user.id}:${activeApiOrigin}`} token={session.accessToken} />
+      <WorkspaceReleaseUpdates key={`${session.user.id}:${activeApiOrigin}`} token={session.accessToken}
+        mandatory={Boolean(updatePolicy?.mandatory)} onAvailabilityChange={setWebUpdateAvailable} />
       </EmployeeProfileProvider>
       </WorkspacePeopleProvider>
       </UndoActionsProvider>
