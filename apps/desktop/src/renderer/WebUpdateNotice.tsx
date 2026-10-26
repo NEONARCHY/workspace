@@ -1,12 +1,11 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { useCallback, useEffect, useState } from "react";
-import { Button } from "@fluentui/react-components";
-import { ArrowClockwise24Regular, CheckmarkCircle24Filled } from "@fluentui/react-icons";
+import { Button, DialogSurface } from "@fluentui/react-components";
+import { ArrowClockwise24Regular } from "@fluentui/react-icons";
 
 import { requestWebReload, workspacePlatform, type WebVersionManifest } from "./platform-adapter";
 import { hasPendingMutation } from "./workspace-api";
-import { ReleaseTimeline } from "./ReleaseTimeline";
-import { orderedReleaseEntries } from "./release-history";
+import { WorkspaceDialog } from "./WorkspaceDialog";
 import { compareReleaseVersions } from "./release-versions.mts";
 import "./release-history.css";
 
@@ -34,20 +33,27 @@ export function WebUpdateNotice({ mandatory = false, onAvailabilityChange }: {
   const [visible, setVisible] = useState(false);
   const [busy, setBusy] = useState(false);
   const [mutationPending, setMutationPending] = useState(false);
+  const [reloadError, setReloadError] = useState(false);
 
   useEffect(() => {
     if (workspacePlatform.kind !== "web") return;
     let active = true;
+    let checked = false;
     const check = () => {
       void workspacePlatform.checkWebVersion()
         .then((manifest) => {
           if (!active) return;
-          const next = manifest && manifest.version !== workspacePlatform.version ? manifest : undefined;
+          checked = true;
+          const next = manifest && compareReleaseVersions(manifest.version, workspacePlatform.version) > 0 ? manifest : undefined;
           setAvailable(next);
           onAvailabilityChange?.(Boolean(next));
           setVisible(Boolean(next && (mandatory || (readSnooze(next.version)?.until ?? 0) <= Date.now())));
         })
-        .catch(() => undefined);
+        .catch(() => {
+          // A failed initial check must not hide installed history indefinitely.
+          // A later network error must not erase a known pending update.
+          if (active && !checked) onAvailabilityChange?.(false);
+        });
     };
     check();
     const timer = window.setInterval(check, 60_000);
@@ -65,22 +71,28 @@ export function WebUpdateNotice({ mandatory = false, onAvailabilityChange }: {
   useEffect(() => {
     if (!available) return;
     const check = () => setMutationPending(hasPendingMutation());
+    check();
     const timer = window.setInterval(check, 250);
     return () => window.clearInterval(timer);
   }, [available]);
 
+  useEffect(() => {
+    if (!busy) return;
+    // Successful navigation unmounts this tree. If it was cancelled, allow retry.
+    const timer = window.setTimeout(() => { setBusy(false); setReloadError(true); }, 15_000);
+    return () => window.clearTimeout(timer);
+  }, [busy]);
+
   if (!available || !visible) return null;
-  const missed = orderedReleaseEntries((available.history ?? []).map(entry => ({
-    ...entry, id: entry.id ?? `release:${entry.version}`,
-  }))).filter(entry => compareReleaseVersions(entry.version, workspacePlatform.version) > 0
-    && compareReleaseVersions(entry.version, available.version) <= 0);
   const reload = () => {
     if (hasPendingMutation()) {
       setMutationPending(true);
       return;
     }
     setBusy(true);
-    requestWebReload();
+    setReloadError(false);
+    try { requestWebReload(); }
+    catch { setBusy(false); setReloadError(true); }
   };
   const remindLater = () => {
     const previous = readSnooze(available.version);
@@ -90,17 +102,14 @@ export function WebUpdateNotice({ mandatory = false, onAvailabilityChange }: {
     catch { /* storage may be unavailable */ }
     setVisible(false);
   };
-  return <aside className="web-update-notice">
-    <div className="web-update-dialog" role="dialog" aria-modal="true" aria-live="polite" aria-labelledby="web-update-title">
+  const content = <>
       <div className="web-update-scroll">
         <div className="web-update-mark" aria-hidden="true"><ArrowClockwise24Regular /></div>
         <span className="web-update-kicker">Обновление Workspace</span>
-        <h2 id="web-update-title">{available.title || "Доступна новая версия"}</h2>
+        <h2 id="web-update-title">Доступна новая версия</h2>
         <p className="web-update-version"><span>Версия {workspacePlatform.version}</span><b>→</b><strong>{available.version}</strong></p>
-        {missed.length ? <div className="release-timeline-scroll"><p className="web-update-summary">Все изменения между вашей и доступной версиями.</p>
-          <ReleaseTimeline entries={missed} /></div>
-          : available.notes?.length ? <ul>{available.notes.map((note, index) => <li key={index}><CheckmarkCircle24Filled /> <span>{note}</span></li>)}</ul>
-          : <p className="web-update-summary">В новой версии улучшены стабильность и удобство работы.</p>}
+        <p className="web-update-summary">{mandatory ? "Требуется обновление. " : ""}После обновления покажем все пропущенные изменения в одном окне.</p>
+        {reloadError ? <WorkspaceNotice tone="error" role="alert">Не удалось запустить обновление. Повторите попытку — отметки об ознакомлении не изменены.</WorkspaceNotice> : null}
         {mutationPending ? <WorkspaceNotice tone="warning" className="web-update-warning" role="alert">Сначала дождитесь завершения текущей операции — введённые данные не потеряются.</WorkspaceNotice> : null}
       </div>
       <footer>
@@ -109,6 +118,11 @@ export function WebUpdateNotice({ mandatory = false, onAvailabilityChange }: {
           Обновить
         </Button>
       </footer>
-    </div>
+  </>;
+  if (mandatory) return <WorkspaceDialog open modalType="alert">
+    <DialogSurface className="web-update-dialog" aria-labelledby="web-update-title">{content}</DialogSurface>
+  </WorkspaceDialog>;
+  return <aside className="web-update-notice" aria-label="Обновление Workspace">
+    <div className="web-update-dialog" role="region" aria-live="polite" aria-labelledby="web-update-title">{content}</div>
   </aside>;
 }

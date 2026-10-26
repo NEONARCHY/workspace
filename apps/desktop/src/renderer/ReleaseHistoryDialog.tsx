@@ -48,7 +48,7 @@ export function ReleaseHistoryDialog({ open, onOpenChange, entries: suppliedEntr
           <Button appearance={catchUp ? "secondary" : "primary"} disabled={saving} onClick={() => onOpenChange(false)}>
             {catchUp ? "Позже" : "Закрыть"}</Button>
           {catchUp ? <Button appearance="primary" disabled={saving || entries.length === 0} onClick={onAcknowledge}>
-            {saving ? "Сохраняем отметку…" : "Ознакомился"}</Button> : null}
+            {saving ? "Сохраняем отметку…" : "Понятно, продолжить"}</Button> : null}
         </DialogActions>
       </DialogBody>
     </DialogSurface>

@@ -39,7 +39,7 @@ describe("AccountReleaseUpdates", () => {
     render(tree());
     await dialog();
     expect(screen.queryByText("Старый пункт")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Ознакомился" }));
+    fireEvent.click(screen.getByRole("button", { name: "Понятно, продолжить" }));
     await waitFor(() => expect(acknowledgeReleaseReads).toHaveBeenCalledWith("employee-a", { entryIds: ["update:new"] }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
@@ -69,12 +69,12 @@ describe("AccountReleaseUpdates", () => {
     acknowledgeReleaseReads.mockRejectedValueOnce(new Error("offline"));
     render(tree());
     await dialog();
-    fireEvent.click(screen.getByRole("button", { name: "Ознакомился" }));
+    fireEvent.click(screen.getByRole("button", { name: "Понятно, продолжить" }));
     fireEvent.click(screen.getByRole("button", { name: "Сохраняем отметку…" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Не удалось сохранить");
     expect(acknowledgeReleaseReads).toHaveBeenCalledTimes(1);
     expect(screen.getByText("Старый пункт")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Ознакомился" }));
+    fireEvent.click(screen.getByRole("button", { name: "Понятно, продолжить" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(acknowledgeReleaseReads).toHaveBeenCalledTimes(2);
   });
@@ -111,7 +111,7 @@ describe("AccountReleaseUpdates", () => {
     await dialog();
     loadReleaseReads.mockImplementationOnce(() => new Promise(resolve => { finishRead = resolve; }));
     fireEvent.focus(window);
-    fireEvent.click(screen.getByRole("button", { name: "Ознакомился" }));
+    fireEvent.click(screen.getByRole("button", { name: "Понятно, продолжить" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     await act(async () => { finishRead?.({ readEntryIds: [] }); });
     await waitFor(() => expect(loadReleaseReads).toHaveBeenCalledTimes(2));
