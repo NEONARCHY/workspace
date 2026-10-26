@@ -1261,7 +1261,10 @@ export interface AIReferentLetter {
   readonly canEdit: boolean;
 }
 
+export type AIReferentParticipation = "all" | "mine";
+
 export interface AIReferentRegistry {
+  readonly participation?: AIReferentParticipation;
   readonly letters: readonly AIReferentLetter[];
   readonly totalCount: number;
   readonly pendingReviewCount: number;

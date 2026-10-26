@@ -87,6 +87,19 @@ body:has(.app-content > :is(.ai-referent-view, .ai-hisobot-view)) .app-shell { p
   padding: 0;
   overflow: visible;
 }
+.ai-referent-participation-bar {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.ai-referent-participation-bar > span {
+  color: var(--ws-muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
 .ai-referent-view .ai-referent-register-tabs {
   display: flex;
   flex: 0 1 auto;
