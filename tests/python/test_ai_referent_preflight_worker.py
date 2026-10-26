@@ -33,7 +33,9 @@ def test_dispatch_uses_pinned_pdf_and_current_gui_send_setting(
     service = Mock(
         archive_root=str(tmp_path), outgoing_settings={"exat_send": {"allow_real_send": automatic}}
     )
-    service.database.get_outgoing_letter.return_value = {"signed_file_path": str(pdf)}
+    service.database.get_outgoing_letter.return_value = {
+        "signed_file_path": str(pdf), "status": "approved",
+    }
     state = modules.state.State(tmp_path / "state.sqlite")
     worker = modules.worker.DeliveryWorker(service, Mock(agent_id="test"), state)
     letter_id = str(uuid4())
@@ -52,6 +54,24 @@ def test_dispatch_uses_pinned_pdf_and_current_gui_send_setting(
     with pytest.raises(modules.client.WorkspaceError, match="PDF"):
         worker.dispatch(job)
     assert prepare.call_count == 1
+
+
+@pytest.mark.parametrize("status", ["exat_sent", "webmail_sent", "edo_sent"])
+def test_dispatch_never_reopens_an_already_sent_local_letter(
+    modules, tmp_path, monkeypatch, status
+):
+    service = Mock(archive_root=str(tmp_path))
+    service.database.get_outgoing_letter.return_value = {"status": status}
+    state = modules.state.State(tmp_path / "state.sqlite")
+    letter_id = str(uuid4())
+    state.put("letter:" + letter_id, 7)
+    worker = modules.worker.DeliveryWorker(service, Mock(agent_id="test"), state)
+    compose = Mock()
+    monkeypatch.setattr(modules.worker, "prepare_compose", compose)
+    with pytest.raises(modules.worker.DeliveryEvidenceConflict):
+        worker.dispatch({"letterId": letter_id, "signedFile": {"id": str(uuid4())}})
+    compose.assert_not_called()
+    service.confirm_manual_send.assert_not_called()
 
 
 def test_delete_reconciles_missing_mapping_and_removes_historical_letter(

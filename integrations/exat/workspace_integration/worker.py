@@ -19,6 +19,10 @@ from .state import State
 from .sync import ArchiveSync
 
 
+class DeliveryEvidenceConflict(WorkspaceError):
+    """The local delivery journal contradicts a server retry; do not touch compose."""
+
+
 class DeliveryWorker:
     def __init__(self, service: Any, client: WorkspaceClient, state: State):
         self.service, self.client, self.state = service, client, state
@@ -127,7 +131,10 @@ class DeliveryWorker:
             # not a swallowed exception or automatic retry of a possibly delivered letter.
             result = self.receipt(
                 job,
-                "unknown" if job["kind"] in {"send", "record_sent"} else "failed",
+                "unknown" if (
+                    job["kind"] in {"send", "record_sent"}
+                    or isinstance(error, DeliveryEvidenceConflict)
+                ) else "failed",
                 (
                     str(error)[:1500]
                     if isinstance(error, WorkspaceError)
@@ -200,6 +207,10 @@ class DeliveryWorker:
                     raise WorkspaceError(
                         "Номер уже занят другим письмом в Exat. Отправка остановлена."
                     )
+                if existing is not None:
+                    raise DeliveryEvidenceConflict(
+                        "Локальный журнал содержит дубли письма. Нужна ручная сверка."
+                    )
                 existing = row
         metadata = json.dumps(
             {"workspace_letter_id": job["letterId"], "workspace_prepare_job": job["id"]}
@@ -224,7 +235,9 @@ class DeliveryWorker:
         if existing:
             local_id = int(existing["id"])
             if existing["status"] in {"exat_sent", "webmail_sent", "edo_sent"}:
-                raise WorkspaceError("Exat уже считает письмо отправленным. Нужна ручная сверка.")
+                raise DeliveryEvidenceConflict(
+                    "Exat уже считает письмо отправленным. Нужна ручная сверка."
+                )
             with self.service.database.connect() as connection:
                 columns = ", ".join(f"{key} = ?" for key in values)
                 connection.execute(
@@ -276,6 +289,10 @@ class DeliveryWorker:
         row = self.service.database.get_outgoing_letter(local_id) if local_id is not None else None
         if row is None or not job.get("signedFile"):
             raise WorkspaceError("Нет локального пакета подтверждённого письма.")
+        if row["status"] in {"exat_sent", "webmail_sent", "edo_sent"}:
+            raise DeliveryEvidenceConflict(
+                "Локальный журнал уже подтверждает отправку. Повтор заблокирован."
+            )
         signed = Path(str(row["signed_file_path"] or ""))
         if (
             not signed.is_file()

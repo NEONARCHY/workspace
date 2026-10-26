@@ -118,6 +118,7 @@ const actionLabels: Readonly<Record<AIReferentAction, string>> = {
   cancel: "Отменить письмо",
   queue_delivery: "Подготовить подписанный PDF",
   retry_delivery: "Повторить подготовку PDF",
+  retry_failed_delivery: "Повторить после ошибки",
   release_delivery: "Отправить",
   send: "Отправить письмо референтом",
   confirm_sent: "Подтвердить доставку",
@@ -967,6 +968,12 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
                   </div>
                 </section> : null}
                 {selected.deliveryError ? <WorkspaceNotice tone="error" role="alert">{selected.deliveryError}</WorkspaceNotice> : null}
+                {selected.retryBlockReason ? <WorkspaceNotice tone="warning">{selected.retryBlockReason}</WorkspaceNotice> : null}
+                {selected.availableActions.includes("retry_failed_delivery") ? <section className="ai-referent-detail-card">
+                  <h3>Повтор без нового согласования</h3>
+                  <p>Номер, получатель и согласование сохранятся. Перед повтором проверьте папку отправленных и журнал E-XAT/Webmail: один статус ошибки не доказывает, что адресат не получил письмо.</p>
+                  <label className="ai-referent-decision-comment">Результат проверки доставки<Textarea value={decisionComment} disabled={busy} placeholder="Где проверили и как убедились, что письмо не отправлено" onChange={(_e, d) => setDecisionComment(d.value)} /></label>
+                </section> : null}
                 {selected.canReplaceDocument && !readOnly ? <section className="ai-referent-detail-card">
                   <h3>Замена администратором</h3>
                   <p>Без нового согласования. DOCX получит прежний номер и подпись; готовый PDF будет использован как есть. Проверьте номер, подпись и содержимое.</p>
@@ -981,11 +988,11 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
                       .finally(() => { busyRef.current = false; setBusy(false); });
                   }}>Загрузить замену</Button>
                 </section> : null}
-                {selected.availableActions.some((action) => ["return_for_revision", "confirm_sent", "confirm_not_sent"].includes(action)) ? (
+                {!selected.availableActions.includes("retry_failed_delivery") && selected.availableActions.some((action) => ["return_for_revision", "confirm_sent", "confirm_not_sent"].includes(action)) ? (
                   <label className="ai-referent-decision-comment">Комментарий к решению<Textarea value={decisionComment} onChange={(_e, d) => setDecisionComment(d.value)} /></label>
                 ) : null}
                 {selected.availableActions.includes("return_for_revision") && !readOnly ? <AIReferentAudioComposer key={`${selected.id}:${selected.revision}`} token={token} letter={selected} disabled={busy} value={selectedAudio} onChange={(audio) => setDecisionAudio(audio ? { letterId: selected.id, revision: selected.revision, audio } : undefined)} /> : null}
-                {error ? <WorkspaceNotice tone="error" className="ai-referent-feedback" role="alert">{error}</WorkspaceNotice> : null}
+                {error && confirmAction !== "retry_failed_delivery" ? <WorkspaceNotice tone="error" className="ai-referent-feedback" role="alert">{error}</WorkspaceNotice> : null}
                 </DialogContent>
                 <DialogActions className="ai-referent-detail-actions">
                   {selected.canEdit && !readOnly ? <Button appearance="secondary" onClick={() => openEdit(selected)}>Редактировать</Button> : null}
@@ -996,8 +1003,8 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
                       key={action}
                       appearance={action === "approve" || action === "queue_delivery" || action === "submit" ? "primary" : "secondary"}
                       icon={action === "approve" ? <Checkmark20Regular /> : undefined}
-                      disabled={busy || (["return_for_revision", "confirm_sent", "confirm_not_sent"].includes(action) && decisionComment.trim().length < 3 && !(action === "return_for_revision" && selectedAudio))}
-                      onClick={() => ["send", "cancel", "confirm_sent", "confirm_not_sent", "mark_sent", "replace_document", "prepare_replacement"].includes(action) ? setConfirmAction(action) : void act(selected, action)}
+                      disabled={busy || (action === "retry_failed_delivery" && decisionComment.trim().length < 12) || (["return_for_revision", "confirm_sent", "confirm_not_sent"].includes(action) && decisionComment.trim().length < 3 && !(action === "return_for_revision" && selectedAudio))}
+                      onClick={() => ["send", "cancel", "confirm_sent", "confirm_not_sent", "mark_sent", "replace_document", "prepare_replacement", "retry_failed_delivery"].includes(action) ? setConfirmAction(action) : void act(selected, action)}
                     >
                       {selected.workflowKind === "sign_only" ? ({ submit: "Отправить на подпись", approve: "Одобрить подпись", retry_delivery: "Повторить подпись", cancel: "Отменить заявку" } as Partial<Record<AIReferentAction, string>>)[action] ?? actionLabels[action] : actionLabels[action]}
                     </Button>
@@ -1011,7 +1018,11 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
                     .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Не удалось удалить письмо."))
                     .finally(() => { busyRef.current = false; setBusy(false); });
                 }}>Подтвердить удаление</Button><Button disabled={busy} onClick={() => setDeleteConfirmation("")}>Не удалять</Button></section> : null}
-                {!readOnly && confirmAction && selected.availableActions.includes(confirmAction) ? <div className="ai-referent-detail-card" role="group" aria-label="Подтверждение действия"><p>{confirmAction === "send" ? "Робот отправит письмо внешнему получателю. Подтверждаете?" : confirmAction === "prepare_replacement" ? "Применить замену без повторного согласования? Номер сохранится. Готовый PDF используется как есть — проверьте подпись и содержимое." : confirmAction === "replace_document" ? "Робот закроет подготовленное окно. Затем вы сможете заменить документ без повторного согласования." : confirmAction === "mark_sent" ? "Подтверждаете, что письмо уже отправлено вручную? Робот запишет результат без повторной отправки." : "Подтвердите изменение состояния письма."}</p><Button appearance="primary" disabled={busy} onClick={() => void act(selected, confirmAction)}>Подтвердить</Button><Button disabled={busy} onClick={() => setConfirmAction(undefined)}>Отмена</Button></div> : null}
+                {!readOnly && confirmAction && selected.availableActions.includes(confirmAction) ? <div className="ai-referent-detail-card" role="group" aria-label="Подтверждение действия">
+                  {confirmAction === "retry_failed_delivery" && error ? <WorkspaceNotice tone="error" role="alert">{error}</WorkspaceNotice> : null}
+                  <p>{confirmAction === "retry_failed_delivery" ? `Повторить подготовку отправки письма ${selected.displayNumber ?? ""} для ${selected.recipientOrganization} (${selected.recipientAddress}) без нового согласования? Проверка: ${decisionComment.trim().replace(/[.!?]+$/, "")}. Если подписанный PDF уже готов и на ПК референта включена отправка, робот может отправить письмо адресату. При неизвестном результате повтор будет запрещён.` : confirmAction === "send" ? "Робот отправит письмо внешнему получателю. Подтверждаете?" : confirmAction === "prepare_replacement" ? "Применить замену без повторного согласования? Номер сохранится. Готовый PDF используется как есть — проверьте подпись и содержимое." : confirmAction === "replace_document" ? "Робот закроет подготовленное окно. Затем вы сможете заменить документ без повторного согласования." : confirmAction === "mark_sent" ? "Подтверждаете, что письмо уже отправлено вручную? Робот запишет результат без повторной отправки." : "Подтвердите изменение состояния письма."}</p>
+                  <Button appearance="primary" disabled={busy || (confirmAction === "retry_failed_delivery" && decisionComment.trim().length < 12)} onClick={() => void act(selected, confirmAction)}>Подтвердить</Button><Button disabled={busy} onClick={() => setConfirmAction(undefined)}>Отмена</Button>
+                </div> : null}
                 </div>
                 {letterPreview?.ownerId === selected.id ? <AIReferentPacketViewer token={token} kind="outgoing" ownerId={letterPreview.ownerId} file={letterPreview.file} onClose={() => setLetterPreview(undefined)} /> : null}
             </DialogBody>

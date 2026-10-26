@@ -35,6 +35,7 @@ AIReferentAction = Literal[
     "cancel",
     "queue_delivery",
     "retry_delivery",
+    "retry_failed_delivery",
     "release_delivery",
     "send",
     "confirm_sent",
@@ -235,6 +236,7 @@ class AIReferentEventResponse(ApiModel):
 
 
 class AIReferentLetterResponse(ApiModel):
+    retry_block_reason: str = ""
     submission_block_reason: str = ""
     id: str
     display_number: str | None = None
