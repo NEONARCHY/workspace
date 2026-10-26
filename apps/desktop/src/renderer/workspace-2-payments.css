@@ -343,6 +343,9 @@
 .approvals-view .approval-card-peopleline { margin-top: 12px; }
 .approvals-view .approval-card-owner { display: flex; min-width: 0; align-items: center; gap: 10px; color: var(--ws-theme-muted, #465f6f); font-size: 11px; }
 .approvals-view .approval-card-owner > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.approvals-view .approval-detail-person { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; min-width: 0; vertical-align: middle; }
+.approvals-view .approval-detail-person > .fui-Avatar { flex: none; }
+.approvals-view .approval-detail-person > span:last-child { min-width: 0; overflow-wrap: anywhere; }
 .approvals-view .approval-card-deadline {
   display: inline-flex;
   max-width: 47%;

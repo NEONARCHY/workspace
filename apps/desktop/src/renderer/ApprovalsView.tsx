@@ -1,4 +1,4 @@
-import { EmployeeAvatar as Avatar } from "./EmployeeAvatar";
+import { TaskPersonAvatar as PersonAvatar } from "./TaskPersonAvatar";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { LoadingSkeleton } from "./LoadingSkeleton";
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
@@ -1799,7 +1799,7 @@ export function ApprovalsView({
                             </span>
                             <span className="approval-card-peopleline">
                               {personLink(request.responsibleUserId, <>
-                                <Avatar size={24} name={responsibleName} color="colorful" />
+                                <PersonAvatar size={24} person={peopleById.get(request.responsibleUserId)} token={token} fallbackName={responsibleName} />
                                 <span>{responsibleName}</span>
                               </>, "approval-card-owner")}
                               {request.details.deadline && cardStatus.tone !== "overdue" ? (
@@ -1882,7 +1882,7 @@ export function ApprovalsView({
                 return <button type="button" className="process-record-row" key={request.id} onClick={() => openDetail(request.id)}>
                   <span className="process-record-primary"><small>#{request.number}</small><strong>{request.title}</strong><em>{request.details.projectName || "Без проекта"}</em></span>
                   <span className={`process-record-status status-${cardStatus.tone}`}><i />{cardStatus.label}</span>
-                  {personLink(request.responsibleUserId, <><Avatar size={28} name={responsibleName} color="colorful" /><span><small>Ответственный</small><strong>{responsibleName}</strong></span></>, "process-record-person")}
+                  {personLink(request.responsibleUserId, <><PersonAvatar size={28} person={peopleById.get(request.responsibleUserId)} token={token} fallbackName={responsibleName} /><span><small>Ответственный</small><strong>{responsibleName}</strong></span></>, "process-record-person")}
                   <span className="process-record-fact"><small>Этап</small><strong>{column?.label || "Маршрут не назначен"}</strong></span>
                   <span className="process-record-fact process-record-money"><small>Сумма</small><strong>{formatMoney(request.amount, request.currency)}</strong></span>
                   <span className="process-record-arrow" aria-hidden="true">→</span>
@@ -2055,7 +2055,7 @@ export function ApprovalsView({
                     </div>
                     <dl className="approval-key-facts detail-overview">
                       <div><dt>Текущий этап</dt><dd>{selectedRequest.stageLabel}</dd></div>
-                      <div><dt>Ответственный</dt><dd>{personLink(selectedRequest.responsibleUserId, peopleById.get(selectedRequest.responsibleUserId)?.name ?? "Сотрудник")}</dd></div>
+                      <div><dt>Ответственный</dt><dd>{personLink(selectedRequest.responsibleUserId, <><PersonAvatar person={peopleById.get(selectedRequest.responsibleUserId)} token={token} size={28} /><span>{peopleById.get(selectedRequest.responsibleUserId)?.name ?? "Сотрудник"}</span></>, "approval-detail-person")}</dd></div>
                       <div><dt>Срок</dt><dd>{selectedDeadline?.label ?? "Без срока"}</dd></div>
                     </dl>
                     {selectedRequest.status === "needs_revision" && latestReturnComment(selectedRequest) ? (
@@ -2098,8 +2098,8 @@ export function ApprovalsView({
                     <section className="approval-fact-section detail-overview approval-people-summary">
                       <h3>Ответственные</h3>
                       <dl>
-                        <div><dt>Инициатор</dt><dd>{personLink(selectedRequest.requesterId, peopleById.get(selectedRequest.requesterId)?.name ?? "Сотрудник")}</dd></div>
-                        <div><dt>Ответственный</dt><dd>{personLink(selectedRequest.responsibleUserId, peopleById.get(selectedRequest.responsibleUserId)?.name ?? "Сотрудник")}</dd></div>
+                        <div><dt>Инициатор</dt><dd>{personLink(selectedRequest.requesterId, <><PersonAvatar person={peopleById.get(selectedRequest.requesterId)} token={token} size={32} /><span>{peopleById.get(selectedRequest.requesterId)?.name ?? "Сотрудник"}</span></>, "approval-detail-person")}</dd></div>
+                        <div><dt>Ответственный</dt><dd>{personLink(selectedRequest.responsibleUserId, <><PersonAvatar person={peopleById.get(selectedRequest.responsibleUserId)} token={token} size={32} /><span>{peopleById.get(selectedRequest.responsibleUserId)?.name ?? "Сотрудник"}</span></>, "approval-detail-person")}</dd></div>
                         <div><dt>Текущий этап</dt><dd>{selectedRequest.stageLabel}</dd></div>
                         <div><dt>Создана</dt><dd>{formatDateTime(selectedRequest.createdAt)}</dd></div>
                       </dl>

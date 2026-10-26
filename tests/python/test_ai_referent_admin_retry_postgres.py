@@ -2,13 +2,14 @@
 
 import asyncio
 import os
+from collections.abc import AsyncIterator
 from uuid import UUID, uuid4
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 from pydantic import SecretStr
 from sqlalchemy import delete, select, update
-from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 from ai_referent_test_support import pass_preflight
 from test_zoom_postgres import zoom_settings
@@ -29,17 +30,43 @@ def anyio_backend():
     return "asyncio"
 
 
+@pytest.fixture
+async def retry_engine(anyio_backend: str) -> AsyncIterator[AsyncEngine]:
+    url = os.environ.get("YUKSALISH_TEST_DATABASE_URL")
+    if not url:
+        pytest.skip("YUKSALISH_TEST_DATABASE_URL is not configured")
+    engine = create_async_engine(url)
+    try:
+        async with engine.connect() as connection:
+            previous_agent = await connection.scalar(select(
+                ai_referent_configuration.c.execution_agent_id,
+            ).where(ai_referent_configuration.c.id == 1))
+        try:
+            yield engine
+        finally:
+            # The executor is shared across HTTP tests. Restore its assignment
+            # even when an assertion fails, without weakening the single-agent guard.
+            async with engine.begin() as connection:
+                await connection.execute(update(ai_referent_configuration).where(
+                    ai_referent_configuration.c.id == 1,
+                ).values(execution_agent_id=previous_agent))
+    finally:
+        await engine.dispose()
+
+
 @pytest.mark.anyio
 @pytest.mark.postgres
 @pytest.mark.parametrize("existing_pdf", [False, True])
-async def test_admin_retry_http_preserves_approval_permissions_and_single_job(existing_pdf):
+async def test_admin_retry_http_preserves_approval_permissions_and_single_job(
+    existing_pdf, retry_engine,
+):
     url = os.environ.get("YUKSALISH_TEST_DATABASE_URL")
     if not url:
         pytest.skip("YUKSALISH_TEST_DATABASE_URL is not configured")
     settings = zoom_settings(url)
     settings.seed_demo_data = True
     settings.ai_referent_agent_token = SecretStr("admin-retry-test-agent")
-    engine = create_async_engine(url)
+    engine = retry_engine
     app = create_app(settings)
     base = "/api/v1/ai-referent"
     agent = {"X-AI-Referent-Agent-Token": "admin-retry-test-agent"}
@@ -210,4 +237,3 @@ async def test_admin_retry_http_preserves_approval_permissions_and_single_job(ex
         await call("POST", path + "/actions", admin, expected=409, json={
             **payload, "operationId": str(uuid4()), "expectedRevision": sent["revision"],
         })
-    await engine.dispose()

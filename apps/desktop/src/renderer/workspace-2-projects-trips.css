@@ -412,6 +412,9 @@
 .trips-view .approval-card-owner { display: flex; align-items: center; gap: 10px; min-width: 0; margin-top: 2px; color: var(--ws-theme-muted, #48616e); font-size: 11px; }
 .projects-view .spatial-person,
 .trips-view .approval-card-owner > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trip-dialog .trip-person { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; min-width: 0; vertical-align: middle; }
+.trip-dialog .trip-person > .fui-Avatar { flex: none; }
+.trip-dialog .trip-person > span:last-child { min-width: 0; overflow-wrap: anywhere; }
 .projects-view .budget-progress { height: 5px; margin-top: 4px; overflow: hidden; border-radius: 999px; background: var(--ws-theme-surface-soft, #e6eeed); }
 .projects-view .budget-progress > i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--ws-theme-wash-teal, #78c7b5), #68a8c5); }
 .trips-view .trip-card-destination { color: var(--ws-theme-muted, #31566a); font-size: 16px; font-weight: 600; }
