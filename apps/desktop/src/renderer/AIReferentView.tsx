@@ -17,6 +17,7 @@ import type {
   AIReferentLetterInput,
   AIReferentPacketFile,
   AIReferentRegistry,
+  AIReferentParticipation,
   AIReferentVisibility,
   WorkspacePerson,
   WorkspaceAttachment,
@@ -88,6 +89,7 @@ interface AIReferentViewProps {
   readonly people: readonly WorkspacePerson[];
   readonly canCreate: boolean;
   readonly canAdmin?: boolean;
+  readonly preferOutgoing?: boolean;
   readonly focusRequestId?: string;
   readonly focusIncomingId?: string;
   readonly focusRevision?: number;
@@ -195,17 +197,22 @@ function dateTime(value: string): string {
   }).format(new Date(value));
 }
 
-export function AIReferentView({ token, people, canCreate, canAdmin = false, focusRequestId, focusIncomingId, focusRevision, onPreviewAttachment }: AIReferentViewProps) {
+export function AIReferentView({ token, people, canCreate, canAdmin = false, preferOutgoing = false, focusRequestId, focusIncomingId, focusRevision, onPreviewAttachment }: AIReferentViewProps) {
   const [letterPreview, setLetterPreview] = useState<{ readonly ownerId: string; readonly file: AIReferentPacketFile }>();
   const letterPreviewFocusTarget = useRestoreFocusTarget();
   const [localPreview, setLocalPreview] = useState<File>();
   const loadLocalOffice = useCallback((file: File, sheet: number, offset: number, signal?: AbortSignal) =>
     previewAIReferentLocalFile(token, file, sheet, offset, signal), [token]);
-  const [registerKind, setRegisterKind] = useState<"incoming" | "outgoing" | "sign_only" | "settings" | "visibility" | "addresses" | "archive" | "telegram">("incoming");
+  const [registerKind, setRegisterKind] = useState<"incoming" | "outgoing" | "sign_only" | "settings" | "visibility" | "addresses" | "archive" | "telegram">(preferOutgoing ? "outgoing" : "incoming");
+  const [participation, setParticipation] = useState<AIReferentParticipation>(preferOutgoing ? "mine" : "all");
   const [visibility, setVisibility] = useState<AIReferentVisibility>();
   const [visibilityError, setVisibilityError] = useState("");
   const [visibilityAttempt, setVisibilityAttempt] = useState(0);
   const canIncoming = visibility !== undefined && visibility.incomingMode !== "none";
+  const incomingTab = canIncoming ? <button type="button" role="tab"
+    aria-selected={registerKind === "incoming"}
+    className={registerKind === "incoming" ? "active" : ""}
+    onClick={() => setRegisterKind("incoming")}>Входящие</button> : null;
 
   useEffect(() => {
     let alive = true;
@@ -281,6 +288,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
   const boburId = reviewerConfig?.reviewers.find((item) => item.key === "bobur" && item.canApprove)?.userId;
   // Search and counts use the same server-side selection across all pages.
   const visibleLetters = registry?.letters ?? [];
+  const personalOutgoing = registerKind === "outgoing" && participation === "mine";
   const readOnly = authority?.writable !== true;
   const requiredRoute = addressRoute(form.recipientAddress);
   const needsManualRecipientChoice = manualRecipientChoice === "ask" && Boolean(requiredRoute)
@@ -361,14 +369,17 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
     const sequence = ++requestSequence.current;
     if (!quiet) { setLoading(true); setRegistryError(""); }
     try {
-      const next = await loadAIReferentRegistry(token, { query, status: filter === "all" ? undefined : filter, offset: page * 50, workflowKind: registerKind === "sign_only" ? "sign_only" : "delivery" });
+      const next = await loadAIReferentRegistry(token, { query, status: filter === "all" ? undefined : filter, offset: page * 50, workflowKind: registerKind === "sign_only" ? "sign_only" : "delivery", participation: registerKind === "outgoing" ? participation : undefined });
+      if (registerKind === "outgoing" && participation === "mine" && next.participation !== "mine") {
+        throw new Error("Сервер пока не поддерживает режим «Мои». Обновите сервер или выберите «Все» для просмотра доступного общего списка.");
+      }
       if (sequence === requestSequence.current) { setRegistry(next); setRegistryError(""); }
     } catch (reason) {
       if (sequence === requestSequence.current) setRegistryError(reason instanceof Error ? reason.message : "Не удалось загрузить письма.");
     } finally {
       if (sequence === requestSequence.current) setLoading(false);
     }
-  }, [token, query, filter, page, registerKind]);
+  }, [token, query, filter, page, registerKind, participation]);
 
   useEffect(() => {
     if (registerKind !== "outgoing" && registerKind !== "sign_only") return;
@@ -607,15 +618,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
 
       <div className="ai-referent-register-bar">
         <SlidingSegmented className="ai-referent-register-tabs" role="tablist" aria-label="Реестры корреспонденции">
-          {canIncoming ? <button
-            type="button"
-            role="tab"
-            aria-selected={registerKind === "incoming"}
-            className={registerKind === "incoming" ? "active" : ""}
-            onClick={() => setRegisterKind("incoming")}
-          >
-            Входящие
-          </button> : null}
+          {!preferOutgoing ? incomingTab : null}
           <button
             type="button"
             role="tab"
@@ -640,6 +643,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
             className={registerKind === "addresses" ? "active" : ""}
             onClick={() => setRegisterKind("addresses")}>Адресная книга</button> : null}
           {visibility?.canViewJournals ? <button type="button" role="tab" aria-selected={registerKind === "archive"} className={registerKind === "archive" ? "active" : ""} onClick={() => setRegisterKind("archive")}>Архив и журналы</button> : null}
+          {preferOutgoing ? incomingTab : null}
           <button type="button" role="tab" aria-selected={registerKind === "telegram"} className={registerKind === "telegram" ? "active" : ""} onClick={() => setRegisterKind("telegram")}>Мой Telegram</button>
         </SlidingSegmented>
         {canCreate && !readOnly ? <div className="ai-referent-register-actions">
@@ -680,6 +684,19 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
         </button>
       </section>
 
+      {registerKind === "outgoing" ? <div className="ai-referent-participation-bar">
+        <SlidingSegmented className="ai-referent-filters" role="group" aria-label="Участие в исходящих письмах">
+          {([ ["mine", "Мои"], ["all", "Все"] ] as const).map(([value, label]) =>
+            <button type="button" key={value} className={participation === value ? "active" : ""}
+              aria-pressed={participation === value} onClick={() => {
+                if (value === participation) return;
+                requestSequence.current += 1;
+                setRegistry(undefined); setRegistryError(""); setLoading(true);
+                setParticipation(value); setPage(0);
+              }}>{label}</button>)}
+        </SlidingSegmented>
+        <span>{participation === "mine" ? "Письма, где вы автор или согласующий" : "Все исходящие письма, доступные вам по правам"}</span>
+      </div> : null}
       <div className="ai-referent-toolbar">
         <AIReferentGooeySearch
           ariaLabel={registerKind === "sign_only" ? "Поиск пакетов на подпись" : "Поиск исходящих писем"}
@@ -690,7 +707,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
         <div className="ai-referent-toolbar-actions">
           <div className="ai-referent-filters" role="group" aria-label="Фильтр писем">
             {([
-              ["all", "Все"],
+              ["all", registerKind === "outgoing" ? "Все статусы" : "Все"],
               ["draft", "Черновики"],
               ["pending_review", "На согласовании"],
               ["needs_revision", "Доработка"],
@@ -738,8 +755,8 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
       {registry && !registryError && visibleLetters.length === 0 ? (
         <div className="ai-referent-empty">
           <Mail24Regular />
-          <h2>{query || filter !== "all" ? "Письма не найдены" : "Исходящих писем пока нет"}</h2>
-          <p>{query || filter !== "all" ? "Попробуйте другой запрос или фильтр." : "Создайте первое письмо, чтобы начать согласование."}</p>
+          <h2>{query || filter !== "all" ? "Письма не найдены" : personalOutgoing ? "Писем с вашим участием пока нет" : "Исходящих писем пока нет"}</h2>
+          <p>{query || filter !== "all" ? "Попробуйте другой запрос или фильтр." : personalOutgoing ? "Здесь появятся письма, где вы автор или согласующий. Выберите «Все», чтобы посмотреть доступный общий список." : "Создайте первое письмо, чтобы начать согласование."}</p>
         </div>
       ) : null}
       {visibleLetters.length > 0 ? (

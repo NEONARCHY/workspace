@@ -7,7 +7,7 @@ import { AIReferentRecipientPicker } from "./AIReferentRecipientPicker";
 import { referentDownloadName } from "./AIReferentFiles";
 import { workspaceTheme } from "./workspace-theme";
 import { actOnAIReferentLetter, addAIReferentManualRecipient, createAIReferentLetter, checkAIReferentDocument, loadAIReferentAuthority, loadAIReferentLetter, loadAIReferentPacket, loadAIReferentIncomingRegistry, loadAIReferentRegistry, loadAIReferentReviewers, loadAIReferentRecipients, loadAIReferentManualRecipients, updateAIReferentLetter, uploadWorkspaceAttachment } from "./workspace-api";
-import type { AIReferentLetter } from "@yuksalish/contracts";
+import type { AIReferentLetter, AIReferentRegistry } from "@yuksalish/contracts";
 import { loadAIReferentVisibility } from "./workspace-api";
 import { previewAIReferentLocalFile } from "./workspace-api";
 import { downloadAIReferentPacket, previewAIReferentPacketFile } from "./workspace-api";
@@ -150,7 +150,7 @@ describe("AIReferentView", () => {
     vi.mocked(loadAIReferentVisibility).mockResolvedValue({ incomingMode: "all", canViewJournals: true, canManageVisibility: false, revision: 0 });
     vi.mocked(checkAIReferentDocument).mockReset();
     vi.mocked(loadAIReferentAuthority).mockResolvedValue({ writable: true, mode: "legacy", leaseUntil: null, detail: "" });
-    vi.mocked(loadAIReferentRegistry).mockResolvedValue(registry);
+    vi.mocked(loadAIReferentRegistry).mockImplementation(async (_token, filters) => ({ ...registry, participation: filters?.participation ?? "all" }));
     vi.mocked(loadAIReferentIncomingRegistry).mockResolvedValue(incomingRegistry);
     const firstLetter = registry.letters[0];
     if (!firstLetter) throw new Error("Missing letter fixture");
@@ -164,6 +164,103 @@ describe("AIReferentView", () => {
     });
     vi.mocked(loadAIReferentManualRecipients).mockResolvedValue([]);
     vi.mocked(addAIReferentManualRecipient).mockResolvedValue({ id: "manual-new", name: "Новый адресат", addresses: ["office@example.org"], route: "webmail", categoryKey: "other", addressBookOrganization: "Новый адресат" });
+  });
+
+  it("opens personal outgoing first for reviewers and puts incoming before Telegram", async () => {
+    render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate preferOutgoing /></FluentProvider>);
+    await waitFor(() => expect(screen.getByRole("tab", { name: "Входящие" })).toBeInTheDocument());
+    const tabs = within(screen.getByRole("tablist", { name: "Реестры корреспонденции" })).getAllByRole("tab");
+    expect(tabs.map(tab => tab.textContent)).toEqual(["Исходящие", "На подпись", "Архив и журналы", "Входящие", "Мой Telegram"]);
+    expect(tabs[0]).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("button", { name: "Мои", pressed: true })).toBeInTheDocument();
+    await waitFor(() => expect(loadAIReferentRegistry).toHaveBeenCalledWith("token", expect.objectContaining({ participation: "mine", workflowKind: "delivery" })));
+    expect(loadAIReferentIncomingRegistry).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("tab", { name: "Входящие" }));
+    await waitFor(() => expect(loadAIReferentIncomingRegistry).toHaveBeenCalled());
+  });
+
+  it("keeps the incoming-first default for employees", async () => {
+    render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate /></FluentProvider>);
+    await waitFor(() => expect(screen.getByRole("tab", { name: "Входящие", selected: true })).toBeInTheDocument());
+    expect(within(screen.getByRole("tablist", { name: "Реестры корреспонденции" })).getAllByRole("tab")[0]).toHaveTextContent("Входящие");
+    fireEvent.click(screen.getByRole("tab", { name: "Исходящие" }));
+    expect(screen.getByRole("button", { name: "Все", pressed: true })).toBeInTheDocument();
+  });
+
+  it("combines personal scope with search and status and clears stale rows on switch", async () => {
+    render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate preferOutgoing /></FluentProvider>);
+    await screen.findByRole("button", { name: /Ответ партнёру/ });
+    fireEvent.change(screen.getByRole("textbox", { name: "Поиск исходящих писем" }), { target: { value: "номер" } });
+    fireEvent.click(screen.getByRole("button", { name: "На согласовании" }));
+    await waitFor(() => expect(loadAIReferentRegistry).toHaveBeenLastCalledWith("token", expect.objectContaining({ participation: "mine", query: "номер", status: "pending_review", offset: 0 })));
+    vi.mocked(loadAIReferentRegistry).mockRejectedValueOnce(new Error("Scope unavailable"));
+    fireEvent.click(screen.getByRole("button", { name: "Все" }));
+    expect(screen.queryByRole("button", { name: /Ответ партнёру/ })).not.toBeInTheDocument();
+    await screen.findByText("Scope unavailable");
+    expect(loadAIReferentRegistry).toHaveBeenLastCalledWith("token", expect.objectContaining({ participation: "all", query: "номер", status: "pending_review", offset: 0 }));
+    fireEvent.click(screen.getByRole("button", { name: "Обновить" }));
+    await screen.findByRole("button", { name: /Ответ партнёру/ });
+  });
+
+  it("keeps direct incoming links and sign-only scope independent of reviewer default", async () => {
+    const view = render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate preferOutgoing focusIncomingId="incoming-1" /></FluentProvider>);
+    await waitFor(() => expect(screen.getByRole("tab", { name: "Входящие", selected: true })).toBeInTheDocument());
+    view.unmount();
+    render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate preferOutgoing /></FluentProvider>);
+    fireEvent.click(screen.getByRole("tab", { name: "На подпись" }));
+    await waitFor(() => expect(loadAIReferentRegistry).toHaveBeenLastCalledWith("token", expect.objectContaining({ workflowKind: "sign_only", participation: undefined })));
+    expect(screen.queryByRole("group", { name: "Участие в исходящих письмах" })).not.toBeInTheDocument();
+  });
+
+  it("does not label an old server's unfiltered registry as personal", async () => {
+    vi.mocked(loadAIReferentRegistry).mockResolvedValue(registry);
+    render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate preferOutgoing /></FluentProvider>);
+    await screen.findByText(/Сервер пока не поддерживает режим/);
+    expect(screen.queryByRole("button", { name: /Ответ партнёру/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Все" }));
+    await screen.findByRole("button", { name: /Ответ партнёру/ });
+  });
+
+  it("explains an empty personal registry without implying the shared registry is empty", async () => {
+    vi.mocked(loadAIReferentRegistry).mockResolvedValue({ ...registry, participation: "mine", letters: [], totalCount: 0 });
+    render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate={false} preferOutgoing /></FluentProvider>);
+    await screen.findByRole("heading", { name: "Писем с вашим участием пока нет" });
+    expect(screen.getByText(/Выберите «Все», чтобы посмотреть доступный общий список/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Все" })).toBeEnabled();
+  });
+
+  it("resets outgoing pagination when participation changes", async () => {
+    const template = registry.letters[0];
+    if (!template) throw new Error("Missing letter fixture");
+    vi.mocked(loadAIReferentRegistry).mockImplementation(async (_token, filters) => ({
+      ...registry, participation: filters?.participation ?? "all", totalCount: 51,
+      letters: Array.from({ length: filters?.offset ? 1 : 50 }, (_, index) => ({ ...template, id: `letter-${(filters?.offset ?? 0) + index}` })),
+    }));
+    render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate preferOutgoing /></FluentProvider>);
+    const pages = screen.getByRole("group", { name: "Страницы исходящих писем" });
+    await waitFor(() => expect(within(pages).getByRole("button", { name: "Далее" })).toBeEnabled());
+    fireEvent.click(within(pages).getByRole("button", { name: "Далее" }));
+    await waitFor(() => expect(loadAIReferentRegistry).toHaveBeenLastCalledWith("token", expect.objectContaining({ participation: "mine", offset: 50 })));
+    fireEvent.click(screen.getByRole("button", { name: "Все" }));
+    await waitFor(() => expect(loadAIReferentRegistry).toHaveBeenLastCalledWith("token", expect.objectContaining({ participation: "all", offset: 0 })));
+    expect(within(pages).getByText("Страница 1")).toBeInTheDocument();
+  });
+
+  it("ignores a late All response after returning to Mine", async () => {
+    let finishAll: ((value: AIReferentRegistry) => void) | undefined;
+    vi.mocked(loadAIReferentRegistry).mockImplementation(async (_token, filters) => {
+      if (filters?.participation === "all") return new Promise(resolve => { finishAll = resolve; });
+      return { ...registry, participation: "mine" };
+    });
+    render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate preferOutgoing /></FluentProvider>);
+    await screen.findByRole("button", { name: /Ответ партнёру/ });
+    fireEvent.click(screen.getByRole("button", { name: "Все" }));
+    await waitFor(() => expect(finishAll).toBeTypeOf("function"));
+    fireEvent.click(screen.getByRole("button", { name: "Мои" }));
+    await screen.findByRole("button", { name: /Ответ партнёру/ });
+    await act(async () => { finishAll?.({ ...registry, participation: "all", letters: registry.letters.map(letter => ({ ...letter, subject: "Чужое позднее письмо" })) }); });
+    expect(screen.queryByRole("button", { name: /Чужое позднее письмо/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Ответ партнёру/ })).toBeInTheDocument();
   });
 
   it("shows the address-book manager only to administrators", async () => {

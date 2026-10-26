@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from typing import Literal
 from uuid import UUID, uuid4
 
 from sqlalchemy import String, and_, cast, false, func, insert, or_, select, update
@@ -565,6 +566,7 @@ async def load_letters(
     query: str = "",
     status: str | None = None,
     workflow_kind: str | None = None,
+    participation: Literal["all", "mine"] = "all",
     active_only: bool = False,
     history_only: bool = False,
     awaiting_my_signature: bool = False,
@@ -590,6 +592,15 @@ async def load_letters(
         )
     )
     permissions = await module_permissions_for_user(connection, current_user)
+    # This is an additional selection, never a replacement for access control below.
+    # Apply before counts and pagination so every page and summary use the same scope.
+    if participation == "mine":
+        statement = statement.where(or_(
+            ai_referent_letters.c.created_by_user_id == current_user.id,
+            ai_referent_letters.c.reviewer_user_id == current_user.id,
+            ai_referent_letters.c.final_reviewer_user_id == current_user.id,
+            ai_referent_letters.c.initial_reviewer_user_id == current_user.id,
+        ))
     if awaiting_my_signature:
         # Scope before counting/pagination, even for administrators. A future final
         # reviewer is not the current reviewer until the previous step approves.
@@ -688,6 +699,7 @@ async def load_letters(
         await _response(connection, row, current_user, may_approve=may_approve) for row in rows
     ]
     return AIReferentRegistryResponse(
+        participation=participation,
         letters=letters,
         total_count=sum(counts.values()),
         pending_review_count=sum(

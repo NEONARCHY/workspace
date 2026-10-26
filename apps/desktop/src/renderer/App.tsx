@@ -2486,6 +2486,8 @@ export function App() {
             ) : null}
             {displayedSection === "ai_referent" ? (
               <AIReferentView
+                key={session.user.id}
+                preferOutgoing={session.user.jobTitle?.trim().toLowerCase() === chairmanPosition.toLowerCase() || modulePermissions.ai_referent?.approve === true}
                 onPreviewAttachment={setPreviewAttachment}
                 token={session.accessToken}
                 people={displayPeople}

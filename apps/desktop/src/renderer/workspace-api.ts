@@ -55,6 +55,7 @@ import type {
   AIReferentLetter,
   AIReferentLetterInput,
   AIReferentRegistry,
+  AIReferentParticipation,
   TelegramAccessPerson,
   TelegramAccessRegistry,
   TelegramAccessUpdate,
@@ -357,13 +358,14 @@ export function issueEmployeeReward(
 
 export function loadAIReferentRegistry(
   token: string,
-  filters: { readonly query?: string; readonly status?: string; readonly offset?: number; readonly workflowKind?: "delivery" | "sign_only" } = {},
+  filters: { readonly query?: string; readonly status?: string; readonly offset?: number; readonly workflowKind?: "delivery" | "sign_only"; readonly participation?: AIReferentParticipation } = {},
 ): Promise<AIReferentRegistry> {
   const query = new URLSearchParams();
   if (filters.query?.trim()) query.set("query", filters.query.trim());
   if (filters.status) query.set("status", filters.status);
   if (filters.offset) query.set("offset", String(filters.offset));
   if (filters.workflowKind) query.set("workflow_kind", filters.workflowKind);
+  if (filters.participation) query.set("participation", filters.participation);
   const suffix = query.size > 0 ? `?${query.toString()}` : "";
   return apiRequest<AIReferentRegistry>(`/ai-referent/letters${suffix}`, {}, token);
 }

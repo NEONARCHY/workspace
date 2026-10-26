@@ -3,7 +3,7 @@ import hashlib
 import secrets
 from datetime import UTC, datetime
 from io import BytesIO
-from typing import Annotated, cast
+from typing import Annotated, Literal, cast
 from urllib.parse import quote
 from uuid import UUID
 from zipfile import BadZipFile, ZipFile
@@ -365,12 +365,13 @@ async def get_letters(
     query: Annotated[str, Query(max_length=200)] = "",
     status: AIReferentStatus | None = None,
     workflow_kind: AIReferentWorkflowKind | None = None,
+    participation: Literal["all", "mine"] = "all",
     offset: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
 ) -> AIReferentRegistryResponse:
     return await load_letters(
         connection, current_user, query=query, status=status,
-        workflow_kind=workflow_kind, offset=offset, limit=limit
+        workflow_kind=workflow_kind, participation=participation, offset=offset, limit=limit
     )
 
 

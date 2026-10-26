@@ -273,6 +273,7 @@ class AIReferentLetterResponse(ApiModel):
 
 
 class AIReferentRegistryResponse(ApiModel):
+    participation: Literal["all", "mine"] = "all"
     letters: list[AIReferentLetterResponse] = Field(default_factory=list)
     total_count: int = 0
     pending_review_count: int = 0
