@@ -21,7 +21,7 @@ from .efficiency_service import METHODOLOGY_VERSION, record_task_event
 from .employee_availability import ensure_trip_available
 from .errors import WorkspaceRepositoryError as WorkspaceRepositoryError
 from .personal_preferences import get_preferences as get_personal_preferences
-from .position_policy import is_calendar_chairman, is_executive_leader
+from .position_policy import is_executive_leader
 from .tables import (
     absence_requests,
     ai_referent_letters,
@@ -3730,7 +3730,7 @@ async def _ensure_calendar_participants_are_available(
     ends_at: datetime,
     excluding_event_id: UUID | None = None,
 ) -> None:
-    """Serialise a person's invitations and reject overlaps without exposing event details."""
+    """Reserve only confirmed attendance, serialising decisions without exposing event details."""
     locked_ids = list(
         (
             await connection.execute(
@@ -3747,7 +3747,6 @@ async def _ensure_calendar_participants_are_available(
     statement = (
         select(
             users.c.full_name,
-            func.coalesce(positions.c.name, users.c.job_title).label("job_title"),
             calendar_event_attendees.c.status,
         )
         .select_from(
@@ -3755,11 +3754,10 @@ async def _ensure_calendar_participants_are_available(
                 calendar_events,
                 calendar_events.c.id == calendar_event_attendees.c.event_id,
             ).join(users, users.c.id == calendar_event_attendees.c.user_id)
-            .outerjoin(positions, positions.c.id == users.c.position_id)
         )
         .where(
             calendar_event_attendees.c.user_id.in_(participant_ids),
-            calendar_event_attendees.c.status.in_(("pending", "accepted")),
+            calendar_event_attendees.c.status == "accepted",
             calendar_events.c.status == "scheduled",
             calendar_events.c.starts_at < ends_at,
             calendar_events.c.ends_at > starts_at,
@@ -3771,7 +3769,7 @@ async def _ensure_calendar_participants_are_available(
     busy_rows = (await connection.execute(statement)).mappings().all()
     busy_names = sorted({
         row["full_name"] for row in busy_rows
-        if row["status"] == "accepted" or not is_calendar_chairman(row["job_title"])
+        if row["status"] == "accepted"
     })
     if busy_names:
         names = ", ".join(sorted(busy_names)[:3])

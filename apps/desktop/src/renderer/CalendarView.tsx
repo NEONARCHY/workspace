@@ -365,11 +365,11 @@ export function CalendarView({
         continue;
       }
       for (const attendee of event.attendees) {
-        if (attendee.status !== "declined" && (!chairmanIds.has(attendee.userId) || attendee.status === "accepted")) busyIds.add(attendee.userId);
+        if (attendee.status === "accepted") busyIds.add(attendee.userId);
       }
     }
     return busyIds;
-  }, [draft, events, selected?.id, chairmanIds]);
+  }, [draft, events, selected?.id]);
   const days = useMemo(() => {
     const firstWeekday = (month.getDay() + 6) % 7;
     const daysInMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
@@ -593,7 +593,6 @@ export function CalendarView({
       }
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Не удалось сохранить событие.");
-      if (saveError instanceof Error && saveError.message.includes("заняты")) setAvailabilityWarning(saveError.message);
     } finally {
       setBusy(false);
     }
