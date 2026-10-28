@@ -27,7 +27,7 @@ from reportlab.platypus import (  # type: ignore[import-untyped]
 )
 
 from .hr_hiring_templates import _latin, latin_person_name
-from .trip_document_text import trip_body_text, trip_destination_text
+from .trip_document_text import trip_body_text, trip_destination_phrase
 
 _ASSETS = Path(__file__).parent / "hr_assets"
 _LOGO = Path(__file__).parent / "trip_assets" / "yuksalish-logo-color.png"
@@ -168,7 +168,7 @@ def brief_pdf(
     else:
         story.append(Paragraph(
             f"{start:%d.%m.%Y} - {end:%d.%m.%Y} kunlari "
-            f"{escape(trip_destination_text(destination))}ga "
+            f"{escape(trip_destination_phrase(destination))} "
             "xizmat safariga yuborishga ruxsat berishingizni soʻrayman.", brief_body,  # noqa: RUF001
         ))
     if employees:
@@ -207,7 +207,7 @@ def order_pdf(
     registration = (
         "Raqam tasdiqlangandan so'ng beriladi" if unregistered else f"{_text(number)}-son a/f"
     )
-    place = escape(trip_destination_text(destination))
+    place = escape(trip_destination_phrase(destination))
     _fonts()
     body = _style("order-body", size=11, leading=18)
     bold = _style("order-bold", size=11, leading=18, bold=True)
@@ -245,12 +245,12 @@ def order_pdf(
         person = f"{_text(job_title)} {person_name}" if job_title else person_name
         story.append(Paragraph(
             f"1. Harakatning {person} {period} "
-            f"{place}ga xizmat safariga yuborilsin.", body,
+            f"{place} xizmat safariga yuborilsin.", body,
         ))
     else:
         story.append(Paragraph(
             f"1. Harakatning quyidagi xodimlari {period} "
-            f"{place}ga xizmat safariga yuborilsin:", body,
+            f"{place} xizmat safariga yuborilsin:", body,
         ))
         for index, (name, job_title) in enumerate(employees, start=1):
             suffix = f" — {_text(job_title)}" if job_title else ""

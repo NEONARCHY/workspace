@@ -190,11 +190,11 @@ def test_order_preview_has_no_fictitious_number_or_duplicate_purpose(number: str
     ("Ташкентская область", "Toshkent viloyati"),
     ("город Ташкент", "Toshkent shahri"),
     ("Surxondaryo viloyati", "Surxondaryo viloyati"),
-    ("Фергана, Узбекистан", "Ferghana, Uzbekistan"),
-    ("Fergana, Uzbekistan", "Ferghana, Uzbekistan"),
-    ("Ferghana, Uzbekistan", "Ferghana, Uzbekistan"),
-    ("Fergana, Узбекистан", "Ferghana, Uzbekistan"),
-    ("Ферганская область", "Farg\u02bbona viloyati"),
+    ("Фергана, Узбекистан", "Farg'ona shahri"),
+    ("Fergana, Uzbekistan", "Farg'ona shahri"),
+    ("Ferghana, Uzbekistan", "Farg'ona shahri"),
+    ("Fergana, Узбекистан", "Farg'ona shahri"),
+    ("Ферганская область", "Farg'ona viloyati"),
     ("Unknown place, district 17", "Unknown place, district 17"),
     ("Kashkadarİnskaya oblast", "Kashkadarİnskaya oblast"),
 ])
@@ -216,7 +216,7 @@ def test_brief_normalizes_saved_place_alias_and_every_person_name() -> None:
         signed_on=date(2026, 10, 28),
     )
     text = " ".join(text_of(content).split())
-    assert "Ferghana, Uzbekistan" in text and "Fergana, Uzbekistan" not in text
+    assert "Farg'ona shahriga" in text and "Fergana, Uzbekistan" not in text
     assert "Testov Xodim Anvar o'g'li" in text
     assert "Testov Rais Vali o'g'liga" in text
     assert "Testov Hamroh Ali o'g'li" in text
@@ -232,7 +232,7 @@ def test_order_uses_same_name_and_place_rules_for_all_parties() -> None:
         chair="Testov Rais Karim ugli", signature=None,
     )
     text = " ".join(text_of(content).split())
-    assert "Ferghana, Uzbekistanga" in text
+    assert "Farg'ona shahriga" in text
     for name in ["Xodim Ali", "Hamroh Vali", "Tashabbus Anvar", "Rais Karim"]:
         assert f"Testov {name} o'g'li" in text
     assert "ugli" not in text
