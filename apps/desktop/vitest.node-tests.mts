@@ -43,6 +43,7 @@ export const nodeTestFiles = [
   "src/renderer/team-dashboard-dialog.test.ts",
   "src/renderer/team-flow-header.test.ts",
   "src/renderer/theme-geometry.test.ts",
+  "src/renderer/trip-document-text.test.ts",
   "src/renderer/trip-map-layout.test.ts",
   "src/renderer/workspace-field-borders.test.ts",
   "src/renderer/workspace-modal-backdrops.test.ts",

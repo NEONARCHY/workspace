@@ -6,7 +6,7 @@ import re
 from datetime import date
 
 from .hr_hiring_templates import _latin
-from .trip_document_text import trip_destination_text
+from .trip_document_text import trip_destination_phrase
 
 _MONTHS = (
     "yanvar", "fevral", "mart", "aprel", "may", "iyun",
@@ -54,7 +54,7 @@ def generate_trip_brief(
     *, destination: str, start: date, end: date, purpose: str, expense_source: str,
 ) -> str:
     """Use checked facts only; never invent an itinerary, project or funding source."""
-    place = trip_destination_text(validate_fact(destination, field="Куда едем", min_letters=3))
+    place = trip_destination_phrase(validate_fact(destination, field="Куда едем", min_letters=3))
     activity = _latin(validate_fact(
         purpose, field="Основание и мероприятие", min_letters=20, min_words=4,
         max_length=600,
@@ -65,7 +65,7 @@ def generate_trip_brief(
     if end < start:
         raise ValueError("Дата окончания не может быть раньше даты начала")
     return "\n\n".join((
-        f"{trip_date_phrase(start, end)} {place} hududiga xizmat safari rejalashtirilgan. "
+        f"{trip_date_phrase(start, end)} {place} xizmat safari rejalashtirilgan. "
         f"Safarning maqsadi: {activity.rstrip('.!?')}.",
         "Shu munosabat bilan mazkur xizmat safariga ruxsat berishingizni soʻrayman.",  # noqa: RUF001
         f"Safar xarajatlarini qoplash manbai: {funding}.",

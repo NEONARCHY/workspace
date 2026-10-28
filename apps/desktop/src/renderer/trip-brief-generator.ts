@@ -1,15 +1,6 @@
-const months = ["yanvar", "fevral", "mart", "aprel", "may", "iyun", "iyul", "avgust", "sentabr", "oktabr", "noyabr", "dekabr"] as const;
-const cyrillic = "абвгдеёжзийклмнопрстуфхцчшщъыьэюяўқғҳ";
-const latin = ["a", "b", "v", "g", "d", "e", "yo", "j", "z", "i", "y", "k", "l", "m", "n", "o", "p", "r", "s", "t", "u", "f", "x", "ts", "ch", "sh", "shch", "ʼ", "i", "", "e", "yu", "ya", "oʻ", "q", "gʻ", "h"] as const;
-const replacements = new Map([...cyrillic].map((letter, index) => [letter, latin[index] ?? letter]));
+import { tripDestinationPhrase, tripTextToLatin as toLatin } from "./trip-document-text";
 
-function toLatin(value: string): string {
-  return [...value].map((letter) => {
-    const translated = replacements.get(letter.toLowerCase());
-    return translated === undefined ? letter : letter === letter.toUpperCase()
-      ? translated.charAt(0).toUpperCase() + translated.slice(1) : translated;
-  }).join("");
-}
+const months = ["yanvar", "fevral", "mart", "aprel", "may", "iyun", "iyul", "avgust", "sentabr", "oktabr", "noyabr", "dekabr"] as const;
 
 const clean = (value: string) => value.replace(/\s+/gu, " ").trim().replace(/[ .;,]+$/u, "");
 const filler = new Set(["test", "asdf", "qwerty", "тест", "нет", "йўқ", "yoq", "bilmayman"]);
@@ -57,11 +48,11 @@ function datePhrase(startDate: string, endDate: string): string {
 
 export function tripBriefPreview(facts: TripBriefFacts): string {
   if (tripBriefError(facts)) return "Заполните поля выше — здесь появится текст билдирги.";
-  const place = toLatin(clean(facts.destination));
+  const place = tripDestinationPhrase(clean(facts.destination));
   const activity = toLatin(clean(facts.purpose)).replace(/[.!?]+$/u, "");
   const funding = toLatin(clean(facts.expenseSource));
   return [
-    `${datePhrase(facts.startDate, facts.endDate)} ${place} hududiga xizmat safari rejalashtirilgan. Safarning maqsadi: ${activity}.`,
+    `${datePhrase(facts.startDate, facts.endDate)} ${place} xizmat safari rejalashtirilgan. Safarning maqsadi: ${activity}.`,
     "Shu munosabat bilan mazkur xizmat safariga ruxsat berishingizni soʻrayman.",
     `Safar xarajatlarini qoplash manbai: ${funding}.`,
   ].join("\n\n");
