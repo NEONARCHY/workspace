@@ -572,6 +572,8 @@ describe("corporate workspace authentication alpha", () => {
     clickWithFocus(await screen.findByRole("button", { name: "Новое событие" }));
     const dialog = await screen.findByRole("dialog", { name: "Новое мероприятие" });
     const form = within(dialog);
+    act(() => form.getByLabelText("Название события").focus());
+    await waitFor(() => expect(dialog).not.toHaveAttribute("aria-hidden", "true"));
     changeField(form.getByRole("textbox", { name: "Название события" }), { target: { value: "Тестовая встреча" } });
     fireEvent.click(form.getByRole("button", { name: "Создать мероприятие" }));
     expect(await form.findByRole("alert")).toHaveTextContent(reason);
