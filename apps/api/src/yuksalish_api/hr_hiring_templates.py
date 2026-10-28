@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from html import escape
 from io import BytesIO
 from pathlib import Path
@@ -65,6 +66,23 @@ def _latin(value: str) -> str:
     """Keep already-Latin ID names while converting legacy Cyrillic HR fields."""
     translated = value.translate(_LATIN_TRANSLATION)
     return translated.upper() if value.isupper() else translated
+
+
+_PATRONYMIC = re.compile(
+    r"(?<!\w)(?P<root>ugli|o['\u02bb\u02bc\u2018\u2019]?g"
+    r"['\u02bb\u02bc\u2018\u2019]?li)(?P<suffix>ning|dan|ga|ni|da)?(?!\w)",
+    re.IGNORECASE,
+)
+
+
+def latin_person_name(value: str) -> str:
+    """Normalize the patronymic in rendered names, never in stored identity fields."""
+    def replace(match: re.Match[str]) -> str:
+        root = match["root"]
+        canonical = "O'G'LI" if root.isupper() else "O'g'li" if root[0].isupper() else "o'g'li"
+        return canonical + match["suffix"] if match["suffix"] else canonical
+
+    return _PATRONYMIC.sub(replace, _latin(value))
 
 
 def _fonts() -> None:
@@ -207,7 +225,7 @@ def _order(fields: HiringFields, signer: str) -> bytes:
     canvas.drawString(100.8, 313.2, "Rais")
     month = _MONTHS_LATIN[f.document_date.month - 1]
     start_month = _MONTHS_LATIN[f.start_date.month - 1]
-    full_name = _latin(f.full_name)
+    full_name = latin_person_name(f.full_name)
     _line(canvas, 286, 160, 73, f"{_latin(f.order_number)}-son sh/t", "номер приказа")
     _line(
         canvas,
@@ -228,7 +246,7 @@ def _order(fields: HiringFields, signer: str) -> bytes:
         f"lavozimiga {probation}ishga qabul qilinsin."
     )
     second = (
-        f"2. Buxgalteriya boʻlimi boshligʻi {_latin(f.accountant_dative)} xodimga shtat "  # noqa: RUF001
+        f"2. Buxgalteriya boʻlimi boshligʻi {latin_person_name(f.accountant_dative)} xodimga shtat "  # noqa: RUF001
         "jadvaliga muvofiq lavozim maoshini belgilash hamda mehnatga haq toʻlashni "  # noqa: RUF001
         "belgilangan tartibda amalga oshirish vazifasi yuklatilsin."
     )
@@ -249,7 +267,7 @@ def _order(fields: HiringFields, signer: str) -> bytes:
     top += _paragraph(canvas, basis, top)
     if top > 487:
         raise ValueError("Текст приказа не помещается на оригинальном бланке; сократите поля")
-    _signer_name(canvas, _latin(signer))
+    _signer_name(canvas, latin_person_name(signer))
     canvas.save()
     return _merge(
         "order-latin-blank.pdf",

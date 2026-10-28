@@ -190,6 +190,11 @@ def test_order_preview_has_no_fictitious_number_or_duplicate_purpose(number: str
     ("Ташкентская область", "Toshkent viloyati"),
     ("город Ташкент", "Toshkent shahri"),
     ("Surxondaryo viloyati", "Surxondaryo viloyati"),
+    ("Фергана, Узбекистан", "Ferghana, Uzbekistan"),
+    ("Fergana, Uzbekistan", "Ferghana, Uzbekistan"),
+    ("Ferghana, Uzbekistan", "Ferghana, Uzbekistan"),
+    ("Fergana, Узбекистан", "Ferghana, Uzbekistan"),
+    ("Ферганская область", "Farg\u02bbona viloyati"),
     ("Unknown place, district 17", "Unknown place, district 17"),
     ("Kashkadarİnskaya oblast", "Kashkadarİnskaya oblast"),
 ])
@@ -197,6 +202,40 @@ def test_trip_destination_uses_known_names_without_guessing_unknown_places(
     value: str, expected: str,
 ) -> None:
     assert trip_destination_text(value) == expected
+
+
+def test_brief_normalizes_saved_place_alias_and_every_person_name() -> None:
+    saved_text = "2026-yil 28-29-oktabr kunlari Fergana, Uzbekistan hududiga xizmat safari."
+    content = brief_pdf(
+        requester="Testov Xodim Anvar угли", chair="Testov Rais Vali ўғли",
+        purpose="Tekshirilgan loyiha doirasida monitoring o'tkazish",
+        destination="Фергана, Узбекистан",
+        start=date(2026, 10, 28), end=date(2026, 10, 29),
+        employees=["Testov Hamroh Ali ugli"], expense_source="Loyiha mablag'lari",
+        brief_text=saved_text, attachment_name=None, signature=None,
+        signed_on=date(2026, 10, 28),
+    )
+    text = " ".join(text_of(content).split())
+    assert "Ferghana, Uzbekistan" in text and "Fergana, Uzbekistan" not in text
+    assert "Testov Xodim Anvar o'g'li" in text
+    assert "Testov Rais Vali o'g'liga" in text
+    assert "Testov Hamroh Ali o'g'li" in text
+    assert "ugli" not in text
+
+
+def test_order_uses_same_name_and_place_rules_for_all_parties() -> None:
+    content = order_pdf(
+        order_number=None, issued=date(2026, 10, 28), purpose="Monitoring",
+        destination="Фергана, Узбекистан", start=date(2026, 10, 28), end=date(2026, 10, 29),
+        employees=[("Testov Xodim Ali угли", "mutaxassis"), ("Testov Hamroh Vali ўғли", "")],
+        expense_source="Loyiha mablag'lari", requester="Testov Tashabbus Anvar ugli",
+        chair="Testov Rais Karim ugli", signature=None,
+    )
+    text = " ".join(text_of(content).split())
+    assert "Ferghana, Uzbekistanga" in text
+    for name in ["Xodim Ali", "Hamroh Vali", "Tashabbus Anvar", "Rais Karim"]:
+        assert f"Testov {name} o'g'li" in text
+    assert "ugli" not in text
 
 
 def test_order_preview_read_does_not_register_or_sign_a_document(

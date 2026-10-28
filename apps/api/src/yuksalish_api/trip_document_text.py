@@ -23,6 +23,9 @@ _REGIONS = {
 }
 _ALIASES = {alias.casefold(): name for alias, name in _REGIONS.items()}
 _ALIASES.update({_latin(alias).casefold(): name for alias, name in _REGIONS.items()})
+_ALIASES.update({alias.casefold(): "Ferghana, Uzbekistan" for alias in (
+    "Фергана, Узбекистан", "Fergana, Uzbekistan", "Fergana, Узбекистан",
+)})
 _PATTERN = re.compile(
     r"(?<!\w)(?:" + "|".join(re.escape(alias) for alias in sorted(
         _ALIASES, key=len, reverse=True,
@@ -33,6 +36,11 @@ _PATTERN = re.compile(
 def trip_destination_text(value: str) -> str:
     """Normalize known Russian region aliases before converting Uzbek Cyrillic."""
     cleaned = " ".join(value.split())
+    return trip_body_text(cleaned)
+
+
+def trip_body_text(value: str) -> str:
+    """Apply reviewed place aliases in authored briefs without rewriting their prose."""
     return _latin(_PATTERN.sub(
-        lambda match: _ALIASES.get(match[0].casefold(), match[0]), cleaned,
+        lambda match: _ALIASES.get(match[0].casefold(), match[0]), value,
     ))
