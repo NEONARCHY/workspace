@@ -1765,12 +1765,12 @@ export function App() {
   const runCalendarMutation = async (
     mutation: (token: string) => Promise<CalendarEvent>,
   ): Promise<CalendarEvent | undefined> => {
-    if (session === undefined) return undefined;
+    if (session === undefined) throw new Error("Сеанс завершён. Войдите в Workspace снова.");
     try {
       return mergeCalendarEvent(await mutation(session.accessToken));
     } catch (error) {
       reportError(error);
-      return undefined;
+      throw error;
     }
   };
 

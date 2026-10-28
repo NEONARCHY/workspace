@@ -39,9 +39,11 @@ def test_calendar_appearance_rejects_arbitrary_css_and_reserved_zoom(
     (EXECUTIVE_LEADER_POSITION_NAME, "pending", False),
     (EXECUTIVE_LEADER_POSITION_NAME.replace("'", "\u2018"), "pending", False),
     (EXECUTIVE_LEADER_POSITION_NAME, "accepted", True),
-    ("Specialist", "pending", True),
+    ("Specialist", "pending", False),
+    ("Specialist", "accepted", True),
+    ("Specialist", "declined", False),
 ])
-def test_chairman_is_reserved_only_after_acceptance(
+def test_every_employee_is_reserved_only_after_acceptance(
     title: str, status: str, conflict: bool,
 ) -> None:
     user_id = uuid4()
@@ -65,3 +67,6 @@ def test_chairman_is_reserved_only_after_acceptance(
     query = str(connection.execute.call_args_list[1].args[0])
     assert "calendar_events.starts_at <" in query
     assert "calendar_events.ends_at >" in query
+    statement = connection.execute.call_args_list[1].args[0]
+    assert "accepted" in statement.compile().params.values()
+    assert "pending" not in statement.compile().params.values()

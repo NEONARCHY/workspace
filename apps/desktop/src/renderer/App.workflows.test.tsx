@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { App } from "./App";
 import { people, initialTasks } from "./test-fixtures/demo-data";
 import { changeField } from "./test-fixtures/rich-editor";
-import { render, mockServer, clickWithFocus, loginToWorkspace, selectPaymentDirection } from "./app-test-harness";
+import { render, mockServer, clickWithFocus, loginToWorkspace, selectPaymentDirection, response } from "./app-test-harness";
 
 // Compile only the real workflows covered by this isolated suite.
 import "./ApprovalsView";
@@ -554,6 +554,30 @@ describe("corporate workspace authentication alpha", () => {
     const original = await screen.findByRole("article", { name: "Новости Workspace" });
     await waitFor(() => expect(original).toHaveFocus());
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/feed/posts/feed-1"), expect.anything());
+  });
+
+  it("shows the calendar API conflict in the creation form and preserves the draft", async () => {
+    const fetchMock = mockServer();
+    const original = fetchMock.getMockImplementation()!;
+    const reason = "Невозможно назначить мероприятие: заняты Тестовый сотрудник. Выберите другое время.";
+    fetchMock.mockImplementation(async (input, options) => {
+      if (String(input).endsWith("/calendar/events") && options?.method === "POST") {
+        return response({ detail: reason }, 409);
+      }
+      return original(input, options);
+    });
+    render(<App />);
+    await loginToWorkspace("aziza", "home");
+    clickWithFocus(within(document.querySelector(".app-rail")!).getByRole("button", { name: "Календарь" }));
+    clickWithFocus(await screen.findByRole("button", { name: "Новое событие" }));
+    const dialog = await screen.findByRole("dialog", { name: "Новое мероприятие" });
+    const form = within(dialog);
+    changeField(form.getByRole("textbox", { name: "Название события" }), { target: { value: "Тестовая встреча" } });
+    fireEvent.click(form.getByRole("button", { name: "Создать мероприятие" }));
+    expect(await form.findByRole("alert")).toHaveTextContent(reason);
+    expect(form.getByRole("textbox", { name: "Название события" })).toHaveValue("Тестовая встреча");
+    expect(form.getByRole("button", { name: "Создать мероприятие" })).toBeEnabled();
+    expect(form.queryByText("Не удалось создать мероприятие. Повторите попытку.")).not.toBeInTheDocument();
   });
 
   it("creates an event in the shared calendar", async () => {

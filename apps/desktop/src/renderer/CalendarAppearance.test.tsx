@@ -8,11 +8,11 @@ import type { CalendarEvent, WorkspacePerson } from "@yuksalish/contracts";
 
 afterEach(cleanup);
 const chair: WorkspacePerson = { id: "chair", name: "Бобур Бекмуродов", initials: "ББ", role: "employee", color: "brand", jobTitle: '"Yuksalish" harakati raisi, Qonunchilik palatasi qo\'mita raisi' };
-function calendar(status: "accepted" | "pending" = "accepted") {
+function calendar(status: "accepted" | "pending" = "accepted", person = chair) {
   const day = new Date(); day.setHours(0, 0, 0, 0);
-  const event: CalendarEvent = { id: "reserved", organizerUserId: "other", title: "Подтверждённая встреча", description: "", eventType: "meeting", startsAt: day.toISOString(), endsAt: new Date(day.getTime() + 86400000).toISOString(), allDay: false, location: "", status: "scheduled", attendeeIds: [chair.id], attendees: [{ userId: chair.id, status }], canRespond: false, canEdit: false, createdAt: day.toISOString(), updatedAt: day.toISOString() };
+  const event: CalendarEvent = { id: "reserved", organizerUserId: "other", title: "Подтверждённая встреча", description: "", eventType: "meeting", startsAt: day.toISOString(), endsAt: new Date(day.getTime() + 86400000).toISOString(), allDay: false, location: "", status: "scheduled", attendeeIds: [person.id], attendees: [{ userId: person.id, status }], canRespond: false, canEdit: false, createdAt: day.toISOString(), updatedAt: day.toISOString() };
   const create = vi.fn();
-  render(<FluentProvider theme={workspaceTheme}><CalendarView events={[event]} people={[chair]} currentUserId="me" onCreate={create} onUpdate={vi.fn()} onCancel={vi.fn()} /></FluentProvider>);
+  render(<FluentProvider theme={workspaceTheme}><CalendarView events={[event]} people={[person]} currentUserId="me" onCreate={create} onUpdate={vi.fn()} onCancel={vi.fn()} /></FluentProvider>);
   fireEvent.click(screen.getByRole("button", { name: "Новое событие" }));
   return create;
 }
@@ -32,6 +32,18 @@ it("does not reserve the chairman's time for a pending invitation", () => {
   fireEvent.click(screen.getByRole("checkbox", { name: /Бобур Бекмуродов/ }));
   expect(screen.getByRole("checkbox", { name: /Бобур Бекмуродов/ })).toBeChecked();
   expect(screen.queryByRole("dialog", { name: "Участник уже занят" })).not.toBeInTheDocument();
+});
+it("allows inviting an ordinary employee whose other invitation is still pending", () => {
+  calendar("pending", { ...chair, id: "employee", name: "Тестовый сотрудник", jobTitle: "Mutaxassis" });
+  const checkbox = screen.getByRole("checkbox", { name: "Тестовый сотрудник" });
+  expect(checkbox).toBeEnabled();
+  fireEvent.click(checkbox);
+  expect(checkbox).toBeChecked();
+  expect(screen.queryByText(/Тестовый сотрудник · занят/)).not.toBeInTheDocument();
+});
+it("keeps confirmed ordinary attendance busy", () => {
+  calendar("accepted", { ...chair, id: "employee", name: "Тестовый сотрудник", jobTitle: "Mutaxassis" });
+  expect(screen.getByRole("checkbox", { name: /Тестовый сотрудник/ })).toBeDisabled();
 });
 it("offers every requested icon, presets and a custom RGB color", () => {
   calendar("pending");

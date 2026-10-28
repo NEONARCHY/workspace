@@ -86,6 +86,18 @@ it("replaces the confirm action with a green confirmation even before event prop
   expect(screen.getByRole("button", { name: "Отказаться" })).toBeEnabled();
   expect(respond).toHaveBeenCalledTimes(1);
 });
+it("keeps a failed acceptance pending and shows the exact conflict inside the event", async () => {
+  const reason = "Невозможно назначить мероприятие: заняты Тестовый сотрудник. Выберите другое время.";
+  const respond = vi.fn().mockRejectedValue(new Error(reason));
+  setup(undefined, respond);
+  fireEvent.click(within(screen.getByRole("grid")).getByRole("button", { name: /Рабочая встреча/ }));
+  const dialog = screen.getByRole("dialog", { name: event.title });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Подтвердить участие" }));
+  expect(await within(dialog).findByRole("alert")).toHaveTextContent(reason);
+  expect(within(dialog).getByRole("button", { name: "Подтвердить участие" })).toBeEnabled();
+  expect(within(dialog).queryByText("Вы подтвердили участие")).not.toBeInTheDocument();
+  expect(respond).toHaveBeenCalledTimes(1);
+});
 it("shows an approved trip as read-only without asking travelers to RSVP", () => {
   const trip = sampleEvent("Командировка · Самарканд", {
     eventType: "trip", allDay: true, canRespond: false, canEdit: false,
