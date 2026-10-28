@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
@@ -18,7 +18,12 @@ from yuksalish_api.repository import (
     respond_to_calendar_event,
 )
 from yuksalish_api.seed import seed_demo_data
-from yuksalish_api.tables import calendar_event_attendees, calendar_events, users
+from yuksalish_api.tables import (
+    calendar_event_attendees,
+    calendar_events,
+    users,
+    workspace_notifications,
+)
 from yuksalish_api.workspace_schemas import (
     CreateCalendarEventRequest,
     RespondCalendarEventRequest,
@@ -114,6 +119,7 @@ async def _reservation_scenario(database_url: str) -> None:
 
 async def _concurrent_scenario(database_url: str) -> None:
     engine = create_async_engine(database_url)
+    created_ids: list[UUID] = []
     try:
         host, other_host, guest = await _people(engine)
         start = datetime.now(UTC) + timedelta(days=115)
@@ -127,6 +133,7 @@ async def _concurrent_scenario(database_url: str) -> None:
                 title="QA concurrent RSVP B", starts_at=start, ends_at=end,
                 attendee_ids=[str(guest.id)],
             ))
+            created_ids.extend((UUID(first.id), UUID(second.id)))
 
         async def accept(event_id: str) -> int:
             try:
@@ -151,7 +158,26 @@ async def _concurrent_scenario(database_url: str) -> None:
                 calendar_events.c.status == "scheduled",
             ))).scalars().all()) == 2
     finally:
-        await engine.dispose()
+        try:
+            # Concurrent connections must see committed fixtures. Remove exactly
+            # those fixtures and their notices even when a race assertion fails.
+            if created_ids:
+                async with engine.begin() as connection:
+                    await connection.execute(delete(workspace_notifications).where(
+                        workspace_notifications.c.entity_id.in_(created_ids),
+                        workspace_notifications.c.section == "calendar",
+                    ))
+                    await connection.execute(delete(calendar_event_attendees).where(
+                        calendar_event_attendees.c.event_id.in_(created_ids),
+                    ))
+                    await connection.execute(delete(calendar_events).where(
+                        calendar_events.c.id.in_(created_ids),
+                    ))
+                    assert not (await connection.execute(select(calendar_events.c.id).where(
+                        calendar_events.c.id.in_(created_ids),
+                    ))).scalars().all()
+        finally:
+            await engine.dispose()
 
 
 @pytest.mark.postgres
