@@ -26,8 +26,8 @@ from reportlab.platypus import (  # type: ignore[import-untyped]
     TableStyle,
 )
 
-from .hr_hiring_templates import _latin
-from .trip_document_text import trip_destination_text
+from .hr_hiring_templates import _latin, latin_person_name
+from .trip_document_text import trip_body_text, trip_destination_text
 
 _ASSETS = Path(__file__).parent / "hr_assets"
 _LOGO = Path(__file__).parent / "trip_assets" / "yuksalish-logo-color.png"
@@ -145,7 +145,9 @@ def brief_pdf(
     story: list[object] = [
         Table([[
             Spacer(1, 66),
-            Paragraph(f'“Yuksalish” harakati raisi<br/>{_text(chair)}ga', recipient),
+            Paragraph(
+                f'“Yuksalish” harakati raisi<br/>{escape(latin_person_name(chair))}ga', recipient,
+            ),
         ]], colWidths=[235, 243], style=TableStyle([
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
             ("LEFTPADDING", (0, 0), (-1, -1), 0),
@@ -162,7 +164,7 @@ def brief_pdf(
     if brief_text.strip():
         for paragraph in brief_text.strip().splitlines():
             if paragraph.strip():
-                story.append(Paragraph(_text(paragraph), brief_body))
+                story.append(Paragraph(escape(trip_body_text(paragraph)), brief_body))
     else:
         story.append(Paragraph(
             f"{start:%d.%m.%Y} - {end:%d.%m.%Y} kunlari "
@@ -171,7 +173,8 @@ def brief_pdf(
         ))
     if employees:
         story.append(Paragraph(
-            "Safar ishtirokchilari: " + "; ".join(_text(name) for name in employees), regular,
+            "Safar ishtirokchilari: "
+            + "; ".join(escape(latin_person_name(name)) for name in employees), regular,
         ))
     if include_fact_lines and expense_source.strip():
         story.append(Paragraph(f"Xarajatlar manbai: {_text(expense_source)}", regular))
@@ -180,7 +183,9 @@ def brief_pdf(
             f"Ilova: {_text(attachment_name)}. Asl fayl alohida saqlanadi.", small
         ))
     story.append(Spacer(1, 28))
-    story.append(Paragraph(f"{signed_on:%d.%m.%Y} y. &nbsp;&nbsp; {_text(requester)}", regular))
+    story.append(Paragraph(
+        f"{signed_on:%d.%m.%Y} y. &nbsp;&nbsp; {escape(latin_person_name(requester))}", regular,
+    ))
     if signature is not None:
         story.append(_signature_image(signature))
     return _build(story)
@@ -236,7 +241,8 @@ def order_pdf(
     story.extend([Spacer(1, 8), Paragraph("B U Y U R A M A N :", centered), Spacer(1, 6)])
     if len(employees) == 1:
         name, job_title = employees[0]
-        person = f"{_text(job_title)} {_text(name)}" if job_title else _text(name)
+        person_name = escape(latin_person_name(name))
+        person = f"{_text(job_title)} {person_name}" if job_title else person_name
         story.append(Paragraph(
             f"1. Harakatning {person} {period} "
             f"{place}ga xizmat safariga yuborilsin.", body,
@@ -248,7 +254,7 @@ def order_pdf(
         ))
         for index, (name, job_title) in enumerate(employees, start=1):
             suffix = f" — {_text(job_title)}" if job_title else ""
-            story.append(Paragraph(f"{index}) {_text(name)}{suffix};", body))
+            story.append(Paragraph(f"{index}) {escape(latin_person_name(name))}{suffix};", body))
     if expense_source.strip():
         story.append(Paragraph(
             "2. Xizmat safari bilan bogʻliq xarajatlar "  # noqa: RUF001
@@ -257,7 +263,7 @@ def order_pdf(
         ))
     signature_cell: object = _signature_image(signature) if signature is not None else Spacer(1, 55)
     signature_row = Table([[
-        Paragraph("Rais", bold), signature_cell, Paragraph(_text(chair), right),
+        Paragraph("Rais", bold), signature_cell, Paragraph(escape(latin_person_name(chair)), right),
     ]], colWidths=[150, 150, 178], minRowHeights=[55])
     signature_row.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
@@ -266,7 +272,8 @@ def order_pdf(
     ]))
     # A continuation page must contain a substantive clause, not only a signature.
     story.append(KeepTogether([
-        story.pop(), Spacer(1, 12), Paragraph(f"Asos: {_text(requester)}ning bildirgisi.", body),
+        story.pop(), Spacer(1, 12),
+        Paragraph(f"Asos: {escape(latin_person_name(requester))}ning bildirgisi.", body),
         Spacer(1, 24), signature_row,
     ]))
     return _build(story, draft=signature is None)

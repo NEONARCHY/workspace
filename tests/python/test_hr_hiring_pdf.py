@@ -94,6 +94,23 @@ def test_document_fields_are_text_not_paragraph_markup() -> None:
     assert values.address in contract
 
 
+def test_latin_order_normalizes_patronymics_without_changing_source_identity() -> None:
+    values = fields().model_copy(update={
+        "full_name": "Testov Xodim Anvar угли", "accountant_dative": "Testov Hisobchi Ali углига",
+    })
+    packet = documents(values, "Testov Rais Vali ўғли")
+    order_text = " ".join(
+        page.extract_text() for page in PdfReader(BytesIO(packet["order"])).pages
+    )
+    assert "Testov Xodim Anvar o'g'li" in order_text
+    assert "Testov Hisobchi Ali o'g'liga" in order_text
+    assert "Testov Rais Vali o'g'li" in order_text
+    contract_text = " ".join(
+        page.extract_text() for page in PdfReader(BytesIO(packet["contract"])).pages
+    )
+    assert values.full_name in contract_text
+
+
 def test_original_backgrounds_have_no_sample_employee_or_extra_page() -> None:
     root = Path(__file__).parents[2] / "apps/api/src/yuksalish_api/hr_assets"
     contract = PdfReader(root / "contract-original-blank.pdf")
