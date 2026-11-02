@@ -7,7 +7,8 @@ settings:
 overrides:
   nwsapi: 2.2.28
   esbuild: 0.28.1
-  follow-redirects: 1.16.1
+  follow-redirects: 1.16.2
+  minimatch: 11.0.4
   undici@>=6 <6.29.1: 6.29.1
   undici@>=7 <7.30.1: 7.30.1
   brace-expansion@<1.1.21: 1.1.21
@@ -17,9 +18,20 @@ overrides:
   zod@>=4 <4.6.6: 4.6.6
   http-cache-semantics@<=4.2.0: 4.3.0
   source-map-js@>=1 <1.2.2: 1.2.2
-  joi@>=18 <18.2.9: 18.2.9
+  joi@>=18 <18.3.1: 18.3.1
   shell-quote@<1.11.0: 1.11.0
   '@electron/get@3.1.0>global-agent': 4.1.3
+
+patchedDependencies:
+  '@electron/asar@3.4.1':
+    hash: 44061677a56c42f7a0514555d8bfc4897df15c67bf278096aa4f2f15083bf2e0
+    path: patches/@electron__asar@3.4.1.patch
+  dir-compare@4.2.0:
+    hash: 6abcda734a55426b1675bd8444143880b81e93075c459bc0db600ccb90d62fec
+    path: patches/dir-compare@4.2.0.patch
+  glob@7.2.3:
+    hash: 4ea7202eb36535da6538c074e7271c506528cc6152dffcb6cbcd731d1e52f30d
+    path: patches/glob@7.2.3.patch
 
 importers:
 
@@ -1125,6 +1137,9 @@ packages:
     resolution: {integrity: sha512-wgm9Ehl2jpeqP3zw/7mo3kRHFp5MEDhqAdwy1fTGkHAwnkGOVsgpvQhL8B5n1qlb01jV3n/bI0ZfZp5lWA1k4w==}
     engines: {node: '>=18.0.0'}
 
+  '@isaacs/nonrecursive-glob-match@1.0.3':
+    resolution: {integrity: sha512-SI7kyKHq4XXDRozw+r9GlRZkia1ZkFrpLW98r2IC2Bpr8YkFGE3fvjzmxCG0x78A++69HmDNrDvSMYBZmHGpKA==}
+
   '@jridgewell/gen-mapping@0.3.13':
     resolution: {integrity: sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA==}
 
@@ -1874,9 +1889,6 @@ packages:
   axios@1.20.0:
     resolution: {integrity: sha512-r8aOh8j9cGKpgQAqpzrUHnSIc6a59Y3Xf/cv8sy1DrHCkZHzQGEuoq1tARk6qSyDdtQGSDgpb9kFlruzPvrgwg==}
 
-  balanced-match@1.0.2:
-    resolution: {integrity: sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw==}
-
   balanced-match@4.0.4:
     resolution: {integrity: sha512-BLrgEcRTwX2o6gGxGOCNyMvGSp35YofuYzw9h1IMTRmKqttAZZVU67bdb9Pr2vUHA8+j3i2tJfjO6C6+4myGTA==}
     engines: {node: 18 || 20 || >=22}
@@ -1891,12 +1903,6 @@ packages:
 
   bluebird@3.7.2:
     resolution: {integrity: sha512-XpNj6GDQzdfW+r2Wnn7xiSAd7TM3jzkxGXBGTtWKuSXv1xUV+azxAm8jdWZN06QTQk+2N2XB9jRDkvbmQmcRtg==}
-
-  brace-expansion@1.1.21:
-    resolution: {integrity: sha512-9zeA+KLZNNzglF2TPKRQEDyx6Yby7daAkuy8MiPzpXPsYDWi/DRM8jmwUDxokQjYqBpv5DgPiwD4h4ZZSy1Ujw==}
-
-  brace-expansion@2.1.7:
-    resolution: {integrity: sha512-uZbew1NqdmPDTMJ8ah1y+b+9QEJrfkXFk3RcTQw3X0jW/xRUvFKsg1CfQdSYGdTbXZWExtU3J3ccxtnfw1Fi0g==}
 
   brace-expansion@5.0.12:
     resolution: {integrity: sha512-YovQ3rzhaLMIrDjNDMkNS01tea93qhEhG5xy8f6+R0l+dw3Ki+5sCoIoI942iuLZTHWogWktgwVDhU09iNEimQ==}
@@ -2025,9 +2031,6 @@ packages:
   compare-version@0.1.2:
     resolution: {integrity: sha512-pJDh5/4wrEnXX/VWRZvruAGHkzKdr46z11OlTPN+VrATlWWhSKewNCJ1futCO5C7eJB3nPMFZA1LeYtcFboZ2A==}
     engines: {node: '>=0.10.0'}
-
-  concat-map@0.0.1:
-    resolution: {integrity: sha512-/Srv4dswyQNBfohGpz9o6Yb3Gz3SrUDqBH5rTuhGR7ahtlbYKnVxw2bCFMRljaA7EXHaXZ8wsHdodFvbkhKmqg==}
 
   concurrently@10.0.5:
     resolution: {integrity: sha512-JaP/CoftUrCcAFW/g//RbgEGwlelnEae6cfBLgH6ZdO6s8jPkn6p9SB9u6pdVxYXoiSnFqseOlHfrEfF82TVOg==}
@@ -2384,8 +2387,8 @@ packages:
   flatted@3.4.4:
     resolution: {integrity: sha512-5+ybhBZANEJxaH3X5evAFatUxLfEHSr7n6kYJ+1Qd0mUqr4eu9gIf6GDbWHf8RJijHrjjO8G+la14SlL2SeS1Q==}
 
-  follow-redirects@1.16.1:
-    resolution: {integrity: sha512-FNvFGzoMLWmE6Yj9spb/zjd7yiNCHiAW9/Tg9CXrQ8wuu32HtlJOwWO11OJafl5FfY3DxTdQ0vj42zU1kvv5jg==}
+  follow-redirects@1.16.2:
+    resolution: {integrity: sha512-/kVP2U8z596Ia0gwFrwyIeo74ta5aVmSeU1FfAUMAmcEP5EP7zydmag3SLiN64NaRKef3lxsq7i/g7ltJQDGow==}
     engines: {node: '>=4.0'}
     peerDependencies:
       debug: '*'
@@ -2631,8 +2634,8 @@ packages:
     resolution: {integrity: sha512-AC/7JofJvZGrrneWNaEnJeOLUx+JlGt7tNa0wZiRPT4MY1wmfKjt2+6O2p2uz2+skll8OZZmJMNqeke7kKbNgQ==}
     hasBin: true
 
-  joi@18.2.9:
-    resolution: {integrity: sha512-2mD929bUVKUhOLQQEVhlf6EZ0Mlo0DeRb5MO7cViR9AXLtBauuccEtB1py9Ocxpo/P7ucnh442iY/iOwrh3IQw==}
+  joi@18.3.1:
+    resolution: {integrity: sha512-mV9M4Llh4va3NT90p7KBtQhoZqjs8xLX7EWYE4y/GG3yLF6REbIBEHSUb0UX1JXRht2w5tiLSsvmpYc5akiqIw==}
     engines: {node: '>= 20'}
 
   joycon@3.1.1:
@@ -2857,20 +2860,9 @@ packages:
     resolution: {integrity: sha512-I9jwMn07Sy/IwOj3zVkVik2JTvgpaykDZEigL6Rx6N9LbMywwUSMtxET+7lVoDLLd3O3IXwJwvuuns8UB/HeAg==}
     engines: {node: '>=4'}
 
-  minimatch@10.2.6:
-    resolution: {integrity: sha512-vpLQEs+VLCr1nU0BXS07maYoFwlDAH0gngQuuttxIwutDFEMHq2blX+8vpgxDdK3J1PwjCJiep77OitTZ4Ll1A==}
-    engines: {node: 18 || 20 || >=22}
-
-  minimatch@3.1.5:
-    resolution: {integrity: sha512-VgjWUsnnT6n+NUk6eZq77zeFdpW2LWDzP6zFGrCbHXiYNul5Dzqk2HHQ5uFH2DNW5Xbp8+jVzaeNt94ssEEl4w==}
-
-  minimatch@5.1.9:
-    resolution: {integrity: sha512-7o1wEA2RyMP7Iu7GNba9vc0RWWGACJOCZBJX2GJWip0ikV+wcOsgVuY9uE8CPiyQhkGFSlhuSkZPavN7u1c2Fw==}
-    engines: {node: '>=10'}
-
-  minimatch@9.0.9:
-    resolution: {integrity: sha512-OBwBN9AL4dqmETlpS2zasx+vTeWclWzkblfZk7KTA5j3jeOONz/tRCnZomUyvNg83wL5Zv9Ss6HMJXAgL8R2Yg==}
-    engines: {node: '>=16 || 14 >=14.17'}
+  minimatch@11.0.4:
+    resolution: {integrity: sha512-/UJ1dEoVQTjPNDh6SGlUo+ueLMmoHTas4q+8yaAR/5t6nLAIiBDJtoYUh20IYleix7ehiQkgczb84PE3uzHkxg==}
+    engines: {node: 20 || >=22}
 
   minimist@1.2.8:
     resolution: {integrity: sha512-2yyAR8qBkN3YuheJanUpWC5U3bb5osDywNB8RzDVlDwDHbocAJveqqj1u8+SVD7jkWT4yvsHCpWqqWqAxb0zCA==}
@@ -3921,11 +3913,11 @@ snapshots:
 
   '@electron-internal/extract-zip@1.0.5': {}
 
-  '@electron/asar@3.4.1':
+  '@electron/asar@3.4.1(patch_hash=44061677a56c42f7a0514555d8bfc4897df15c67bf278096aa4f2f15083bf2e0)':
     dependencies:
       commander: 5.1.0
-      glob: 7.2.3
-      minimatch: 3.1.5
+      glob: 7.2.3(patch_hash=4ea7202eb36535da6538c074e7271c506528cc6152dffcb6cbcd731d1e52f30d)
+      minimatch: 11.0.4
 
   '@electron/fuses@1.8.0':
     dependencies:
@@ -3992,12 +3984,12 @@ snapshots:
 
   '@electron/universal@2.0.3':
     dependencies:
-      '@electron/asar': 3.4.1
+      '@electron/asar': 3.4.1(patch_hash=44061677a56c42f7a0514555d8bfc4897df15c67bf278096aa4f2f15083bf2e0)
       '@malept/cross-spawn-promise': 2.0.0
       debug: 4.4.3
-      dir-compare: 4.2.0
+      dir-compare: 4.2.0(patch_hash=6abcda734a55426b1675bd8444143880b81e93075c459bc0db600ccb90d62fec)
       fs-extra: 11.4.0
-      minimatch: 9.0.9
+      minimatch: 11.0.4
       plist: 3.1.0
     transitivePeerDependencies:
       - supports-color
@@ -4106,7 +4098,7 @@ snapshots:
     dependencies:
       '@eslint/object-schema': 3.0.5
       debug: 4.4.3
-      minimatch: 10.2.6
+      minimatch: 11.0.4
     transitivePeerDependencies:
       - supports-color
 
@@ -5348,6 +5340,8 @@ snapshots:
     dependencies:
       minipass: 7.1.3
 
+  '@isaacs/nonrecursive-glob-match@1.0.3': {}
+
   '@jridgewell/gen-mapping@0.3.13':
     dependencies:
       '@jridgewell/sourcemap-codec': 1.6.0
@@ -5811,7 +5805,7 @@ snapshots:
       '@typescript-eslint/types': 8.69.0
       '@typescript-eslint/visitor-keys': 8.69.0
       debug: 4.4.3
-      minimatch: 10.2.6
+      minimatch: 11.0.4
       semver: 7.8.5
       tinyglobby: 0.2.17
       ts-api-utils: 2.5.0(typescript@6.0.3)
@@ -5954,7 +5948,7 @@ snapshots:
 
   app-builder-lib@26.15.3(dmg-builder@26.15.3)(electron-builder-squirrel-windows@26.15.3):
     dependencies:
-      '@electron/asar': 3.4.1
+      '@electron/asar': 3.4.1(patch_hash=44061677a56c42f7a0514555d8bfc4897df15c67bf278096aa4f2f15083bf2e0)
       '@electron/fuses': 1.8.0
       '@electron/get': 3.1.0
       '@electron/notarize': 2.5.0
@@ -5986,7 +5980,7 @@ snapshots:
       js-yaml: 4.3.2
       json5: 2.2.3
       lazy-val: 1.0.5
-      minimatch: 10.2.6
+      minimatch: 11.0.4
       pkijs: 3.4.0
       plist: 3.1.0
       proper-lockfile: 4.1.2
@@ -6030,15 +6024,13 @@ snapshots:
 
   axios@1.20.0:
     dependencies:
-      follow-redirects: 1.16.1
+      follow-redirects: 1.16.2
       form-data: 4.0.6
       https-proxy-agent: 5.0.1
       proxy-from-env: 2.1.0
     transitivePeerDependencies:
       - debug
       - supports-color
-
-  balanced-match@1.0.2: {}
 
   balanced-match@4.0.4: {}
 
@@ -6047,15 +6039,6 @@ snapshots:
   baseline-browser-mapping@2.11.20: {}
 
   bluebird@3.7.2: {}
-
-  brace-expansion@1.1.21:
-    dependencies:
-      balanced-match: 1.0.2
-      concat-map: 0.0.1
-
-  brace-expansion@2.1.7:
-    dependencies:
-      balanced-match: 1.0.2
 
   brace-expansion@5.0.12:
     dependencies:
@@ -6190,8 +6173,6 @@ snapshots:
 
   compare-version@0.1.2: {}
 
-  concat-map@0.0.1: {}
-
   concurrently@10.0.5:
     dependencies:
       chalk: 5.6.2
@@ -6307,9 +6288,9 @@ snapshots:
 
   detect-libc@2.1.2: {}
 
-  dir-compare@4.2.0:
+  dir-compare@4.2.0(patch_hash=6abcda734a55426b1675bd8444143880b81e93075c459bc0db600ccb90d62fec):
     dependencies:
-      minimatch: 3.1.5
+      minimatch: 11.0.4
       p-limit: 3.1.0
 
   dmg-builder@26.15.3(electron-builder-squirrel-windows@26.15.3):
@@ -6402,7 +6383,7 @@ snapshots:
 
   electron-winstaller@5.4.0:
     dependencies:
-      '@electron/asar': 3.4.1
+      '@electron/asar': 3.4.1(patch_hash=44061677a56c42f7a0514555d8bfc4897df15c67bf278096aa4f2f15083bf2e0)
       debug: 4.4.3
       fs-extra: 7.0.1
       lodash: 4.18.1
@@ -6547,7 +6528,7 @@ snapshots:
       imurmurhash: 0.1.4
       is-glob: 4.0.3
       json-stable-stringify-without-jsonify: 1.0.1
-      minimatch: 10.2.6
+      minimatch: 11.0.4
       natural-compare: 1.4.0
       optionator: 0.9.4
     optionalDependencies:
@@ -6601,7 +6582,7 @@ snapshots:
 
   filelist@1.0.6:
     dependencies:
-      minimatch: 5.1.9
+      minimatch: 11.0.4
 
   find-up@5.0.0:
     dependencies:
@@ -6621,7 +6602,7 @@ snapshots:
 
   flatted@3.4.4: {}
 
-  follow-redirects@1.16.1: {}
+  follow-redirects@1.16.2: {}
 
   form-data@4.0.6:
     dependencies:
@@ -6716,12 +6697,12 @@ snapshots:
     dependencies:
       is-glob: 4.0.3
 
-  glob@7.2.3:
+  glob@7.2.3(patch_hash=4ea7202eb36535da6538c074e7271c506528cc6152dffcb6cbcd731d1e52f30d):
     dependencies:
       fs.realpath: 1.0.0
       inflight: 1.0.6
       inherits: 2.0.4
-      minimatch: 3.1.5
+      minimatch: 11.0.4
       once: 1.4.0
       path-is-absolute: 1.0.1
 
@@ -6876,7 +6857,7 @@ snapshots:
 
   jiti@2.7.0: {}
 
-  joi@18.2.9:
+  joi@18.3.1:
     dependencies:
       '@hapi/address': 5.1.1
       '@hapi/formula': 3.0.2
@@ -7066,21 +7047,10 @@ snapshots:
 
   min-indent@1.0.1: {}
 
-  minimatch@10.2.6:
+  minimatch@11.0.4:
     dependencies:
+      '@isaacs/nonrecursive-glob-match': 1.0.3
       brace-expansion: 5.0.12
-
-  minimatch@3.1.5:
-    dependencies:
-      brace-expansion: 1.1.21
-
-  minimatch@5.1.9:
-    dependencies:
-      brace-expansion: 2.1.7
-
-  minimatch@9.0.9:
-    dependencies:
-      brace-expansion: 2.1.7
 
   minimist@1.2.8: {}
 
@@ -7349,7 +7319,7 @@ snapshots:
 
   rimraf@2.6.3:
     dependencies:
-      glob: 7.2.3
+      glob: 7.2.3(patch_hash=4ea7202eb36535da6538c074e7271c506528cc6152dffcb6cbcd731d1e52f30d)
 
   rolldown@1.2.6:
     dependencies:
@@ -7765,7 +7735,7 @@ snapshots:
   wait-on@9.1.0:
     dependencies:
       axios: 1.20.0
-      joi: 18.2.9
+      joi: 18.3.1
       lodash: 4.18.1
       minimist: 1.2.8
       rxjs: 7.8.2
