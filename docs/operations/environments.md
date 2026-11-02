@@ -59,6 +59,12 @@ Before building the LAN web image, run `scripts/lan/prepare-release-note-order.p
 the full Git clone. It exports only release-note ordering metadata; `.git` and credentials
 remain excluded from Docker. Normal LAN deploy/restore scripts do this automatically.
 
+The web Dockerfile copies the tracked `patches/` directory before the frozen pnpm
+install, together with the lockfile and workspace manifest. CI builds the complete
+web image on Linux, including this install step and the final Nginx image. The
+required desktop gate also requires this image check; host-only builds do not
+validate the Docker build context. Building this image does not start or update services.
+
 ## Secret handling
 
 The optional assistant key is `YUKSALISH_GEMINI_API_KEY` in the server's local environment file (for the test LAN site, `.env.lan`). Never put it in desktop/Vite variables or commit it. Without a key the assistant and generated greetings show a configuration message; scheduled birthday posts and notifications still work.
