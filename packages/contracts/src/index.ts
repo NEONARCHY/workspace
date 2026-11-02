@@ -1872,22 +1872,66 @@ export interface WorkspaceTaskCreateInput {
   readonly cycle?: TaskCycleInput | null;
 }
 
+/** Pending imports may wait for the chair to select a primary assignee. */
+export type TaskProposalDraft = Omit<WorkspaceTaskCreateInput, "assigneeId"> & { readonly assigneeId?: string | null };
+
 export interface TaskProposal {
   readonly id: string;
   readonly creatorUserId: string;
   readonly authorUserId: string;
   readonly status: "pending" | "approved" | "rejected" | "cancelled";
-  readonly task: WorkspaceTaskCreateInput;
+  readonly task: TaskProposalDraft;
   readonly taskId: string | null;
   readonly reason: string;
   readonly createdAt: string;
   readonly decidedAt: string | null;
+  readonly importBatchId?: string | null;
+  readonly importSourceKey?: string | null;
 }
 
 export interface TaskProposalWrite {
   readonly requestId: string;
   readonly authorUserId: string;
   readonly task: WorkspaceTaskCreateInput;
+}
+
+export interface TaskProposalImportContext {
+  readonly canImport: boolean;
+  readonly chairUserId: string | null;
+  readonly chairName: string | null;
+  readonly configurationError: string | null;
+}
+
+export interface TaskProposalImportRow {
+  readonly sourceKey: string;
+  readonly numberHint: string;
+  readonly title: string;
+  readonly description: string;
+  readonly assigneeHint: string;
+  readonly coexecutorHints: readonly string[];
+  readonly dueDateHint: string | null;
+  readonly dueAtHint: string | null;
+  readonly deadlineText: string;
+  readonly note: string;
+  readonly warnings: readonly string[];
+}
+
+export interface TaskProposalImportPreview {
+  readonly sourceName: string;
+  readonly rows: readonly TaskProposalImportRow[];
+}
+
+export interface TaskProposalImportWrite {
+  readonly requestId: string;
+  readonly authorUserId: string;
+  readonly sourceName: string;
+  readonly items: readonly { readonly sourceKey: string; readonly task: TaskProposalDraft }[];
+}
+
+export interface TaskProposalImportResult {
+  readonly batchId: string;
+  readonly proposals: readonly TaskProposal[];
+  readonly reused: boolean;
 }
 
 export interface TaskProjectOption {

@@ -1,4 +1,5 @@
 import type { OfficePreviewResult } from "./file-viewer-kind";
+import type { TaskProposalImportContext, TaskProposalImportPreview, TaskProposalImportResult, TaskProposalImportWrite } from "@yuksalish/contracts";
 import type { ChairmanMemo, ChairmanMemoContext, ChairmanMemoFields, ChairmanMemoRegistry } from "@yuksalish/contracts";
 import type { ReleaseReadState, ReleaseReadInput } from "@yuksalish/contracts";
 
@@ -1750,9 +1751,9 @@ export function proposeWorkspaceTask(token: string, payload: TaskProposalWrite):
   return apiRequest("/task-proposals", { method: "POST", body: JSON.stringify(payload) }, token);
 }
 
-export function decideTaskProposal(token: string, id: string, action: "approve" | "reject" | "cancel", reason = ""): Promise<TaskProposal> {
+export function decideTaskProposal(token: string, id: string, action: "approve" | "reject" | "cancel", reason = "", changes?: { readonly assigneeId?: string; readonly dueAt?: string | null; readonly importReviewed?: boolean }): Promise<TaskProposal> {
   return apiRequest(`/task-proposals/${encodeURIComponent(id)}/decision`, {
-    method: "POST", body: JSON.stringify({ action, reason }),
+    method: "POST", body: JSON.stringify({ action, reason, ...changes }),
   }, token);
 }
 
@@ -2288,6 +2289,29 @@ export async function uploadMailFile(token: string, id: string, file: File, expe
 }
 export function createTaskFromMail(token: string, payload: MailTaskExport): Promise<WorkspaceTask> {
   return apiRequest("/mail/tasks", { method: "POST", body: JSON.stringify(payload) }, token, 120_000);
+}
+
+export function loadTaskProposalImportContext(token: string): Promise<TaskProposalImportContext> {
+  return apiRequest("/task-proposals/import/context", {}, token);
+}
+
+export async function previewTaskProposalImport(token: string, file: File): Promise<TaskProposalImportPreview> {
+  if (!file.name.toLowerCase().endsWith(".xlsx") || !file.size || file.size > 5 * 1024 * 1024) {
+    throw new Error("Выберите XLSX размером до 5 МБ");
+  }
+  const body = new FormData(); body.set("file", file);
+  const headers = new Headers({ Authorization: `Bearer ${token}`, Accept: "application/json" });
+  if (workspacePlatform.kind === "electron") headers.set("X-Desktop-Version", workspacePlatform.version);
+  return boundedRequest(`${getApiBaseUrl()}/api/v1/task-proposals/import/preview`,
+    { method: "POST", headers, body }, async response => await response.json() as TaskProposalImportPreview, 120_000);
+}
+
+export function submitTaskProposalImport(token: string, payload: TaskProposalImportWrite): Promise<TaskProposalImportResult> {
+  return apiRequest("/task-proposals/import/confirm", { method: "POST", body: JSON.stringify(payload) }, token, 120_000);
+}
+
+export function loadTaskProposalImportResult(token: string, batchId: string): Promise<TaskProposalImportResult> {
+  return apiRequest(`/task-proposals/import/${encodeURIComponent(batchId)}`, {}, token);
 }
 
 export function loadGrants(token: string): Promise<readonly GrantSummary[]> {
