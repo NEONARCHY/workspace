@@ -72,6 +72,16 @@ edo_incoming_access = sa.Table(
 )
 uuid_type = postgresql.UUID(as_uuid=True)
 
+task_proposal_import_batches = sa.Table(
+    "task_proposal_import_batches", metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("creator_user_id", uuid_type),
+    sa.Column("author_user_id", uuid_type),
+    sa.Column("content_hash", sa.String(64)),
+    sa.Column("source_name", sa.String(240)),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+)
+
 task_proposals = sa.Table(
     "task_proposals", metadata,
     sa.Column("id", uuid_type, primary_key=True),
@@ -83,6 +93,8 @@ task_proposals = sa.Table(
     sa.Column("reason", sa.Text()),
     sa.Column("created_at", sa.DateTime(timezone=True)),
     sa.Column("decided_at", sa.DateTime(timezone=True)),
+    sa.Column("import_batch_id", uuid_type),
+    sa.Column("import_source_key", sa.String(300)),
 )
 
 survey_analyses = sa.Table(

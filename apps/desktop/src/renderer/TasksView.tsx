@@ -1,4 +1,5 @@
 import { TaskPersonAvatar } from "./TaskPersonAvatar";
+import { TaskProposalImportLauncher } from "./TaskProposalImport";
 import { canManageAnyTask } from "./task-permissions";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { LoadingSkeleton } from "./LoadingSkeleton";
@@ -727,6 +728,8 @@ export function TasksView(props: TasksViewProps) {
           <div><h1>Задачи</h1><p>Карточки, команда, сроки и зависимости</p></div>
           <div className="task-toolbar-actions">
             <div className="task-calendar-navigation-slot" ref={setCalendarToolbarTarget} />
+            {props.token ? <TaskProposalImportLauncher token={props.token} people={people} tasks={tasks}
+              onSubmitted={() => setProposalRevision(value => value + 1)} /> : null}
             {newTaskButton}
             {taskViewSwitch}
           </div>

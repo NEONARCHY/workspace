@@ -5,6 +5,8 @@ import { WorkspaceDialog } from "./WorkspaceDialog";
 import { RecordSection } from "./RecordComposer";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { decideTaskProposal, loadTaskProposals } from "./workspace-api";
+import { PersonPicker } from "./PersonPicker";
+import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
 
 const labels: Record<TaskProposal["status"], string> = {
   pending: "Ожидает подтверждения", approved: "Постановка подтверждена",
@@ -30,6 +32,12 @@ export function TaskProposals({ token, currentUserId, people, tasks, revision, f
   const [busy, setBusy] = useState(false);
   const [retry, setRetry] = useState(0);
   const [loaded, setLoaded] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const [edits, setEdits] = useState<Readonly<Record<string, { readonly assigneeId: string; readonly dueAt: string }>>>({});
   const requestSequence = useRef(0);
   useEffect(() => {
     let active = true;
@@ -42,13 +50,18 @@ export function TaskProposals({ token, currentUserId, people, tasks, revision, f
     return () => { active = false; };
   }, [token, tasks, revision, retry]);
   const selected = proposals.find((item) => item.id === selectedId);
+  const review = selected ? edits[selected.id] ?? { assigneeId: selected.task.assigneeId ?? "", dueAt: selected.task.dueAt ?? "" } : { assigneeId: "", dueAt: "" };
+  const patchReview = (change: Partial<typeof review>) => { if (selected) setEdits(current => ({ ...current, [selected.id]: { ...review, ...change } })); };
   const person = (id: string) => people.find((item) => item.id === id)?.name ?? "Сотрудник";
   const pending = proposals.filter((item) => item.status === "pending");
   const decide = async (action: "approve" | "reject" | "cancel") => {
     if (!selected || busy) return;
     setBusy(true); setError("");
     try {
-      const updated = await decideTaskProposal(token, selected.id, action, reason);
+      const changes = action === "approve" && selected.importBatchId
+        ? { assigneeId: review.assigneeId, dueAt: review.dueAt ? new Date(review.dueAt).toISOString() : null, importReviewed: true } : undefined;
+      const updated = changes ? await decideTaskProposal(token, selected.id, action, reason, changes)
+        : await decideTaskProposal(token, selected.id, action, reason);
       ++requestSequence.current;
       setProposals((items) => items.map((item) => item.id === updated.id ? updated : item));
       setReason("");
@@ -79,7 +92,11 @@ export function TaskProposals({ token, currentUserId, people, tasks, revision, f
           <div className="record-composer-body"><div className="record-composer-fields">
             <RecordSection title="Постановка">
               <dl className="record-summary-facts">
-                <div><dt>Подготовил и будет исполнять</dt><dd>{person(selected.creatorUserId)}</dd></div>
+                <div><dt>{selected.importBatchId ? "Подготовил импорт" : "Подготовил и будет исполнять"}</dt><dd>{person(selected.creatorUserId)}</dd></div>
+                {selected.importBatchId ? <>
+                  <div><dt>Ответственный</dt><dd>{selected.task.assigneeId ? person(selected.task.assigneeId) : "Не указан"}</dd></div>
+                  <div><dt>Исходная строка</dt><dd>{selected.importSourceKey}</dd></div>
+                </> : null}
                 <div><dt>Постановщик после одобрения</dt><dd>{person(selected.authorUserId)}</dd></div>
                 <div><dt>Отправлено</dt><dd>{dateLabel(selected.createdAt)}</dd></div>
                 <div><dt>Срок</dt><dd>{dateLabel(selected.task.dueAt)}</dd></div>
@@ -112,6 +129,10 @@ export function TaskProposals({ token, currentUserId, people, tasks, revision, f
             </RecordSection>
             {selected.status === "pending" && selected.authorUserId === currentUserId ? <RecordSection title="Решение постановщика">
               <p>Подтверждая, вы ставите эту задачу от своего имени со всеми указанными условиями.</p>
+              {selected.importBatchId ? <div className="record-summary-facts">
+                <div><strong>Ответственный перед одобрением</strong><PersonPicker token={token} people={people.filter(person => person.status === "active")} label="Ответственный при одобрении" value={review.assigneeId} disabled={busy} onChange={id => patchReview({ assigneeId: id })} /></div>
+                <div><strong>Точный срок</strong><WorkspaceDateTimePicker ariaLabel="Срок при одобрении" value={review.dueAt} disabled={busy} onChange={value => patchReview({ dueAt: value })} /><small>Исходный срок сохранён в описании. Можно выбрать будущий срок или оставить без срока.</small></div>
+              </div> : null}
               <Textarea aria-label="Причина отклонения заявки" placeholder="Причина обязательна для отклонения" value={reason} disabled={busy} onChange={(_, data) => setReason(data.value)} />
             </RecordSection> : null}
             {selected.reason ? <RecordSection title="Причина решения"><p>{selected.reason}</p></RecordSection> : null}
@@ -121,7 +142,7 @@ export function TaskProposals({ token, currentUserId, people, tasks, revision, f
             <span>{selected.decidedAt ? `Решение: ${dateLabel(selected.decidedAt)}` : "Пока не подтверждено, не учитывается в эффективности."}</span>
             <div>{selected.status === "pending" ? selected.authorUserId === currentUserId ? <>
               <Button disabled={busy || !reason.trim()} onClick={() => void decide("reject")}>Отклонить</Button>
-              <Button appearance="primary" disabled={busy} onClick={() => void decide("approve")}>Подтвердить постановку</Button>
+              <Button appearance="primary" disabled={busy || Boolean(selected.importBatchId && (!review.assigneeId || (review.dueAt && (!Number.isFinite(Date.parse(review.dueAt)) || Date.parse(review.dueAt) <= now))))} onClick={() => void decide("approve")}>Подтвердить постановку</Button>
             </> : <Button disabled={busy} onClick={() => void decide("cancel")}>Отозвать заявку</Button> : null}
             {selected.taskId && tasks.some((task) => task.id === selected.taskId) ? <Button onClick={() => { onOpenTask(selected.taskId!); setSelectedId(""); }}>Открыть задачу</Button> : null}</div>
           </footer>

@@ -19,6 +19,22 @@ const proposal: TaskProposal = {
     participants: [{ userId: "dilshod", role: "observer" }], checklist: [{ title: "Проверить цифры" }] },
 };
 
+it("requires a primary assignee for an imported request and records personal review", async () => {
+  const imported: TaskProposal = { ...proposal, importBatchId: "batch", importSourceKey: "Sheet!2",
+    task: { ...proposal.task, assigneeId: undefined } };
+  vi.mocked(loadTaskProposals).mockResolvedValue([imported]);
+  vi.mocked(decideTaskProposal).mockResolvedValue({ ...imported, status: "approved", taskId: "created" });
+  render(<FluentProvider theme={webLightTheme}><TaskProposals token="test" currentUserId="baxtiyor"
+    people={people.map(person => ({ ...person, status: "active" as const }))} tasks={[]} revision={0} focusId="proposal" onOpenTask={vi.fn()} /></FluentProvider>);
+  const dialog = await screen.findByRole("dialog", { name: "Заявка на постановку задачи" });
+  expect(within(dialog).getByRole("button", { name: "Подтвердить постановку" })).toBeDisabled();
+  fireEvent.click(within(dialog).getByRole("button", { name: "Ответственный при одобрении" }));
+  fireEvent.click(within(document.querySelector(".person-picker-surface")!).getByRole("button", { name: new RegExp(people.find(person => person.id === "aziza")!.name) }));
+  fireEvent.click(within(dialog).getByRole("button", { name: "Подтвердить постановку" }));
+  await waitFor(() => expect(decideTaskProposal).toHaveBeenCalledWith("test", "proposal", "approve", "",
+    { assigneeId: "aziza", dueAt: null, importReviewed: true }));
+});
+
 it("sends the full self-assigned draft for consent instead of creating a task", async () => {
   const onPropose = vi.fn().mockRejectedValueOnce(new Error("Нет сети")).mockResolvedValueOnce(undefined);
   const onSubmit = vi.fn();

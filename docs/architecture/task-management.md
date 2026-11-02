@@ -326,3 +326,35 @@ idempotent materialisation, migration from an empty database, one-chat-per-task 
 membership reconciliation. A short user check of real task density and a two-client
 conversation remains useful before expanding the pilot. Exact Bitrix behavioural
 characterisation still requires safely selected representative production tasks.
+
+### Administrative XLSX proposals to the chair — 2 November 2026
+
+An administrator with tasks.create can prepare an XLSX batch in Tasks →
+«Импорт запросов». The chair is resolved from the active HR chair setting;
+importing to oneself is refused. Name matching is explicitly reviewed, ambiguous
+names require selection, and file notes and date-only deadlines remain in the
+proposal description. No hour is inferred. An unresolved primary assignee can
+remain pending; the chair must choose an active employee before approval.
+
+The import uses the existing private proposal lifecycle, not active task import.
+Only its submitting administrator and named chair can list the proposals/receipt.
+Co-executors receive task access only after approval. The chair may adjust the
+primary assignee and precise future deadline while reviewing an imported request;
+ordinary self-assigned proposals retain their immutable conditions. The decision
+records original and approved conditions in the audit. An explicit importReviewed
+marker prevents older clients from consenting with incomplete import information.
+
+GET /api/v1/task-proposals/import/context exposes capability. POST /import/preview
+reads XLSX (5 MiB, 100 proposals) without saving uploaded bytes; formulas are
+rejected. POST /import/confirm atomically validates and stores the batch, private
+pending proposals, notifications and audit entries. GET /import/{batchId} recovers
+an uncertain result. A stable UUID plus chair/content uniqueness prevents a retry
+or unchanged renamed reupload from creating a second batch, including another
+administrator's retry. Private receipts never become globally readable.
+
+Migration 0118_task_proposal_imports is additive. Deploy API and migration before
+web; old clients cannot approve imported requests. Rollback keeps the schema and
+private pending records and restores the previous API/web images; do not downgrade
+or delete a batch once it contains proposals. Before production installation,
+verify a fresh PostgreSQL backup by restoring it into a separate disposable DB.
+The migration changes no existing tasks, invitations, correspondence or files.

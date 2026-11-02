@@ -1,0 +1,39 @@
+.fui-DialogSurface.record-composer-dialog.proposal-import-dialog { width: min(1160px, calc(100vw - 32px)); max-width: none; height: min(850px, calc(100dvh - 32px)); max-height: calc(100dvh - 32px); padding: 0; overflow: hidden; display: flex; flex-direction: column; color: var(--ws-text); }
+.proposal-import-header, .proposal-import-footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 20px 24px; flex-shrink: 0; }
+.proposal-import-header h2 { margin: 4px 0 8px; font-size: 26px; }
+.proposal-import-header small { color: var(--ws-link); font-weight: 700; }
+.proposal-import-header p, .proposal-import-file p { margin: 4px 0; color: var(--ws-muted); }
+.proposal-import-scroll { flex: 1; min-height: 0; overflow: auto; padding: 0 24px 20px; scrollbar-width: thin; }
+.proposal-import-file { display: flex; align-items: center; gap: 16px; background: var(--ws-surface); border: 1px solid var(--ws-border); border-radius: 18px; padding: 18px; }
+.proposal-import-file > svg { width: 32px; height: 32px; color: var(--ws-link); flex-shrink: 0; }
+.proposal-import-file > div { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.proposal-import-summary, .proposal-import-steps { display: flex; flex-wrap: wrap; gap: 16px; margin: 18px 0; }
+.proposal-import-summary > span { padding: 10px 16px; border-radius: 12px; background: var(--ws-surface); font-variant-numeric: tabular-nums; }
+.proposal-import-names > p { color: var(--ws-muted); }
+.proposal-import-name { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(220px, 2fr); align-items: center; gap: 16px; padding: 9px 0; }
+.proposal-import-names > button { margin: 12px 0; }
+.proposal-import-review { display: grid; grid-template-columns: minmax(220px, 30%) minmax(0, 1fr); gap: 22px; align-items: start; }
+.proposal-import-list { display: flex; flex-direction: column; gap: 8px; position: sticky; top: 0; max-height: 460px; overflow: auto; scrollbar-width: thin; }
+.proposal-import-list > button { border: 1px solid var(--ws-border); border-radius: 14px; padding: 13px; display: flex; flex-direction: column; gap: 7px; text-align: left; font: inherit; color: inherit; background: var(--ws-surface); cursor: pointer; }
+.proposal-import-list > button[aria-pressed="true"] { border-color: var(--ws-link); background: var(--ws-selected); }
+.proposal-import-list > button small { color: var(--ws-muted); font-size: 12px; }
+.proposal-import-editor { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.proposal-import-editor p { margin: 6px 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+.proposal-import-row-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.proposal-import-source-note { padding: 14px; border-radius: 14px; background: var(--ws-surface); }
+.proposal-import-footer { border-top: 1px solid var(--ws-border); font-size: 12px; }
+.proposal-import-footer > span { flex: 1; }
+.proposal-import-receipt { padding: 24px 0; }
+.proposal-import-receipt > svg { width: 40px; height: 40px; color: var(--ws-link); }
+.proposal-import-receipt li { margin: 8px 0; }
+.proposal-import-list > button:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 2px; }
+@media (max-width: 800px) {
+  .proposal-import-review { grid-template-columns: minmax(0, 1fr); }
+  .proposal-import-list { position: static; max-height: 210px; }
+  .proposal-import-header, .proposal-import-footer { padding: 14px; }
+  .proposal-import-scroll { padding: 0 14px 14px; }
+  .proposal-import-file { flex-wrap: wrap; }
+  .proposal-import-name { grid-template-columns: minmax(0, 1fr); gap: 7px; }
+  .proposal-import-footer { flex-wrap: wrap; }
+}
+@media (forced-colors: active) { .proposal-import-list > button[aria-pressed="true"] { outline: 2px solid Highlight; } }
