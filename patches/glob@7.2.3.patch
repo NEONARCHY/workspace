@@ -1,0 +1,26 @@
+diff --git a/glob.js b/glob.js
+index 37a4d7e6..205a3f2b 100644
+--- a/glob.js
++++ b/glob.js
+@@ -385 +385 @@ Glob.prototype._processReaddir2 = function (prefix, read, abs, remain, index, in
+-  var rawGlob = pn._glob
++  var rawGlob = pn.pattern
+@@ -394 +394 @@ Glob.prototype._processReaddir2 = function (prefix, read, abs, remain, index, in
+-        m = !e.match(pn)
++        m = !pn.test(e)
+@@ -396 +396 @@ Glob.prototype._processReaddir2 = function (prefix, read, abs, remain, index, in
+-        m = e.match(pn)
++        m = pn.test(e)
+diff --git a/sync.js b/sync.js
+index 2c4f4801..fe7820e9 100644
+--- a/sync.js
++++ b/sync.js
+@@ -147 +147 @@ GlobSync.prototype._processReaddir = function (prefix, read, abs, remain, index,
+-  var rawGlob = pn._glob
++  var rawGlob = pn.pattern
+@@ -156 +156 @@ GlobSync.prototype._processReaddir = function (prefix, read, abs, remain, index,
+-        m = !e.match(pn)
++        m = !pn.test(e)
+@@ -158 +158 @@ GlobSync.prototype._processReaddir = function (prefix, read, abs, remain, index,
+-        m = e.match(pn)
++        m = pn.test(e)
