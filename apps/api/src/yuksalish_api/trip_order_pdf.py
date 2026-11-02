@@ -102,12 +102,14 @@ def _signature_image(content: bytes) -> Image:
     return Image(output, width=width, height=height, hAlign="LEFT")
 
 
-def _build(story: list[object], *, draft: bool = False) -> bytes:
+def _build(
+    story: list[object], *, draft: bool = False, title: str = "Yuksalish xizmat safari",
+) -> bytes:
     _fonts()
     output = BytesIO()
     document = SimpleDocTemplate(
         output, pagesize=A4, leftMargin=58, rightMargin=58,
-        topMargin=130, bottomMargin=62, title="Yuksalish xizmat safari",
+        topMargin=130, bottomMargin=62, title=title,
     )
     def page(canvas: Canvas, document: object) -> None:
         _page(canvas, document)

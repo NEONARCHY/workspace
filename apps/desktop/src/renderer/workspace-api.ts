@@ -1,4 +1,5 @@
 import type { OfficePreviewResult } from "./file-viewer-kind";
+import type { ChairmanMemo, ChairmanMemoContext, ChairmanMemoFields, ChairmanMemoRegistry } from "@yuksalish/contracts";
 import type { ReleaseReadState, ReleaseReadInput } from "@yuksalish/contracts";
 
 import type { TeamApprovalInbox, TeamApprovalInboxKind } from "@yuksalish/contracts";
@@ -918,6 +919,24 @@ async function boundedRequest<T>(url: string, options: RequestInit, read: (respo
     if (isMutation) pendingMutations = Math.max(0, pendingMutations - 1);
   }
 }
+
+export const loadChairmanMemoContext = (token: string, signal?: AbortSignal) =>
+  apiRequest<ChairmanMemoContext>("/chairman-memos/context", { signal }, token);
+export const loadChairmanMemos = (token: string, offset = 0, signal?: AbortSignal) =>
+  apiRequest<ChairmanMemoRegistry>(`/chairman-memos?offset=${offset}`, { signal }, token);
+export const loadChairmanMemo = (token: string, id: string, signal?: AbortSignal) =>
+  apiRequest<ChairmanMemo>(`/chairman-memos/${encodeURIComponent(id)}`, { signal }, token);
+export const createChairmanMemo = (token: string, fields: ChairmanMemoFields, requestId: string) =>
+  apiRequest<ChairmanMemo>("/chairman-memos", { method: "POST", body: JSON.stringify({ ...fields, requestId }) }, token);
+export const saveChairmanMemo = (token: string, memo: ChairmanMemo, fields: ChairmanMemoFields) =>
+  apiRequest<ChairmanMemo>(`/chairman-memos/${memo.id}`, { method: "PUT", body: JSON.stringify({ ...fields, expectedRevision: memo.revision }) }, token);
+export const actOnChairmanMemo = (token: string, memo: ChairmanMemo, action: "submit" | "withdraw" | "approve" | "return", comment = "") =>
+  apiRequest<ChairmanMemo>(`/chairman-memos/${memo.id}/${action === "approve" || action === "return" ? "decision" : action}`, {
+    method: "POST", body: JSON.stringify({ expectedRevision: memo.revision,
+      ...(action === "approve" || action === "return" ? { decision: action, comment } : {}) }),
+  }, token);
+export const downloadChairmanMemoPdf = (token: string, id: string, signal?: AbortSignal) =>
+  apiRequest<Blob>(`/chairman-memos/${encodeURIComponent(id)}/pdf`, { signal }, token, 30_000, response => response.blob());
 
 async function apiRequest<T>(
   path: string,

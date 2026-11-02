@@ -43,6 +43,7 @@ import { useTeamGrantInbox } from "./useTeamGrantInbox";
 import { useTeamApprovalInbox } from "./useTeamApprovalInbox";
 
 interface TeamDashboardViewProps {
+  readonly memorandumAction?: ReactNode;
   readonly children?: ReactNode;
   readonly token: string;
   readonly tasks: readonly WorkspaceTask[];
@@ -175,6 +176,7 @@ function MetricCard({ icon, label, value, note, tone, active, onSelect, loading 
 }
 
 export function TeamDashboardView({
+  memorandumAction,
   children,
   token,
   tasks,
@@ -388,6 +390,7 @@ export function TeamDashboardView({
     </WorkspaceSectionHeader>
 
     <section className="team-dash-metrics" aria-label="Ключевые показатели команды">
+      {memorandumAction}
       <MetricCard active={decisionPanel === "overdue"} onSelect={() => setDecisionPanel("overdue")} icon={<Warning24Regular />} label="Нужна помощь" value={overdueTasks.length} note={overdueTasks.length ? "истёк текущий срок" : "истёкших сроков нет"} tone="danger" />
       <MetricCard active={decisionPanel === "review"} onSelect={() => setDecisionPanel("review")} icon={<CheckmarkCircle24Regular />} label="Ждут решения" value={reviewTasks.length} note="задачи, где вы постановщик" tone="review" />
       {onSelectPaymentRequest ? <MetricCard active={decisionPanel === "payments"} onSelect={() => setDecisionPanel("payments")} icon={<CheckmarkCircle24Regular />} label="Заявки на оплату" value={pendingPayments.length} note="ждут вашего решения" tone="brand" /> : null}

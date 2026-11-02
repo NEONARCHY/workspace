@@ -1,4 +1,5 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
+import { ChairmanMemoLauncher, ChairmanMemosDialog } from "./ChairmanMemos";
 import { attachmentImageCache, waitForCachedImage } from "./attachment-image-cache";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { WorkspaceSectionContent } from "./WorkspaceSectionContent";
@@ -482,6 +483,7 @@ export function App() {
   useEffect(() => { if (activeSection !== "messenger") lastMessengerBackground.current = activeSection; }, [activeSection]);
   const [supportRegistry, setSupportRegistry] = useState<SupportRegistry>();
   const [supportOpen, setSupportOpen] = useState(false);
+  const [memoFocus, setMemoFocus] = useState<{ readonly userId: string; readonly id?: string }>();
   const [supportFocusRequestId, setSupportFocusRequestId] = useState<string>();
   const activeToken = useRef<string | undefined>(undefined);
   const [focusTarget, setFocusTarget] = useState<{
@@ -1843,6 +1845,9 @@ export function App() {
 
   const openNotification = (notification: WorkspaceNotification) => {
     void handleMarkNotificationRead(notification);
+    if (notification.section === "home" && notification.kind === "approval" && notification.entityId) {
+      setMemoFocus({ userId: workspace.currentUser.id, id: notification.entityId }); return;
+    }
     if (notification.section === "feed" && notification.entityId) { void openFeedPost(notification.entityId); return; }
     if (notification.kind === "support") {
       setSupportFocusRequestId(notification.entityId ?? undefined);
@@ -1866,6 +1871,10 @@ export function App() {
     return workspacePlatform.onNotificationOpen((payload) => {
       const notification = workspace.notifications.find((item) => item.id === payload.id);
       if (session === undefined || notification === undefined) return;
+      if (notification.section === "home" && notification.kind === "approval" && notification.entityId) {
+        if (!notification.readAt) void markWorkspaceNotificationRead(session.accessToken, notification.id).then(mergeNotification).catch(reportError);
+        setMemoFocus({ userId: session.user.id, id: notification.entityId }); return;
+      }
       if (!notification.readAt) {
         void markWorkspaceNotificationRead(session.accessToken, notification.id)
           .then(mergeNotification)
@@ -2276,7 +2285,9 @@ export function App() {
 
           <WorkspaceSectionContent authorityKey={JSON.stringify([session.user.id, session.user.role, workspace.moduleAccess])} section={displayedSection}>
             <RecoveryBoundary key={`${session.user.id}:${displayedSection}`} onHome={() => setActiveSection(chairmanHome ? "team_overview" : "home")}>
-            {displayedSection === "home" ? <PersonalHomeView
+            {displayedSection === "home" ? <>
+              <ChairmanMemoLauncher token={session.accessToken} userId={session.user.id} compact onOpen={() => setMemoFocus({ userId: session.user.id })} />
+              <PersonalHomeView
               key={session.user.id}
               token={session.accessToken}
               workspace={workspace}
@@ -2290,7 +2301,7 @@ export function App() {
                 if (canView("zoom_meetings")) await refreshZoom();
               }}
               onOpen={openPersonalHomeTarget}
-            /> : null}
+            /></> : null}
             {displayedSection === "notifications" ? (
               <NotificationCenter
                 key={focusNotification?.revision}
@@ -2394,6 +2405,7 @@ export function App() {
             {displayedSection === "team_overview" ? (
               <section className="workspace-view tasks-view bp5-tasks dashboard-mode" aria-label="Обзор команды">
                 <TeamDashboardView
+                  memorandumAction={<ChairmanMemoLauncher token={session.accessToken} userId={session.user.id} onOpen={() => setMemoFocus({ userId: session.user.id })} />}
                   token={session.accessToken}
                   tasks={workspace.tasks}
                   calendarEvents={workspace.calendarEvents}
@@ -2824,6 +2836,8 @@ export function App() {
         } : undefined}
         onOpenChange={(open) => { if (!open) setProfileUserId(undefined); }}
       /></Suspense> : null}
+      {memoFocus?.userId === session.user.id ? <ChairmanMemosDialog key={session.user.id + ":" + (memoFocus.id ?? "list")} token={session.accessToken} userId={session.user.id}
+        initialId={memoFocus.id} onClose={() => setMemoFocus(undefined)} /> : null}
       {supportOpen ? (
         <Suspense fallback={null}>
         <SupportDialog

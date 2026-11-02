@@ -917,6 +917,7 @@ export type NotificationKind =
 export type NotificationPriority = "normal" | "attention" | "urgent";
 export type NotificationSection = Extract<
   WorkspaceSection,
+  | "home"
   | "grants"
   | "messenger"
   | "tasks"
@@ -933,6 +934,45 @@ export type NotificationSection = Extract<
   | "ai_hisobot"
   | "feed"
 > | "notifications";
+
+export type ChairmanMemoStatus = "draft" | "pending" | "approved" | "needs_revision";
+export interface ChairmanMemoContext {
+  readonly requesterName: string;
+  readonly requesterTitle: string;
+  readonly enabled: boolean;
+  readonly canCreate: boolean;
+  readonly canReview: boolean;
+  readonly pendingCount: number;
+  readonly chairName: string | null;
+  readonly configurationError: string | null;
+}
+export interface ChairmanMemoSummary {
+  readonly id: string;
+  readonly title: string;
+  readonly status: ChairmanMemoStatus;
+  readonly revision: number;
+  readonly requesterName: string;
+  readonly chairName: string;
+  readonly createdAt: string;
+  readonly submittedAt: string | null;
+  readonly decidedAt: string | null;
+}
+export interface ChairmanMemo extends ChairmanMemoSummary {
+  readonly body: string;
+  readonly requesterTitle: string;
+  readonly decisionComment: string;
+  readonly canEdit: boolean;
+  readonly canSubmit: boolean;
+  readonly canDecide: boolean;
+  readonly canWithdraw: boolean;
+  readonly hasPdf: boolean;
+  readonly pdfByteSize: number;
+}
+export interface ChairmanMemoRegistry {
+  readonly items: readonly ChairmanMemoSummary[];
+  readonly total: number;
+}
+export interface ChairmanMemoFields { readonly title: string; readonly body: string }
 
 export interface ExchangeRate {
   readonly code: string;

@@ -34,6 +34,7 @@ from .routers import (
     ai_referent_shared,
     assistant,
     authentication,
+    chairman_memos,
     context,
     directory,
     dossiers,
@@ -249,6 +250,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(telegram_access.router, prefix=runtime_settings.api_prefix)
     application.include_router(hisobot.router, prefix=runtime_settings.api_prefix)
     application.include_router(personal.router, prefix=runtime_settings.api_prefix)
+    application.include_router(chairman_memos.router, prefix=runtime_settings.api_prefix)
     application.include_router(recognition.router, prefix=runtime_settings.api_prefix)
     application.include_router(support.router, prefix=runtime_settings.api_prefix)
     application.include_router(updates.router, prefix=runtime_settings.api_prefix)

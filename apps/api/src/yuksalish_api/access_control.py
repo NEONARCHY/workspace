@@ -155,6 +155,15 @@ async def module_permissions_for_user(
 def request_module_action(path: str, method: str) -> tuple[str, ModuleAction] | None:
     normalized = path.removeprefix("/api/v1")
     upper_method = method.upper()
+    if normalized == "/chairman-memos" or normalized.startswith("/chairman-memos/"):
+        if upper_method in {"GET", "HEAD", "OPTIONS"}:
+            return "home", "view"
+        if normalized.endswith("/decision"):
+            return "home", "approve"
+        action: ModuleAction = (
+            "edit" if upper_method == "PUT" or normalized.endswith("/withdraw") else "create"
+        )
+        return "home", action
     if normalized == "/personnel-dossiers" or normalized.startswith("/personnel-dossiers/"):
         # Own questionnaire is available without access to HR payroll. The dedicated
         # service checks every target, scope and operation, including administrator settings.
