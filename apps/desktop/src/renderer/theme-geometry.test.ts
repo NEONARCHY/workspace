@@ -38,17 +38,21 @@ it("shares Fluent typography, dimensions and motion tokens between palettes", ()
   }
 });
 
-it("uses the former dark banner geometry in shared responsive header rules", () => {
+it("keeps default banner geometry with a shared compact opt-in for task and payment queues", () => {
   const css = read("section-headers.css");
   const header = css.match(/html:root body \.app-provider :is\([^}]+?\.ws-section-header \{([^}]+)\}/)?.[1];
-  expect(header).toContain("min-height: 116px;");
-  expect(header).toContain("padding-block: 22px;");
+  expect(header).toContain("min-height: var(--ws-section-header-height, 116px);");
+  expect(header).toContain("padding-block: var(--ws-section-header-padding, 22px);");
   expect(header).toContain("border-radius: 20px;");
   expect(header).not.toMatch(/(?:^|;)\s*(?:margin|gap|display|position|color|background)\s*:/);
   expect(css).toContain("padding: 22px clamp(20px, 3vw, 36px);");
   expect(css).toContain("padding: 22px 24px;");
   expect(css).toContain("padding: 22px 16px;");
   expect(css).not.toMatch(/min-height: (?:148|138)px/);
+  const compact = [...css.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^{}]*--ws-section-header-height:\s*88px;[^{}]*)\}/g)];
+  expect(compact).toHaveLength(1);
+  expect(compact[0]?.[1]?.trim()).toBe(".workspace-view:is(.tasks-view:not(.dashboard-mode), .approvals-view)");
+  expect(compact[0]?.[2]).toContain("--ws-section-header-padding: 12px;");
 });
 
 it("reserves the same popup border and home/project radii before either palette paints", () => {
