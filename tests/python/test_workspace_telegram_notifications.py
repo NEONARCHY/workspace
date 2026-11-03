@@ -409,3 +409,35 @@ def test_co_assignees_receive_one_event_observers_and_author_do_not():
             assert set(targets) == {people[0].id, people[1].id}
 
     asyncio.run(run())
+
+
+def test_new_recurring_occurrence_enqueues_once_without_backfill():
+    from yuksalish_api.tables import task_cycles
+
+    async def run():
+        async with scenario() as (c, people, _, __):
+            created = await repo.create_task(
+                c,
+                people[2],
+                CreateTaskRequest(
+                    title="Synthetic recurring notification",
+                    assignee_id=str(people[0].id),
+                    cycle={"title": "Recurring test", "scheduleKind": "daily"},
+                ),
+            )
+            assert created.cycle is not None
+            await c.execute(update(task_cycles).values(is_enabled=False))
+            now = datetime.now(UTC)
+            await c.execute(
+                update(task_cycles)
+                .where(task_cycles.c.id == UUID(created.cycle.id))
+                .values(is_enabled=True, next_run_at=now - timedelta(minutes=1))
+            )
+            assert await repo.materialize_due_task_cycles(c, now) == 1
+            assert await repo.materialize_due_task_cycles(c, now) == 0
+            notices = (await c.execute(select(deliveries))).mappings().all()
+            assert len(notices) == 2
+            assert len({row["entity_id"] for row in notices}) == 2
+            assert all(row["user_id"] == people[0].id for row in notices)
+
+    asyncio.run(run())

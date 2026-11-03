@@ -6073,6 +6073,9 @@ async def materialize_due_task_cycles(
                 assignee_user_id=template["primary_assignee_user_id"],
                 occurred_at=current_time,
             )
+            from .telegram_notification_events import queue_task
+
+            await queue_task(connection, task_id)
             created += 1
         await connection.execute(
             update(task_cycles)
