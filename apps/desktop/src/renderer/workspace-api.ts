@@ -1,4 +1,5 @@
 import type { OfficePreviewResult } from "./file-viewer-kind";
+import type { WorkspaceNoticeTarget } from "@yuksalish/contracts";
 import type { TaskProposalImportContext, TaskProposalImportPreview, TaskProposalImportResult, TaskProposalImportWrite } from "@yuksalish/contracts";
 import type { ChairmanMemo, ChairmanMemoContext, ChairmanMemoFields, ChairmanMemoRegistry } from "@yuksalish/contracts";
 import type { ReleaseReadState, ReleaseReadInput } from "@yuksalish/contracts";
@@ -1745,6 +1746,10 @@ export async function loadTaskProposals(token: string): Promise<readonly TaskPro
   const proposals = await apiRequest<readonly TaskProposal[]>("/task-proposals", {}, token);
   if (!Array.isArray(proposals)) throw new Error("Сервер вернул некорректный список заявок");
   return proposals;
+}
+
+export function resolveWorkspaceNotice(token: string, id: string): Promise<WorkspaceNoticeTarget> {
+  return apiRequest(`/telegram-notifications/open/${encodeURIComponent(id)}`, {}, token);
 }
 
 export function proposeWorkspaceTask(token: string, payload: TaskProposalWrite): Promise<TaskProposal> {

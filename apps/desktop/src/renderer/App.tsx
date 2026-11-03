@@ -1,5 +1,7 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { ChairmanMemoLauncher, ChairmanMemosDialog } from "./ChairmanMemos";
+import { workspaceNoticeId, withoutWorkspaceNotice } from "./workspace-notice-link";
+import { resolveWorkspaceNotice } from "./workspace-api";
 import { attachmentImageCache, waitForCachedImage } from "./attachment-image-cache";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { WorkspaceSectionContent } from "./WorkspaceSectionContent";
@@ -634,6 +636,22 @@ export function App() {
     setConnectionDetail("Не удалось выполнить операцию");
     setBackgroundError(error instanceof Error ? error.message : "Ошибка операции");
   }, []);
+
+  useEffect(() => {
+    if (!session || workspacePlatform.kind !== "web") return;
+    let id: string | undefined;
+    try { id = workspaceNoticeId(window.location.search); }
+    catch (error) { reportError(error); return; }
+    if (!id) return;
+    let active = true;
+    void resolveWorkspaceNotice(session.accessToken, id).then(target => {
+      if (!active) return;
+      setFocusTarget(current => ({ ...target, revision: (current?.revision ?? 0) + 1 }));
+      setActiveSection(target.section);
+      window.history.replaceState(window.history.state, "", withoutWorkspaceNotice(window.location.href));
+    }).catch((error: unknown) => { if (active) reportError(error); });
+    return () => { active = false; };
+  }, [session, reportError]);
 
   const handleSwitchNetwork = async () => {
     if (!session || switchingNetwork) return;

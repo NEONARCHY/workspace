@@ -60,6 +60,7 @@ from .routers import (
     task_plans,
     task_proposals,
     telegram_access,
+    telegram_notifications,
     trip_documents,
     updates,
     workday,
@@ -248,6 +249,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(ai_referent_shared.router, prefix=runtime_settings.api_prefix)
     application.include_router(edo_incoming.router, prefix=runtime_settings.api_prefix)
     application.include_router(telegram_access.router, prefix=runtime_settings.api_prefix)
+    application.include_router(telegram_notifications.router, prefix=runtime_settings.api_prefix)
     application.include_router(hisobot.router, prefix=runtime_settings.api_prefix)
     application.include_router(personal.router, prefix=runtime_settings.api_prefix)
     application.include_router(chairman_memos.router, prefix=runtime_settings.api_prefix)
