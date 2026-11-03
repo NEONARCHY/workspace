@@ -4,7 +4,17 @@ from collections.abc import Callable, Coroutine
 from typing import Annotated, Any, cast
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    UploadFile,
+)
 from fastapi.exceptions import RequestValidationError
 from fastapi.routing import APIRoute
 from sqlalchemy import select
@@ -34,6 +44,7 @@ from ..chairman_memo_tables import memoranda
 from ..database import get_connection
 from ..errors import WorkspaceRepositoryError
 from ..events import WorkspaceEventBus
+from ..memo_processing_service import MAX_ORDER_BYTES, attach_order
 from ..settings import Settings
 
 
@@ -76,7 +87,11 @@ async def committed(c: AsyncConnection, request: Request, memo_id: UUID) -> None
     record = (
         await c.execute(
             select(
-                memoranda.c.requester_user_id, memoranda.c.chair_user_id, memoranda.c.status
+                memoranda.c.requester_user_id,
+                memoranda.c.chair_user_id,
+                memoranda.c.status,
+                memoranda.c.hr_user_id,
+                memoranda.c.accountant_user_id,
             ).where(memoranda.c.id == memo_id)
         )
     ).one()
@@ -85,6 +100,10 @@ async def committed(c: AsyncConnection, request: Request, memo_id: UUID) -> None
     recipients = {record.requester_user_id}
     if record.status != "draft":
         recipients.add(record.chair_user_id)
+    if record.hr_user_id:
+        recipients.add(record.hr_user_id)
+    if record.accountant_user_id and record.status in {"accountant_pending", "completed"}:
+        recipients.add(record.accountant_user_id)
     for recipient in recipients:
         await bus.publish({"type": "notification.created"}, recipient_id=recipient)
 
@@ -103,7 +122,10 @@ async def get_registry(
 
 @router.get("/{memo_id}", response_model=MemoDetail)
 async def get_memo(
-    memo_id: UUID, user: User, connection: Connection, requesters: Requesters,
+    memo_id: UUID,
+    user: User,
+    connection: Connection,
+    requesters: Requesters,
 ) -> MemoDetail:
     return await detail(connection, user, memo_id, requesters)
 
@@ -125,7 +147,11 @@ async def get_pdf(memo_id: UUID, user: User, connection: Connection) -> Response
 
 @router.post("", response_model=MemoDetail)
 async def post_memo(
-    value: MemoCreate, request: Request, user: User, connection: Connection, requesters: Requesters,
+    value: MemoCreate,
+    request: Request,
+    user: User,
+    connection: Connection,
+    requesters: Requesters,
 ) -> MemoDetail:
     result = await create(connection, user, value, requesters)
     await committed(connection, request, UUID(result.id))
@@ -134,7 +160,11 @@ async def post_memo(
 
 @router.put("/{memo_id}", response_model=MemoDetail)
 async def put_memo(
-    memo_id: UUID, value: MemoUpdate, request: Request, user: User, connection: Connection,
+    memo_id: UUID,
+    value: MemoUpdate,
+    request: Request,
+    user: User,
+    connection: Connection,
     requesters: Requesters,
 ) -> MemoDetail:
     result = await save(connection, user, memo_id, value, requesters)
@@ -144,7 +174,11 @@ async def put_memo(
 
 @router.post("/{memo_id}/submit", response_model=MemoDetail)
 async def submit_memo(
-    memo_id: UUID, value: MemoRevision, request: Request, user: User, connection: Connection,
+    memo_id: UUID,
+    value: MemoRevision,
+    request: Request,
+    user: User,
+    connection: Connection,
     requesters: Requesters,
 ) -> MemoDetail:
     result = await transition(connection, user, memo_id, value, "submit", requesters)
@@ -154,7 +188,11 @@ async def submit_memo(
 
 @router.post("/{memo_id}/decision", response_model=MemoDetail)
 async def decide_memo(
-    memo_id: UUID, value: MemoDecision, request: Request, user: User, connection: Connection,
+    memo_id: UUID,
+    value: MemoDecision,
+    request: Request,
+    user: User,
+    connection: Connection,
     requesters: Requesters,
 ) -> MemoDetail:
     result = await transition(connection, user, memo_id, value, "decide", requesters)
@@ -164,9 +202,94 @@ async def decide_memo(
 
 @router.post("/{memo_id}/withdraw", response_model=MemoDetail)
 async def withdraw_memo(
-    memo_id: UUID, value: MemoRevision, request: Request, user: User, connection: Connection,
+    memo_id: UUID,
+    value: MemoRevision,
+    request: Request,
+    user: User,
+    connection: Connection,
     requesters: Requesters,
 ) -> MemoDetail:
     result = await transition(connection, user, memo_id, value, "withdraw", requesters)
     await committed(connection, request, memo_id)
     return result
+
+
+@router.post("/{memo_id}/start-processing", response_model=MemoDetail)
+async def start_processing(
+    memo_id: UUID,
+    value: MemoRevision,
+    request: Request,
+    user: User,
+    connection: Connection,
+    requesters: Requesters,
+) -> MemoDetail:
+    result = await transition(connection, user, memo_id, value, "start_processing", requesters)
+    await committed(connection, request, memo_id)
+    return result
+
+
+@router.post("/{memo_id}/hr-complete", response_model=MemoDetail)
+async def hr_complete(
+    memo_id: UUID,
+    value: MemoRevision,
+    request: Request,
+    user: User,
+    connection: Connection,
+    requesters: Requesters,
+) -> MemoDetail:
+    result = await transition(connection, user, memo_id, value, "hr_complete", requesters)
+    await committed(connection, request, memo_id)
+    return result
+
+
+@router.post("/{memo_id}/complete", response_model=MemoDetail)
+async def complete_memo(
+    memo_id: UUID,
+    value: MemoRevision,
+    request: Request,
+    user: User,
+    connection: Connection,
+    requesters: Requesters,
+) -> MemoDetail:
+    result = await transition(connection, user, memo_id, value, "complete", requesters)
+    await committed(connection, request, memo_id)
+    return result
+
+
+@router.post("/{memo_id}/order", response_model=MemoDetail)
+async def upload_order(
+    memo_id: UUID,
+    request: Request,
+    user: User,
+    connection: Connection,
+    requesters: Requesters,
+    expected_revision: Annotated[int, Form(ge=1)],
+    file: Annotated[UploadFile, File()],
+) -> MemoDetail:
+    try:
+        content = await file.read(MAX_ORDER_BYTES + 1)
+    finally:
+        await file.close()
+    result = await attach_order(
+        connection,
+        user,
+        memo_id,
+        MemoRevision(expected_revision=expected_revision),
+        file.filename or "",
+        content,
+        requesters,
+    )
+    await committed(connection, request, memo_id)
+    return result
+
+
+@router.get("/{memo_id}/order")
+async def order_pdf(memo_id: UUID, user: User, connection: Connection) -> Response:
+    record = await row(connection, user, memo_id)
+    if not record["order_content"]:
+        raise HTTPException(404, "Приказ пока не прикреплён", headers=PRIVATE)
+    return Response(
+        bytes(record["order_content"]),
+        media_type="application/pdf",
+        headers={**PRIVATE, "Content-Disposition": f'inline; filename="order-{memo_id}.pdf"'},
+    )

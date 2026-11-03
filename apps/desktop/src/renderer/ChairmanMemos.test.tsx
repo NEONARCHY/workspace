@@ -8,7 +8,7 @@ import { workspaceTheme } from "./workspace-theme";
 const api = vi.hoisted(() => ({
   loadChairmanMemoContext: vi.fn(), loadChairmanMemos: vi.fn(), loadChairmanMemo: vi.fn(),
   createChairmanMemo: vi.fn(), saveChairmanMemo: vi.fn(), actOnChairmanMemo: vi.fn(),
-  downloadChairmanMemoPdf: vi.fn(),
+  downloadChairmanMemoPdf: vi.fn(), downloadChairmanMemoOrder: vi.fn(), attachChairmanMemoOrder: vi.fn(),
 }));
 vi.mock("./workspace-api", () => api);
 const context: ChairmanMemoContext = {
@@ -87,4 +87,48 @@ describe("private memorandum UI", () => {
     expect(approve).toBeEnabled();
     expect(screen.queryByText("Одобрено председателем")).not.toBeInTheDocument();
   });
+  it("preserves the chosen alphabet when saving fails", async () => {
+    api.saveChairmanMemo.mockRejectedValue(new Error("Нет связи"));
+    dialog(memo.id);
+    const alphabet = await screen.findByRole("combobox", { name: "Алфавит документа" });
+    fireEvent.change(alphabet, { target: { value: "latin" } });
+    expect(screen.getByRole("button", { name: "Отправить председателю" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить изменения" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Нет связи");
+    expect(alphabet).toHaveValue("latin");
+    expect(api.saveChairmanMemo).toHaveBeenCalledWith("test-token", memo, expect.objectContaining({ documentScript: "latin" }));
+  });
+  it("requires an uploaded order and preserves the selected file after an error", async () => {
+    const hr = { ...memo, status: "hr_pending", canEdit: false, canSubmit: false, canAttachOrder: true,
+      orderFileName: null, hrName: "Кадровик", accountantName: "Бухгалтер", revision: 3 };
+    api.loadChairmanMemo.mockResolvedValue(hr);
+    api.attachChairmanMemoOrder.mockRejectedValueOnce(new Error("Загрузка не удалась"));
+    dialog(memo.id);
+    const transfer = await screen.findByRole("button", { name: "Утвердить и передать бухгалтеру" });
+    expect(transfer).toBeDisabled();
+    const file = new File(["synthetic"], "order.pdf", { type: "application/pdf" });
+    fireEvent.change(screen.getByLabelText("Выбрать приказ в PDF"), { target: { files: [file] } });
+    fireEvent.click(screen.getByRole("button", { name: "Загрузить приказ" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Загрузка не удалась");
+    expect(screen.getByText("order.pdf")).toBeInTheDocument();
+    expect(transfer).toBeDisabled();
+    api.attachChairmanMemoOrder.mockResolvedValue({ ...hr, revision: 4, orderFileName: "order.pdf", orderByteSize: 100 });
+    fireEvent.click(screen.getByRole("button", { name: "Загрузить приказ" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Утвердить и передать бухгалтеру" })).toBeEnabled());
+    expect(api.attachChairmanMemoOrder).toHaveBeenLastCalledWith("test-token", hr, file);
+  });
+  it("lets the accountant complete its own stage and removes the action afterwards", async () => {
+    const accounting = { ...memo, status: "accountant_pending", canEdit: false, canSubmit: false,
+      canComplete: true, orderFileName: "order.pdf", revision: 5 };
+    api.loadChairmanMemo.mockResolvedValue(accounting);
+    api.actOnChairmanMemo.mockResolvedValue({ ...accounting, status: "completed", canComplete: false,
+      revision: 6, completedAt: "2026-11-03T11:00:00Z" });
+    dialog(memo.id);
+    const complete = await screen.findByRole("button", { name: "Выполнено" });
+    expect(screen.queryByRole("button", { name: "Загрузить приказ" })).not.toBeInTheDocument();
+    fireEvent.click(complete);
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Выполнено" })).not.toBeInTheDocument());
+    expect(api.actOnChairmanMemo).toHaveBeenCalledWith("test-token", accounting, "complete");
+  });
+
 });

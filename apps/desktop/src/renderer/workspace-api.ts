@@ -932,7 +932,7 @@ export const createChairmanMemo = (token: string, fields: ChairmanMemoFields, re
   apiRequest<ChairmanMemo>("/chairman-memos", { method: "POST", body: JSON.stringify({ ...fields, requestId }) }, token);
 export const saveChairmanMemo = (token: string, memo: ChairmanMemo, fields: ChairmanMemoFields) =>
   apiRequest<ChairmanMemo>(`/chairman-memos/${memo.id}`, { method: "PUT", body: JSON.stringify({ ...fields, expectedRevision: memo.revision }) }, token);
-export const actOnChairmanMemo = (token: string, memo: ChairmanMemo, action: "submit" | "withdraw" | "approve" | "return", comment = "") =>
+export const actOnChairmanMemo = (token: string, memo: ChairmanMemo, action: "submit" | "withdraw" | "approve" | "return" | "start-processing" | "hr-complete" | "complete", comment = "") =>
   apiRequest<ChairmanMemo>(`/chairman-memos/${memo.id}/${action === "approve" || action === "return" ? "decision" : action}`, {
     method: "POST", body: JSON.stringify({ expectedRevision: memo.revision,
       ...(action === "approve" || action === "return" ? { decision: action, comment } : {}) }),
@@ -2898,3 +2898,14 @@ export function subscribeToWorkspaceEvents(
     socket?.close();
   };
 }
+
+export function attachChairmanMemoOrder(token: string, memo: ChairmanMemo, file: File): Promise<ChairmanMemo> {
+  if (!file.name.toLowerCase().endsWith(".pdf") || file.size > 10 * 1024 * 1024) throw new Error("Выберите приказ в PDF до 10 МБ");
+  const body = new FormData(); body.set("file", file); body.set("expected_revision", String(memo.revision));
+  const headers = new Headers({ Authorization: `Bearer ${token}`, Accept: "application/json" });
+  if (workspacePlatform.kind === "electron") headers.set("X-Desktop-Version", workspacePlatform.version);
+  return boundedRequest(`${getApiBaseUrl()}/api/v1/chairman-memos/${encodeURIComponent(memo.id)}/order`,
+    { method: "POST", headers, body }, response => response.json() as Promise<ChairmanMemo>, 120_000);
+}
+export const downloadChairmanMemoOrder = (token: string, id: string, signal?: AbortSignal) =>
+  apiRequest<Blob>(`/chairman-memos/${encodeURIComponent(id)}/order`, { signal }, token, 30_000, response => response.blob());
