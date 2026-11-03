@@ -19,6 +19,37 @@ const proposal: TaskProposal = {
     participants: [{ userId: "dilshod", role: "observer" }], checklist: [{ title: "Проверить цифры" }] },
 };
 
+it("keeps personal withdrawal accessible from the compact launcher without an inline queue", async () => {
+  vi.mocked(loadTaskProposals).mockResolvedValue([proposal]);
+  vi.mocked(decideTaskProposal).mockResolvedValue({ ...proposal, status: "cancelled" });
+  render(<FluentProvider theme={webLightTheme}><TaskProposals compact token="test" currentUserId="aziza"
+    people={people} tasks={[]} revision={0} onOpenTask={vi.fn()} /></FluentProvider>);
+  expect(screen.queryByRole("region", { name: "Заявки на постановку задач" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Запросы" }));
+  const list = await screen.findByRole("dialog", { name: "Запросы на постановку задач" });
+  fireEvent.click(await within(list).findByRole("button", { name: "Открыть заявку" }));
+  const detail = await screen.findByRole("dialog", { name: "Заявка на постановку задачи" });
+  expect(within(detail).queryByRole("button", { name: "Подтвердить постановку" })).not.toBeInTheDocument();
+  fireEvent.click(within(detail).getByRole("button", { name: "Отозвать заявку" }));
+  await waitFor(() => expect(decideTaskProposal).toHaveBeenCalledWith("test", "proposal", "cancel", ""));
+  fireEvent.click(within(detail).getByRole("button", { name: "Закрыть заявку" }));
+  expect(await screen.findByRole("dialog", { name: "Запросы на постановку задач" })).toHaveTextContent("Отозвана");
+  fireEvent.click(screen.getByRole("button", { name: "Закрыть запросы" }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+});
+
+it("shows loading failures and retry inside the compact request dialog", async () => {
+  vi.mocked(loadTaskProposals).mockRejectedValueOnce(new Error("Не удалось загрузить запросы")).mockResolvedValue([proposal]);
+  render(<FluentProvider theme={webLightTheme}><TaskProposals compact token="test" currentUserId="aziza"
+    people={people} tasks={[]} revision={0} onOpenTask={vi.fn()} /></FluentProvider>);
+  fireEvent.click(screen.getByRole("button", { name: "Запросы" }));
+  const list = await screen.findByRole("dialog", { name: "Запросы на постановку задач" });
+  expect(await within(list).findByRole("alert")).toHaveTextContent("Не удалось загрузить запросы");
+  fireEvent.click(within(list).getByRole("button", { name: "Обновить заявки" }));
+  expect(await within(list).findByRole("button", { name: "Открыть заявку" })).toBeEnabled();
+});
+
 it("requires a primary assignee for an imported request and records personal review", async () => {
   const imported: TaskProposal = { ...proposal, importBatchId: "batch", importSourceKey: "Sheet!2",
     task: { ...proposal.task, assigneeId: undefined } };

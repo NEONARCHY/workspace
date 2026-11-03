@@ -12,7 +12,7 @@ body .app-provider :is(.workspace-view, .team-dashboard, .telegram-access-view) 
   justify-content: space-between;
   gap: 18px 24px;
   min-width: 0;
-  min-height: 116px;
+  min-height: var(--ws-section-header-height, 116px);
   margin: 0 0 14px;
   padding: 22px clamp(20px, 3vw, 36px);
   overflow: hidden;
@@ -26,14 +26,13 @@ body .app-provider :is(.workspace-view, .team-dashboard, .telegram-access-view) 
 /* Match the former dark override's priority for these three properties only.
    Local margins, gaps and responsive inline padding retain their own cascade. */
 html:root body .app-provider :is(.workspace-view, .team-dashboard, .telegram-access-view) .ws-section-header {
-  min-height: 116px;
-  padding-block: 22px;
+  min-height: var(--ws-section-header-height, 116px);
+  padding-block: var(--ws-section-header-padding, 22px);
   border-radius: 20px;
 }
 .workspace-view .ws-section-header::before, .workspace-view .ws-section-header::after { content: none; }
 /* Process summaries own the same gap above and below; do not add a second header gap. */
 body .app-provider :is(.approvals-view, .trips-view) > .ws-section-header { margin-bottom: 0; }
-body .app-provider .tasks-view .tasks-main > .ws-section-header:has(+ .task-proposals) { margin-bottom: 0; }
 .ws-section-header > :not(.ws-section-header-art, .ws-illustrated-header-art) {
   position: relative;
   z-index: 1;
@@ -315,6 +314,24 @@ body .app-provider .notifications-view .ws-section-header .notification-head-act
   .ws-section-header .ws-illustrated-header-copy { padding-right: 36px; }
   .employees-header-tools .fui-Switch { width: 100%; }
 }
+/* Working queues reserve height for records while retaining all header actions.
+   Variables feed the shared geometry rule in both palettes, including at zoom. */
+.workspace-view:is(.tasks-view:not(.dashboard-mode), .approvals-view) {
+  --ws-section-header-height: 88px;
+  --ws-section-header-padding: 12px;
+}
+body .app-provider .workspace-view:is(.tasks-view:not(.dashboard-mode), .approvals-view) .ws-section-header {
+  gap: 10px 16px;
+  margin-bottom: 8px;
+}
+.workspace-view:is(.tasks-view:not(.dashboard-mode), .approvals-view) .ws-section-header :is(h1, h2) {
+  margin: 0 0 4px;
+  font-size: 28px;
+}
+.workspace-view:is(.tasks-view:not(.dashboard-mode), .approvals-view) .ws-section-header > div:first-of-type {
+  flex-basis: 240px;
+}
+.approvals-view.workflow-process-view { --ws2-process-section-gap: 8px; }
 @media (forced-colors: active) {
   body .app-provider :is(.workspace-view, .team-dashboard, .telegram-access-view) .ws-section-header {
     color: CanvasText;

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { TaskProposal, WorkspacePerson, WorkspaceTask } from "@yuksalish/contracts";
-import { Button, DialogSurface, Textarea } from "@fluentui/react-components";
+import { Button, DialogSurface, Textarea, useRestoreFocusTarget } from "@fluentui/react-components";
 import { WorkspaceDialog } from "./WorkspaceDialog";
 import { RecordSection } from "./RecordComposer";
 import { WorkspaceNotice } from "./WorkspaceNotice";
@@ -15,18 +15,21 @@ const labels: Record<TaskProposal["status"], string> = {
 const priorityLabels = { low: "Низкий", normal: "Обычный", high: "Высокий", urgent: "Срочный" };
 const dateLabel = (date?: string | null) => date ? new Date(date).toLocaleString("ru-RU") : "Без срока";
 
-export function TaskProposals({ token, currentUserId, people, tasks, revision, focusId, onRefresh, onOpenTask }: {
+export function TaskProposals({ token, currentUserId, people, tasks, revision, focusId, compact = false, onRefresh, onOpenTask }: {
   readonly token: string;
   readonly currentUserId: string;
   readonly people: readonly WorkspacePerson[];
   readonly tasks: readonly WorkspaceTask[];
   readonly revision: number;
   readonly focusId?: string;
+  readonly compact?: boolean;
   readonly onRefresh?: () => Promise<void>;
   readonly onOpenTask: (id: string) => void;
 }) {
   const [proposals, setProposals] = useState<readonly TaskProposal[]>([]);
   const [selectedId, setSelectedId] = useState(focusId ?? "");
+  const [listOpen, setListOpen] = useState(false);
+  const launcherFocusTarget = useRestoreFocusTarget();
   const [reason, setReason] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -73,19 +76,26 @@ export function TaskProposals({ token, currentUserId, people, tasks, revision, f
       setError(cause instanceof Error ? cause.message : "Не удалось сохранить решение");
     } finally { setBusy(false); }
   };
-  return <section className="record-section task-proposals" aria-label="Заявки на постановку задач">
-    <details open={Boolean(focusId && proposals.some((item) => item.id === focusId))}>
-      <summary>Заявки на постановку · {pending.length} ожидают подтверждения</summary>
+  const proposalList = <>
       <p>Входящие заявки и ваши предложения. До подтверждения это не рабочие задачи.</p>
       {!loaded ? <p role="status">Загружаем заявки…</p> : !proposals.length ? <p>Заявок пока нет.</p> : null}
       <div className="task-composer-dependencies">{proposals.map((item) => <div key={item.id}>
         <span><strong>{item.task.title}</strong><small>{labels[item.status]} · {person(item.creatorUserId)} → {person(item.authorUserId)}</small></span>
         <Button onClick={() => { setSelectedId(item.id); setReason(""); setError(""); }}>Открыть заявку</Button>
       </div>)}</div>
-    </details>
-    {error ? <WorkspaceNotice tone="error" role="alert" actions={<Button onClick={() => setRetry((value) => value + 1)}>Обновить заявки</Button>}>{error}</WorkspaceNotice> : null}
-    <WorkspaceDialog open={Boolean(selected)} onOpenChange={(_, data) => { if (!data.open && !busy) setSelectedId(""); }}>
-      <DialogSurface className="record-composer-dialog" aria-label="Заявка на постановку задачи">
+  </>;
+  const listError = error ? <WorkspaceNotice tone="error" role="alert" actions={<Button onClick={() => setRetry((value) => value + 1)}>Обновить заявки</Button>}>{error}</WorkspaceNotice> : null;
+  return <>
+    {compact ? <Button {...launcherFocusTarget} onClick={() => setListOpen(true)} aria-haspopup="dialog">Запросы</Button> :
+      <section className="record-section task-proposals" aria-label="Заявки на постановку задач">
+        <details open={Boolean(focusId && proposals.some((item) => item.id === focusId))}>
+          <summary>Заявки на постановку · {pending.length} ожидают подтверждения</summary>
+          {proposalList}
+        </details>
+        {listError}
+      </section>}
+    <WorkspaceDialog open={Boolean(selected) || (compact && listOpen)} onOpenChange={(_, data) => { if (!data.open && !busy) { setSelectedId(""); setListOpen(false); } }}>
+      <DialogSurface className="record-composer-dialog" aria-label={selected ? "Заявка на постановку задачи" : "Запросы на постановку задач"}>
         {selected ? <div className="record-composer">
           <header className="record-composer-header"><div><span className="record-eyebrow">{labels[selected.status]}</span><h2>{selected.task.title}</h2></div>
             <Button disabled={busy} onClick={() => setSelectedId("")}>Закрыть заявку</Button></header>
@@ -144,10 +154,13 @@ export function TaskProposals({ token, currentUserId, people, tasks, revision, f
               <Button disabled={busy || !reason.trim()} onClick={() => void decide("reject")}>Отклонить</Button>
               <Button appearance="primary" disabled={busy || Boolean(selected.importBatchId && (!review.assigneeId || (review.dueAt && (!Number.isFinite(Date.parse(review.dueAt)) || Date.parse(review.dueAt) <= now))))} onClick={() => void decide("approve")}>Подтвердить постановку</Button>
             </> : <Button disabled={busy} onClick={() => void decide("cancel")}>Отозвать заявку</Button> : null}
-            {selected.taskId && tasks.some((task) => task.id === selected.taskId) ? <Button onClick={() => { onOpenTask(selected.taskId!); setSelectedId(""); }}>Открыть задачу</Button> : null}</div>
+            {selected.taskId && tasks.some((task) => task.id === selected.taskId) ? <Button onClick={() => { onOpenTask(selected.taskId!); setSelectedId(""); setListOpen(false); }}>Открыть задачу</Button> : null}</div>
           </footer>
+        </div> : compact && listOpen ? <div className="record-composer">
+          <header className="record-composer-header"><div><h2>Запросы на постановку задач</h2><p>{pending.length} ожидают подтверждения</p></div><Button onClick={() => setListOpen(false)}>Закрыть запросы</Button></header>
+          <div className="record-composer-body"><div className="record-composer-fields">{proposalList}{listError}</div></div>
         </div> : null}
       </DialogSurface>
     </WorkspaceDialog>
-  </section>;
+  </>;
 }

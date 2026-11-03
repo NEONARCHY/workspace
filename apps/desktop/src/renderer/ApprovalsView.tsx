@@ -1597,6 +1597,8 @@ export function ApprovalsView({
               ? "Рабочая очередь по стадиям — от запуска до оплаты"
               : "Настройка логики процесса без изменения кода"}
           </p>
+        </div>
+        <div className="toolbar-actions">
           <div className="approvals-tabs">
             <SlidingSegmented className="approval-mode-switch" role="group" aria-label="Разделы согласований">
               <button
@@ -1621,8 +1623,6 @@ export function ApprovalsView({
               ) : null}
             </SlidingSegmented>
           </div>
-        </div>
-        <div className="toolbar-actions">
           {mode === "requests" ? (
             <Button
               className="ws-section-header-primary"
