@@ -49,7 +49,9 @@ async def scenario():
     assert parsed.host in {"127.0.0.1", "localhost", "::1"}
     assert (parsed.database or "").startswith("yuksalish_test")
     engine = create_async_engine(url)
-    people = {key: uuid4() for key in ["chair", "deputy", "first", "hr", "other", "admin"]}
+    people = {key: uuid4() for key in (
+        "chair", "deputy", "first", "hr", "accountant", "other", "admin",
+    )}
     now = datetime.now(UTC)
     settings = Settings(
         environment="test", database_url=url, auth_signing_key=SecretStr(secrets.token_urlsafe(40))
@@ -78,6 +80,7 @@ async def scenario():
                             "deputy": "Rais o‘rinbosari",
                             "first": "Rais birinchi o‘rinbosari",
                             "hr": "Kadrlar mutaxassisi",
+                            "accountant": "Bosh hisobchi",
                         }.get(key, "Mutaxassis"),
                         role="admin"
                         if key == "admin"
@@ -94,6 +97,7 @@ async def scenario():
                 insert(hr_settings).values(
                     id=1,
                     hr_user_id=people["hr"],
+                    accountant_user_id=people["accountant"],
                     chair_user_id=people["chair"],
                     updated_by_user_id=people["admin"],
                     updated_at=now,
@@ -198,7 +202,7 @@ def test_personal_requester_can_prepare_own_memo_but_not_review_or_read_others()
             approved = await client.post(path + "/decision", headers=headers["chair"], json={
                 "expectedRevision": 3, "decision": "approve",
             })
-            assert approved.status_code == 200 and approved.json()["status"] == "approved"
+            assert approved.status_code == 200 and approved.json()["status"] == "hr_pending"
 
     asyncio.run(run())
 
@@ -254,8 +258,8 @@ def test_pdf_keeps_authored_text_and_handles_multipage():
     pdf = PdfReader(BytesIO(content))
     assert len(pdf.pages) > 1
     text = "\n".join(page.extract_text() for page in pdf.pages)
-    assert "BILDIRGI" in text and "Русский текст" in text and "<tag> & oddiy" in text
-    assert "o'g'li" in text
+    assert "БИЛДИРГИ" in text and "Русский текст" in text and "<таг> & оддий" in text
+    assert "ўғли" in text
     assert pdf.metadata.title == "Yuksalish bildirgi"
 
 
@@ -354,7 +358,7 @@ def test_submit_return_approve_notifications_and_immutable_pdf():
                 headers=headers["chair"],
                 json={"expectedRevision": 5, "decision": "approve", "comment": "Согласовано"},
             )
-            assert approved.json()["status"] == "approved"
+            assert approved.json()["status"] == "hr_pending"
             assert not approved.json()["canEdit"] and not approved.json()["canDecide"]
             after = await client.get(path + "/pdf", headers=headers["deputy"])
             assert (
@@ -389,8 +393,13 @@ def test_submit_return_approve_notifications_and_immutable_pdf():
                     .all()
                 )
                 assert sum(n["title"] == "Председатель одобрил вашу билдирги" for n in notes) == 1
-                assert {n["user_id"] for n in notes} == {people["deputy"], people["chair"]}
-                assert not any(n["requires_action"] and n["resolved_at"] is None for n in notes)
+                assert {n["user_id"] for n in notes} == {
+                    people["deputy"], people["chair"], people["hr"],
+                }
+                assert {
+                    n["user_id"] for n in notes
+                    if n["requires_action"] and n["resolved_at"] is None
+                } == {people["hr"]}
 
     asyncio.run(run())
 

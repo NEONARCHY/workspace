@@ -25,4 +25,12 @@ memoranda = sa.Table(
     sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
     sa.Column("submitted_at", sa.DateTime(timezone=True)),
     sa.Column("decided_at", sa.DateTime(timezone=True)),
+    sa.Column("document_script", sa.String(16)),
+    sa.Column("hr_user_id", UUID(as_uuid=True), sa.ForeignKey("core_users.id")),
+    sa.Column("accountant_user_id", UUID(as_uuid=True), sa.ForeignKey("core_users.id")),
+    sa.Column("hr_completed_at", sa.DateTime(timezone=True)),
+    sa.Column("completed_at", sa.DateTime(timezone=True)),
+    sa.Column("order_file_name", sa.String(240)),
+    sa.Column("order_content", sa.LargeBinary()),
+    sa.Column("order_sha256", sa.String(64)),
 )

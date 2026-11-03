@@ -43,3 +43,15 @@
 @media (forced-colors: active) {
   .memo-list-item[aria-current="true"] { outline: 2px solid Highlight; }
 }
+
+.memo-body { text-align: justify; }
+.memo-body > p { margin: 0 0 8px; text-indent: 1.25cm; }
+.memo-body-input textarea { line-height: 1.7; text-align: justify; }
+.memo-route { display: flex; gap: 6px; flex-wrap: wrap; list-style: none; margin: 0; padding: 0; }
+.memo-route li { flex: 1 1 130px; padding: 12px; border-radius: 10px; background: var(--ws-muted-surface); color: var(--ws-muted); border: 1px solid var(--ws-line); font-size: 12px; }
+.memo-route li[aria-current="step"] { border-color: var(--ws-link); color: var(--ws-link); font-weight: 600; }
+.memo-route li[data-done="true"] { color: var(--colorPaletteGreenForeground1, #166534); }
+.memo-order { padding: 18px; border-radius: 14px; border: 1px solid var(--ws-line); display: grid; gap: 12px; }
+.memo-order h3, .memo-order p { margin: 0; }
+.memo-order p { color: var(--ws-muted); line-height: 1.6; }
+.memo-status[data-status="completed"] { color: var(--colorPaletteGreenForeground1, #166534); background: var(--colorPaletteGreenBackground1, #e9f6ee); }

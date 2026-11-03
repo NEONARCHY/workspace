@@ -2,17 +2,35 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import ConfigDict, Field, field_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator
 
+from .memo_document_text import DocumentScript, document_text
 from .workspace_schemas import ApiModel
 
-MemoStatus = Literal["draft", "pending", "approved", "needs_revision"]
+MemoStatus = Literal[
+    "draft",
+    "pending",
+    "approved",
+    "needs_revision",
+    "hr_pending",
+    "accountant_pending",
+    "completed",
+]
 
 
 class MemoInput(ApiModel):
     model_config = ConfigDict(extra="forbid")
     title: str = Field(min_length=1, max_length=160)
     body: str = Field(min_length=1, max_length=20000)
+    document_script: DocumentScript = "cyrillic"
+
+    @model_validator(mode="after")
+    def consistent_script(self) -> "MemoInput":
+        self.body = document_text(self.body, self.document_script)
+        self.title = document_text(self.title, self.document_script)
+        if len(self.body) > 20000 or len(self.title) > 160:
+            raise ValueError("После смены алфавита текст превышает допустимую длину")
+        return self
 
     @field_validator("title", "body")
     @classmethod
@@ -68,6 +86,17 @@ class MemoDetail(MemoSummary):
     can_withdraw: bool
     has_pdf: bool
     pdf_byte_size: int
+    document_script: DocumentScript | None = None
+    document_labels: dict[str, str] = Field(default_factory=dict)
+    can_start_processing: bool = False
+    can_attach_order: bool = False
+    can_complete: bool = False
+    hr_name: str | None = None
+    accountant_name: str | None = None
+    order_file_name: str | None = None
+    order_byte_size: int = 0
+    hr_completed_at: datetime | None = None
+    completed_at: datetime | None = None
 
 
 class MemoContext(ApiModel):
@@ -79,6 +108,7 @@ class MemoContext(ApiModel):
     pending_count: int
     chair_name: str | None
     configuration_error: str | None
+    document_labels: dict[str, dict[str, str]] = Field(default_factory=dict)
 
 
 class MemoRegistry(ApiModel):

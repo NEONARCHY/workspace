@@ -29,6 +29,8 @@ from .chairman_memo_schemas import (
 )
 from .chairman_memo_tables import memoranda as memos
 from .errors import WorkspaceRepositoryError as Error
+from .memo_document_text import DocumentScript, document_parts
+from .memo_processing_service import actors, flags, inbox, process, processing_visible
 from .position_policy import is_executive_leader
 from .tables import audit_events, hr_settings, workspace_notifications
 
@@ -42,12 +44,12 @@ def is_memo_deputy(title: str | None) -> bool:
 
 
 async def can_create(
-    c: AsyncConnection, user: AuthenticatedUser,
+    c: AsyncConnection,
+    user: AuthenticatedUser,
     additional_requesters: frozenset[UUID] = frozenset(),
 ) -> bool:
     hr_id = await c.scalar(select(hr_settings.c.hr_user_id).where(hr_settings.c.id == 1))
-    return (user.id == hr_id or is_memo_deputy(user.job_title)
-            or user.id in additional_requesters)
+    return user.id == hr_id or is_memo_deputy(user.job_title) or user.id in additional_requesters
 
 
 async def chair(c: AsyncConnection) -> AuthenticatedUser:
@@ -60,6 +62,7 @@ async def chair(c: AsyncConnection) -> AuthenticatedUser:
 
 def visible(user: AuthenticatedUser) -> ColumnElement[bool]:
     return or_(
+        processing_visible(user),
         memos.c.requester_user_id == user.id,
         and_(
             memos.c.chair_user_id == user.id,
@@ -70,7 +73,8 @@ def visible(user: AuthenticatedUser) -> ColumnElement[bool]:
 
 
 async def context(
-    c: AsyncConnection, user: AuthenticatedUser,
+    c: AsyncConnection,
+    user: AuthenticatedUser,
     additional_requesters: frozenset[UUID] = frozenset(),
 ) -> MemoContext:
     await ensure_module_action(c, user, "home", "view")
@@ -88,12 +92,25 @@ async def context(
         )
         or 0
     )
+    processing_count = await inbox(c, user) if access["approve"] else 0
+    pending += processing_count
     own = bool(await c.scalar(select(memos.c.id).where(visible(user)).limit(1)))
     configured_id = await c.scalar(select(hr_settings.c.chair_user_id).where(hr_settings.c.id == 1))
     reviewer = (
         is_executive_leader(user.job_title)
         and access["approve"]
         and (user.id == configured_id or pending > 0)
+    )
+    configured_processors = (
+        await c.execute(
+            select(hr_settings.c.hr_user_id, hr_settings.c.accountant_user_id).where(
+                hr_settings.c.id == 1
+            )
+        )
+    ).first()
+    reviewer = reviewer or (
+        access["approve"]
+        and bool(processing_count or (configured_processors and user.id in configured_processors))
     )
     name, error = None, None
     if creator or reviewer:
@@ -110,6 +127,10 @@ async def context(
         pending_count=pending,
         chair_name=name,
         configuration_error=error,
+        document_labels={
+            script: document_parts(name or "", user.full_name, user.job_title or "", "", script)
+            for script in ("latin", "cyrillic")
+        },
     )
 
 
@@ -161,7 +182,9 @@ async def row(
 
 
 async def detail(
-    c: AsyncConnection, user: AuthenticatedUser, memo_id: UUID,
+    c: AsyncConnection,
+    user: AuthenticatedUser,
+    memo_id: UUID,
     additional_requesters: frozenset[UUID] = frozenset(),
 ) -> MemoDetail:
     record = await row(c, user, memo_id)
@@ -177,6 +200,16 @@ async def detail(
         {
             **dict(record),
             "id": str(record["id"]),
+            **await flags(c, user, record, access["approve"]),
+            "document_labels": document_parts(
+                record["chair_name"],
+                record["requester_name"],
+                record["requester_title"],
+                record["body"],
+                record["document_script"],
+            )
+            if record["document_script"]
+            else {},
             "can_edit": editable,
             "can_submit": editable and access["create"],
             "can_decide": record["status"] == "pending"
@@ -196,7 +229,7 @@ def check_revision(record: RowMapping, value: MemoRevision) -> None:
 
 
 async def pdf_values(
-    user: AuthenticatedUser, recipient: AuthenticatedUser, body: str
+    user: AuthenticatedUser, recipient: AuthenticatedUser, body: str, script: DocumentScript
 ) -> dict[str, object]:
     pdf = await run_in_threadpool(
         memo_pdf,
@@ -204,14 +237,17 @@ async def pdf_values(
         requester=user.full_name,
         job_title=user.job_title or "",
         body=body,
+        script=script,
         dated=datetime.now(ZoneInfo("Asia/Tashkent")).date(),
     )
+    parts = document_parts(recipient.full_name, user.full_name, user.job_title or "", body, script)
     return {
+        "document_script": script,
         "pdf_content": pdf,
         "pdf_sha256": hashlib.sha256(pdf).hexdigest(),
-        "requester_name": user.full_name,
-        "requester_title": user.job_title or "",
-        "chair_name": recipient.full_name,
+        "requester_name": parts["requester"],
+        "requester_title": parts["job_title"],
+        "chair_name": parts["recipient"][:-2],
         "chair_user_id": recipient.id,
     }
 
@@ -227,6 +263,7 @@ async def audit(
     from_status: str | None = None,
     to_status: str | None = None,
     comment: str = "",
+    order_hash: str | None = None,
 ) -> None:
     await c.execute(
         insert(audit_events).values(
@@ -238,6 +275,7 @@ async def audit(
             details={
                 "revision": revision,
                 "pdfSha256": pdf_hash,
+                "orderSha256": order_hash,
                 "fromStatus": from_status,
                 "toStatus": to_status,
                 "comment": comment,
@@ -248,7 +286,9 @@ async def audit(
 
 
 async def create(
-    c: AsyncConnection, user: AuthenticatedUser, value: MemoCreate,
+    c: AsyncConnection,
+    user: AuthenticatedUser,
+    value: MemoCreate,
     additional_requesters: frozenset[UUID] = frozenset(),
 ) -> MemoDetail:
     await ensure_module_action(c, user, "home", "create")
@@ -257,7 +297,7 @@ async def create(
     recipient = await chair(c)
     if recipient.id == user.id:
         raise Error(409, "Нельзя направить билдирги самому себе")
-    values = await pdf_values(user, recipient, value.body)
+    values = await pdf_values(user, recipient, value.body, value.document_script)
     now = datetime.now(UTC)
     inserted = await c.scalar(
         pg_insert(memos)
@@ -281,6 +321,7 @@ async def create(
         if (
             existing["requester_user_id"] != user.id
             or existing["title"] != value.title
+            or existing["document_script"] != value.document_script
             or existing["body"] != value.body
             or existing["status"] != "draft"
         ):
@@ -291,7 +332,10 @@ async def create(
 
 
 async def save(
-    c: AsyncConnection, user: AuthenticatedUser, memo_id: UUID, value: MemoUpdate,
+    c: AsyncConnection,
+    user: AuthenticatedUser,
+    memo_id: UUID,
+    value: MemoUpdate,
     additional_requesters: frozenset[UUID] = frozenset(),
 ) -> MemoDetail:
     await ensure_module_action(c, user, "home", "edit")
@@ -307,7 +351,7 @@ async def save(
     recipient = await chair(c)
     if recipient.id == user.id:
         raise Error(409, "Нельзя направить билдирги самому себе")
-    values = await pdf_values(user, recipient, value.body)
+    values = await pdf_values(user, recipient, value.body, value.document_script)
     revision = record["revision"] + 1
     await c.execute(
         update(memos)
@@ -360,24 +404,35 @@ async def notify(
 
 
 async def transition(
-    c: AsyncConnection, user: AuthenticatedUser, memo_id: UUID, value: MemoRevision, action: str,
+    c: AsyncConnection,
+    user: AuthenticatedUser,
+    memo_id: UUID,
+    value: MemoRevision,
+    action: str,
     additional_requesters: frozenset[UUID] = frozenset(),
 ) -> MemoDetail:
     record = await row(c, user, memo_id, lock=True)
     check_revision(record, value)
+    if action in {"start_processing", "hr_complete", "complete"}:
+        return await process(c, user, record, action, additional_requesters)
     now, revision = datetime.now(UTC), record["revision"] + 1
     values: dict[str, object] = {"revision": revision, "updated_at": now}
     if action == "submit":
         await ensure_module_action(c, user, "home", "create")
-        if (record["requester_user_id"] != user.id
-                or not await can_create(c, user, additional_requesters)):
+        if record["requester_user_id"] != user.id or not await can_create(
+            c, user, additional_requesters
+        ):
             raise Error(403, "Отправить билдирги может только её заявитель с действующим доступом")
         if record["status"] not in {"draft", "needs_revision"}:
             raise Error(409, "Билдирги уже отправлена")
         recipient = await chair(c)
         if recipient.id == user.id:
             raise Error(409, "Нельзя согласовать собственную билдирги")
-        values.update(await pdf_values(user, recipient, record["body"]))
+        values.update(
+            await pdf_values(
+                user, recipient, record["body"], record["document_script"] or "cyrillic"
+            )
+        )
         values.update(status="pending", submitted_at=now, decided_at=None, decision_comment="")
         target, title, needs_action = recipient.id, "Билдирги на вашем согласовании", True
     elif action == "withdraw":
@@ -395,10 +450,12 @@ async def transition(
         if value.decision == "return" and not value.comment:
             raise Error(422, "Укажите, что заявителю нужно исправить")
         values.update(
-            status="approved" if value.decision == "approve" else "needs_revision",
+            status="hr_pending" if value.decision == "approve" else "needs_revision",
             decided_at=now,
             decision_comment=value.comment,
         )
+        if value.decision == "approve":
+            values.update(await actors(c, user.id))
         target, title, needs_action = (
             record["requester_user_id"],
             (
@@ -428,6 +485,19 @@ async def transition(
         status=str(values["status"]),
         revision=revision,
     )
+    if values["status"] == "hr_pending":
+        hr_target = values["hr_user_id"]
+        if not isinstance(hr_target, UUID):
+            raise Error(409, "Кадровик не назначен. Передача остановлена")
+        await notify(
+            c,
+            record,
+            hr_target,
+            "Билдирги: подготовьте и прикрепите приказ",
+            action=True,
+            status="hr_pending",
+            revision=revision,
+        )
     await audit(
         c,
         user.id,

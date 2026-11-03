@@ -1,19 +1,20 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { Button, DialogSurface, Field, Spinner, Textarea, useRestoreFocusTarget } from "@fluentui/react-components";
+import { Button, DialogSurface, Field, Select, Spinner, Textarea, useRestoreFocusTarget } from "@fluentui/react-components";
 import { DocumentText24Regular, Dismiss20Regular, Add20Regular, ArrowDownload20Regular } from "@fluentui/react-icons";
-import type { ChairmanMemo, ChairmanMemoContext, ChairmanMemoRegistry, ChairmanMemoStatus } from "@yuksalish/contracts";
+import type { ChairmanMemo, ChairmanMemoContext, ChairmanMemoRegistry, ChairmanMemoStatus, MemoDocumentScript } from "@yuksalish/contracts";
 import { Input } from "./WorkspaceInput";
 import { WorkspaceDialog } from "./WorkspaceDialog";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { CompanyLogo } from "./CompanyLogo";
 import {
-  actOnChairmanMemo, createChairmanMemo, downloadChairmanMemoPdf, loadChairmanMemo,
+  attachChairmanMemoOrder, downloadChairmanMemoOrder, actOnChairmanMemo, createChairmanMemo, downloadChairmanMemoPdf, loadChairmanMemo,
   loadChairmanMemoContext, loadChairmanMemos, saveChairmanMemo,
 } from "./workspace-api";
 import "./chairman-memos.css";
 
 const PdfViewer = lazy(() => import("./FileViewer").then(module => ({ default: module.ExternalFileViewer })));
 const labels: Readonly<Record<ChairmanMemoStatus, string>> = {
+  hr_pending: "У кадровика · подготовка приказа", accountant_pending: "У главного бухгалтера", completed: "Выполнено",
   draft: "Черновик", pending: "На согласовании", approved: "Одобрено председателем", needs_revision: "На доработке",
 };
 const message = (error: unknown) => error instanceof Error ? error.message : "Не удалось загрузить билдирги";
@@ -44,7 +45,7 @@ export function ChairmanMemoLauncher({ token, userId, onOpen, compact = false }:
     aria-haspopup="dialog" onClick={onOpen}>
     <span className="team-dash-metric-icon" aria-hidden="true"><DocumentText24Regular /></span>
     <span className="team-dash-metric-copy"><span>{data.canReview ? "Билдирги на согласование" : "Билдирги председателю"}</span>
-      <small>{failed ? "Не удалось обновить · открыть и повторить" : data.configurationError ? "Проверьте настройку адресата" : data.canReview ? "обращения заместителей и кадровика" : "написать обращение · посмотреть решение"}</small></span>
+      <small>{failed ? "Не удалось обновить · открыть и повторить" : data.configurationError ? "Проверьте настройку адресата" : data.canReview ? "документы на вашем этапе обработки" : "написать обращение · посмотреть решение"}</small></span>
     <strong>{failed ? "—" : data.canReview ? data.pendingCount : "+"}</strong>
   </button>;
 }
@@ -63,10 +64,12 @@ export function ChairmanMemosDialog({ token, userId, initialId, onClose }: {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [preview, setPreview] = useState(false);
+  const [preview, setPreview] = useState<"memo" | "order">();
+  const [script, setScript] = useState<MemoDocumentScript>("cyrillic");
+  const [orderFile, setOrderFile] = useState<File>();
   const requestId = useRef(crypto.randomUUID());
   const alive = useRef(true);
-  const dirty = (creating && Boolean(title || body)) || Boolean(selected?.canEdit && (title !== selected.title || body !== selected.body));
+  const dirty = (creating && Boolean(title || body)) || Boolean(selected?.canEdit && (title !== selected.title || body !== selected.body || script !== (selected.documentScript ?? (/[а-яёўқғҳ]/i.test(selected.body) ? "cyrillic" : "latin"))));
   const refresh = useCallback(async (signal?: AbortSignal) => {
     const [nextContext, nextRegistry] = await Promise.all([
       loadChairmanMemoContext(token, signal), loadChairmanMemos(token, offset, signal),
@@ -74,6 +77,7 @@ export function ChairmanMemosDialog({ token, userId, initialId, onClose }: {
     if (!signal?.aborted && alive.current) { setContext(nextContext); setRegistry(nextRegistry); }
   }, [token, offset]);
   const choose = useCallback((memo: ChairmanMemo) => {
+    setScript(memo.documentScript ?? (/[а-яёўқғҳ]/i.test(memo.body) ? "cyrillic" : "latin")); setOrderFile(undefined);
     setSelected(memo); setCreating(false); setTitle(memo.title); setBody(memo.body); setComment(""); setError("");
   }, []);
   useEffect(() => {
@@ -111,17 +115,19 @@ export function ChairmanMemosDialog({ token, userId, initialId, onClose }: {
     finally { if (alive.current) setBusy(false); }
   };
   const persist = () => void mutate(() => selected
-    ? saveChairmanMemo(token, selected, { title, body })
-    : createChairmanMemo(token, { title, body }, requestId.current));
-  const download = async () => {
+    ? saveChairmanMemo(token, selected, { title, body, documentScript: script })
+    : createChairmanMemo(token, { title, body, documentScript: script }, requestId.current));
+  const download = async (order = false) => {
     if (!selected) return;
-    const blob = await downloadChairmanMemoPdf(token, selected.id);
+    const blob = await (order ? downloadChairmanMemoOrder(token, selected.id) : downloadChairmanMemoPdf(token, selected.id));
     const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a"); anchor.href = url; anchor.download = `bildirgi-${selected.id}.pdf`; anchor.click();
+    const anchor = document.createElement("a"); anchor.href = url; anchor.download = order ? selected.orderFileName ?? `order-${selected.id}.pdf` : `bildirgi-${selected.id}.pdf`; anchor.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 60000);
   };
   const form = creating || selected;
   const editing = creating || selected?.canEdit;
+  const paper = editing ? context?.documentLabels?.[script] : selected?.documentLabels;
+  const stage = selected?.status === "hr_pending" ? 1 : selected?.status === "accountant_pending" ? 2 : selected?.status === "completed" ? 3 : 0;
   return <>
     <WorkspaceDialog open={!preview} onOpenChange={(_, data) => { if (!data.open) close(); }}>
       <DialogSurface className="memo-dialog" aria-labelledby="memo-dialog-title">
@@ -133,7 +139,7 @@ export function ChairmanMemosDialog({ token, userId, initialId, onClose }: {
             <div className="memo-list-tools">
               {context?.canCreate ? <Button appearance="primary" icon={<Add20Regular />} disabled={busy || Boolean(context.configurationError)} onClick={() => {
                 if (!mayLeave()) return;
-                setSelected(undefined); setCreating(true); setTitle(""); setBody(""); setComment(""); setError(""); requestId.current = crypto.randomUUID();
+                setSelected(undefined); setCreating(true); setScript("cyrillic"); setOrderFile(undefined); setTitle(""); setBody(""); setComment(""); setError(""); requestId.current = crypto.randomUUID();
               }}>Написать билдирги</Button> : null}
               <Button disabled={busy} onClick={() => { setError(""); void refresh().catch(problem => setError(message(problem))); }}>Обновить список</Button>
             </div>
@@ -154,22 +160,43 @@ export function ChairmanMemosDialog({ token, userId, initialId, onClose }: {
             {!form ? <div className="memo-welcome"><DocumentText24Regular /><h3>{context?.canReview ? "Билдирги на вашем решении" : "Обращение на фирменном бланке"}</h3><p>{context?.canReview ? "Выберите обращение, ознакомьтесь с текстом и PDF, затем примите решение." : "Напишите текст полностью. Адресат, шапка и заявитель заполнятся автоматически."}</p></div> : <>
               <div className="memo-editor-toolbar"><span className="memo-status" data-status={selected?.status ?? "draft"}>{labels[selected?.status ?? "draft"]}</span>
                 {selected ? <Button disabled={busy} onClick={() => { void open(selected.id); }}>Обновить карточку</Button> : null}
-                {selected?.hasPdf ? <><Button disabled={busy || dirty} onClick={() => setPreview(true)}>Посмотреть PDF</Button>
+                {selected?.hasPdf ? <><Button disabled={busy || dirty} onClick={() => setPreview("memo")}>Посмотреть PDF</Button>
                   <Button icon={<ArrowDownload20Regular />} disabled={busy || dirty} onClick={() => { void download().catch(problem => setError(message(problem))); }}>Скачать PDF</Button></> : null}
               </div>
               <Field label="Тема обращения" required><Input value={title} maxLength={160} disabled={!editing || busy} onChange={(_, data) => setTitle(data.value)} /></Field>
+              <Field label="Алфавит документа" hint={editing ? "Текст, шапка и заявитель приводятся к выбранному алфавиту при сохранении. Проверьте ФИО перед отправкой." : selected && !selected.documentScript ? "Ранее сохранённый PDF не изменялся. Новый формат применяется при сохранении черновика." : undefined}>
+                <Select aria-label="Алфавит документа" value={selected && !editing && !selected.documentScript ? "legacy" : script} disabled={!editing || busy} onChange={(_, data) => { if (data.value === "latin" || data.value === "cyrillic") setScript(data.value); }}>
+                  {selected && !editing && !selected.documentScript ? <option value="legacy">Сохранённый макет · без изменений</option> : null}
+                  <option value="cyrillic">Ўзбекча · кириллица</option><option value="latin">O‘zbekcha · латиница</option>
+                </Select>
+              </Field>
+              {selected && !["draft", "needs_revision"].includes(selected.status) ? <ol className="memo-route" aria-label="Маршрут билдирги">
+                {["Председатель", "Кадровик · приказ", "Главный бухгалтер", "Выполнено"].map((name, index) => <li key={name} aria-current={stage === index ? "step" : undefined} data-done={index < stage}>{name}</li>)}
+              </ol> : null}
+              {selected && (selected.hrName || selected.canAttachOrder || selected.orderFileName) ? <section className="memo-order" aria-label="Приказ и исполнение">
+                <h3>Приказ и исполнение</h3>
+                <p>Кадровик: {selected.hrName ?? "не назначен"} · Главный бухгалтер: {selected.accountantName ?? "не назначен"}</p>
+                {selected.canAttachOrder ? <>
+                  <Field label="Приказ в PDF" hint="До 10 МБ. Передача бухгалтеру доступна после загрузки приказа.">
+                    <input aria-label="Выбрать приказ в PDF" type="file" accept=".pdf,application/pdf" disabled={busy} onChange={event => setOrderFile(event.currentTarget.files?.[0])} />
+                  </Field>
+                  {orderFile ? <div><span>{orderFile.name}</span> <Button disabled={busy} onClick={() => { void mutate(() => attachChairmanMemoOrder(token, selected, orderFile)); }}>Загрузить приказ</Button></div> : null}
+                </> : null}
+                {selected.orderFileName ? <div className="memo-editor-toolbar"><strong>{selected.orderFileName}</strong><Button disabled={busy} onClick={() => setPreview("order")}>Посмотреть приказ</Button><Button disabled={busy} onClick={() => { void download(true).catch(problem => setError(message(problem))); }}>Скачать приказ</Button></div> : null}
+                {selected.completedAt ? <p>Выполнено главным бухгалтером {date(selected.completedAt)}</p> : null}
+              </section> : null}
               <div className="memo-paper">
                 <div className="memo-paper-brand"><span>HARAKAT</span><CompanyLogo tone="color" /><span>MOVEMENT</span></div>
-                <div className="memo-recipient">“Yuksalish” harakati raisi<br /><strong>{selected?.chairName ?? context?.chairName}</strong></div>
-                <h3>BILDIRGI</h3>
+                <div className="memo-recipient">{paper?.recipient_label ?? "“Yuksalish” harakati raisi"}<br /><strong>{paper?.recipient ?? selected?.chairName ?? context?.chairName}</strong></div>
+                <h3>{paper?.heading ?? "BILDIRGI"}</h3>
                 {editing ? <Field label="Текст билдирги" required hint={`${body.length.toLocaleString("ru-RU")} / 20 000 знаков`}>
-                  <Textarea value={body} resize="vertical" rows={13} maxLength={20000} disabled={busy} onChange={(_, data) => setBody(data.value)} placeholder="Напишите полный текст обращения…" />
-                </Field> : <div className="memo-body">{body}</div>}
-                <footer className="memo-applicant"><span>{selected?.requesterTitle ?? context?.requesterTitle}</span><strong>{selected?.requesterName ?? context?.requesterName}</strong></footer>
+                  <Textarea className="memo-body-input" value={body} resize="vertical" rows={13} maxLength={20000} disabled={busy} onChange={(_, data) => setBody(data.value)} placeholder="Напишите полный текст обращения…" />
+                </Field> : <div className="memo-body">{body.split(/\r?\n/).map((paragraph, index) => <p key={index}>{paragraph || "\u00a0"}</p>)}</div>}
+                <footer className="memo-applicant"><span>{paper?.job_title ?? selected?.requesterTitle ?? context?.requesterTitle}</span><strong>{paper?.requester ?? selected?.requesterName ?? context?.requesterName}</strong></footer>
               </div>
               {selected?.decisionComment ? <WorkspaceNotice tone="info"><strong>Комментарий председателя</strong><p className="memo-body">{selected.decisionComment}</p></WorkspaceNotice> : null}
               {selected?.decidedAt ? <p className="memo-decision-date">Решение принято {date(selected.decidedAt)}</p> : null}
-              {selected?.canDecide ? <Field label="Комментарий к решению" hint="При возврате на доработку укажите, что исправить."><Textarea value={comment} maxLength={2000} disabled={busy} onChange={(_, data) => setComment(data.value)} /></Field> : null}
+          {selected?.canDecide ? <Field label="Комментарий к решению" hint="При возврате на доработку укажите, что исправить."><Textarea value={comment} maxLength={2000} disabled={busy} onChange={(_, data) => setComment(data.value)} /></Field> : null}
             </>}
           </section>
         </div>}
@@ -177,6 +204,9 @@ export function ChairmanMemosDialog({ token, userId, initialId, onClose }: {
           {editing ? <Button appearance="secondary" disabled={busy || !title.trim() || !body.trim() || (!creating && !dirty)} onClick={persist}>{creating ? "Сохранить черновик" : "Сохранить изменения"}</Button> : null}
           {selected?.canSubmit ? <Button appearance="primary" disabled={busy || dirty} onClick={() => { void mutate(() => actOnChairmanMemo(token, selected, "submit")); }}>Отправить председателю</Button> : null}
           {selected?.canWithdraw ? <Button disabled={busy} onClick={() => { void mutate(() => actOnChairmanMemo(token, selected, "withdraw")); }}>Отозвать для правки</Button> : null}
+              {selected?.canStartProcessing ? <Button appearance="primary" disabled={busy} onClick={() => { void mutate(() => actOnChairmanMemo(token, selected, "start-processing")); }}>Продолжить оформление у кадровика</Button> : null}
+          {selected?.canAttachOrder ? <Button appearance="primary" disabled={busy || !selected.orderFileName || Boolean(orderFile)} onClick={() => { void mutate(() => actOnChairmanMemo(token, selected, "hr-complete")); }}>Утвердить и передать бухгалтеру</Button> : null}
+          {selected?.canComplete ? <Button appearance="primary" disabled={busy} onClick={() => { void mutate(() => actOnChairmanMemo(token, selected, "complete")); }}>Выполнено</Button> : null}
           {selected?.canDecide ? <><Button disabled={busy || !comment.trim()} onClick={() => { void mutate(() => actOnChairmanMemo(token, selected, "return", comment)); }}>Вернуть на доработку</Button>
             <Button appearance="primary" disabled={busy} onClick={() => { void mutate(() => actOnChairmanMemo(token, selected, "approve", comment)); }}>Одобрить билдирги</Button></> : null}
           <Button onClick={close} disabled={busy}>Закрыть</Button>
@@ -184,9 +214,9 @@ export function ChairmanMemosDialog({ token, userId, initialId, onClose }: {
       </DialogSurface>
     </WorkspaceDialog>
     {preview && selected ? <Suspense fallback={<Spinner label="Открываем PDF…" />}><PdfViewer
-      attachment={{ id: selected.id, fileName: `bildirgi-${selected.id}.pdf`, contentType: "application/pdf", byteSize: selected.pdfByteSize }}
-      onClose={() => setPreview(false)} onLoad={(_, signal) => downloadChairmanMemoPdf(token, selected.id, signal)}
-      onLoadOffice={() => Promise.reject(new Error("Документ уже в PDF"))} onDownload={download}
+      attachment={{ id: selected.id, fileName: preview === "order" ? selected.orderFileName ?? "order.pdf" : `bildirgi-${selected.id}.pdf`, contentType: "application/pdf", byteSize: preview === "order" ? selected.orderByteSize ?? 0 : selected.pdfByteSize }}
+      onClose={() => setPreview(undefined)} onLoad={(_, signal) => preview === "order" ? downloadChairmanMemoOrder(token, selected.id, signal) : downloadChairmanMemoPdf(token, selected.id, signal)}
+      onLoadOffice={() => Promise.reject(new Error("Документ уже в PDF"))} onDownload={() => download(preview === "order")}
     /></Suspense> : null}
   </>;
 }

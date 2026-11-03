@@ -158,7 +158,9 @@ def request_module_action(path: str, method: str) -> tuple[str, ModuleAction] | 
     if normalized == "/chairman-memos" or normalized.startswith("/chairman-memos/"):
         if upper_method in {"GET", "HEAD", "OPTIONS"}:
             return "home", "view"
-        if normalized.endswith("/decision"):
+        if normalized.endswith((
+            "/decision", "/order", "/complete", "/hr-complete", "/start-processing",
+        )):
             return "home", "approve"
         action: ModuleAction = (
             "edit" if upper_method == "PUT" or normalized.endswith("/withdraw") else "create"

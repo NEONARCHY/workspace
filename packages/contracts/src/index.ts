@@ -935,8 +935,10 @@ export type NotificationSection = Extract<
   | "feed"
 > | "notifications";
 
-export type ChairmanMemoStatus = "draft" | "pending" | "approved" | "needs_revision";
+export type ChairmanMemoStatus = "draft" | "pending" | "approved" | "needs_revision" | "hr_pending" | "accountant_pending" | "completed";
+export type MemoDocumentScript = "latin" | "cyrillic";
 export interface ChairmanMemoContext {
+  readonly documentLabels?: Readonly<Record<string, Readonly<Record<string, string>>>>;
   readonly requesterName: string;
   readonly requesterTitle: string;
   readonly enabled: boolean;
@@ -958,6 +960,17 @@ export interface ChairmanMemoSummary {
   readonly decidedAt: string | null;
 }
 export interface ChairmanMemo extends ChairmanMemoSummary {
+  readonly documentScript?: MemoDocumentScript | null;
+  readonly documentLabels?: Readonly<Record<string, string>>;
+  readonly canStartProcessing?: boolean;
+  readonly canAttachOrder?: boolean;
+  readonly canComplete?: boolean;
+  readonly hrName?: string | null;
+  readonly accountantName?: string | null;
+  readonly orderFileName?: string | null;
+  readonly orderByteSize?: number;
+  readonly hrCompletedAt?: string | null;
+  readonly completedAt?: string | null;
   readonly body: string;
   readonly requesterTitle: string;
   readonly decisionComment: string;
@@ -972,7 +985,7 @@ export interface ChairmanMemoRegistry {
   readonly items: readonly ChairmanMemoSummary[];
   readonly total: number;
 }
-export interface ChairmanMemoFields { readonly title: string; readonly body: string }
+export interface ChairmanMemoFields { readonly title: string; readonly body: string; readonly documentScript?: MemoDocumentScript }
 
 export interface ExchangeRate {
   readonly code: string;
