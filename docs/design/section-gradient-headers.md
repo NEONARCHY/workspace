@@ -1,5 +1,25 @@
 # Section gradient headers — 2026-10-07
 
+## Compact work queues — 2026-11-03
+
+Tasks and payments reserve more height for records. Their headers use an 88 px
+minimum and 12 px vertical padding in both palettes; wrapped actions can grow the
+header naturally. Payment section tabs sit beside the actions instead of below
+the title. Text, controls, workflow stages and permissions stay available.
+
+Tasks no longer render the full-width proposal disclosure above the summary.
+The compact “Запросы” action opens the same list and review details in a Fluent
+dialog, including personal withdrawal, loading/error/retry and direct links.
+The leadership queue in Team Overview remains unchanged. Task summary cards use
+a 60 px minimum and table cells use 11 px vertical padding (15 px for coarse
+pointers); priority labels retain their own line. Filters wrap or scroll through
+the existing responsive rules. No API or business-rule change is involved.
+
+Validated locally with synthetic data in light/dark palettes, 1920×1080,
+1024×768, 640×720 and 960×540 reflow, plus keyboard opening, Escape and focus
+restoration. The designated test LAN host was unreachable; this package has not
+been installed there or on production.
+
 ## Owner direction
 
 Extend the Projects / Project Applications banner family to the main workspace

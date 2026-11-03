@@ -728,18 +728,17 @@ export function TasksView(props: TasksViewProps) {
           <div><h1>Задачи</h1><p>Карточки, команда, сроки и зависимости</p></div>
           <div className="task-toolbar-actions">
             <div className="task-calendar-navigation-slot" ref={setCalendarToolbarTarget} />
+            {props.token ? <TaskProposals compact key={focusTaskId ?? "proposals"} token={props.token}
+              currentUserId={currentUserId} people={people} tasks={tasks} revision={proposalRevision}
+              focusId={focusTaskId} onRefresh={props.onRefreshTasks}
+              onOpenTask={(id) => { setSelectedId(id); setDetailOpen(true); }}
+            /> : null}
             {props.token ? <TaskProposalImportLauncher token={props.token} people={people} tasks={tasks}
               onSubmitted={() => setProposalRevision(value => value + 1)} /> : null}
             {newTaskButton}
             {taskViewSwitch}
           </div>
         </WorkspaceSectionHeader>
-
-        {props.token ? <TaskProposals key={focusTaskId ?? "proposals"} token={props.token}
-          currentUserId={currentUserId} people={people} tasks={tasks} revision={proposalRevision}
-          focusId={focusTaskId} onRefresh={props.onRefreshTasks}
-          onOpenTask={(id) => { setSelectedId(id); setDetailOpen(true); }}
-        /> : null}
 
         {!(["calendar", "efficiency", "plans"] as TaskMode[]).includes(mode) ? <div className="task-workbench-summary" aria-label="Сводка задач">
           <div className="task-focus-object review"><span>Ждут решения</span><strong>{taskCounts.review}</strong><small>результатов на проверке</small></div>

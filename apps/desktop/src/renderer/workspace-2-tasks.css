@@ -12,17 +12,10 @@
   background: transparent;
 }
 
-/* The disclosure owns equal outer gaps, including when its content is open. */
-.tasks-view .tasks-main > .task-proposals {
-  flex: none;
-  margin-block: 14px;
-  border: 1px solid var(--ws-line);
-}
-
 /* Selection changes the surface, not the labels' width or the group's position. */
 .tasks-view .view-switch > button { font-weight: 600; }
 .tasks-view .task-calendar-navigation-slot { flex: 0 0 auto; min-height: 36px; }
-.tasks-view .task-toolbar-actions { flex-wrap: nowrap; }
+.tasks-view .task-toolbar-actions { flex-wrap: wrap; }
 .app-provider .tasks-view .workspace-select.task-role-filter { height: 36px; min-height: 36px; padding: 0; }
 .app-provider .tasks-view .workspace-select.task-role-filter { flex: 0 0 184px; width: 184px; }
 .tasks-view .task-role-filter .fui-Dropdown__button { white-space: nowrap; align-items: center; }
@@ -44,8 +37,8 @@
 .task-workbench-summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  padding: 0 var(--ws-view-edge) 12px;
+  gap: 8px;
+  padding: 0 var(--ws-view-edge) 8px;
 }
 
 .task-focus-object {
@@ -53,8 +46,8 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: end;
-  min-height: 78px;
-  padding: 13px 16px;
+  min-height: 60px;
+  padding: 9px 14px;
   overflow: hidden;
   border: 1px solid rgb(var(--ws-theme-line-rgb, 255 255 255) / 0.88);
   border-radius: 18px;
@@ -87,8 +80,8 @@
 .task-focus-object.review::after { background: rgb(213 164 41 / 10%); }
 
 .tasks-view .task-filters {
-  margin: 0 var(--ws-view-edge) 12px;
-  padding: 6px;
+  margin: 0 var(--ws-view-edge) 8px;
+  padding: 4px;
   border: 1px solid rgb(var(--ws-theme-line-rgb, 255 255 255) / 0.86);
   border-radius: 16px;
   background: rgb(var(--ws-theme-surface-rgb, 255 255 255) / 0.62);
@@ -101,8 +94,8 @@
   flex: none;
   gap: 4px;
   max-width: 100%;
-  min-height: 46px;
-  padding: 4px;
+  min-height: 40px;
+  padding: 2px;
   border: 1px solid var(--ws-theme-line, #dce8e8);
   border-radius: 15px;
   background: var(--ws-theme-surface-soft, #eaf1f1);
@@ -111,8 +104,8 @@
   display: inline-flex;
   gap: 7px;
   align-items: center;
-  height: 38px;
-  padding: 9px 14px;
+  min-height: 34px;
+  padding: 6px 12px;
   border: 0;
   border-radius: 11px;
   color: rgb(var(--ws-theme-ink-rgb, 41 58 85) / 0.66);
@@ -148,6 +141,11 @@
 }
 
 .task-record-table .record-title { position: relative; padding-left: 28px; }
+.tasks-view .task-record-table td { padding-block: 11px; }
+@media (pointer: coarse) {
+  .tasks-view .task-filter-tabs > button { min-height: 44px; }
+  .tasks-view .task-record-table td { padding-block: 15px; }
+}
 .task-record-progress { display: block; width: min(168px, 72%); height: 3px; margin-top: 7px; overflow: hidden; border-radius: 999px; background: var(--ws-theme-surface-soft, #e5ecee); }
 .task-record-progress i { display: block; height: 100%; border-radius: inherit; background: var(--ws-accent, #0091a8); }
 .task-record-table tbody tr { transition: transform 160ms var(--ws-ease-out, ease), background-color 160ms ease, box-shadow 160ms ease; }
