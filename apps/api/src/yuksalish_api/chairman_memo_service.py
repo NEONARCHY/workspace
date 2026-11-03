@@ -1,5 +1,5 @@
 # ruff: noqa: RUF001
-"""Private memoranda: deputies/HR -> named chair, no administrative bypass."""
+"""Private memoranda: authorised requesters -> named chair, no administrative bypass."""
 
 import hashlib
 import re
@@ -41,9 +41,13 @@ def is_memo_deputy(title: str | None) -> bool:
     return bool(re.fullmatch(r"rais(?:ning)? (?:birinchi )?o'rinbosari", normalized))
 
 
-async def can_create(c: AsyncConnection, user: AuthenticatedUser) -> bool:
+async def can_create(
+    c: AsyncConnection, user: AuthenticatedUser,
+    additional_requesters: frozenset[UUID] = frozenset(),
+) -> bool:
     hr_id = await c.scalar(select(hr_settings.c.hr_user_id).where(hr_settings.c.id == 1))
-    return user.id == hr_id or is_memo_deputy(user.job_title)
+    return (user.id == hr_id or is_memo_deputy(user.job_title)
+            or user.id in additional_requesters)
 
 
 async def chair(c: AsyncConnection) -> AuthenticatedUser:
@@ -65,10 +69,13 @@ def visible(user: AuthenticatedUser) -> ColumnElement[bool]:
     )
 
 
-async def context(c: AsyncConnection, user: AuthenticatedUser) -> MemoContext:
+async def context(
+    c: AsyncConnection, user: AuthenticatedUser,
+    additional_requesters: frozenset[UUID] = frozenset(),
+) -> MemoContext:
     await ensure_module_action(c, user, "home", "view")
     access = (await module_permissions_for_user(c, user))["home"]
-    creator = await can_create(c, user) and access["create"]
+    creator = await can_create(c, user, additional_requesters) and access["create"]
     pending = int(
         await c.scalar(
             select(func.count())
@@ -153,14 +160,17 @@ async def row(
     return result
 
 
-async def detail(c: AsyncConnection, user: AuthenticatedUser, memo_id: UUID) -> MemoDetail:
+async def detail(
+    c: AsyncConnection, user: AuthenticatedUser, memo_id: UUID,
+    additional_requesters: frozenset[UUID] = frozenset(),
+) -> MemoDetail:
     record = await row(c, user, memo_id)
     access = (await module_permissions_for_user(c, user))["home"]
     owner = record["requester_user_id"] == user.id
     editable = (
         owner
         and record["status"] in {"draft", "needs_revision"}
-        and await can_create(c, user)
+        and await can_create(c, user, additional_requesters)
         and access["edit"]
     )
     return MemoDetail.model_validate(
@@ -237,10 +247,13 @@ async def audit(
     )
 
 
-async def create(c: AsyncConnection, user: AuthenticatedUser, value: MemoCreate) -> MemoDetail:
+async def create(
+    c: AsyncConnection, user: AuthenticatedUser, value: MemoCreate,
+    additional_requesters: frozenset[UUID] = frozenset(),
+) -> MemoDetail:
     await ensure_module_action(c, user, "home", "create")
-    if not await can_create(c, user):
-        raise Error(403, "Создавать билдирги могут только заместители председателя и кадровик")
+    if not await can_create(c, user, additional_requesters):
+        raise Error(403, "Нет права подготовки билдирги председателю")
     recipient = await chair(c)
     if recipient.id == user.id:
         raise Error(409, "Нельзя направить билдирги самому себе")
@@ -274,11 +287,12 @@ async def create(c: AsyncConnection, user: AuthenticatedUser, value: MemoCreate)
             raise Error(409, "Этот запрос уже использован. Обновите список билдирги")
     else:
         await audit(c, user.id, value.request_id, "created", 1, str(values["pdf_sha256"]))
-    return await detail(c, user, value.request_id)
+    return await detail(c, user, value.request_id, additional_requesters)
 
 
 async def save(
-    c: AsyncConnection, user: AuthenticatedUser, memo_id: UUID, value: MemoUpdate
+    c: AsyncConnection, user: AuthenticatedUser, memo_id: UUID, value: MemoUpdate,
+    additional_requesters: frozenset[UUID] = frozenset(),
 ) -> MemoDetail:
     await ensure_module_action(c, user, "home", "edit")
     record = await row(c, user, memo_id, lock=True)
@@ -288,7 +302,7 @@ async def save(
         "needs_revision",
     }:
         raise Error(409, "Изменять можно только свою неотправленную билдирги")
-    if not await can_create(c, user):
+    if not await can_create(c, user, additional_requesters):
         raise Error(403, "Право подготовки билдирги больше недоступно")
     recipient = await chair(c)
     if recipient.id == user.id:
@@ -307,7 +321,7 @@ async def save(
         )
     )
     await audit(c, user.id, memo_id, "edited", revision, str(values["pdf_sha256"]))
-    return await detail(c, user, memo_id)
+    return await detail(c, user, memo_id, additional_requesters)
 
 
 async def notify(
@@ -346,7 +360,8 @@ async def notify(
 
 
 async def transition(
-    c: AsyncConnection, user: AuthenticatedUser, memo_id: UUID, value: MemoRevision, action: str
+    c: AsyncConnection, user: AuthenticatedUser, memo_id: UUID, value: MemoRevision, action: str,
+    additional_requesters: frozenset[UUID] = frozenset(),
 ) -> MemoDetail:
     record = await row(c, user, memo_id, lock=True)
     check_revision(record, value)
@@ -354,7 +369,8 @@ async def transition(
     values: dict[str, object] = {"revision": revision, "updated_at": now}
     if action == "submit":
         await ensure_module_action(c, user, "home", "create")
-        if record["requester_user_id"] != user.id or not await can_create(c, user):
+        if (record["requester_user_id"] != user.id
+                or not await can_create(c, user, additional_requesters)):
             raise Error(403, "Отправить билдирги может только её заявитель с действующим доступом")
         if record["status"] not in {"draft", "needs_revision"}:
             raise Error(409, "Билдирги уже отправлена")
@@ -423,4 +439,4 @@ async def transition(
         to_status=str(values["status"]),
         comment=value.comment if isinstance(value, MemoDecision) else "",
     )
-    return await detail(c, user, memo_id)
+    return await detail(c, user, memo_id, additional_requesters)

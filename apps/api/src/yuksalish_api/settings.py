@@ -19,6 +19,7 @@ class Settings(BaseSettings):
 
     environment: Literal["development", "test", "staging", "production"] = "development"
     deployment_id: UUID | None = None
+    chairman_memo_requester_ids: list[UUID] = Field(default_factory=list)
     api_prefix: str = "/api/v1"
     api_host: str = "127.0.0.1"
     api_port: int = 8000

@@ -14,7 +14,7 @@ from uuid import uuid4
 import httpx
 import pytest
 from fastapi import FastAPI
-from pydantic import SecretStr
+from pydantic import SecretStr, ValidationError
 from pypdf import PdfReader
 from sqlalchemy import delete, func, insert, select, update
 from sqlalchemy.engine import make_url
@@ -153,6 +153,94 @@ def test_domain_positions_and_central_gate():
         assert not is_memo_deputy(title)
     assert request_module_action(PREFIX + "/context", "GET") == ("home", "view")
     assert request_module_action(PREFIX + "/x/decision", "POST") == ("home", "approve")
+
+
+def test_personal_requester_configuration_is_uuid_only(monkeypatch):
+    identifier = uuid4()
+    monkeypatch.setenv("YUKSALISH_CHAIRMAN_MEMO_REQUESTER_IDS", '["' + str(identifier) + '"]')
+    assert Settings(_env_file=None).chairman_memo_requester_ids == [identifier]
+    monkeypatch.setenv("YUKSALISH_CHAIRMAN_MEMO_REQUESTER_IDS", '["not-a-uuid"]')
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+def test_personal_requester_can_prepare_own_memo_but_not_review_or_read_others():
+    async def run():
+        async with scenario() as (client, headers, _, people, app):
+            settings = app.state.settings
+            assert not (await client.get(PREFIX + "/context", headers=headers["other"])).json()[
+                "canCreate"
+            ]
+            settings.chairman_memo_requester_ids = [people["other"]]
+            access = (await client.get(PREFIX + "/context", headers=headers["other"])).json()
+            assert access["canCreate"] and access["enabled"] and not access["canReview"]
+            assert not (await client.get(PREFIX + "/context", headers=headers["admin"])).json()[
+                "canCreate"
+            ]
+            foreign, _ = await make(client, headers)
+            assert (await client.get(PREFIX + "/" + foreign["id"],
+                                     headers=headers["other"])).status_code == 404
+            own, payload = await make(client, headers, "other")
+            path = PREFIX + "/" + own["id"]
+            assert own["canEdit"] and own["canSubmit"] and not own["canDecide"]
+            assert (await client.get(path + "/pdf", headers=headers["other"])).status_code == 200
+            saved = await client.put(path, headers=headers["other"], json={
+                "title": payload["title"], "body": "Исправленный собственный текст",
+                "expectedRevision": 1,
+            })
+            assert saved.status_code == 200 and saved.json()["revision"] == 2
+            sent = await client.post(path + "/submit", headers=headers["other"],
+                                     json={"expectedRevision": 2})
+            assert sent.status_code == 200 and sent.json()["status"] == "pending"
+            assert (await client.post(path + "/decision", headers=headers["other"], json={
+                "expectedRevision": 3, "decision": "approve",
+            })).status_code == 403
+            approved = await client.post(path + "/decision", headers=headers["chair"], json={
+                "expectedRevision": 3, "decision": "approve",
+            })
+            assert approved.status_code == 200 and approved.json()["status"] == "approved"
+
+    asyncio.run(run())
+
+
+def test_personal_requester_revocation_module_denial_and_inactive_account_are_enforced():
+    async def run():
+        async with scenario() as (client, headers, engine, people, app):
+            app.state.settings.chairman_memo_requester_ids = [people["other"]]
+            draft, payload = await make(client, headers, "other")
+            path = PREFIX + "/" + draft["id"]
+            app.state.settings.chairman_memo_requester_ids = []
+            detail = await client.get(path, headers=headers["other"])
+            assert detail.status_code == 200 and not detail.json()["canSubmit"]
+            assert not detail.json()["canEdit"]
+            assert (await client.post(path + "/submit", headers=headers["other"],
+                                     json={"expectedRevision": 1})).status_code == 403
+            assert (await client.put(path, headers=headers["other"], json={
+                "title": payload["title"], "body": payload["body"], "expectedRevision": 1,
+            })).status_code == 403
+            denied = await client.post(PREFIX, headers=headers["other"],
+                                       json={**payload, "requestId": str(uuid4())})
+            assert denied.status_code == 403
+            app.state.settings.chairman_memo_requester_ids = [people["other"]]
+            async with engine.begin() as c:
+                await c.execute(insert(module_access_rules).values(
+                    id=uuid4(), subject_type="user", subject_key=str(people["other"]),
+                    module_key="home", permissions={"view": True},
+                    created_by_user_id=people["admin"], created_at=datetime.now(UTC),
+                    updated_at=datetime.now(UTC),
+                ))
+            assert not (await client.get(PREFIX + "/context", headers=headers["other"])).json()[
+                "canCreate"
+            ]
+            assert (await client.post(path + "/submit", headers=headers["other"],
+                                     json={"expectedRevision": 1})).status_code == 403
+            async with engine.begin() as c:
+                await c.execute(update(users).where(users.c.id == people["other"])
+                                .values(status="blocked"))
+            assert (await client.get(PREFIX + "/context",
+                                     headers=headers["other"])).status_code == 401
+
+    asyncio.run(run())
 
 
 def test_pdf_keeps_authored_text_and_handles_multipage():
