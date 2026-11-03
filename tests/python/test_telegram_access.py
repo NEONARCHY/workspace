@@ -44,9 +44,12 @@ def test_bot_grant_requires_numeric_telegram_id() -> None:
 
 
 def test_connected_bot_catalog() -> None:
-    assert [bot.key for bot in BOT_CATALOG if bot.connected] == ["ai_referent", "hisobot"]
+    assert [bot.key for bot in BOT_CATALOG if bot.connected] == [
+        "ai_referent", "hisobot", "workspace_notifications",
+    ]
     assert {bot.key for bot in BOT_CATALOG} == {
-        "ai_referent", "hisobot", "takliflar", "hudud_rating", "ai_news_reader"
+        "ai_referent", "hisobot", "takliflar", "hudud_rating", "ai_news_reader",
+        "workspace_notifications",
     }
 
 

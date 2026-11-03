@@ -4650,6 +4650,9 @@ async def create_task(
         occurred_at=now,
         created_by_user_id=current_user.id,
     )
+    from .telegram_notification_events import queue_task
+
+    await queue_task(connection, task_id)
     return await _task_response(connection, task_id)
 
 
@@ -6070,6 +6073,9 @@ async def materialize_due_task_cycles(
                 assignee_user_id=template["primary_assignee_user_id"],
                 occurred_at=current_time,
             )
+            from .telegram_notification_events import queue_task
+
+            await queue_task(connection, task_id)
             created += 1
         await connection.execute(
             update(task_cycles)
@@ -6649,6 +6655,9 @@ async def create_approval_request(
         "created_at": now,
     }
     await connection.execute(insert(approval_request_versions).values(**version_values))
+    from .telegram_notification_events import queue_payment
+
+    await queue_payment(connection, request_id)
     return await _request_response(connection, request_id, current_user)
 
 
@@ -6857,6 +6866,9 @@ async def update_approval_request(
         action="edit", comment=(payload.change_comment or "").strip() or None,
         created_at=datetime.now(UTC),
     ))
+    from .telegram_notification_events import queue_payment
+
+    await queue_payment(connection, request_id)
     return await _request_response(connection, request_id, current_user)
 
 
@@ -8320,6 +8332,9 @@ async def act_on_request(
                 finished_at=None,
             )
         )
+        from .telegram_notification_events import queue_payment
+
+        await queue_payment(connection, request_id)
         return await _request_response(connection, request_id, current_user)
     if row["status"] not in {"running", "needs_revision"}:
         raise WorkspaceRepositoryError(409, "Request is already finished")
@@ -8470,4 +8485,7 @@ async def act_on_request(
             finished_at=finished_at,
         )
     )
+    from .telegram_notification_events import queue_payment
+
+    await queue_payment(connection, request_id)
     return await _request_response(connection, request_id, current_user)

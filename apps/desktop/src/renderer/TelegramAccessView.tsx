@@ -145,11 +145,12 @@ function PersonAccessRow({
                 aria-label={`${bot.label}${bot.connected ? "" : ", интеграция ещё не подключена"}`}
               />
               <span className="telegram-access-bot-mark" aria-hidden="true">✓</span>
-              <span>{bot.label}<small>{bot.connected ? "Подключён" : "Ожидает интеграции"}</small></span>
+              <span>{bot.label}<small>{bot.key === "workspace_notifications" ? "Отдельное разрешение · только ЦА" : bot.connected ? "Подключён" : "Ожидает интеграции"}</small></span>
             </label>
           ))}
         </div>
       </fieldset>
+      {selected.includes("workspace_notifications") ? <p>Задачи и оплаты приходят через бот AI Hisobot. Рабочая отправка включается отдельно; разрешение не обязывает сдавать отчёты. Сотруднику нужно нажать «Старт» в боте.</p> : null}
       {selected.includes("hisobot") ? <div className="telegram-access-hisobot" aria-label="Настройки AI Hisobot">
         <label>Контур отчётности
           <WorkspaceSelect value={hisobotScope} onChange={(event) => setHisobotScope(event.target.value as "central" | "hudud")} disabled={busy || Boolean(managedDepartment)}>

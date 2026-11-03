@@ -7,7 +7,10 @@ from pydantic import Field, model_validator
 
 from .workspace_schemas import ApiModel
 
-BotKey = Literal["ai_referent", "hisobot", "takliflar", "hudud_rating", "ai_news_reader"]
+BotKey = Literal[
+    "ai_referent", "hisobot", "takliflar", "hudud_rating", "ai_news_reader",
+    "workspace_notifications",
+]
 HISOBOT_REGIONS = frozenset({
     "Андижон вилояти", "Бухоро вилояти", "Фарғона вилояти", "Жиззах вилояти",
     "Наманган вилояти", "Навоий вилояти", "Қашқадарё вилояти",
