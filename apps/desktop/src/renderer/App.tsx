@@ -639,13 +639,11 @@ export function App() {
 
   useEffect(() => {
     if (!session || workspacePlatform.kind !== "web") return;
-    let id: string | undefined;
-    try { id = workspaceNoticeId(window.location.search); }
-    catch (error) { reportError(error); return; }
-    if (!id) return;
     let active = true;
-    void resolveWorkspaceNotice(session.accessToken, id).then(target => {
-      if (!active) return;
+    void Promise.resolve().then(() => workspaceNoticeId(window.location.search)).then(id => (
+      id ? resolveWorkspaceNotice(session.accessToken, id) : undefined
+    )).then(target => {
+      if (!active || !target) return;
       setFocusTarget(current => ({ ...target, revision: (current?.revision ?? 0) + 1 }));
       setActiveSection(target.section);
       window.history.replaceState(window.history.state, "", withoutWorkspaceNotice(window.location.href));
