@@ -683,6 +683,40 @@ describe("AIReferentView", () => {
     expect(comment).toHaveValue("Уточните адрес");
   });
 
+  it("requires a written reason and explicit confirmation for final rejection", async () => {
+    const letter: AIReferentLetter = { ...registry.letters[0]!, availableActions: ["approve", "return_for_revision", "reject"] };
+    vi.mocked(loadAIReferentLetter).mockResolvedValue(letter);
+    vi.mocked(actOnAIReferentLetter).mockRejectedValue(new Error("Письмо уже изменилось"));
+    render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate focusRequestId="letter-1" /></FluentProvider>);
+    const comment = await screen.findByLabelText("Комментарий к решению");
+    act(() => comment.focus());
+    const reject = screen.getByRole("button", { name: "Отклонить" });
+    expect(reject).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Вернуть на доработку" })).toBeVisible();
+    fireEvent.change(comment, { target: { value: "Письмо потеряло актуальность" } });
+    fireEvent.click(reject);
+    expect(actOnAIReferentLetter).not.toHaveBeenCalled();
+    expect(screen.getByText(/Отклонить письмо окончательно/)).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Подтвердить" }));
+    await waitFor(() => expect(actOnAIReferentLetter).toHaveBeenCalledWith(
+      "token", expect.objectContaining({ id: "letter-1", revision: 2 }), "reject",
+      "Письмо потеряло актуальность", expect.any(String), undefined,
+    ));
+    expect(await screen.findAllByText("Письмо уже изменилось")).not.toHaveLength(0);
+    expect(comment).toHaveValue("Письмо потеряло актуальность");
+  });
+
+  it("shows the final rejection reason and no further approval actions", async () => {
+    const letter: AIReferentLetter = { ...registry.letters[0]!, status: "rejected", availableActions: [],
+      events: [{ id: "rejection", eventType: "letter.reject", actorName: "Согласующий", fromStatus: "pending_review", toStatus: "rejected", comment: "Письмо потеряло актуальность", createdAt: "2026-11-03T10:00:00Z" }] };
+    vi.mocked(loadAIReferentLetter).mockResolvedValue(letter);
+    render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate focusRequestId="letter-1" /></FluentProvider>);
+    expect(await screen.findByText("Письмо отклонено. Согласование завершено.")).toBeVisible();
+    expect(screen.getByText("Письмо потеряло актуальность")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Согласовать" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Вернуть на доработку" })).not.toBeInTheDocument();
+  });
+
   it("lets an administrator replace the document without asking a reviewer again", async () => {
     const letter: AIReferentLetter = { ...registry.letters[0]!, status: "operator_revision",
       revision: 12, canReplaceDocument: true, canEdit: false, availableActions: [],

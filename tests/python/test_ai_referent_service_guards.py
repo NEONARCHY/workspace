@@ -53,7 +53,7 @@ def actor(role="employee"):
 @pytest.mark.parametrize(
     ("status", "review_actions"),
     [
-        ("pending_review", {"approve", "return_for_revision"}),
+        ("pending_review", {"approve", "return_for_revision", "reject"}),
         ("approved", {"queue_delivery"}),
         ("failed", {"retry_delivery", "return_for_revision"}),
         ("awaiting_final_send", {"release_delivery", "return_for_revision"}),
@@ -678,6 +678,7 @@ async def test_reviewer_validation_uses_account_and_module_permission(monkeypatc
         ("submit", "draft", "pending_review"),
         ("approve", "pending_review", "queued"),
         ("return_for_revision", "pending_review", "needs_revision"),
+        ("reject", "pending_review", "rejected"),
         ("queue_delivery", "approved", "queued"),
         ("retry_delivery", "failed", "queued"),
         ("cancel", "pending_review", "cancelled"),
@@ -759,6 +760,7 @@ async def test_letter_actions_keep_revision_audit_and_delivery_idempotency(
         ("submit", "draft"),
         ("approve", "pending_review"),
         ("return_for_revision", "pending_review"),
+        ("reject", "pending_review"),
         ("queue_delivery", "approved"),
         ("retry_delivery", "failed"),
         ("release_delivery", "awaiting_final_send"),

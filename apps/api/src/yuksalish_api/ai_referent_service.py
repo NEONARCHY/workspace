@@ -49,7 +49,7 @@ from .tables import (
 from .workspace_schemas import AttachmentResponse
 
 _EDITABLE_STATUSES = frozenset({"draft", "needs_revision"})
-_FINAL_STATUSES = frozenset({"sent", "signed", "cancelled"})
+_FINAL_STATUSES = frozenset({"sent", "signed", "cancelled", "rejected"})
 _PRIVILEGED_ROLES = frozenset({"admin", "superadmin"})
 
 
@@ -118,7 +118,7 @@ def _available_actions(
         if can_edit and row["reviewer_user_id"] is not None and attachment_count > 0:
             actions.append("submit")
         if status == "pending_review" and may_approve and is_reviewer:
-            actions.extend(("approve", "return_for_revision"))
+            actions.extend(("approve", "return_for_revision", "reject"))
         if status == "failed" and may_approve and is_reviewer:
             actions.extend(("retry_delivery", "return_for_revision"))
         if status not in _FINAL_STATUSES | {"queued", "sending"} and is_creator:
@@ -133,7 +133,7 @@ def _available_actions(
     ):
         actions.append("submit")
     if status == "pending_review" and may_approve and is_reviewer:
-        actions.extend(("approve", "return_for_revision"))
+        actions.extend(("approve", "return_for_revision", "reject"))
     if status == "approved" and may_approve and is_reviewer:
         actions.append("queue_delivery")
     if status == "failed" and may_approve and is_reviewer:
@@ -865,6 +865,16 @@ async def act_on_letter(
         if last_reminder and datetime.now(UTC) - last_reminder < timedelta(minutes=5):
             raise AIReferentServiceError(429, "Повторное напоминание доступно через 5 минут.")
         next_status = current_status
+    elif action == "reject":
+        await ensure_module_action(connection, current_user, "ai_referent", "approve")
+        if not is_reviewer:
+            raise AIReferentServiceError(403, "Отклонить письмо может назначенный согласующий.")
+        if current_status != "pending_review":
+            raise AIReferentServiceError(409, "Письмо уже не ожидает согласования.")
+        await _validate_reviewer(connection, current_user.id)
+        if len(payload.comment) < 3:
+            raise AIReferentServiceError(422, "Укажите причину окончательного отказа.")
+        next_status = "rejected"
     elif row["workflow_kind"] == "sign_only":
         if action == "submit":
             await ensure_module_action(connection, current_user, "ai_referent", "edit")
@@ -1142,6 +1152,7 @@ async def act_on_letter(
         "submit": "Письмо поступило на согласование",
         "approve": "Письмо согласовано",
         "return_for_revision": "Письмо возвращено с комментарием",
+        "reject": "Письмо отклонено согласующим",
         "queue_delivery": "Подготовка подписанного письма",
         "retry_delivery": "Повторная подготовка письма",
         "retry_failed_delivery": "Администратор повторяет отправку без нового согласования",
