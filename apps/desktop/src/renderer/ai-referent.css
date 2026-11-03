@@ -212,6 +212,7 @@
 }
 .ai-referent-status.status-pending_review { color: var(--ws-theme-ink-warning, #99691f); background: var(--ws-theme-wash-warning, #fff6df); }
 .ai-referent-status.status-needs_revision,
+.ai-referent-status.status-rejected,
 .ai-referent-status.status-failed { color: var(--ws-theme-ink-danger, #9d3d4c); background: var(--ws-theme-surface, #fff0f2); }
 .ai-referent-status.status-approved,
 .ai-referent-status.status-queued,

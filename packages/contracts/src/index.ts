@@ -1231,6 +1231,7 @@ export type AIReferentStatus =
   | "sent"
   | "failed"
   | "cancelled"
+  | "rejected"
   | "signed";
 export type AIReferentWorkflowKind = "delivery" | "sign_only";
 export type AIReferentSource = "workspace" | "telegram" | "import";
@@ -1247,6 +1248,7 @@ export type AIReferentAction =
   | "submit"
   | "approve"
   | "return_for_revision"
+  | "reject"
   | "cancel"
   | "queue_delivery"
   | "retry_delivery";
