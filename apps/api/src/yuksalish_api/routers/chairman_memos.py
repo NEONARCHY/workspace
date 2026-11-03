@@ -34,6 +34,7 @@ from ..chairman_memo_tables import memoranda
 from ..database import get_connection
 from ..errors import WorkspaceRepositoryError
 from ..events import WorkspaceEventBus
+from ..settings import Settings
 
 
 class PrivateMemoRoute(APIRoute):
@@ -63,6 +64,14 @@ User = Annotated[AuthenticatedUser, Depends(require_user)]
 Connection = Annotated[AsyncConnection, Depends(get_connection)]
 
 
+def additional_requesters(request: Request) -> frozenset[UUID]:
+    settings = cast(Settings, request.app.state.settings)
+    return frozenset(settings.chairman_memo_requester_ids)
+
+
+Requesters = Annotated[frozenset[UUID], Depends(additional_requesters)]
+
+
 async def committed(c: AsyncConnection, request: Request, memo_id: UUID) -> None:
     record = (
         await c.execute(
@@ -81,8 +90,8 @@ async def committed(c: AsyncConnection, request: Request, memo_id: UUID) -> None
 
 
 @router.get("/context", response_model=MemoContext)
-async def get_context(user: User, connection: Connection) -> MemoContext:
-    return await context(connection, user)
+async def get_context(user: User, connection: Connection, requesters: Requesters) -> MemoContext:
+    return await context(connection, user, requesters)
 
 
 @router.get("", response_model=MemoRegistry)
@@ -93,8 +102,10 @@ async def get_registry(
 
 
 @router.get("/{memo_id}", response_model=MemoDetail)
-async def get_memo(memo_id: UUID, user: User, connection: Connection) -> MemoDetail:
-    return await detail(connection, user, memo_id)
+async def get_memo(
+    memo_id: UUID, user: User, connection: Connection, requesters: Requesters,
+) -> MemoDetail:
+    return await detail(connection, user, memo_id, requesters)
 
 
 @router.get("/{memo_id}/pdf")
@@ -114,44 +125,48 @@ async def get_pdf(memo_id: UUID, user: User, connection: Connection) -> Response
 
 @router.post("", response_model=MemoDetail)
 async def post_memo(
-    value: MemoCreate, request: Request, user: User, connection: Connection
+    value: MemoCreate, request: Request, user: User, connection: Connection, requesters: Requesters,
 ) -> MemoDetail:
-    result = await create(connection, user, value)
+    result = await create(connection, user, value, requesters)
     await committed(connection, request, UUID(result.id))
     return result
 
 
 @router.put("/{memo_id}", response_model=MemoDetail)
 async def put_memo(
-    memo_id: UUID, value: MemoUpdate, request: Request, user: User, connection: Connection
+    memo_id: UUID, value: MemoUpdate, request: Request, user: User, connection: Connection,
+    requesters: Requesters,
 ) -> MemoDetail:
-    result = await save(connection, user, memo_id, value)
+    result = await save(connection, user, memo_id, value, requesters)
     await committed(connection, request, memo_id)
     return result
 
 
 @router.post("/{memo_id}/submit", response_model=MemoDetail)
 async def submit_memo(
-    memo_id: UUID, value: MemoRevision, request: Request, user: User, connection: Connection
+    memo_id: UUID, value: MemoRevision, request: Request, user: User, connection: Connection,
+    requesters: Requesters,
 ) -> MemoDetail:
-    result = await transition(connection, user, memo_id, value, "submit")
+    result = await transition(connection, user, memo_id, value, "submit", requesters)
     await committed(connection, request, memo_id)
     return result
 
 
 @router.post("/{memo_id}/decision", response_model=MemoDetail)
 async def decide_memo(
-    memo_id: UUID, value: MemoDecision, request: Request, user: User, connection: Connection
+    memo_id: UUID, value: MemoDecision, request: Request, user: User, connection: Connection,
+    requesters: Requesters,
 ) -> MemoDetail:
-    result = await transition(connection, user, memo_id, value, "decide")
+    result = await transition(connection, user, memo_id, value, "decide", requesters)
     await committed(connection, request, memo_id)
     return result
 
 
 @router.post("/{memo_id}/withdraw", response_model=MemoDetail)
 async def withdraw_memo(
-    memo_id: UUID, value: MemoRevision, request: Request, user: User, connection: Connection
+    memo_id: UUID, value: MemoRevision, request: Request, user: User, connection: Connection,
+    requesters: Requesters,
 ) -> MemoDetail:
-    result = await transition(connection, user, memo_id, value, "withdraw")
+    result = await transition(connection, user, memo_id, value, "withdraw", requesters)
     await committed(connection, request, memo_id)
     return result
