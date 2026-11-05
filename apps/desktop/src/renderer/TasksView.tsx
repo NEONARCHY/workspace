@@ -70,6 +70,7 @@ import { isTaskOverdue, taskDeadlineLabel } from "./task-deadline";
 import { useTaskDeadlineClock } from "./useTaskDeadlineClock";
 import { needsTaskDeadlineDecision, pendingTaskDeadlineRequest } from "./task-deadline-request";
 import { TaskDeadlineDecision } from "./TaskDeadlineDecision";
+import { TaskReturnDialog } from "./TaskReturnDialog";
 import { TaskPriorityIndicator, taskPriorityLabels } from "./TaskPriority";
 import "./task-detail-workflow.css";
 
@@ -283,7 +284,7 @@ export function TasksView(props: TasksViewProps) {
     if (id !== selectedId) {
       setEditing(false); setExtendingDeadline(false); setCycleEditing(false); setDateError("");
       setChecklistTitle(""); setCommentBody(""); setParticipantId(""); setDependencyId("");
-      setEfficiencyAction(""); setEfficiencyReasonText("");
+      setEfficiencyAction(""); setEfficiencyReasonText(""); setReturnDialogOpen(false);
       setResultText(""); setResultError(""); setCreatingSubtask(false); setSubtaskTitle(""); setSubtaskDueAt("");
     }
     updateSelectedId(id);
@@ -332,7 +333,8 @@ export function TasksView(props: TasksViewProps) {
   const [cycleCalendarRule, setCycleCalendarRule] = useState<"weekdays" | "month_days">("weekdays");
   const [cycleWeekdays, setCycleWeekdays] = useState<readonly number[]>([0]);
   const [cycleMonthDays, setCycleMonthDays] = useState("1");
-  const [efficiencyAction, setEfficiencyAction] = useState<"return" | "exclude" | "include" | "">("");
+  const [efficiencyAction, setEfficiencyAction] = useState<"exclude" | "include" | "">("");
+  const [returnDialogOpen, setReturnDialogOpen] = useState(false);
   const [efficiencyReason, setEfficiencyReason] = useState<TaskReturnReason | TaskEfficiencyExclusionReason>("corrections_required");
   const [efficiencyReasonText, setEfficiencyReasonText] = useState("");
   const [extendingDeadline, setExtendingDeadline] = useState(false);
@@ -351,6 +353,7 @@ export function TasksView(props: TasksViewProps) {
   const [subtaskAssigneeScope, setSubtaskAssigneeScope] = useState<EmployeeScope>("central");
   const [subtaskDueAt, setSubtaskDueAt] = useState("");
   const newTaskFocusTarget = useRestoreFocusTarget();
+  const returnFocusTarget = useRestoreFocusTarget();
   const inEmployeeScope = (person: WorkspacePerson, scope: EmployeeScope) =>
     !departments || employeeScope(person.departmentId, departments) === scope;
 
@@ -664,10 +667,18 @@ export function TasksView(props: TasksViewProps) {
     setDateError("");
     setReviewBusy(true);
     try {
-      const result = efficiencyAction === "return"
-        ? await onReturnForRevision(selectedTask, efficiencyReason as TaskReturnReason, efficiencyReasonText.trim())
-        : await onSetEfficiencyExclusion(selectedTask, efficiencyAction === "exclude", efficiencyAction === "exclude" ? efficiencyReason as TaskEfficiencyExclusionReason : undefined, efficiencyReasonText.trim());
+      const result = await onSetEfficiencyExclusion(selectedTask, efficiencyAction === "exclude", efficiencyAction === "exclude" ? efficiencyReason as TaskEfficiencyExclusionReason : undefined, efficiencyReasonText.trim());
       if (result) { setEfficiencyAction(""); setEfficiencyReasonText(""); }
+    } finally {
+      setReviewBusy(false);
+    }
+  };
+
+  const returnForRevision = async (reason: TaskReturnReason, text: string) => {
+    if (!selectedTask || !canReviewResult || reviewBusy) return false;
+    setReviewBusy(true);
+    try {
+      return Boolean(await onReturnForRevision(selectedTask, reason, text));
     } finally {
       setReviewBusy(false);
     }
@@ -844,7 +855,6 @@ export function TasksView(props: TasksViewProps) {
             <Button appearance="secondary" icon={<Attach24Regular />} disabled={resultUploading || reviewBusy} onClick={() => resultFileInput.current?.click()}>{resultUploading ? "Загружаем файлы…" : "Добавить файлы к результату"}</Button>
             <small>Файлы сохраняются в задаче сразу; постановщик увидит их вместе с результатом.</small>
           </div> : null}
-          {efficiencyAction === "return" && canReviewResult ? <div className="task-card-editor efficiency-action-form" role="region" aria-label="Мотивированный возврат"><label><span>Причина возврата</span><WorkspaceSelect aria-label="Причина действия эффективности" value={efficiencyReason} onChange={(event) => setEfficiencyReason(event.target.value as typeof efficiencyReason)}><option value="corrections_required">Нужны исправления</option><option value="incomplete_result">Результат неполный</option><option value="requirements_not_met">Требования не выполнены</option><option value="other">Другая причина</option></WorkspaceSelect></label><Textarea aria-label="Пояснение причины" placeholder={efficiencyReason === "other" ? "Обязательное пояснение" : "Что именно нужно исправить"} value={efficiencyReasonText} onChange={(_, data) => setEfficiencyReasonText(data.value)} /><div className="task-editor-actions"><Button appearance="primary" onClick={() => void submitEfficiencyAction()} disabled={reviewBusy}>{reviewBusy ? "Возврат…" : "Вернуть исполнителям"}</Button><Button appearance="subtle" onClick={() => setEfficiencyAction("")} disabled={reviewBusy}>Отмена</Button></div></div> : null}
         </div>
         <AttachmentPanel attachments={attachments.filter((attachment) => attachment.ownerType === "task" && attachment.ownerId === selectedTask.id)} canUpload={canEdit} dropzone headingAccessory={<TaskHelp title="Вложения">Откройте файл нажатием. Свой файл можно удалить; администратор может удалить любой файл задачи. Количество не ограничено, до 25 МБ на обычный файл.</TaskHelp>} onUpload={(files) => onUploadAttachments(selectedTask, files)} onDownload={onDownloadAttachment}
           canDelete={attachment => attachment.uploadedByUserId === currentUserId || ["admin", "superadmin"].includes(people.find(person => person.id === currentUserId)?.role ?? "")}
@@ -941,15 +951,19 @@ export function TasksView(props: TasksViewProps) {
           {canManageParticipants ? <div className="task-editor-actions">{selectedTask.efficiencyExcluded
             ? <Button appearance="subtle" onClick={() => setEfficiencyAction("include")}>Снова учитывать задачу</Button>
             : <Button appearance="subtle" onClick={() => { setEfficiencyAction("exclude"); setEfficiencyReason("external_dependency"); }}>Исключить из расчёта</Button>}</div> : null}
-        {efficiencyAction && efficiencyAction !== "return" ? <div className="task-card-editor efficiency-action-form" role="region" aria-label={efficiencyAction === "exclude" ? "Исключение из расчёта" : "Возврат в расчёт"}>{efficiencyAction !== "include" ? <label><span>Причина</span><WorkspaceSelect aria-label="Причина действия эффективности" value={efficiencyReason} onChange={(event) => setEfficiencyReason(event.target.value as typeof efficiencyReason)}><option value="external_dependency">Внешняя зависимость</option><option value="requirements_changed">Требования изменились</option><option value="cancelled">Задача отменена</option><option value="duplicate">Дубликат</option><option value="other">Другая причина</option></WorkspaceSelect></label> : <p>Задача снова будет учитываться по зафиксированным срокам и событиям.</p>}{efficiencyAction !== "include" ? <Textarea aria-label="Пояснение причины" placeholder={efficiencyReason === "other" ? "Обязательное пояснение" : "Дополнительное пояснение"} value={efficiencyReasonText} onChange={(_, data) => setEfficiencyReasonText(data.value)} /> : null}<div className="task-editor-actions"><Button appearance="primary" onClick={() => void submitEfficiencyAction()}>Подтвердить</Button><Button appearance="subtle" onClick={() => setEfficiencyAction("")}>Отмена</Button></div></div> : null}</div>
+        {efficiencyAction ? <div className="task-card-editor efficiency-action-form" role="region" aria-label={efficiencyAction === "exclude" ? "Исключение из расчёта" : "Возврат в расчёт"}>{efficiencyAction !== "include" ? <label><span>Причина</span><WorkspaceSelect aria-label="Причина действия эффективности" value={efficiencyReason} onChange={(event) => setEfficiencyReason(event.target.value as typeof efficiencyReason)}><option value="external_dependency">Внешняя зависимость</option><option value="requirements_changed">Требования изменились</option><option value="cancelled">Задача отменена</option><option value="duplicate">Дубликат</option><option value="other">Другая причина</option></WorkspaceSelect></label> : <p>Задача снова будет учитываться по зафиксированным срокам и событиям.</p>}{efficiencyAction !== "include" ? <Textarea aria-label="Пояснение причины" placeholder={efficiencyReason === "other" ? "Обязательное пояснение" : "Дополнительное пояснение"} value={efficiencyReasonText} onChange={(_, data) => setEfficiencyReasonText(data.value)} /> : null}<div className="task-editor-actions"><Button appearance="primary" onClick={() => void submitEfficiencyAction()}>Подтвердить</Button><Button appearance="subtle" onClick={() => setEfficiencyAction("")}>Отмена</Button></div></div> : null}</div>
         </div></div>
         <div className="detail-footer">
           {canDelete ? <Button className="task-delete-button" appearance="secondary" icon={<Delete24Regular />} disabled={deleting || reviewBusy} onClick={() => void deleteSelectedTask()}>{deleting ? "Удаление…" : "Удалить задачу"}</Button> : null}
-          {canReviewResult ? <Button appearance="secondary" disabled={reviewBusy} onClick={() => { setEfficiencyAction("return"); setEfficiencyReason("corrections_required"); }}>Вернуть на доработку</Button> : null}
+          {canReviewResult ? <Button {...returnFocusTarget} appearance="secondary" disabled={reviewBusy} onClick={() => setReturnDialogOpen(true)}>Вернуть на доработку</Button> : null}
           {canAcceptResult ? <Button appearance="primary" disabled={reviewBusy} onClick={() => void acceptResult()}>{reviewBusy ? "Сохранение…" : "Утвердить результат"}</Button> : null}
           {canSubmitResult && !canReviewResult ? <Button appearance="primary" disabled={reviewBusy || resultUploading || !resultText.trim()} onClick={() => void submitResult()}>{reviewBusy ? "Отправка…" : "Завершить и отправить на проверку"}</Button> : null}
         </div>
-      </aside>{renderTaskChat(selectedTask)}</div></DialogSurface>
+      </aside>{renderTaskChat(selectedTask)}</div>
+        <TaskReturnDialog key={selectedTask.id} open={detailOpen && returnDialogOpen && canReviewResult}
+          taskTitle={selectedTask.title} onClose={() => setReturnDialogOpen(false)}
+          onSubmit={returnForRevision} />
+      </DialogSurface>
       </Dialog> : null}
       {pendingTaskDelete ? <ConfirmActionDialog
         open

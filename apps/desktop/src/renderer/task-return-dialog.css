@@ -1,0 +1,45 @@
+.fui-DialogSurface.task-return-dialog {
+  width: min(580px, calc(100vw - 32px));
+  max-width: none;
+  max-height: calc(100dvh - 32px);
+  padding: 26px;
+  overflow: hidden;
+  border: 1px solid var(--ws-line);
+  border-radius: 24px;
+  background: var(--ws-surface);
+  color: var(--ws-text);
+  box-shadow: var(--ws-shadow-float);
+}
+.task-return-dialog > form { min-height: 0; display: flex; }
+.task-return-dialog .fui-DialogBody {
+  width: 100%;
+  min-height: 0;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas: "title" "content" "actions";
+  gap: 20px;
+}
+.task-return-dialog .fui-DialogTitle { grid-area: title; font-size: 24px; line-height: 1.25; padding-right: 36px; }
+.task-return-dialog .task-return-close { grid-area: title; justify-self: end; align-self: start; }
+.task-return-heading { display: flex; align-items: center; gap: 12px; overflow-wrap: anywhere; }
+.task-return-icon { display: grid; place-items: center; width: 44px; height: 44px; flex: 0 0 auto; border-radius: 14px; color: var(--ws-link); background: var(--ws-muted-surface); }
+.task-return-dialog .fui-DialogContent { grid-area: content; min-height: 0; display: grid; gap: 18px; overflow-y: auto; padding-right: 4px; }
+.task-return-context { display: grid; gap: 5px; padding: 14px 16px; border-radius: 14px; background: var(--ws-muted-surface); overflow-wrap: anywhere; }
+.task-return-context > span { font-size: 12px; color: var(--ws-muted); }
+.task-return-context > strong { font-size: 14px; line-height: 1.5; }
+.task-return-description { margin: 0; font-size: 14px; line-height: 1.6; color: var(--ws-muted); }
+.task-return-dialog .fui-Field { min-width: 0; }
+.task-return-dialog .fui-Textarea { width: 100%; }
+.task-return-dialog .fui-Textarea textarea { min-height: 128px; max-height: 35dvh; resize: vertical; }
+.task-return-dialog .fui-DialogActions { grid-area: actions; justify-self: stretch; display: flex; width: 100%; flex-wrap: wrap; gap: 10px; justify-content: flex-end; padding-top: 16px; border-top: 1px solid var(--ws-line); }
+.task-return-dialog .fui-DialogActions > .fui-Button { min-height: 44px; white-space: normal; }
+@media (max-width: 540px) {
+  .fui-DialogSurface.task-return-dialog { padding: 20px 16px; }
+  .task-return-dialog .fui-DialogTitle { font-size: 21px; }
+  .task-return-icon { width: 36px; height: 36px; }
+  .task-return-dialog .fui-DialogActions > .fui-Button { flex: 1 1 100%; }
+}
+@media (forced-colors: active) {
+  .fui-DialogSurface.task-return-dialog { border-color: CanvasText; box-shadow: none; }
+  .task-return-icon, .task-return-context { border: 1px solid CanvasText; }
+}
