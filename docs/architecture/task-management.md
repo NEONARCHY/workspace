@@ -181,6 +181,11 @@ The task detail footer contains result submission for executors, and delete,
 accept and return actions for the author when applicable. The result composer
 also accepts task files, which remain available in the card after submission.
 The former payment-request shortcut is no longer part of the task card.
+The return action opens a separate modal above the task card, with the task title,
+the existing reason codes and a focused explanation field. An explanation remains
+mandatory for `other`; the existing review permissions and server action are unchanged.
+The dialog keeps its draft and displays an error when a return fails. While the
+request is pending, its fields, repeated submission and dismissal are blocked.
 Task deletion also removes its task chat and immutable message versions through
 a transaction-scoped purge guard; ordinary message history remains append-only.
 

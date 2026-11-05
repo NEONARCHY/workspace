@@ -322,6 +322,7 @@ describe("corporate workspace authentication alpha", () => {
     expect(screen.getByText("Результат отправлен. Ожидает решения постановщика.")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Вернуть на доработку" }));
+    expect(screen.getByRole("dialog", { name: "Вернуть на доработку" })).toBeVisible();
     changeField(screen.getByRole("textbox", { name: "Пояснение причины" }), {
       target: { value: "Добавьте номер договора" },
     });
