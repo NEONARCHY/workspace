@@ -13,7 +13,6 @@ from .access_control import ensure_module_action
 from .auth import AuthenticatedUser, load_authenticated_user
 from .errors import WorkspaceRepositoryError as Error
 from .settings import Settings
-from .tables import approval_requests
 from .telegram_notification_events import current_payment_stage, task_access
 from .telegram_notification_schemas import (
     DeliveryAck,
@@ -229,31 +228,10 @@ async def open_notice(
         await ensure_module_action(c, user, "tasks", "view")
         await _task_access_row(c, user, row["entity_id"])
         return WorkspaceNoticeTarget(section="tasks", entity_id=str(row["entity_id"]))
-    from .repository import _active_stages_for_requests
+    from .repository import validate_attachment_owner
 
     await ensure_module_action(c, user, "payment_requests", "view")
-    request = (
-        (
-            await c.execute(
-                select(approval_requests).where(
-                    approval_requests.c.id == row["entity_id"],
-                )
-            )
-        )
-        .mappings()
-        .first()
+    await validate_attachment_owner(
+        c, user, "approval_request", row["entity_id"], write=False,
     )
-    if request is None:
-        raise Error(404, "Заявка недоступна")
-    stages = await _active_stages_for_requests(c, [request], user)
-    if not (
-        user.role in {"admin", "superadmin"}
-        or user.id
-        in {
-            request["requester_user_id"],
-            request["responsible_user_id"],
-        }
-        or any(stage.can_act for stage in stages.get(request["id"], []))
-    ):
-        raise Error(404, "Заявка недоступна")
     return WorkspaceNoticeTarget(section="payment_requests", entity_id=str(row["entity_id"]))
