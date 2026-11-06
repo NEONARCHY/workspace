@@ -129,7 +129,7 @@ async def test_only_final_payment_records_immutable_once_only_expense() -> None:
                     await update_approval_request(connection, employee, UUID(active.id),
                         UpdateApprovalRequest(title="Unauthorized", amount=50,
                                               change_comment="No access"))
-                assert not_initiator.value.status_code == 403
+                assert not_initiator.value.status_code == 404
                 with pytest.raises(WorkspaceRepositoryError) as no_reason:
                     await update_approval_request(connection, outsider, UUID(active.id),
                                                   UpdateApprovalRequest(title="Changed", amount=50))
@@ -172,7 +172,7 @@ async def test_only_final_payment_records_immutable_once_only_expense() -> None:
                 with pytest.raises(WorkspaceRepositoryError) as forbidden:
                     await act_on_request(connection, employee, request_id,
                                          ApprovalActionRequest(action="approve"))
-                assert forbidden.value.status_code == 403
+                assert forbidden.value.status_code == 404
                 request = await act_on_request(connection, admin, request_id,
                                               ApprovalActionRequest(action="approve"))
                 assert request.status == "running"
