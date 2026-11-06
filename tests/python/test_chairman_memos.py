@@ -151,12 +151,68 @@ async def make(client, headers, key="deputy"):
 
 
 def test_domain_positions_and_central_gate():
-    for title in ["Rais o'rinbosari", "Raisning o‘rinbosari", "Rais birinchi o‘rinbosari"]:
+    for title in [
+        "Rais o'rinbosari", "Raisning o‘rinbosari", "Rais birinchi o‘rinbosari",
+        "Rais birinchi o‘rinbosari – ijrochi direktor",
+        "  RAISNING  BIRINCHI  OʼRINBOSARI — IJROCHI DIREKTOR  ",
+        "Rais birinchi o'rinbosari-ijrochi direktor",
+    ]:
         assert is_memo_deputy(title)
-    for title in [None, "Mutaxassis", "Rais o‘rinbosari yordamchisi", "Viloyat rais o‘rinbosari"]:
+    for title in [
+        None, "Mutaxassis", "Rais o‘rinbosari yordamchisi", "Viloyat rais o‘rinbosari",
+        "Ijrochi direktor", "Rais birinchi o‘rinbosari – ijrochi direktor yordamchisi",
+        "Viloyat rais birinchi o‘rinbosari – ijrochi direktor",
+        "Rais birinchi o‘rinbosari – boshqa direktor",
+    ]:
         assert not is_memo_deputy(title)
     assert request_module_action(PREFIX + "/context", "GET") == ("home", "view")
     assert request_module_action(PREFIX + "/x/decision", "POST") == ("home", "approve")
+
+
+def test_first_deputy_director_can_prepare_only_own_memos():
+    async def run():
+        async with scenario() as (client, headers, engine, people, _):
+            async with engine.begin() as c:
+                await c.execute(update(users).where(users.c.id == people["first"]).values(
+                    job_title="Rais birinchi o‘rinbosari – ijrochi direktor",
+                ))
+            access = (await client.get(PREFIX + "/context", headers=headers["first"])).json()
+            assert access["enabled"] and access["canCreate"] and not access["canReview"]
+            foreign, _ = await make(client, headers, "deputy")
+            assert (await client.get(PREFIX + "/" + foreign["id"],
+                                     headers=headers["first"])).status_code == 404
+            own, payload = await make(client, headers, "first")
+            assert own["canEdit"] and own["canSubmit"] and not own["canDecide"]
+            assert (await client.get(PREFIX + "/" + own["id"],
+                                     headers=headers["deputy"])).status_code == 404
+            sent = await client.post(PREFIX + "/" + own["id"] + "/submit",
+                                     headers=headers["first"], json={"expectedRevision": 1})
+            assert sent.status_code == 200 and sent.json()["status"] == "pending"
+            denied = await client.post(PREFIX + "/" + own["id"] + "/decision",
+                                       headers=headers["first"],
+                                       json={"expectedRevision": 2, "decision": "approve"})
+            assert denied.status_code == 403
+            async with engine.begin() as c:
+                await c.execute(insert(module_access_rules).values(
+                    id=uuid4(), subject_type="user", subject_key=str(people["first"]),
+                    module_key="home", permissions={"view": True},
+                    created_by_user_id=people["admin"], created_at=datetime.now(UTC),
+                    updated_at=datetime.now(UTC),
+                ))
+            assert not (await client.get(PREFIX + "/context", headers=headers["first"])).json()[
+                "canCreate"
+            ]
+            denied = await client.post(PREFIX, headers=headers["first"],
+                                       json={**payload, "requestId": str(uuid4())})
+            assert denied.status_code == 403
+            async with engine.begin() as c:
+                await c.execute(update(users).where(users.c.id == people["first"]).values(
+                    status="archived",
+                ))
+            assert (await client.get(PREFIX + "/context",
+                                     headers=headers["first"])).status_code == 401
+
+    asyncio.run(run())
 
 
 def test_personal_requester_configuration_is_uuid_only(monkeypatch):
