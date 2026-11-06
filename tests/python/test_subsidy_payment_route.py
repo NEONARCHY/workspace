@@ -228,7 +228,7 @@ async def test_subsidy_payment_uses_askar_and_other_projects_keep_deputy() -> No
                         connection, askar, UUID(ordinary.id),
                         ApprovalActionRequest(action="approve"),
                     )
-                assert forbidden.value.status_code == 403
+                assert forbidden.value.status_code == 404
                 ordinary = await act_on_request(
                     connection, deputy, UUID(ordinary.id),
                     ApprovalActionRequest(action="approve"),

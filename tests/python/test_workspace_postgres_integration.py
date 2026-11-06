@@ -974,13 +974,14 @@ async def _exercise_live_workspace(database_url: str) -> None:
                     UUID(approval.id),
                     ApprovalActionRequest(action="move", node_key="start"),
                 )
-            with pytest.raises(WorkspaceRepositoryError, match="cannot move"):
+            with pytest.raises(WorkspaceRepositoryError, match="Request was not found") as hidden:
                 await act_on_request(
                     connection,
                     dilshod_auth,
                     UUID(approval.id),
                     ApprovalActionRequest(action="move", node_key="project_financier"),
                 )
+            assert hidden.value.status_code == 404
             approval = await act_on_request(
                 connection,
                 admin,
