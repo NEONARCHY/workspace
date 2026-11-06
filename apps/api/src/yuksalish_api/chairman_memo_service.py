@@ -40,7 +40,10 @@ PRIVATE = {"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosn
 def is_memo_deputy(title: str | None) -> bool:
     apostrophes = str.maketrans({"‘": "'", "’": "'", "ʻ": "'", "ʼ": "'", "`": "'"})
     normalized = " ".join((title or "").translate(apostrophes).casefold().split())
-    return bool(re.fullmatch(r"rais(?:ning)? (?:birinchi )?o'rinbosari", normalized))
+    return bool(re.fullmatch(
+        r"rais(?:ning)? (?:birinchi )?o'rinbosari(?:\s*[\u2013\u2014-]\s*ijrochi direktor)?",
+        normalized,
+    ))
 
 
 async def can_create(
