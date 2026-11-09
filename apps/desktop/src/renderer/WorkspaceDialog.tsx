@@ -7,7 +7,8 @@ export function focusWorkspaceDialog(surface: HTMLElement | null) {
   const active = surface.ownerDocument.activeElement;
   const activeDialog = active?.closest('[role="dialog"]');
   if (activeDialog && activeDialog !== surface) return;
-  if (active !== surface && surface.getAttribute("aria-hidden") !== "true") return;
+  if (active && surface.contains(active) && active !== surface
+    && surface.getAttribute("aria-hidden") !== "true") return;
   const target = surface.querySelector<HTMLElement>('button:not([disabled]), input:not([disabled]):not([type="hidden"]), textarea:not([disabled]), a[href], [tabindex="0"]:not([data-tabster-dummy])');
   if (active === target) surface.focus({ preventScroll: true });
   target?.focus({ preventScroll: true });

@@ -16,6 +16,12 @@ it("activates a real control instead of a focus sentinel and preserves an active
     focusWorkspaceDialog(surface);
     expect(surface.querySelector("button")).toHaveFocus();
     surface.removeAttribute("aria-hidden");
+    const outside = document.createElement("button");
+    document.body.append(outside);
+    outside.focus();
+    focusWorkspaceDialog(surface);
+    expect(surface.querySelector("button")).toHaveFocus();
+    outside.remove();
     const input = surface.querySelector("input")!;
     input.focus();
     focusWorkspaceDialog(surface);
