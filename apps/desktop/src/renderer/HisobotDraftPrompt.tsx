@@ -18,7 +18,7 @@ export function currentHisobotReminderDay(notifications: readonly WorkspaceNotif
   if (!day || !clock || clock < "17:40" || clock >= "18:30") return undefined;
   const weekday = new Date(`${day}T00:00:00Z`).getUTCDay();
   if (weekday === 0 || weekday === 6) return undefined;
-  return notifications.some(item => item.kind === "hisobot" && item.isReminder && item.requiresAction
+  return notifications.some(item => item.kind === "hisobot" && item.section === "ai_hisobot" && item.isReminder && item.requiresAction
     && !item.resolvedAt && new Date(item.occurredAt) <= now
     && new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Tashkent" }).format(new Date(item.occurredAt)) === day)
     ? day : undefined;

@@ -46,6 +46,7 @@ interface TeamDashboardViewProps {
   readonly onDecisionOpen?: (returnFocusTo: HTMLElement | null) => void;
   readonly decisionRevision?: number;
   readonly memorandumAction?: ReactNode;
+  readonly monthlyReportAction?: ReactNode;
   readonly children?: ReactNode;
   readonly token: string;
   readonly tasks: readonly WorkspaceTask[];
@@ -181,6 +182,7 @@ export function TeamDashboardView({
   decisionRevision = 0,
   onDecisionOpen,
   memorandumAction,
+  monthlyReportAction,
   children,
   token,
   tasks,
@@ -410,6 +412,7 @@ export function TeamDashboardView({
 
     <section className="team-dash-metrics" aria-label="Ключевые показатели команды">
       {memorandumAction}
+      {monthlyReportAction}
       <MetricCard active={decisionPanel === "overdue"} onSelect={() => openPanel("overdue")} icon={<Warning24Regular />} label="Нужна помощь" value={overdueTasks.length} note={overdueTasks.length ? "истёк текущий срок" : "истёкших сроков нет"} tone="danger" />
       <MetricCard active={decisionPanel === "review"} onSelect={() => openPanel("review")} icon={<CheckmarkCircle24Regular />} label="Ждут решения" value={reviewTasks.length} note="задачи, где вы постановщик" tone="review" />
       {onSelectPaymentRequest ? <MetricCard active={decisionPanel === "payments"} onSelect={() => openPanel("payments")} icon={<CheckmarkCircle24Regular />} label="Заявки на оплату" value={pendingPayments.length} note="ждут вашего решения" tone="brand" /> : null}

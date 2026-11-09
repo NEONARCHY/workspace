@@ -3,6 +3,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 describe("web API addresses and session restore", () => {
   const defaultBridge = window.yuksalish;
   const cookieDescriptor = Object.getOwnPropertyDescriptor(Document.prototype, "cookie");
+  it("rejects a successful but malformed monthly response instead of rendering missing fields", async () => {
+    window.yuksalish = undefined;
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({})));
+    const api = await import("./workspace-api");
+    await expect(api.loadMonthlyReports("monthly-token")).rejects.toThrow("неполные данные ежемесячных отчётов");
+  });
   it("loads separate personal trip and leave inboxes without falling back on an old server", async () => {
     window.yuksalish = undefined;
     const fetchMock = vi.fn().mockResolvedValueOnce(Response.json({ enabled: true, items: [] }))

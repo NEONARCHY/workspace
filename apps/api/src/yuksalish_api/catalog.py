@@ -68,6 +68,12 @@ MODULE_CATALOG = (
         status="available",
     ),
     ModuleDescriptor(
+        key="ai_monthly_reports",
+        label=LocalizedLabel(ru="Ойлик ҳисоботлар", uz_cyrl="Ойлик ҳисоботлар",
+                             uz_latn="Oylik hisobotlar"),
+        route="/monthly-reports", status="available",
+    ),
+    ModuleDescriptor(
         key="assistant",
         label=LocalizedLabel(
             ru="ИИ-ассистент",
