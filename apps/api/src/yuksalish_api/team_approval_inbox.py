@@ -1,10 +1,10 @@
-"""Read-only, personal first-deputy queues. Approval routes remain unchanged."""
+"""Read-only, personal chairman/deputy queues. Approval routes remain unchanged."""
 
 from datetime import date
 from typing import Literal
 
 from fastapi import HTTPException
-from sqlalchemy import or_, select
+from sqlalchemy import and_, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from .access_control import ensure_module_action, module_permissions_for_user
@@ -16,7 +16,7 @@ from .repository import (
     _trip_directory_deputy_id,
     _trip_row_deputy_id,
 )
-from .tables import leave_requests, trip_requests, users
+from .tables import hr_settings, leave_requests, trip_requests, users
 from .workspace_schemas import ApiModel
 
 ApprovalInboxKind = Literal["trips", "leaves"]
@@ -68,6 +68,9 @@ async def team_approval_inbox(
         ) for row in rows])
 
     configured_id = await _trip_deputy_user_id(connection)
+    chair_id = await connection.scalar(
+        select(hr_settings.c.chair_user_id).where(hr_settings.c.id == 1)
+    )
     # Version 3 pins the approver at submission. A later route edit must not steal
     # existing decisions; unpinned legacy records use the original directory role.
     rows = (await connection.execute(
@@ -80,10 +83,21 @@ async def team_approval_inbox(
         ).join(users, users.c.id == trip_requests.c.requester_user_id)
         .where(
             trip_requests.c.deleted_at.is_(None), trip_requests.c.status == "running",
-            trip_requests.c.stage == "deputy_approval", trip_requests.c.workflow_version == 3,
             or_(
-                trip_requests.c.deputy_approver_user_id == user.id,
-                trip_requests.c.deputy_approver_user_id.is_(None) & (directory_id == user.id),
+                and_(
+                    trip_requests.c.stage == "deputy_approval",
+                    trip_requests.c.workflow_version == 3,
+                    or_(
+                        trip_requests.c.deputy_approver_user_id == user.id,
+                        trip_requests.c.deputy_approver_user_id.is_(None)
+                        & (directory_id == user.id),
+                    ),
+                ),
+                and_(
+                    trip_requests.c.stage == "manager_approval",
+                    trip_requests.c.workflow_version >= 2,
+                    literal(chair_id == user.id),
+                ),
             ),
         ).order_by(trip_requests.c.start_date, trip_requests.c.created_at, trip_requests.c.id)
     )).mappings().all()
@@ -91,8 +105,9 @@ async def team_approval_inbox(
         id=str(row["id"]), title=row["destination"], requester_name=row["full_name"],
         starts_on=row["start_date"], ends_on=row["end_date"],
     ) for row in rows if "approve" in _trip_allowed_actions(
-        row, user, deputy_user_id=_trip_row_deputy_id(row, configured_id, directory_id),
+        row, user, chair_user_id=chair_id,
+        deputy_user_id=_trip_row_deputy_id(row, configured_id, directory_id),
     )]
     return TeamApprovalInbox(
-        enabled=user.id in {configured_id, directory_id} or bool(items), items=items,
+        enabled=user.id in {configured_id, directory_id, chair_id} or bool(items), items=items,
     )

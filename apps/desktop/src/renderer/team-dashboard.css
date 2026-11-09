@@ -1479,3 +1479,17 @@
   .team-dash-decisions > header { top: -16px; }
   .team-dash-decisions h3 { font-size: 18px; }
 }
+.workspace-view[data-dialog-only="true"],
+.workspace-view[data-dialog-only="true"] > .approval-workspace {
+  display: contents;
+}
+
+.fui-DialogSurface.team-decision-dialog {
+  width: min(960px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  max-height: calc(100dvh - 32px);
+}
+
+.leave-view[data-dialog-only="true"] .leave-layout {
+  grid-template-columns: minmax(0, 1fr);
+}

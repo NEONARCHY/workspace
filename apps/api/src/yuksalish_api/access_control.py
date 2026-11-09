@@ -200,6 +200,15 @@ def request_module_action(path: str, method: str) -> tuple[str, ModuleAction] | 
         return "assistant", "view"
     if normalized.startswith("/survey-analyses/") and normalized.endswith("/export"):
         return "survey_analytics", "view"
+    if normalized == "/monthly-reports" or normalized.startswith("/monthly-reports/"):
+        monthly_action: ModuleAction = "view"
+        if normalized.endswith("/authorize"):
+            monthly_action = "approve"
+        elif normalized.endswith("/submit"):
+            monthly_action = "create"
+        elif upper_method == "PUT":
+            monthly_action = "admin"
+        return "ai_monthly_reports", monthly_action
     if normalized.startswith("/hisobot") and not normalized.startswith("/hisobot/bridge"):
         return "ai_hisobot", "create" if upper_method in {"POST", "PUT"} else "view"
     if normalized == "/grants/settings" and upper_method != "GET":

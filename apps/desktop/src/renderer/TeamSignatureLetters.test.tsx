@@ -41,9 +41,11 @@ describe("team signature inbox", () => {
     expect(panel()).toHaveTextContent("Азиза Каримова");
     expect(panel()).not.toHaveTextContent("Баходировна");
     fireEvent.click(within(panel()).getByRole("button", { name: /Письмо партнёру/ }));
+    await act(async () => { await vi.advanceTimersByTimeAsync(400); });
     expect(onSelect).toHaveBeenLastCalledWith("letter");
     fireEvent.click(tile());
     fireEvent.click(within(panel()).getByRole("button", { name: /Пакет документов/ }));
+    await act(async () => { await vi.advanceTimersByTimeAsync(400); });
     expect(onSelect).toHaveBeenLastCalledWith("packet");
     fireEvent.click(tile());
     await act(async () => { fireEvent.click(within(panel()).getByRole("button", { name: "Закрыть" })); await vi.advanceTimersByTimeAsync(300); });

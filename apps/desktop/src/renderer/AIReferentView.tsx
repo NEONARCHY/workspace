@@ -51,7 +51,7 @@ import {
   Open20Regular,
 } from "@fluentui/react-icons";
 
-import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
+import { WorkspaceDialog as Dialog, focusWorkspaceDialog } from "./WorkspaceDialog";
 import { WorkspaceSelect as Select } from "./WorkspaceSelect";
 import { AIReferentIncomingRegister } from "./AIReferentIncomingRegister";
 import { AIReferentSettings } from "./AIReferentSettings";
@@ -85,6 +85,8 @@ import {
 } from "./workspace-api";
 
 interface AIReferentViewProps {
+  readonly dialogOnly?: boolean;
+  readonly onDialogClose?: () => void;
   readonly token: string;
   readonly people: readonly WorkspacePerson[];
   readonly canCreate: boolean;
@@ -199,7 +201,7 @@ function dateTime(value: string): string {
   }).format(new Date(value));
 }
 
-export function AIReferentView({ token, people, canCreate, canAdmin = false, preferOutgoing = false, focusRequestId, focusIncomingId, focusRevision, onPreviewAttachment }: AIReferentViewProps) {
+export function AIReferentView({ token, people, canCreate, canAdmin = false, preferOutgoing = false, focusRequestId, focusIncomingId, focusRevision, onPreviewAttachment, dialogOnly = false, onDialogClose }: AIReferentViewProps) {
   const [letterPreview, setLetterPreview] = useState<{ readonly ownerId: string; readonly file: AIReferentPacketFile }>();
   const letterPreviewFocusTarget = useRestoreFocusTarget();
   const [localPreview, setLocalPreview] = useState<File>();
@@ -252,6 +254,8 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, pre
   const [page, setPage] = useState(0);
   const [filter, setFilter] = useState<"all" | AIReferentLetter["status"]>("all");
   const [selectedId, setSelectedId] = useState("");
+  const detailSurface = useRef<HTMLDivElement>(null);
+  const [detailRetry, setDetailRetry] = useState(0);
   const [detail, setDetail] = useState<AIReferentLetter>();
   const [detailTab, setDetailTab] = useState<"overview" | "files" | "history">("overview");
   const editRevision = useRef(1);
@@ -405,7 +409,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, pre
       if (busyRef.current) return;
       void loadAIReferentLetter(token, selectedId).then((letter) => {
         if (alive) {
-          setDetail(letter);
+          setDetail((current) => current?.id === letter.id && current.revision > letter.revision ? current : letter);
           if (letter.workflowKind === "sign_only") setRegisterKind("sign_only");
         }
       })
@@ -414,7 +418,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, pre
     reload();
     const timer = setInterval(reload, 10000);
     return () => { alive = false; clearInterval(timer); };
-  }, [token, selectedId]);
+  }, [token, selectedId, detailRetry]);
 
   const replaceLetter = (updated: AIReferentLetter) => {
     setDetail(updated);
@@ -598,7 +602,8 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, pre
     ? 1 + (selected.attachments.filter((attachment) => attachment.documentRole !== "primary").length)
     : selected?.attachments.length ?? 0;
   return (
-    <section className="workspace-view ai-referent-view" aria-label="AI Referent">
+    <section data-dialog-only={dialogOnly || undefined} className="workspace-view ai-referent-view" aria-label="AI Referent">
+{!dialogOnly && <>
       <header className="ai-referent-header ws-illustrated-header ws-section-header">
         <div className="ws-illustrated-header-copy">
           <span className="view-kicker">Единая корреспонденция</span>
@@ -801,7 +806,9 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, pre
         </div>
       )}
 
-      <Dialog open={formOpen} onOpenChange={(_event, data) => { if (!busy && !manualRecipientBusy) setFormOpen(data.open); }}>
+
+</>}
+      <Dialog open={formOpen} onAfterClose={() => { if (dialogOnly && !selectedId) onDialogClose?.(); }} onOpenChange={(_event, data) => { if (!busy && !manualRecipientBusy) setFormOpen(data.open); }}>
         <DialogSurface className="ai-referent-form-dialog">
           <DialogBody>
             <DialogTitle
@@ -916,8 +923,8 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, pre
         </DialogSurface>
       </Dialog>
 
-      <Dialog open={Boolean(selected)} onOpenChange={(_event, data) => { if (!data.open && !busy) { setSelectedId(""); setLetterPreview(undefined); } }}>
-        <DialogSurface className="ai-referent-detail-dialog">
+      <Dialog open={Boolean(selectedId)} onAfterOpen={() => focusWorkspaceDialog(detailSurface.current)} onAfterClose={() => { if (!formOpen) onDialogClose?.(); }} onOpenChange={(_event, data) => { if (!data.open && !busy) { setSelectedId(""); setLetterPreview(undefined); } }}>
+        <DialogSurface ref={detailSurface} className="ai-referent-detail-dialog">
           {selected ? (
             <DialogBody>
               <DialogTitle
@@ -931,6 +938,9 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, pre
                 {selected.subject || selected.displayNumber || "Тема — исходящий номер"}
               </DialogTitle>
               <DialogContent className="ai-referent-detail-content">
+                {readOnly ? <WorkspaceNotice tone="info" className="ai-referent-readonly" role="status">
+                  {authorityError ? `Режим только для просмотра: ${authorityError}` : authority?.detail || "Проверяем связь с роботом. Пока изменения недоступны."}
+                </WorkspaceNotice> : null}
                 <div className="ai-referent-detail-status">
                   <span className={`ai-referent-status status-${selected.status}`}>{statusLabels[selected.status]}</span>
                   <span>{selected.workflowKind === "sign_only" ? "Только подпись · без доставки" : selected.route === "exat" ? "E-XAT" : "Webmail"}</span>
@@ -1049,7 +1059,10 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, pre
                 </div>
                 {letterPreview?.ownerId === selected.id ? <AIReferentPacketViewer token={token} kind="outgoing" ownerId={letterPreview.ownerId} file={letterPreview.file} onClose={() => setLetterPreview(undefined)} /> : null}
             </DialogBody>
-          ) : null}
+          ) : <DialogBody>
+            <DialogTitle action={<Button appearance="subtle" aria-label="Закрыть письмо" onClick={() => setSelectedId("")}>Закрыть</Button>}>{error ? "Письмо недоступно" : "Открываем письмо"}</DialogTitle>
+            <DialogContent>{error ? <WorkspaceNotice tone="error" role="alert" actions={<Button onClick={() => { setError(""); setDetailRetry((value) => value + 1); }}>Повторить</Button>}>{error}</WorkspaceNotice> : <p role="status">Загружаем документ и доступные решения…</p>}</DialogContent>
+          </DialogBody>}
         </DialogSurface>
       </Dialog>
       {formOpen && localPreview && <Suspense fallback={<span role="status">Открываем выбранный документ…</span>}>

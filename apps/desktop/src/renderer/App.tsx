@@ -1,3 +1,7 @@
+import { TeamDecisionFrame } from "./TeamDecisionFrame";
+import { MonthlyReportDashboard, MonthlyReportPrompts, MonthlyReportsView } from "./MonthlyReportsView";
+import { useMonthlyReports, useMonthlyReportWindow } from "./useMonthlyReports";
+import { TaskProposals } from "./TaskProposals";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { ChairmanMemoLauncher, ChairmanMemosDialog } from "./ChairmanMemos";
 import { workspaceNoticeId, withoutWorkspaceNotice } from "./workspace-notice-link";
@@ -360,6 +364,7 @@ const navItems: readonly NavItem[] = [
   { key: "ai_referent", label: "AI Referent", icon: <Mail24Regular /> },
   { key: "incoming_letters", label: "Входящие письма", icon: <Mail24Regular /> },
   { key: "ai_hisobot", label: "AI Hisobot", icon: <DocumentBulletList24Filled /> },
+  { key: "ai_monthly_reports", label: "Ойлик ҳисоботлар", icon: <DocumentBulletList24Filled /> },
   { key: "telegram_access", label: "Доступ к ботам", icon: <PeopleTeam24Regular /> },
   { key: "feed", label: "Лента", icon: <News24Regular /> },
   { key: "projects", label: "Список проектов", icon: <FolderPeople24Regular /> },
@@ -435,6 +440,10 @@ export function App() {
   const [activeApiOrigin, setActiveApiOrigin] = useState<string>();
   const [switchingNetwork, setSwitchingNetwork] = useState(false);
   const [workspace, setWorkspace] = useState<WorkspaceState>(initialWorkspace);
+  const monthlyReports = useMonthlyReports(session?.accessToken, Boolean(session && workspace.currentUser.id === session.user.id
+    && workspace.moduleAccess.some(item => item.moduleKey === "ai_monthly_reports" && item.permissions.view)));
+  const monthlyWindow = useMonthlyReportWindow(session?.user.id);
+  const hideMonthlyReports = monthlyWindow.hide;
   const displayPeople = useMemo(() => workspace.people.map(employeeDisplayPerson), [workspace.people]);
   const displayCurrentUser = useMemo(() => employeeDisplayPerson(workspace.currentUser), [workspace.currentUser]);
   const displayChats = useMemo(() => workspace.chats.map((chat) => {
@@ -491,6 +500,17 @@ export function App() {
   const [focusTarget, setFocusTarget] = useState<{
     section: WorkspaceSection; entityId?: string; messageId?: string; incomingReferent?: boolean; revision: number;
   }>();
+  const [teamDecision, setTeamDecision] = useState<{
+    readonly section: "tasks" | "task_proposals" | "payment_requests" | "ai_referent" | "grants" | "trip_approvals" | "leave_approvals";
+    readonly entityId: string;
+  }>();
+  const [teamDecisionRevision, setTeamDecisionRevision] = useState(0);
+  const decisionReturnFocus = useRef<HTMLElement | null>(null);
+  const decisionFocusFrame = useRef<number | undefined>(undefined);
+  useEffect(() => () => {
+    if (decisionFocusFrame.current !== undefined) window.cancelAnimationFrame(decisionFocusFrame.current);
+  }, []);
+
   const [paymentCreateContext, setPaymentCreateContext] = useState<{ projectId: string; workstreamId: string }>();
   const consumePaymentCreateContext = useCallback(() => setPaymentCreateContext(undefined), []);
   const [focusNotification, setFocusNotification] = useState<{
@@ -540,6 +560,8 @@ export function App() {
     activeToken.current = authenticated.accessToken;
     knownNotificationIds.current = initialKnownNotificationIds(loaded.notifications);
     setFocusTarget(undefined);
+    setTeamDecision(undefined);
+    hideMonthlyReports();
     setWorkspace({ ...loaded, moduleAccess: loaded.moduleAccess ?? fallbackModuleAccess(loaded.currentUser), personalPreferences: loaded.personalPreferences ?? defaultPersonalPreferences });
     setSupportRegistry(loadedSupport ?? emptySupportRegistry(loaded.currentUser));
     setEfficiency(undefined);
@@ -563,7 +585,7 @@ export function App() {
     setConnectionDetail(apiConnectionLabel());
     setAuthError(undefined);
     setBackgroundError("");
-  }, [persistRefreshSession]);
+  }, [persistRefreshSession, hideMonthlyReports]);
 
   const handleLogin = async (username: string, password: string, totpCode?: string) => {
     setAuthBusy(true);
@@ -1631,8 +1653,14 @@ export function App() {
     mutation: (token: string) => Promise<TripRequest>,
   ): Promise<TripRequest | undefined> => {
     if (session === undefined) return undefined;
+    const token = session.accessToken;
     try {
-      return mergeTripRequest(await mutation(session.accessToken));
+      const updated = await mutation(token);
+      if (activeToken.current !== token) return undefined;
+      refreshWorkspace.invalidate(token);
+      mergeTripRequest(updated);
+      void refreshWorkspace(token).catch(reportError);
+      return updated;
     } catch (error) {
       reportError(error);
       return undefined;
@@ -1649,10 +1677,13 @@ export function App() {
     if (!session) throw new Error("Сеанс завершён. Войдите повторно.");
     try {
       await deleteWorkspaceTripRequest(session.accessToken, tripRequest.id);
+      if (activeToken.current !== session.accessToken) return;
+      refreshWorkspace.invalidate(session.accessToken);
       setWorkspace((current) => ({
         ...current,
         tripRequests: current.tripRequests.filter((item) => item.id !== tripRequest.id),
       }));
+      void refreshWorkspace(session.accessToken).catch(reportError);
     } catch (error) {
       reportError(error);
       throw error;
@@ -1664,16 +1695,26 @@ export function App() {
     action: TripAction,
     comment = "",
     targetStage?: TripStage,
-  ) => runTripMutation(async (token) => {
-    const updated = await actOnWorkspaceTripRequest(
+  ) => runTripMutation((token) => actOnWorkspaceTripRequest(
       token, tripRequest.id, action, comment, targetStage,
-    );
-    if (updated.status === "approved" || updated.status === "annulled"
-      || tripRequest.status === "approved") {
-      await refreshWorkspace(token).catch(reportError);
-    }
-    return updated;
-  });
+  ));
+
+  const refreshTeamDecision = async () => {
+    if (session) await refreshWorkspace(session.accessToken).catch(reportError);
+  };
+  const closeTeamDecision = () => {
+    setTeamDecision((current) => current === teamDecision ? undefined : current);
+    setTeamDecisionRevision((value) => value + 1);
+    void refreshTeamDecision();
+    if (decisionFocusFrame.current !== undefined) window.cancelAnimationFrame(decisionFocusFrame.current);
+    const token = session?.accessToken;
+    decisionFocusFrame.current = window.requestAnimationFrame(() => {
+      decisionFocusFrame.current = undefined;
+      if (activeToken.current !== token) return;
+      const target = decisionReturnFocus.current;
+      (target?.isConnected ? target : document.getElementById("team-dashboard-title"))?.focus({ preventScroll: true });
+    });
+  };
 
   const handleTripBriefOfficePreview = (
     requestId: string, sheet: number, offset: number, signal?: AbortSignal,
@@ -2294,6 +2335,13 @@ export function App() {
               setHisobotIncoming({ userId: workspace.currentUser.id, draft });
               setFocusTarget(undefined); setFocusNotification(undefined); setActiveSection("ai_hisobot");
             }} />
+          {canView("ai_monthly_reports") && <>
+            <MonthlyReportPrompts key={`monthly-prompt:${session.user.id}`} resource={monthlyReports} token={session.accessToken} userId={session.user.id}
+              paused={displayedSection === "ai_monthly_reports" || monthlyWindow.open || accountOpen || Boolean(profileUserId) || supportOpen || Boolean(teamDecision) || switchingNetwork}
+              onOpen={monthlyWindow.show} />
+            <MonthlyReportsView key={`monthly-window:${session.user.id}`} token={session.accessToken} resource={monthlyReports}
+              open={monthlyWindow.open} onClose={monthlyWindow.hide} onAfterClose={monthlyWindow.afterClose} />
+          </>}
 
           {backgroundError ? <WorkspaceNotice tone="warning" className="workspace-feedback" role="alert" actions={<><Button size="small" onClick={() => void refreshWorkspace(session.accessToken).catch(reportError)}>Обновить данные</Button><Button size="small" appearance="subtle" aria-label="Закрыть сообщение об ошибке" onClick={() => setBackgroundError("")}>×</Button></>}>
             <span>{backgroundError}</span>
@@ -2371,10 +2419,13 @@ export function App() {
             {displayedSection === "messenger" ? (
               <div className="messenger-page-slot" ref={setMessengerPageSlot} />
             ) : null}
-            {displayedSection === "tasks" ? (
+            {(displayedSection === "tasks" || teamDecision?.section === "tasks" && canView("tasks")) ? (
               <WorkingUserIdsContext.Provider value={workspace.workingUserIds ?? []}>
+              <TeamDecisionFrame active={teamDecision?.section === "tasks"} onClose={closeTeamDecision} onRetry={refreshTeamDecision} available={workspace.tasks.some((item) => item.id === teamDecision?.entityId)}>
               <TasksView
-                key={focusTarget?.revision}
+                dialogOnly={teamDecision?.section === "tasks"}
+                onDialogClose={teamDecision?.section === "tasks" ? closeTeamDecision : undefined}
+                key={teamDecision?.section === "tasks" ? teamDecision.entityId : focusTarget?.revision}
                 token={session.accessToken}
                 assistantDraft={canUseAssistant && preparedAction?.kind === "task" ? preparedAction : undefined}
                 tasks={workspace.tasks}
@@ -2414,15 +2465,21 @@ export function App() {
                 onUploadAttachments={handleUploadTaskAttachments}
                 onDeleteAttachment={handleDeleteTaskAttachment}
                 onDownloadAttachment={handleDownloadAttachment}
-                focusTaskId={focusTarget?.section === "tasks" ? focusTarget.entityId : undefined}
-              />
+                focusTaskId={teamDecision?.section === "tasks" ? teamDecision.entityId : focusTarget?.section === "tasks" ? focusTarget.entityId : undefined}
+              /></TeamDecisionFrame>
               </WorkingUserIdsContext.Provider>
             ) : null}
             {displayedSection === "team_overview" ? (
               <section className="workspace-view tasks-view bp5-tasks dashboard-mode" aria-label="Обзор команды">
                 <TeamDashboardView
                   memorandumAction={<ChairmanMemoLauncher token={session.accessToken} userId={session.user.id} onOpen={() => setMemoFocus({ userId: session.user.id })} />}
+                  monthlyReportAction={canView("ai_monthly_reports") ? <MonthlyReportDashboard resource={monthlyReports} onOpen={monthlyWindow.show} /> : undefined}
                   token={session.accessToken}
+                  decisionRevision={teamDecisionRevision}
+                  onDecisionOpen={(target) => {
+                    decisionReturnFocus.current = target;
+                    if (decisionFocusFrame.current !== undefined) window.cancelAnimationFrame(decisionFocusFrame.current);
+                  }}
                   tasks={workspace.tasks}
                   calendarEvents={workspace.calendarEvents}
                   onCalendarResponse={handleCalendarResponse}
@@ -2433,33 +2490,26 @@ export function App() {
                   efficiencyLoading={efficiencyLoading}
                   efficiencyError={efficiencyError}
                   onSelectTask={(taskId) => {
-                    setFocusTarget((current) => ({ section: "tasks", entityId: taskId, revision: (current?.revision ?? 0) + 1 }));
-                    setActiveSection("tasks");
+                    setTeamDecision({ section: "tasks", entityId: taskId });
                   }}
                   onSelectTaskProposal={(proposalId) => {
-                    setFocusTarget((current) => ({ section: "tasks", entityId: proposalId, revision: (current?.revision ?? 0) + 1 }));
-                    setActiveSection("tasks");
+                    setTeamDecision({ section: "task_proposals", entityId: proposalId });
                   }}
                   onSelectGrant={chairmanHome && canView("grants") ? (grantId) => {
-                    setFocusTarget((current) => ({ section: "grants", entityId: grantId, revision: (current?.revision ?? 0) + 1 }));
-                    setActiveSection("grants");
+                    setTeamDecision({ section: "grants", entityId: grantId });
                   } : undefined}
                   paymentRequests={canView("payment_requests") && workspace.workflow ? workspace.requests : []}
                   onSelectTrip={canView("trip_approvals") && modulePermissions.trip_approvals?.approve ? (requestId) => {
-                    setFocusTarget((current) => ({ section: "trip_approvals", entityId: requestId, revision: (current?.revision ?? 0) + 1 }));
-                    setActiveSection("trip_approvals");
+                    setTeamDecision({ section: "trip_approvals", entityId: requestId });
                   } : undefined}
                   onSelectLeave={canView("leave_approvals") && modulePermissions.leave_approvals?.approve ? (requestId) => {
-                    setFocusTarget((current) => ({ section: "leave_approvals", entityId: requestId, revision: (current?.revision ?? 0) + 1 }));
-                    setActiveSection("leave_approvals");
+                    setTeamDecision({ section: "leave_approvals", entityId: requestId });
                   } : undefined}
                   onSelectSignatureLetter={canView("ai_referent") ? (letterId) => {
-                    setFocusTarget((current) => ({ section: "ai_referent", entityId: letterId, revision: (current?.revision ?? 0) + 1 }));
-                    setActiveSection("ai_referent");
+                    setTeamDecision({ section: "ai_referent", entityId: letterId });
                   } : undefined}
                   onSelectPaymentRequest={canView("payment_requests") && workspace.workflow ? (requestId) => {
-                    setFocusTarget((current) => ({ section: "payment_requests", entityId: requestId, revision: (current?.revision ?? 0) + 1 }));
-                    setActiveSection("payment_requests");
+                    setTeamDecision({ section: "payment_requests", entityId: requestId });
                   } : undefined}
                 >
                   {chairmanHome ? <PersonalHomeView
@@ -2480,9 +2530,18 @@ export function App() {
                 </TeamDashboardView>
               </section>
             ) : null}
-            {displayedSection === "payment_requests" && workspace.workflow ? (
+            {teamDecision?.section === "task_proposals" && canView("tasks") ? <TeamDecisionFrame active onClose={closeTeamDecision} onRetry={refreshTeamDecision}>
+              <TaskProposals key={teamDecision.entityId} dialogOnly token={session.accessToken}
+                currentUserId={workspace.currentUser.id} people={displayPeople} tasks={workspace.tasks}
+                revision={teamDecisionRevision} focusId={teamDecision.entityId} onRefresh={refreshTeamDecision}
+                onDialogClose={closeTeamDecision} onOpenTask={(id) => setTeamDecision({ section: "tasks", entityId: id })} />
+            </TeamDecisionFrame> : null}
+            {(displayedSection === "payment_requests" || teamDecision?.section === "payment_requests" && canView("payment_requests")) && workspace.workflow ? (
+              <TeamDecisionFrame active={teamDecision?.section === "payment_requests"} onClose={closeTeamDecision} onRetry={refreshTeamDecision} available={workspace.requests.some((item) => item.id === teamDecision?.entityId)}>
               <ApprovalsView
-                key={JSON.stringify([workspace.workflow, focusTarget?.revision])}
+                dialogOnly={teamDecision?.section === "payment_requests"}
+                onDialogClose={teamDecision?.section === "payment_requests" ? closeTeamDecision : undefined}
+                key={teamDecision?.section === "payment_requests" ? teamDecision.entityId : JSON.stringify([workspace.workflow, focusTarget?.revision])}
                 token={session.accessToken}
                 calendarEvents={workspace.calendarEvents}
                 createContext={paymentCreateContext}
@@ -2508,22 +2567,25 @@ export function App() {
                 onReviseRequest={handleReviseApproval}
                 onUploadAttachments={handleUploadApprovalAttachments}
                 onDownloadAttachment={handleDownloadAttachment}
-                focusRequestId={focusTarget?.section === "payment_requests" ? focusTarget.entityId : undefined}
-              />
+                focusRequestId={teamDecision?.section === "payment_requests" ? teamDecision.entityId : focusTarget?.section === "payment_requests" ? focusTarget.entityId : undefined}
+              /></TeamDecisionFrame>
             ) : null}
-            {displayedSection === "ai_referent" ? (
+            {(displayedSection === "ai_referent" || teamDecision?.section === "ai_referent" && canView("ai_referent")) ? (
+              <TeamDecisionFrame active={teamDecision?.section === "ai_referent"} onClose={closeTeamDecision} onRetry={refreshTeamDecision}>
               <AIReferentView
-                key={session.user.id}
+                dialogOnly={teamDecision?.section === "ai_referent"}
+                onDialogClose={teamDecision?.section === "ai_referent" ? closeTeamDecision : undefined}
+                key={teamDecision?.section === "ai_referent" ? teamDecision.entityId : session.user.id}
                 preferOutgoing={session.user.jobTitle?.trim().toLowerCase() === chairmanPosition.toLowerCase() || modulePermissions.ai_referent?.approve === true}
                 onPreviewAttachment={setPreviewAttachment}
                 token={session.accessToken}
                 people={displayPeople}
                 canCreate={modulePermissions.ai_referent?.create ?? false}
                 canAdmin={session.user.role === "admin" || session.user.role === "superadmin"}
-                focusRequestId={focusTarget?.section === "ai_referent" && !focusTarget.incomingReferent ? focusTarget.entityId : undefined}
+                focusRequestId={teamDecision?.section === "ai_referent" ? teamDecision.entityId : focusTarget?.section === "ai_referent" && !focusTarget.incomingReferent ? focusTarget.entityId : undefined}
                 focusIncomingId={focusTarget?.section === "ai_referent" && focusTarget.incomingReferent ? focusTarget.entityId : undefined}
                 focusRevision={focusTarget?.section === "ai_referent" ? focusTarget.revision : undefined}
-              />
+              /></TeamDecisionFrame>
             ) : null}
             {displayedSection === "incoming_letters" ? (
               <IncomingLettersView
@@ -2541,6 +2603,7 @@ export function App() {
                 incomingDraft={hisobotIncoming?.userId === workspace.currentUser.id ? hisobotIncoming.draft : undefined}
                 onDraftHandled={() => setHisobotIncoming(undefined)} />
             ) : null}
+            {displayedSection === "ai_monthly_reports" ? <MonthlyReportsView key={session.user.id} token={session.accessToken} resource={monthlyReports} /> : null}
             {displayedSection === "telegram_access" && isAdmin ? (
               <TelegramAccessView token={session.accessToken} departments={workspace.departments} />
             ) : null}
@@ -2637,19 +2700,25 @@ export function App() {
               canCreate={modulePermissions.reference?.create ?? false}
               canEdit={modulePermissions.reference?.edit ?? false}
             /> : null}
-            {displayedSection === "grants" ? <GrantsView
-              key={focusTarget?.section === "grants" ? focusTarget.revision : undefined}
+            {(displayedSection === "grants" || teamDecision?.section === "grants" && canView("grants")) ? <TeamDecisionFrame active={teamDecision?.section === "grants"} onClose={closeTeamDecision} onRetry={refreshTeamDecision}>
+              <GrantsView
+                dialogOnly={teamDecision?.section === "grants"}
+                onDialogClose={teamDecision?.section === "grants" ? closeTeamDecision : undefined}
+              key={teamDecision?.section === "grants" ? teamDecision.entityId : focusTarget?.section === "grants" ? focusTarget.revision : undefined}
               token={session.accessToken} currentUser={workspace.currentUser} people={displayPeople}
               departments={workspace.departments} canCreate={modulePermissions.grants?.create ?? false}
               canAdmin={modulePermissions.grants?.admin === true && ["admin", "superadmin"].includes(workspace.currentUser.role)}
-              focusId={focusTarget?.section === "grants" ? focusTarget.entityId : undefined}
+              focusId={teamDecision?.section === "grants" ? teamDecision.entityId : focusTarget?.section === "grants" ? focusTarget.entityId : undefined}
               onOpenChat={canView("messenger") ? (chatId) => void handleOpenContextChat(chatId) : undefined}
               renderGrantChat={canView("messenger") ? (grant) => renderEmbeddedChat(grant.chatId, "гранта") : undefined}
               onPreviewAttachment={setPreviewAttachment} onDownloadAttachment={handleSaveAttachment}
-            /> : null}
-            {displayedSection === "trip_approvals" ? (
+            /></TeamDecisionFrame> : null}
+            {(displayedSection === "trip_approvals" || teamDecision?.section === "trip_approvals" && canView("trip_approvals")) ? (
+              <TeamDecisionFrame active={teamDecision?.section === "trip_approvals"} onClose={closeTeamDecision} onRetry={refreshTeamDecision} available={workspace.tripRequests.some((item) => item.id === teamDecision?.entityId)}>
               <TripApprovalsView
-                key={focusTarget?.revision}
+                dialogOnly={teamDecision?.section === "trip_approvals"}
+                onDialogClose={teamDecision?.section === "trip_approvals" ? closeTeamDecision : undefined}
+                key={teamDecision?.section === "trip_approvals" ? teamDecision.entityId : focusTarget?.revision}
                 token={session.accessToken}
                 assistantDraft={canUseAssistant && preparedAction?.kind === "trip" ? preparedAction : undefined}
                 requests={workspace.tripRequests}
@@ -2671,8 +2740,8 @@ export function App() {
                 renderTripChat={(request) => request.chatId
                   ? renderEmbeddedChat(request.chatId, "поездки")
                   : <div className="embedded-chat-unavailable">Для этой поездки чат недоступен.</div>}
-                focusRequestId={focusTarget?.section === "trip_approvals" ? focusTarget.entityId : undefined}
-              />
+                focusRequestId={teamDecision?.section === "trip_approvals" ? teamDecision.entityId : focusTarget?.section === "trip_approvals" ? focusTarget.entityId : undefined}
+              /></TeamDecisionFrame>
             ) : null}
             {displayedSection === "calendar" ? (
               <CalendarView
@@ -2723,12 +2792,15 @@ export function App() {
                 }}
               />
             ) : null}
-            {displayedSection === "leave_approvals" ? (
-              <LeaveView key={focusTarget?.section === "leave_approvals" ? focusTarget.revision : undefined}
+            {(displayedSection === "leave_approvals" || teamDecision?.section === "leave_approvals" && canView("leave_approvals")) ? (
+              <TeamDecisionFrame active={teamDecision?.section === "leave_approvals"} onClose={closeTeamDecision} onRetry={refreshTeamDecision}>
+              <LeaveView
+                dialogOnly={teamDecision?.section === "leave_approvals"}
+                onDialogClose={teamDecision?.section === "leave_approvals" ? closeTeamDecision : undefined} key={teamDecision?.section === "leave_approvals" ? teamDecision.entityId : focusTarget?.section === "leave_approvals" ? focusTarget.revision : undefined}
                 token={session.accessToken} people={workspace.people}
                 currentUserId={workspace.currentUser.id}
-                focusRequestId={focusTarget?.section === "leave_approvals" ? focusTarget.entityId : undefined}
-                canCreate={modulePermissions.leave_approvals?.create === true} />
+                focusRequestId={teamDecision?.section === "leave_approvals" ? teamDecision.entityId : focusTarget?.section === "leave_approvals" ? focusTarget.entityId : undefined}
+                canCreate={modulePermissions.leave_approvals?.create === true} /></TeamDecisionFrame>
             ) : null}
             {displayedSection === "members" ? (
               <MembersView

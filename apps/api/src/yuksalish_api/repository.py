@@ -2227,6 +2227,7 @@ async def _sync_notifications_for_user(
                         and_(workspace_notifications.c.section == "grants",
                              workspace_notifications.c.entity_id.in_(accessible_grant_ids)),
                         workspace_notifications.c.section == "ai_hisobot",
+                        workspace_notifications.c.section == "ai_monthly_reports",
                         workspace_notifications.c.section == "notifications",
                         and_(workspace_notifications.c.section == "ai_referent",
                              workspace_notifications.c.entity_id.in_(referent_letters)),

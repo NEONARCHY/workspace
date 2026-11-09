@@ -1330,6 +1330,9 @@ async def post_trip_action(
         raise _translate(error) from error
     except ObjectStorageError as error:
         raise HTTPException(503, "Хранилище приказов недоступно") from error
+    # Publish and acknowledge only after the signed order, stage, history and
+    # calendar event are visible to independent workspace refresh connections.
+    await connection.commit()
     await _event_bus(request).publish({"type": "trip.updated", "entityId": result.id})
     return result
 

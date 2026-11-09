@@ -10,11 +10,11 @@ import { employeeDisplayName } from "./employee-display-name";
 
 const pageSize = 20;
 
-export function useSignatureInbox(token: string, currentUserId: string, enabled: boolean) {
+export function useSignatureInbox(token: string, currentUserId: string, enabled: boolean, refreshRevision = 0) {
   const [page, setPage] = useState(0);
   const [revision, setRevision] = useState(0);
   const [resource, setResource] = useState<{ key: string; registry?: AIReferentRegistry; error?: string }>();
-  const key = JSON.stringify([token, currentUserId, page, revision]);
+  const key = JSON.stringify([token, currentUserId, page, revision, refreshRevision]);
   useEffect(() => {
     if (!enabled) return;
     let active = true;
@@ -55,7 +55,7 @@ export function TeamSignatureLetters({ inbox, onSelect }: {
 }) {
   const { registry, loading, error, page, setPage, refresh } = inbox;
   return <>
-    <p>Исходящие письма и документы «На подпись», где сейчас требуется ваше согласование. Подписание доступно в карточке документа.</p>
+    <p>Откройте письмо, проверьте документ и примите решение в отдельном окне. Обзор команды останется на месте.</p>
     {error ? <WorkspaceNotice tone="error" role="alert" actions={<Button onClick={refresh}>Повторить загрузку писем</Button>}>{error}</WorkspaceNotice> : null}
     {loading ? <LoadingSkeleton layout="rows" label="Загружаем письма на подпись" /> : null}
     {registry ? <>

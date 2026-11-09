@@ -21,6 +21,7 @@ def scenario(monkeypatch):
     )
     connection = MagicMock()
     connection.execute = AsyncMock(return_value=MagicMock())
+    connection.scalar = AsyncMock(return_value=None)
     permissions = AsyncMock(return_value={
         "trip_approvals": {"view": True, "approve": True},
         "leave_approvals": {"view": True, "approve": True},
@@ -117,6 +118,28 @@ def test_configured_deputy_sees_empty_trip_queue(scenario):
     connection, user, _ = scenario
     inbox = asyncio.run(service.team_approval_inbox(connection, user, "trips"))
     assert inbox.enabled and inbox.items == []
+
+
+@pytest.mark.parametrize("is_chair", [True, False])
+def test_chairman_trip_queue_excludes_already_approved_requests(scenario, monkeypatch, is_chair):
+    connection, user, _ = scenario
+    other_id = uuid4()
+    monkeypatch.setattr(service, "_trip_directory_deputy_id", AsyncMock(return_value=other_id))
+    monkeypatch.setattr(service, "_trip_deputy_user_id", AsyncMock(return_value=other_id))
+    connection.scalar.return_value = user.id if is_chair else other_id
+    row = {
+        "id": uuid4(), "requester_user_id": uuid4(), "destination": "Chair decision",
+        "full_name": "Employee", "start_date": date(2026, 11, 1),
+        "end_date": date(2026, 11, 2), "workflow_version": 3,
+        "deputy_approver_user_id": other_id, "order_pdf_key": None,
+        "stage": "manager_approval", "status": "running",
+    }
+    connection.execute.return_value.mappings.return_value.all.return_value = [
+        row, {**row, "id": uuid4(), "stage": "approved", "status": "approved"},
+    ]
+    inbox = asyncio.run(service.team_approval_inbox(connection, user, "trips"))
+    assert inbox.enabled is is_chair
+    assert [item.id for item in inbox.items] == ([str(row["id"])] if is_chair else [])
 
 
 def test_changed_leave_assignment_is_rechecked_before_reading(scenario, monkeypatch):

@@ -1,6 +1,7 @@
 import type { ModuleCatalogResponse, ModuleDescriptor } from "@yuksalish/contracts";
 
 export const fallbackModules: readonly ModuleDescriptor[] = [
+  { key: "ai_monthly_reports", label: { ru: "Ойлик ҳисоботлар", uz_cyrl: "Ойлик ҳисоботлар", uz_latn: "Oylik hisobotlar" }, route: "/monthly-reports", status: "available" },
   { key: "home", label: { ru: "Главная", uz_cyrl: "Бош саҳифа", uz_latn: "Bosh sahifa" }, route: "/home", status: "available" },
   {
     key: "tasks",

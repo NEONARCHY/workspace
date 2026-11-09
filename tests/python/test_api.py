@@ -70,6 +70,7 @@ async def test_module_catalog_has_all_locales() -> None:
         "ai_referent",
         "incoming_letters",
         "ai_hisobot",
+        "ai_monthly_reports",
         "assistant",
         "telegram_access",
         "feed",

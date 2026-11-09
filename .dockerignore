@@ -23,5 +23,6 @@ tmp
 *.log
 *.pdf
 *.docx
+!apps/api/src/yuksalish_api/hr_assets/monthly-report-template.docx
 *.exe
 *.zip
