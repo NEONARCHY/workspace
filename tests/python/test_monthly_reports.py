@@ -17,7 +17,13 @@ from yuksalish_api.monthly_report_schemas import CalendarDayWrite, MonthlySubmis
 from yuksalish_api.monthly_report_tables import calendar_days, cycles, members, reports
 from yuksalish_api.object_storage import InMemoryObjectStorage, ObjectStorageError
 from yuksalish_api.seed import seed_demo_data
-from yuksalish_api.tables import audit_events, departments, users, workspace_notifications
+from yuksalish_api.tables import (
+    audit_events,
+    departments,
+    module_access_rules,
+    users,
+    workspace_notifications,
+)
 
 
 @pytest.mark.parametrize(
@@ -135,6 +141,44 @@ def test_monthly_report_workflow_preserves_versions_private_files_and_one_salary
                 assert (await service.overview(c, owner, now=now)).reminder_month == month
                 assert not (await service.overview(c, region_user, now=now)).reminder_month
                 assert not (await service.overview(c, owner, now=now)).cycles[0].members
+                rule_ids = [uuid4(), uuid4()]
+                for rule_id, actor in zip(rule_ids, [owner, deputy], strict=True):
+                    await c.execute(
+                        insert(module_access_rules).values(
+                            id=rule_id,
+                            subject_type="user",
+                            subject_key=str(actor.id),
+                            module_key="ai_monthly_reports",
+                            permissions={
+                                "view": True,
+                                "create": False,
+                                "edit": False,
+                                "approve": False,
+                                "admin": False,
+                            },
+                            created_by_user_id=admin.id,
+                            created_at=now,
+                            updated_at=now,
+                        )
+                    )
+                readonly = await service.overview(c, owner, now=now)
+                assert not readonly.reminder_month and not readonly.cycles[0].can_submit
+                assert not (await service.overview(c, deputy, now=now)).can_authorize
+                with pytest.raises(HTTPException) as no_upload:
+                    await service.submit(
+                        c,
+                        owner,
+                        MonthlySubmission(id=uuid4(), month=month),
+                        [GrantInitialFile("denied.txt", "text/plain", b"not stored")],
+                        InMemoryObjectStorage(),
+                    )
+                assert no_upload.value.status_code == 403
+                with pytest.raises(HTTPException) as no_payroll:
+                    await service.authorize(c, deputy, month, "")
+                assert no_payroll.value.status_code == 403
+                await c.execute(
+                    delete(module_access_rules).where(module_access_rules.c.id.in_(rule_ids))
+                )
                 first = await service.materialize_monthly_reports(c, now)
                 assert first > 0
                 assert await service.materialize_monthly_reports(c, now) == 0
@@ -239,6 +283,11 @@ def test_monthly_report_workflow_preserves_versions_private_files_and_one_salary
                 await c.execute(delete(cycles).where(cycles.c.month == month))
                 await c.execute(delete(calendar_days).where(calendar_days.c.updated_by.in_(ids)))
                 await c.execute(delete(audit_events).where(audit_events.c.actor_user_id.in_(ids)))
+                await c.execute(
+                    delete(module_access_rules).where(
+                        module_access_rules.c.subject_key.in_([str(uid) for uid in ids])
+                    )
+                )
                 await c.execute(delete(users).where(users.c.id.in_(ids)))
                 await c.execute(delete(departments).where(departments.c.id == regional))
             await engine.dispose()

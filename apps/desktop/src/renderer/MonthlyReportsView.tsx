@@ -105,7 +105,7 @@ export function MonthlyReportsView({ token, resource, open, onClose, onAfterClos
         {files.length > 0 && <ul>{files.map((file, index) => <li key={`${index}:${file.name}`}>{file.name} · {Math.ceil(file.size / 1024)} КБ</li>)}</ul>}
         <Field label="Комментарий к отчёту (необязательно)"><Textarea value={comment} maxLength={4000} disabled={busy} onChange={(_, value) => { setComment(value.value); setSubmissionId(crypto.randomUUID()); }} /></Field>
         <Button appearance="primary" disabled={busy || !files.length} onClick={() => void upload()}>{busy ? "Отправляем…" : "Отправить отчёт"}</Button>
-      </section> : <p>Вы не включены в состав сотрудников, сдающих отчёт за этот месяц.</p>}
+      </section> : <p>Отправка отчёта за этот месяц недоступна для вашей учётной записи.</p>}
       {data?.canReview && <section aria-label="Сдача отчётов сотрудниками ЦА">
         <h3>Центральный аппарат · сдали {cycle.submitted} из {cycle.total}</h3>
         <p>Не сдали: {cycle.total - cycle.submitted}. Состав зафиксирован для этого месяца.</p>

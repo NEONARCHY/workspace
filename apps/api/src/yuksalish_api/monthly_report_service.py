@@ -15,7 +15,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from .access_control import ensure_module_action
+from .access_control import ensure_module_action, module_permissions_for_user
 from .auth import AuthenticatedUser
 from .grant_files_service import GrantInitialFile, validated_files
 from .monthly_report_schemas import (
@@ -183,6 +183,7 @@ async def overview(
     now: datetime | None = None,
 ) -> MonthlyOverview:
     await ensure_module_action(c, user, MODULE, "view")
+    access = (await module_permissions_for_user(c, user))[MODULE]
     current = now or datetime.now(UTC)
     today = current.astimezone(ZONE).date()
     active = reporting_month(today)
@@ -209,9 +210,9 @@ async def overview(
     cycle_rows = (await c.execute(query)).mappings().all()
     items = [await _cycle_response(c, r, roster=review) for r in cycle_rows]
     for item in items:
-        item.can_submit = item.month in eligible and item.authorized_at is None
+        item.can_submit = item.month in eligible and item.authorized_at is None and access["create"]
     reminder = None
-    if active in eligible and not any(r["month"] == active for r in own):
+    if access["create"] and active in eligible and not any(r["month"] == active for r in own):
         cycle = next((r for r in cycle_rows if r["month"] == active), None)
         if cycle and today >= cycle["reminder_on"] and not cycle["authorized_at"]:
             reminder = active
@@ -244,7 +245,7 @@ async def overview(
         active_month=active,
         dashboard_visible=active is not None and user.id in {chair, deputy},
         can_review=review,
-        can_authorize=user.id == deputy,
+        can_authorize=user.id == deputy and access["approve"],
         can_configure=user.role in {"admin", "superadmin"},
         reminder_month=reminder,
         payroll_notice=notice,
