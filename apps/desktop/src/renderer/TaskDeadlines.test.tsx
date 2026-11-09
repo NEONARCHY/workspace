@@ -41,19 +41,28 @@ describe("My tasks participation filter", () => {
     task("observer", 1, { authorId: otherId, assigneeId: otherId, participants: [{ userId, role: "observer" }] }),
     task("multiple-roles", 1, { authorId: userId, assigneeId: userId, participants: [{ userId, role: "observer" }] }),
     task("unrelated", 1, { authorId: otherId, assigneeId: otherId, participants: [{ userId: otherId, role: "observer" }] }),
+    task("completed-mine", 1, { authorId: userId, assigneeId: otherId, participants: [], status: "completed" }),
+    task("cancelled-mine", 1, { authorId: otherId, assigneeId: userId, participants: [], status: "cancelled" }),
   ];
 
-  it("includes all four roles, excludes unrelated tasks and counts each task once", () => {
+  it("counts unfinished participation once and keeps completed tasks in their own filter", () => {
     render(wrap(<TasksView {...props(tasks)} />));
     const mine = screen.getByRole("button", { name: "Мои" });
     expect(mine).toHaveTextContent("5");
-    expect(document.querySelector(".task-focus-object.mine")).toHaveTextContent("5задач с вашим участием");
+    expect(document.querySelector(".task-focus-object.mine")).toHaveTextContent("5незавершённых задач с вашим участием");
     fireEvent.click(mine);
     for (const id of ["author", "assignee", "co-assignee", "observer", "multiple-roles"]) expect(row(id)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Открыть задачу: unrelated" })).toBeNull();
+    for (const id of ["unrelated", "completed-mine", "cancelled-mine"]) {
+      expect(screen.queryByRole("button", { name: `Открыть задачу: ${id}` })).toBeNull();
+    }
     fireEvent.change(screen.getByRole("textbox", { name: "Поиск задач" }), { target: { value: "co-assignee" } });
     expect(row("co-assignee")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Открыть задачу: author" })).toBeNull();
+    fireEvent.change(screen.getByRole("textbox", { name: "Поиск задач" }), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Завершённые" }));
+    expect(row("completed-mine")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Открыть задачу: author" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Открыть задачу: cancelled-mine" })).toBeNull();
   });
 
   it.each([
