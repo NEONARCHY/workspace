@@ -37,6 +37,7 @@ describe("team task proposal inbox", () => {
     expect(within(dialog).getByText("Подготовить отчёт")).toBeInTheDocument();
     expect(within(dialog).getByText(/Дилшод Рахимов/)).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole("button", { name: /Подготовить отчёт/ }));
+    await act(async () => { await vi.advanceTimersByTimeAsync(400); });
     expect(onSelect).toHaveBeenCalledWith("request-1");
   });
 

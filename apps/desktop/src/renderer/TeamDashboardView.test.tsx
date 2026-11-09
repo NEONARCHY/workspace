@@ -201,7 +201,7 @@ describe("TeamDashboardView", () => {
     expect(presence.compareDocumentPosition(workload) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it("counts only payment approvals actionable by this user and opens their card", () => {
+  it("counts only payment approvals actionable by this user and opens their card", async () => {
     const details = { projectName: "Проект", projectCode: "P", sourceAccount: "", destinationAccount: "", requestPriority: "normal" as const, comment: "", tripPurpose: "", employeeIds: [], paymentReason: "" };
     const pending: ApprovalRequestSummary = {
       id: "pay-1", number: "12", title: "Оплата услуг", amount: 100, currency: "UZS", status: "running", statusLabel: "В работе",
@@ -216,6 +216,7 @@ describe("TeamDashboardView", () => {
     fireEvent.click(card);
     const list = screen.getByRole("region", { name: "Заявки на оплату, ожидающие решения" });
     fireEvent.click(within(list).getByRole("button", { name: /Оплата услуг/ }));
+    await act(async () => { await vi.advanceTimersByTimeAsync(400); });
     expect(onSelectPaymentRequest).toHaveBeenCalledWith("pay-1");
   });
 

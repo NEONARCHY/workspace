@@ -2,14 +2,14 @@ import { useEffect, useState } from "react";
 import type { TaskProposal } from "@yuksalish/contracts";
 import { loadTaskProposals } from "./workspace-api";
 
-export function useTeamTaskProposals(token: string, currentUserId: string, enabled: boolean) {
+export function useTeamTaskProposals(token: string, currentUserId: string, enabled: boolean, refreshRevision = 0) {
   const [revision, setRevision] = useState(0);
   const [resource, setResource] = useState<{
     key: string;
     proposals?: readonly TaskProposal[];
     error?: string;
   }>();
-  const key = JSON.stringify([token, currentUserId, revision]);
+  const key = JSON.stringify([token, currentUserId, revision, refreshRevision]);
   useEffect(() => {
     if (!enabled) return;
     let active = true;

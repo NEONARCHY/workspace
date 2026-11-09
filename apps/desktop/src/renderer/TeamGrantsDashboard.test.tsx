@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within, waitFor } from "@testing-library/react";
 import { FluentProvider } from "@fluentui/react-components";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { TeamDashboardView } from "./TeamDashboardView";
@@ -29,12 +29,12 @@ it("opens separate launch and result windows from one split grant block", async 
   const launch = await screen.findByRole("dialog", { name: "Запросы на запуск грантов" });
   expect(within(launch).queryByText(reviewing.title)).not.toBeInTheDocument();
   fireEvent.click(within(launch).getByRole("button", { name: /Новая инициатива/ }));
-  expect(select).toHaveBeenCalledWith("pending");
+  await waitFor(() => expect(select).toHaveBeenCalledWith("pending"));
   fireEvent.click(within(group).getByRole("button", { name: /Заявки на гранты/ }));
   const result = await screen.findByRole("dialog", { name: "Гранты на вашей проверке" });
   expect(within(result).queryByText(pending.title)).not.toBeInTheDocument();
   fireEvent.click(within(result).getByRole("button", { name: /Готовая заявка/ }));
-  expect(select).toHaveBeenLastCalledWith("result");
+  await waitFor(() => expect(select).toHaveBeenLastCalledWith("result"));
 });
 
 it("does not display unavailable queues or replace a loading error with zero", async () => {

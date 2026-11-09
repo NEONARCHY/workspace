@@ -59,7 +59,7 @@ import { TaskRecords } from "./TaskRecords";
 import { TaskHistory } from "./TaskHistory";
 import { TaskPlansView } from "./TaskPlansView";
 import { tasksForPlan } from "./task-plan-filter";
-import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
+import { WorkspaceDialog as Dialog, focusWorkspaceDialog } from "./WorkspaceDialog";
 import { WorkspaceSelect } from "./WorkspaceSelect";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
@@ -203,6 +203,8 @@ interface CyclePayload {
 }
 
 interface TasksViewProps {
+  readonly dialogOnly?: boolean;
+  readonly onDialogClose?: () => void;
   readonly assistantDraft?: AssistantActionDraft;
   readonly focusTaskId?: string;
   readonly tasks: readonly WorkspaceTask[];
@@ -261,7 +263,8 @@ export function TasksView(props: TasksViewProps) {
     onSubmitResult, onAcceptResult,
     onSetEfficiencyExclusion,
   } = props;
-  const { assistantDraft } = props;
+  const { assistantDraft, dialogOnly = false, onDialogClose } = props;
+  const decisionSurface = useRef<HTMLDivElement>(null);
   const [mode, setMode] = useState<TaskMode>("list");
   const [settingsTaskId, setSettingsTaskId] = useState("");
   const settingsId = useId();
@@ -733,7 +736,8 @@ export function TasksView(props: TasksViewProps) {
   const [calendarToolbarTarget, setCalendarToolbarTarget] = useState<HTMLDivElement | null>(null);
 
   return (
-    <section className={`workspace-view tasks-view bp5-tasks ${mode === "calendar" ? "calendar-mode" : ""} ${mode === "efficiency" ? "efficiency-mode" : ""} ${detailOpen && selectedTask && mode !== "efficiency" && mode !== "plans" ? "detail-open" : ""}`} aria-label="Задачи">
+    <section data-dialog-only={dialogOnly || undefined} className={`workspace-view tasks-view bp5-tasks ${mode === "calendar" ? "calendar-mode" : ""} ${mode === "efficiency" ? "efficiency-mode" : ""} ${detailOpen && selectedTask && mode !== "efficiency" && mode !== "plans" ? "detail-open" : ""}`} aria-label="Задачи">
+{!dialogOnly && <>
       <div className="tasks-main">
         <WorkspaceSectionHeader motif="tasks" className="section-toolbar">
           <div><h1>Задачи</h1><p>Карточки, команда, сроки и зависимости</p></div>
@@ -813,8 +817,10 @@ export function TasksView(props: TasksViewProps) {
         } : undefined}
       /> : null}
 
-      {mode !== "efficiency" && mode !== "plans" && selectedTask !== undefined ? <Dialog open={detailOpen} onOpenChange={(_, data) => { if (!data.open) setDetailOpen(false); }}>
-      <DialogSurface className="task-record-dialog" aria-label={selectedTask.title}><div className="task-record-workspace"><aside className="task-detail task-card-full">
+
+</>}
+      {mode !== "efficiency" && mode !== "plans" && selectedTask !== undefined ? <Dialog open={detailOpen} onAfterOpen={() => focusWorkspaceDialog(decisionSurface.current)} onAfterClose={onDialogClose} onOpenChange={(_, data) => { if (!data.open) setDetailOpen(false); }}>
+      <DialogSurface ref={decisionSurface} className="task-record-dialog" aria-label={selectedTask.title}><div className="task-record-workspace"><aside className="task-detail task-card-full">
         <div className="task-detail-sticky-header">
         <Button className="task-detail-close" appearance="subtle" icon={<Dismiss24Regular />} aria-label="Закрыть задачу" onClick={() => setDetailOpen(false)} />
         {dateError ? <div className="auth-error" role="alert">{dateError}</div> : null}

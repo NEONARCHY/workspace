@@ -2,14 +2,14 @@ import { useEffect, useState } from "react";
 import type { TeamApprovalInbox, TeamApprovalInboxKind } from "@yuksalish/contracts";
 import { loadTeamApprovalInbox } from "./workspace-api";
 
-export function useTeamApprovalInbox(token: string, userId: string, kind: TeamApprovalInboxKind, enabled: boolean) {
+export function useTeamApprovalInbox(token: string, userId: string, kind: TeamApprovalInboxKind, enabled: boolean, refreshRevision = 0) {
   const [revision, setRevision] = useState(0);
   const [resource, setResource] = useState<{
     key: string;
     inbox?: TeamApprovalInbox;
     error?: string;
   }>();
-  const key = JSON.stringify([token, userId, kind, revision]);
+  const key = JSON.stringify([token, userId, kind, revision, refreshRevision]);
   useEffect(() => {
     if (!enabled) return;
     const controller = new AbortController();
