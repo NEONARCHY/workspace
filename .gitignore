@@ -48,6 +48,7 @@ node_modules/
 *.docx
 # Only the reviewed, anonymized HR layout is a source asset, never employee documents.
 !apps/api/src/yuksalish_api/hr_assets/dossier-template.docx
+!apps/api/src/yuksalish_api/hr_assets/monthly-report-template.docx
 *.exe
 *.zip
 /Hisobot AI/

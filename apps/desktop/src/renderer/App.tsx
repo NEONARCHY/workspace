@@ -1,4 +1,6 @@
 import { TeamDecisionFrame } from "./TeamDecisionFrame";
+import { MonthlyReportDashboard, MonthlyReportPrompts, MonthlyReportsView } from "./MonthlyReportsView";
+import { useMonthlyReports, useMonthlyReportWindow } from "./useMonthlyReports";
 import { TaskProposals } from "./TaskProposals";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { ChairmanMemoLauncher, ChairmanMemosDialog } from "./ChairmanMemos";
@@ -362,6 +364,7 @@ const navItems: readonly NavItem[] = [
   { key: "ai_referent", label: "AI Referent", icon: <Mail24Regular /> },
   { key: "incoming_letters", label: "Входящие письма", icon: <Mail24Regular /> },
   { key: "ai_hisobot", label: "AI Hisobot", icon: <DocumentBulletList24Filled /> },
+  { key: "ai_monthly_reports", label: "Ойлик ҳисоботлар", icon: <DocumentBulletList24Filled /> },
   { key: "telegram_access", label: "Доступ к ботам", icon: <PeopleTeam24Regular /> },
   { key: "feed", label: "Лента", icon: <News24Regular /> },
   { key: "projects", label: "Список проектов", icon: <FolderPeople24Regular /> },
@@ -437,6 +440,10 @@ export function App() {
   const [activeApiOrigin, setActiveApiOrigin] = useState<string>();
   const [switchingNetwork, setSwitchingNetwork] = useState(false);
   const [workspace, setWorkspace] = useState<WorkspaceState>(initialWorkspace);
+  const monthlyReports = useMonthlyReports(session?.accessToken, Boolean(session && workspace.currentUser.id === session.user.id
+    && workspace.moduleAccess.some(item => item.moduleKey === "ai_monthly_reports" && item.permissions.view)));
+  const monthlyWindow = useMonthlyReportWindow(session?.user.id);
+  const hideMonthlyReports = monthlyWindow.hide;
   const displayPeople = useMemo(() => workspace.people.map(employeeDisplayPerson), [workspace.people]);
   const displayCurrentUser = useMemo(() => employeeDisplayPerson(workspace.currentUser), [workspace.currentUser]);
   const displayChats = useMemo(() => workspace.chats.map((chat) => {
@@ -554,6 +561,7 @@ export function App() {
     knownNotificationIds.current = initialKnownNotificationIds(loaded.notifications);
     setFocusTarget(undefined);
     setTeamDecision(undefined);
+    hideMonthlyReports();
     setWorkspace({ ...loaded, moduleAccess: loaded.moduleAccess ?? fallbackModuleAccess(loaded.currentUser), personalPreferences: loaded.personalPreferences ?? defaultPersonalPreferences });
     setSupportRegistry(loadedSupport ?? emptySupportRegistry(loaded.currentUser));
     setEfficiency(undefined);
@@ -577,7 +585,7 @@ export function App() {
     setConnectionDetail(apiConnectionLabel());
     setAuthError(undefined);
     setBackgroundError("");
-  }, [persistRefreshSession]);
+  }, [persistRefreshSession, hideMonthlyReports]);
 
   const handleLogin = async (username: string, password: string, totpCode?: string) => {
     setAuthBusy(true);
@@ -2327,6 +2335,13 @@ export function App() {
               setHisobotIncoming({ userId: workspace.currentUser.id, draft });
               setFocusTarget(undefined); setFocusNotification(undefined); setActiveSection("ai_hisobot");
             }} />
+          {canView("ai_monthly_reports") && <>
+            <MonthlyReportPrompts key={`monthly-prompt:${session.user.id}`} resource={monthlyReports} token={session.accessToken} userId={session.user.id}
+              paused={displayedSection === "ai_monthly_reports" || monthlyWindow.open || accountOpen || Boolean(profileUserId) || supportOpen || Boolean(teamDecision) || switchingNetwork}
+              onOpen={monthlyWindow.show} />
+            <MonthlyReportsView key={`monthly-window:${session.user.id}`} token={session.accessToken} resource={monthlyReports}
+              open={monthlyWindow.open} onClose={monthlyWindow.hide} onAfterClose={monthlyWindow.afterClose} />
+          </>}
 
           {backgroundError ? <WorkspaceNotice tone="warning" className="workspace-feedback" role="alert" actions={<><Button size="small" onClick={() => void refreshWorkspace(session.accessToken).catch(reportError)}>Обновить данные</Button><Button size="small" appearance="subtle" aria-label="Закрыть сообщение об ошибке" onClick={() => setBackgroundError("")}>×</Button></>}>
             <span>{backgroundError}</span>
@@ -2458,6 +2473,7 @@ export function App() {
               <section className="workspace-view tasks-view bp5-tasks dashboard-mode" aria-label="Обзор команды">
                 <TeamDashboardView
                   memorandumAction={<ChairmanMemoLauncher token={session.accessToken} userId={session.user.id} onOpen={() => setMemoFocus({ userId: session.user.id })} />}
+                  monthlyReportAction={canView("ai_monthly_reports") ? <MonthlyReportDashboard resource={monthlyReports} onOpen={monthlyWindow.show} /> : undefined}
                   token={session.accessToken}
                   decisionRevision={teamDecisionRevision}
                   onDecisionOpen={(target) => {
@@ -2587,6 +2603,7 @@ export function App() {
                 incomingDraft={hisobotIncoming?.userId === workspace.currentUser.id ? hisobotIncoming.draft : undefined}
                 onDraftHandled={() => setHisobotIncoming(undefined)} />
             ) : null}
+            {displayedSection === "ai_monthly_reports" ? <MonthlyReportsView key={session.user.id} token={session.accessToken} resource={monthlyReports} /> : null}
             {displayedSection === "telegram_access" && isAdmin ? (
               <TelegramAccessView token={session.accessToken} departments={workspace.departments} />
             ) : null}

@@ -5,6 +5,7 @@ export * from "./reference";
 export * from "./grants";
 export * from "./mail";
 export * from "./hr-dossiers";
+export * from "./monthly-reports";
 import type { ProjectBudgetArticle } from "./project-budget";
 
 export const moduleKeys = [
@@ -16,6 +17,7 @@ export const moduleKeys = [
   "ai_referent",
   "incoming_letters",
   "ai_hisobot",
+  "ai_monthly_reports",
   "assistant",
   "telegram_access",
   "feed",
@@ -932,6 +934,7 @@ export type NotificationSection = Extract<
   | "hr"
   | "ai_referent"
   | "ai_hisobot"
+  | "ai_monthly_reports"
   | "feed"
 > | "notifications";
 

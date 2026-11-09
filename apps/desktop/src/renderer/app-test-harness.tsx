@@ -957,6 +957,11 @@ export function mockServer(
       tripRequests = tripRequests.map((item) => item.id === changed.id ? changed : item);
       return response(changed);
     }
+    if (url.endsWith("/monthly-reports")) {
+      return response({ today: "2026-11-09", activeMonth: null, dashboardVisible: false,
+        canReview: false, canAuthorize: false, canConfigure: false, reminderMonth: null,
+        payrollNotice: null, payrollNoticeId: null, cycles: [], reports: [] });
+    }
     if (url.endsWith("/tasks/project-options")) {
       return response([{ id: "hub-routes", code: "MR", title: "Маршруты" }]);
     }

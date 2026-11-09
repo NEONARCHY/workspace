@@ -1,3 +1,4 @@
+import type { MonthlyOverview, MonthlyCycle, MonthlyCalendarDay, MonthlyReport } from "@yuksalish/contracts";
 import type { OfficePreviewResult } from "./file-viewer-kind";
 import type { WorkspaceNoticeTarget } from "@yuksalish/contracts";
 import type { TaskProposalImportContext, TaskProposalImportPreview, TaskProposalImportResult, TaskProposalImportWrite } from "@yuksalish/contracts";
@@ -2907,5 +2908,31 @@ export function attachChairmanMemoOrder(token: string, memo: ChairmanMemo, file:
   return boundedRequest(`${getApiBaseUrl()}/api/v1/chairman-memos/${encodeURIComponent(memo.id)}/order`,
     { method: "POST", headers, body }, response => response.json() as Promise<ChairmanMemo>, 120_000);
 }
+export const loadMonthlyReports = (token: string, signal?: AbortSignal) =>
+  apiRequest<MonthlyOverview>("/monthly-reports", { signal, cache: "no-store" }, token).then(data => {
+    if (!data || !Array.isArray(data.cycles) || !Array.isArray(data.reports) || typeof data.today !== "string"
+      || typeof data.canReview !== "boolean" || typeof data.dashboardVisible !== "boolean") throw new Error("Сервер вернул неполные данные ежемесячных отчётов. Повторите загрузку.");
+    return data;
+  });
+export const loadMonthlyReportTemplate = (token: string) =>
+  apiRequest<Blob>("/monthly-reports/template", {}, token, 30_000, response => response.blob());
+export const loadMonthlyReportFile = (token: string, reportId: string, fileId: string) =>
+  apiRequest<Blob>(`/monthly-reports/${encodeURIComponent(reportId)}/files/${encodeURIComponent(fileId)}`, {}, token, 60_000, response => response.blob());
+export const authorizeMonthlyPayroll = (token: string, month: string, comment: string) =>
+  apiRequest<MonthlyCycle>(`/monthly-reports/${encodeURIComponent(month)}/authorize`, { method: "POST", body: JSON.stringify({ comment }) }, token);
+export const loadMonthlyCalendar = (token: string) =>
+  apiRequest<readonly MonthlyCalendarDay[]>("/monthly-reports/calendar/days", {}, token);
+export const saveMonthlyCalendar = (token: string, payload: MonthlyCalendarDay) =>
+  apiRequest<void>("/monthly-reports/calendar/days", { method: "PUT", body: JSON.stringify(payload) }, token);
+export async function submitMonthlyReport(token: string, payload: { readonly id: string; readonly month: string; readonly comment: string }, files: readonly File[]) {
+  const form = new FormData();
+  form.append("payload", JSON.stringify(payload));
+  for (const file of files) { checkRemoteUploadSize(file); form.append("files", file); }
+  const headers = new Headers({ Authorization: `Bearer ${token}` });
+  if (workspacePlatform.kind === "electron") headers.set("X-Desktop-Version", workspacePlatform.version);
+  return boundedRequest(`${getApiBaseUrl()}/api/v1/monthly-reports/submit`, { method: "POST", headers, body: form },
+    async response => await response.json() as MonthlyReport, 120_000);
+}
+
 export const downloadChairmanMemoOrder = (token: string, id: string, signal?: AbortSignal) =>
   apiRequest<Blob>(`/chairman-memos/${encodeURIComponent(id)}/order`, { signal }, token, 30_000, response => response.blob());

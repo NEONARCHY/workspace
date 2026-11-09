@@ -25,6 +25,7 @@ from .hisobot_service import materialize_hisobot_reminders
 from .hr_service import materialize_previous_month_register
 from .logging import configure_logging
 from .mail_delivery import process_one as process_mail_delivery
+from .monthly_report_service import materialize_monthly_reports
 from .object_storage import InMemoryObjectStorage, MinioObjectStorage, ObjectStorageError
 from .project_hub_service import materialize_project_reminders
 from .repository import materialize_due_notifications
@@ -50,6 +51,7 @@ from .routers import (
     members,
     messenger,
     modules,
+    monthly_reports,
     personal,
     project_hub,
     project_imports,
@@ -117,6 +119,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         created += zoom_invitations
                         created += await materialize_project_reminders(connection)
                         created += await materialize_hisobot_reminders(connection)
+                        created += await materialize_monthly_reports(connection)
                         created += await materialize_birthdays(connection)
                         await close_overdue_sessions(connection)
                     async with engine.begin() as connection:
@@ -251,6 +254,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(telegram_access.router, prefix=runtime_settings.api_prefix)
     application.include_router(telegram_notifications.router, prefix=runtime_settings.api_prefix)
     application.include_router(hisobot.router, prefix=runtime_settings.api_prefix)
+    application.include_router(monthly_reports.router, prefix=runtime_settings.api_prefix)
     application.include_router(personal.router, prefix=runtime_settings.api_prefix)
     application.include_router(chairman_memos.router, prefix=runtime_settings.api_prefix)
     application.include_router(recognition.router, prefix=runtime_settings.api_prefix)
