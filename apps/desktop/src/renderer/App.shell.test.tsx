@@ -61,6 +61,66 @@ function deputyApprovalServer() {
 }
 
 describe("corporate workspace authentication alpha", () => {
+  it("keeps a chairman-approved trip after a delayed pre-approval bootstrap arrives", async () => {
+    const server = mockServer({ chairmanLogin: true });
+    const original = server.getMockImplementation()!;
+    const sockets: EventTarget[] = [];
+    vi.stubGlobal("WebSocket", class extends EventTarget {
+      constructor() { super(); sockets.push(this); }
+      send() {}
+      close() {}
+    });
+    let trip: TripRequest = {
+      id: "trip-refresh-race", number: "TR-RACE", requesterUserId: "aziza", workflowVersion: 3,
+      purpose: "Рабочая встреча", destination: "Проверка сохранения утверждения",
+      startDate: "2026-11-10", endDate: "2026-11-11", employeeIds: ["aziza"],
+      stage: "manager_approval", stageLabel: "Утверждение председателем",
+      status: "running", statusLabel: "На согласовании", canEdit: false,
+      allowedActions: ["approve", "return", "reject"], actions: [],
+      createdAt: "2026-11-01T06:00:00Z", updatedAt: "2026-11-01T06:00:00Z",
+    };
+    let holdNext = false;
+    let freshReads = 0;
+    let finishStale: (() => void) | undefined;
+    server.mockImplementation(async (input, options) => {
+      const url = String(input);
+      if (url.endsWith(`/trip-requests/${trip.id}/actions`)) {
+        trip = { ...trip, stage: "approved", stageLabel: "Утверждено", status: "approved",
+          statusLabel: "Утверждено", orderNumber: "010-WS", allowedActions: [],
+          updatedAt: "2026-11-09T06:00:00Z" };
+        return response(trip);
+      }
+      if (url.endsWith("/workspace/bootstrap")) {
+        const bootstrap = await (await original(input, options)).json();
+        const snapshot = { ...bootstrap, tripRequests: [trip] };
+        if (holdNext) {
+          holdNext = false;
+          return new Promise<Response>((resolve) => { finishStale = () => resolve(response(snapshot)); });
+        }
+        if (trip.status === "approved") freshReads += 1;
+        return response(snapshot);
+      }
+      return original(input, options);
+    });
+    render(<App />);
+    await loginToWorkspace("malika", "home");
+    clickWithFocus(screen.getByRole("button", { name: "Поездки" }));
+    await screen.findByRole("heading", { name: "Согласование поездок" });
+    const open = document.querySelector<HTMLButtonElement>('[data-trip-id="trip-refresh-race"] .approval-card-open');
+    expect(open).not.toBeNull();
+    clickWithFocus(open!);
+    const dialog = await screen.findByRole("dialog", { name: "Проверка сохранения утверждения" });
+    holdNext = true;
+    act(() => sockets.at(-1)?.dispatchEvent(new MessageEvent("message", { data: JSON.stringify({ type: "trip.updated" }) })));
+    await waitFor(() => expect(finishStale).toBeDefined());
+    clickWithFocus(within(dialog).getByRole("button", { name: "Утвердить и выпустить приказ" }));
+    expect(await within(dialog).findByText(/Приказ зарегистрирован и подписан председателем/)).toBeInTheDocument();
+    await act(async () => { finishStale?.(); });
+    await waitFor(() => expect(freshReads).toBeGreaterThan(0));
+    expect(within(dialog).getByText(/Приказ зарегистрирован и подписан председателем/)).toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: "Утвердить и выпустить приказ" })).not.toBeInTheDocument();
+  });
+
   it("uses the real mobile web menu without losing the current section", async () => {
     const server = mockServer();
     const original = server.getMockImplementation()!;
@@ -260,7 +320,8 @@ describe("corporate workspace authentication alpha", () => {
     expect(paymentCard).toHaveTextContent("1");
     fireEvent.click(paymentCard);
     fireEvent.click(within(screen.getByRole("region", { name: "Заявки на оплату, ожидающие решения" })).getByRole("button", { name: /Оплата по субсидии/ }));
-    await waitFor(() => expect(screen.getByRole("button", { name: "Заявки на оплату" })).toHaveAttribute("aria-current", "page"));
+    expect(await screen.findByRole("dialog", { name: /Оплата по субсидии/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Обзор команды", hidden: true })).toHaveAttribute("aria-current", "page");
   });
 
   it.each(["trips", "leaves"] as const)("opens the server-authorized deputy %s inbox and exact request", async (kind) => {
@@ -274,16 +335,23 @@ describe("corporate workspace authentication alpha", () => {
     const queue = await screen.findByRole("dialog", { name: kind === "trips" ? "Поездки на вашем согласовании" : "Отпуска на вашем согласовании" });
     clickWithFocus(within(queue).getByRole("button", { name: kind === "trips" ? /Тестовый Самарканд/ : /Заявление на отпуск/ }));
     if (kind === "trips") {
-      // The real shell retains the old section until its lazy destination is ready.
-      await screen.findByRole("heading", { name: "Согласование поездок" }, { timeout: 10_000 });
+      expect(screen.queryByRole("heading", { name: "Согласование поездок" })).not.toBeInTheDocument();
       expect(await screen.findByRole("heading", { name: "Тестовый Самарканд" })).toBeInTheDocument();
       expect(await screen.findByRole("button", { name: "Закрыть карточку поездки" })).toBeInTheDocument();
       expect(await screen.findByRole("button", { name: "Согласовать и передать председателю" })).toBeInTheDocument();
       expect(screen.getByRole("dialog", { name: "Тестовый Самарканд" })).toBeInTheDocument();
+      clickWithFocus(screen.getByRole("button", { name: "Закрыть карточку поездки" }));
+      await waitFor(() => expect(screen.queryByRole("dialog", { name: "Тестовый Самарканд" })).not.toBeInTheDocument());
     } else {
-      expect(await screen.findByRole("heading", { name: "Решение первого заместителя" })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "Утвердить и подписать приказ" })).toBeInTheDocument();
+      const leaveDialog = await screen.findByRole("dialog", { name: "Согласование отпуска" }, { timeout: 5000 });
+      expect(await within(leaveDialog).findByRole("button", { name: "Утвердить и подписать приказ" }, { timeout: 5000 })).toBeInTheDocument();
+      expect(within(leaveDialog).getByRole("heading", { name: "Решение первого заместителя" })).toBeInTheDocument();
+      expect(screen.queryByRole("heading", { name: "Отпуска", level: 1 })).not.toBeInTheDocument();
+      clickWithFocus(within(screen.getByRole("dialog", { name: "Согласование отпуска" })).getByRole("button", { name: "Закрыть" }));
+      await waitFor(() => expect(screen.queryByRole("dialog", { name: "Согласование отпуска" })).not.toBeInTheDocument());
     }
+    expect(await screen.findByRole("region", { name: "Ключевые показатели команды" })).toBeInTheDocument();
+    await waitFor(() => expect(metric).toHaveFocus());
   });
 
   it("opens the chairman's signature letter from the team metrics", async () => {
@@ -300,9 +368,15 @@ describe("corporate workspace authentication alpha", () => {
     expect(within(grants).getAllByRole("button")).toHaveLength(2);
     expect(within(grants).getByRole("button", { name: /Заявки на гранты/ })).toBeInTheDocument();
     expect(within(grants).getByRole("button", { name: /Запросы на постановку грантов/ })).toBeInTheDocument();
-    fireEvent.click(signatures);
-    fireEvent.click(within(screen.getByRole("region", { name: "Письма, ожидающие вашей подписи" })).getByRole("button", { name: /Письмо из обзора команды/ }));
-    expect(await screen.findByRole("dialog", { name: /Письмо из обзора команды/ })).toBeInTheDocument();
+    clickWithFocus(signatures);
+    clickWithFocus(within(screen.getByRole("region", { name: "Письма, ожидающие вашей подписи" })).getByRole("button", { name: /Письмо из обзора команды/ }));
+    const letterDialog = await screen.findByRole("dialog", { name: /Письмо из обзора команды/ });
+    expect(screen.queryByRole("heading", { name: "AI Referent" })).not.toBeInTheDocument();
+    expect(document.querySelector(".ai-referent-header")).toBeNull();
+    clickWithFocus(within(letterDialog).getByRole("button", { name: /^Закрыть$/ }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: /Письмо из обзора команды/ })).not.toBeInTheDocument());
+    expect(await screen.findByRole("region", { name: "Ключевые показатели команды" })).toBeInTheDocument();
+    await waitFor(() => expect(signatures).toHaveFocus());
   });
 
   it("keeps the sidebar editor open after clicking the pencil", async () => {

@@ -5,7 +5,7 @@ import type {
   GrantAction, GrantDetail, GrantFields, GrantSettings, GrantStatus, GrantSummary,
   WorkspaceAttachment, WorkspaceDepartment, WorkspacePerson,
 } from "@yuksalish/contracts";
-import { WorkspaceDialog } from "./WorkspaceDialog";
+import { WorkspaceDialog, focusWorkspaceDialog } from "./WorkspaceDialog";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
 import { GrantParticipant } from "./GrantParticipant";
@@ -19,6 +19,8 @@ import {
 import "./grants.css";
 
 interface Props {
+  readonly dialogOnly?: boolean;
+  readonly onDialogClose?: () => void;
   readonly token: string;
   readonly currentUser: Pick<WorkspacePerson, "id" | "role">;
   readonly people: readonly WorkspacePerson[];
@@ -65,7 +67,7 @@ function readableDate(value: string) {
 }
 
 export function GrantsView({ token, currentUser, people, departments, canCreate, canAdmin,
-  focusId, onOpenChat, renderGrantChat, onPreviewAttachment, onDownloadAttachment }: Props) {
+  focusId, onOpenChat, renderGrantChat, onPreviewAttachment, onDownloadAttachment, dialogOnly = false, onDialogClose }: Props) {
   const [grants, setGrants] = useState<readonly GrantSummary[]>([]);
   const [settings, setSettings] = useState<GrantSettings>();
   const [loading, setLoading] = useState(true);
@@ -76,6 +78,7 @@ export function GrantsView({ token, currentUser, people, departments, canCreate,
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string>();
+  const decisionSurface = useRef<HTMLDivElement>(null);
   const [detail, setDetail] = useState<GrantDetail>();
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
@@ -185,7 +188,8 @@ export function GrantsView({ token, currentUser, people, departments, canCreate,
   const hasEmbeddedChat = Boolean(canOpenChat && renderGrantChat);
   const routeReady = Boolean(settings?.leaderUserId && settings.chairUserId);
 
-  return <section className="workspace-view grants-view" aria-label="Гранты">
+  return <section data-dialog-only={dialogOnly || undefined} className="workspace-view grants-view" aria-label="Гранты">
+{!dialogOnly && <>
     <WorkspaceSectionHeader motif="tasks">
       <div><p className="eyebrow">Подготовка · Проверка · Утверждение</p><h1>Гранты</h1>
         <p>Инициатива сотрудника, разрешение председателя и проверка результата.</p></div>
@@ -205,8 +209,10 @@ export function GrantsView({ token, currentUser, people, departments, canCreate,
     </div><label className="grants-search"><span>Поиск заявок</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Название или сотрудник" /></label></div>
     {loading ? <p role="status">Загружаем заявки…</p> : <GrantRecords grants={visible} people={people} token={token} selectedId={selectedId} filterKey={`${filter}:${query}`} statusLabels={grantStatusLabels} now={now} onSelect={openDetail} />}
 
-    <WorkspaceDialog open={Boolean(selectedId) && !editor && !settingsOpen} onOpenChange={(_, data) => { if (!data.open) closeDetail(); }}>
-      <DialogSurface className={`grants-dialog grants-detail-dialog${hasEmbeddedChat ? " has-chat" : ""}`} aria-labelledby="grant-detail-title">
+
+</>}
+    <WorkspaceDialog open={Boolean(selectedId) && !editor && !settingsOpen} onAfterOpen={() => focusWorkspaceDialog(decisionSurface.current)} onAfterClose={() => { if (!editor && !settingsOpen) onDialogClose?.(); }} onOpenChange={(_, data) => { if (!data.open) closeDetail(); }}>
+      <DialogSurface ref={decisionSurface} className={`grants-dialog grants-detail-dialog${hasEmbeddedChat ? " has-chat" : ""}`} aria-labelledby="grant-detail-title">
         <div className="grants-record-workspace"><section className="grants-detail-pane" aria-label="Карточка гранта">
         <header className="grants-dialog-header grant-card-header"><div className="grant-card-heading"><p className="eyebrow"><span>Гранты</span> Карточка заявки</p><h2 id="grant-detail-title">{detail?.title ?? "Загружаем заявку…"}</h2>
           {can("edit") && <Button appearance="subtle" icon={<Edit20Regular />} onClick={() => openEditor(detail)} disabled={busy}>Редактировать карточку</Button>}

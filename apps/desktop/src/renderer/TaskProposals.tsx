@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { TaskProposal, WorkspacePerson, WorkspaceTask } from "@yuksalish/contracts";
 import { Button, DialogSurface, Textarea, useRestoreFocusTarget } from "@fluentui/react-components";
-import { WorkspaceDialog } from "./WorkspaceDialog";
+import { WorkspaceDialog, focusWorkspaceDialog } from "./WorkspaceDialog";
 import { RecordSection } from "./RecordComposer";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { decideTaskProposal, loadTaskProposals } from "./workspace-api";
@@ -15,7 +15,9 @@ const labels: Record<TaskProposal["status"], string> = {
 const priorityLabels = { low: "Низкий", normal: "Обычный", high: "Высокий", urgent: "Срочный" };
 const dateLabel = (date?: string | null) => date ? new Date(date).toLocaleString("ru-RU") : "Без срока";
 
-export function TaskProposals({ token, currentUserId, people, tasks, revision, focusId, compact = false, onRefresh, onOpenTask }: {
+export function TaskProposals({ token, currentUserId, people, tasks, revision, focusId, compact = false, onRefresh, onOpenTask, dialogOnly = false, onDialogClose }: {
+  readonly dialogOnly?: boolean;
+  readonly onDialogClose?: () => void;
   readonly token: string;
   readonly currentUserId: string;
   readonly people: readonly WorkspacePerson[];
@@ -30,6 +32,8 @@ export function TaskProposals({ token, currentUserId, people, tasks, revision, f
   const [selectedId, setSelectedId] = useState(focusId ?? "");
   const [listOpen, setListOpen] = useState(false);
   const launcherFocusTarget = useRestoreFocusTarget();
+  const decisionSurface = useRef<HTMLDivElement>(null);
+  const pendingTask = useRef<string | undefined>(undefined);
   const [reason, setReason] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -86,6 +90,7 @@ export function TaskProposals({ token, currentUserId, people, tasks, revision, f
   </>;
   const listError = error ? <WorkspaceNotice tone="error" role="alert" actions={<Button onClick={() => setRetry((value) => value + 1)}>Обновить заявки</Button>}>{error}</WorkspaceNotice> : null;
   return <>
+{!dialogOnly && <>
     {compact ? <Button {...launcherFocusTarget} onClick={() => setListOpen(true)} aria-haspopup="dialog">Запросы</Button> :
       <section className="record-section task-proposals" aria-label="Заявки на постановку задач">
         <details open={Boolean(focusId && proposals.some((item) => item.id === focusId))}>
@@ -94,8 +99,15 @@ export function TaskProposals({ token, currentUserId, people, tasks, revision, f
         </details>
         {listError}
       </section>}
-    <WorkspaceDialog open={Boolean(selected) || (compact && listOpen)} onOpenChange={(_, data) => { if (!data.open && !busy) { setSelectedId(""); setListOpen(false); } }}>
-      <DialogSurface className="record-composer-dialog" aria-label={selected ? "Заявка на постановку задачи" : "Запросы на постановку задач"}>
+
+</>}
+    <WorkspaceDialog open={Boolean(selectedId) || (compact && listOpen)} onAfterOpen={() => focusWorkspaceDialog(decisionSurface.current)} onAfterClose={() => {
+      const taskId = pendingTask.current;
+      pendingTask.current = undefined;
+      if (taskId) onOpenTask(taskId);
+      else onDialogClose?.();
+    }} onOpenChange={(_, data) => { if (!data.open && !busy) { setSelectedId(""); setListOpen(false); } }}>
+      <DialogSurface ref={decisionSurface} className="record-composer-dialog" aria-label={selected ? "Заявка на постановку задачи" : "Запросы на постановку задач"}>
         {selected ? <div className="record-composer">
           <header className="record-composer-header"><div><span className="record-eyebrow">{labels[selected.status]}</span><h2>{selected.task.title}</h2></div>
             <Button disabled={busy} onClick={() => setSelectedId("")}>Закрыть заявку</Button></header>
@@ -154,12 +166,15 @@ export function TaskProposals({ token, currentUserId, people, tasks, revision, f
               <Button disabled={busy || !reason.trim()} onClick={() => void decide("reject")}>Отклонить</Button>
               <Button appearance="primary" disabled={busy || Boolean(selected.importBatchId && (!review.assigneeId || (review.dueAt && (!Number.isFinite(Date.parse(review.dueAt)) || Date.parse(review.dueAt) <= now))))} onClick={() => void decide("approve")}>Подтвердить постановку</Button>
             </> : <Button disabled={busy} onClick={() => void decide("cancel")}>Отозвать заявку</Button> : null}
-            {selected.taskId && tasks.some((task) => task.id === selected.taskId) ? <Button onClick={() => { onOpenTask(selected.taskId!); setSelectedId(""); setListOpen(false); }}>Открыть задачу</Button> : null}</div>
+            {selected.taskId && tasks.some((task) => task.id === selected.taskId) ? <Button onClick={() => { pendingTask.current = selected.taskId ?? undefined; setSelectedId(""); setListOpen(false); }}>Открыть задачу</Button> : null}</div>
           </footer>
         </div> : compact && listOpen ? <div className="record-composer">
           <header className="record-composer-header"><div><h2>Запросы на постановку задач</h2><p>{pending.length} ожидают подтверждения</p></div><Button onClick={() => setListOpen(false)}>Закрыть запросы</Button></header>
           <div className="record-composer-body"><div className="record-composer-fields">{proposalList}{listError}</div></div>
-        </div> : null}
+        </div> : <div className="record-composer">
+          <header className="record-composer-header"><h2>{loaded ? "Запрос недоступен" : "Открываем запрос"}</h2><Button onClick={() => setSelectedId("")}>Закрыть запрос</Button></header>
+          <div className="record-composer-body">{listError ?? <p role="status">{loaded ? "Запрос больше не доступен в вашей очереди." : "Загружаем запрос на постановку задачи…"}</p>}</div>
+        </div>}
       </DialogSurface>
     </WorkspaceDialog>
   </>;

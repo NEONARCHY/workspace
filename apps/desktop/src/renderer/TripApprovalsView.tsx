@@ -15,7 +15,7 @@ import type { OfficePreviewResult } from "./file-viewer-kind";
 import { Badge, Button, Checkbox, DialogSurface, DialogTitle, Textarea, useRestoreFocusTarget } from "@fluentui/react-components";
 import { TaskPersonAvatar as PersonAvatar } from "./TaskPersonAvatar";
 import { Input } from "./WorkspaceInput";
-import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
+import { WorkspaceDialog as Dialog, focusWorkspaceDialog } from "./WorkspaceDialog";
 import { workflowStageColor } from "./workflow-stage-colors";
 import { Add24Regular, Chat24Regular, Dismiss20Regular, Edit24Regular, Globe24Regular, Search20Regular } from "@fluentui/react-icons";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
@@ -52,6 +52,8 @@ const needsBriefForSubmission = (request: TripRequest) => {
 };
 
 interface TripApprovalsViewProps {
+  readonly dialogOnly?: boolean;
+  readonly onDialogClose?: () => void;
   readonly token?: string;
   readonly assistantDraft?: AssistantActionDraft;
   readonly focusRequestId?: string;
@@ -95,7 +97,7 @@ const exampleTripFacts = {
   expenseSource: "loyiha mablagʻlari",
 };
 
-export function TripApprovalsView({ token, focusRequestId, requests, people, departments, currentUser, onCreate, onUpdate, onDelete, onAction, onLoadBriefOffice, onDownloadDocument, onOpenChat, renderTripChat, workflow, positions = [], canManageWorkflow = false, onSaveWorkflow, onPublishWorkflow, assistantDraft }: TripApprovalsViewProps) {
+export function TripApprovalsView({ token, focusRequestId, requests, people, departments, currentUser, onCreate, onUpdate, onDelete, onAction, onLoadBriefOffice, onDownloadDocument, onOpenChat, renderTripChat, workflow, positions = [], canManageWorkflow = false, onSaveWorkflow, onPublishWorkflow, assistantDraft, dialogOnly = false, onDialogClose }: TripApprovalsViewProps) {
   const boardPan = useMiddleMousePan<HTMLDivElement>();
   const restoreFocusTarget = useRestoreFocusTarget();
   const detailSurfaceRef = useRef<HTMLDivElement>(null);
@@ -294,7 +296,8 @@ export function TripApprovalsView({ token, focusRequestId, requests, people, dep
   const feedback = error ? <WorkspaceNotice tone="error" className="trip-feedback error" role="alert"><span>{error}</span></WorkspaceNotice> : null;
 
   return (
-    <section className={`workspace-view bp7-view trips-view trip-view workflow-process-view${mapOpen ? " trip-map-mode" : ""}`} aria-label="Согласование поездок">
+    <section data-dialog-only={dialogOnly || undefined} className={`workspace-view bp7-view trips-view trip-view workflow-process-view${mapOpen ? " trip-map-mode" : ""}`} aria-label="Согласование поездок">
+{!dialogOnly && <>
       {!mapOpen && <WorkspaceSectionHeader motif="trips" className="bp7-header workflow-hero-header">
         <div><span className="view-kicker">Согласования · Командировки</span><h1>Согласование поездок</h1><p>Перетащите карточку на доступную стадию или откройте её для решения.</p>{canManageWorkflow && workflow ? <SlidingSegmented className="process-view-tabs" role="group" aria-label="Разделы поездок"><button type="button" className={section === "requests" ? "active" : ""} aria-pressed={section === "requests"} onClick={() => setSection("requests")}>Текущие поездки</button><button type="button" className={section === "designer" ? "active" : ""} aria-pressed={section === "designer"} onClick={() => setSection("designer")}>Конструктор маршрутов</button></SlidingSegmented> : null}</div>
         <div className="trip-header-actions">
@@ -357,6 +360,8 @@ export function TripApprovalsView({ token, focusRequestId, requests, people, dep
         </button>)}</div>
       )}
       </>}
+
+</>}
       <Dialog open={(detailOpen && Boolean(selected)) || formOpen} onOpenChange={(_, data) => {
         if (!data.open && !busyRef.current) {
           if (formOpen) closeForm();
@@ -365,13 +370,13 @@ export function TripApprovalsView({ token, focusRequestId, requests, people, dep
       }} surfaceMotion={{ outScale: 1, inScale: 1, duration: 240, exitDuration: 160,
         easing: "cubic-bezier(0.2, 0, 0, 1)", exitEasing: "cubic-bezier(0.4, 0, 1, 1)",
         onMotionFinish: (_, data) => {
+          if (data.direction === "exit") { onDialogClose?.(); return; }
           if (data.direction !== "enter" || formMode !== null || !detailOpen) return;
           // Deferred section loading may focus the surface before Tabster registers
           // its controls. Resolve only that fallback, without stealing an input focus.
           detailFocusFrame.current = window.requestAnimationFrame(() => {
             detailFocusFrame.current = undefined;
-            const surface = detailSurfaceRef.current;
-            if (surface && surface.ownerDocument.activeElement === surface) detailCloseRef.current?.focus();
+            focusWorkspaceDialog(detailSurfaceRef.current);
           });
         } }}>
         <DialogSurface ref={detailSurfaceRef} className={`trip-dialog ${formMode !== null ? "record-composer-dialog" : "context-record-dialog"}`} {...(formMode !== null ? { "aria-labelledby": "trip-composer-title" } : {})}>

@@ -115,6 +115,8 @@ interface WorkflowSnapshot {
 const workflowHistoryLimit = 100;
 
 interface ApprovalsViewProps {
+  readonly dialogOnly?: boolean;
+  readonly onDialogClose?: () => void;
   readonly focusRequestId?: string;
   readonly token: string;
   readonly createContext?: { readonly projectId: string; readonly workstreamId: string };
@@ -950,6 +952,8 @@ export function PaymentFields({ form, targets, calendarEvents, people, departmen
 }
 
 export function ApprovalsView({
+  dialogOnly = false,
+  onDialogClose,
   focusRequestId,
   token,
   createContext,
@@ -1036,7 +1040,7 @@ export function ApprovalsView({
   const stageRibbonRef = useRef<HTMLDivElement>(null);
   const closeCreate = () => { if (!creatingBusyRef.current) setCreatingRequest(false); };
   const openDetail = (requestId: string) => { setActionError(""); setDetailTab("overview"); setSelectedRequestId(requestId); };
-  const closeDetail = () => { setActionError(""); setSelectedRequestId(""); };
+  const closeDetail = () => { setActionError(""); setSelectedRequestId(""); onDialogClose?.(); };
   const removeRequest = async (request: ApprovalRequestSummary) => {
     if (!canManage || actionBusyRef.current) return;
     setPendingRequestDelete(request);
@@ -1587,7 +1591,8 @@ export function ApprovalsView({
   }, [canManage, mode, redoWorkflowChange, undoWorkflowChange]);
 
   return (
-    <section className="workspace-view approvals-view workflow-process-view" aria-label="Согласования">
+    <section data-dialog-only={dialogOnly || undefined} className="workspace-view approvals-view workflow-process-view" aria-label="Согласования">
+{!dialogOnly && <>
       <WorkspaceSectionHeader motif="payments" className="section-toolbar approvals-toolbar workflow-hero-header">
         <div>
           <span className="view-kicker">Финансовый маршрут · Рабочая очередь</span>
@@ -1623,7 +1628,8 @@ export function ApprovalsView({
               ) : null}
             </SlidingSegmented>
           </div>
-          {mode === "requests" ? (
+
+      {mode === "requests" ? (
             <Button
               className="ws-section-header-primary"
               appearance="primary"
@@ -1688,9 +1694,11 @@ export function ApprovalsView({
           )}
         </div>
       </WorkspaceSectionHeader>
+      </>}
 
       {mode === "requests" ? (
         <div className="approval-workspace">
+{!dialogOnly && <>
           <div className="approval-view-toolbar ws2-process-toolbar">
             <SlidingSegmented className="ws2-segmented" role="group" aria-label="Вид заявок">
               <button type="button" className={presentation === "kanban" ? "active" : ""} aria-pressed={presentation === "kanban"} onClick={() => setPresentation("kanban")}>Канбан</button>
@@ -1892,6 +1900,8 @@ export function ApprovalsView({
             </div>
           )}
 
+
+</>}
           {creatingRequest ? (
             <div
               className="approval-overlay record-composer-backdrop"

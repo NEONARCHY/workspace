@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LeaveDecision, LeaveHrDecisionInput, LeaveRequest, LeaveTenureRule, WorkspacePerson } from "@yuksalish/contracts";
-import { Button, Field, Input, Textarea } from "@fluentui/react-components";
+import { Button, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input, Textarea } from "@fluentui/react-components";
+import { WorkspaceDialog, focusWorkspaceDialog } from "./WorkspaceDialog";
 import { Add24Regular, ArrowClockwise20Regular, DocumentPdf20Regular } from "@fluentui/react-icons";
 import { ExternalFileViewer, type FileViewerSource } from "./FileViewer";
 import { WorkspaceNotice } from "./WorkspaceNotice";
@@ -13,6 +14,8 @@ import {
 import "./leave-view.css";
 
 interface Props {
+  readonly dialogOnly?: boolean;
+  readonly onDialogClose?: () => void;
   readonly token: string;
   readonly people: readonly WorkspacePerson[];
   readonly currentUserId: string;
@@ -92,7 +95,9 @@ function formFor(item: LeaveRequest, people: readonly WorkspacePerson[], deputyI
   };
 }
 
-export function LeaveView({ token, people, currentUserId, canCreate, focusRequestId }: Props) {
+export function LeaveView({ token, people, currentUserId, canCreate, focusRequestId, dialogOnly = false, onDialogClose }: Props) {
+  const [dialogOpen, setDialogOpen] = useState(true);
+  const dialogSurface = useRef<HTMLDivElement>(null);
   const [requests, setRequests] = useState<readonly LeaveRequest[]>([]);
   const [context, setContext] = useState<Awaited<ReturnType<typeof loadWorkspaceLeaveContext>>>();
   const [loading, setLoading] = useState(true);
@@ -275,8 +280,8 @@ export function LeaveView({ token, people, currentUserId, canCreate, focusReques
     contentType: "application/pdf", byteSize: 0,
   } : undefined;
 
-  return <section className="workspace-view leave-view" aria-label="Отпуска">
-    <WorkspaceSectionHeader motif="absences" className="leave-header">
+  const content = <section className="workspace-view leave-view" aria-label="Отпуска" data-dialog-only={dialogOnly || undefined}>
+    {!dialogOnly && <WorkspaceSectionHeader motif="absences" className="leave-header">
       <div><span className="view-kicker">Сотрудник · Кадровая служба · Первый заместитель</span>
         <h1>Отпуска</h1><p>Заявление, проверка кадров и подписанный приказ — в одном месте.</p></div>
       <div className="leave-header-actions">
@@ -285,10 +290,10 @@ export function LeaveView({ token, people, currentUserId, canCreate, focusReques
           setSelectedId(undefined); setShowCreate(true); setEditing(false); setApplicationText(""); setStartsOn(""); setEndsOn(""); setPreviewText(false); setShowApplicationExample(false);
         }}>Новое заявление</Button> : null}
       </div>
-    </WorkspaceSectionHeader>
+    </WorkspaceSectionHeader>}
     {error ? <WorkspaceNotice tone="error" role="alert">{error}</WorkspaceNotice> : null}
     {loading ? <p className="leave-empty">Загружаем заявления…</p> : <div className="leave-layout">
-      <div className="leave-list-area">
+      {!dialogOnly && <div className="leave-list-area">
         <div className="leave-filters" aria-label="Фильтр заявлений">
           {([ ["all", "Все"], ["mine", "Мои"], ["action", "Ждут решения"], ["approved", "Утверждены"] ] as const).map(([value, label]) =>
             <button key={value} type="button" aria-pressed={filter === value} onClick={() => setFilter(value)}>{label}</button>)}
@@ -300,7 +305,7 @@ export function LeaveView({ token, people, currentUserId, canCreate, focusReques
             <span>{formatDate(item.startsOn ?? item.requestedStartsOn)}{item.endsOn ?? item.requestedEndsOn ? ` — ${formatDate(item.endsOn ?? item.requestedEndsOn)}` : " · Дата окончания уточняется"}</span>
             {item.orderNumber ? <small>Приказ № {item.orderNumber}-сон а/ф</small> : null}
           </button>)}</div> : <p className="leave-empty">В этом разделе заявлений пока нет.</p>}
-      </div>
+      </div>}
       <div className="leave-detail">
         {showCreate || editing && selected?.canRevise ? <div className="leave-card">
           <h2>{editing ? "Дополнить заявление" : "Новое заявление"}</h2>
@@ -400,4 +405,13 @@ export function LeaveView({ token, people, currentUserId, canCreate, focusReques
         window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
       }} /> : null}
   </section>;
+  if (!dialogOnly) return content;
+  return <WorkspaceDialog open={dialogOpen} onAfterClose={onDialogClose} onAfterOpen={() => focusWorkspaceDialog(dialogSurface.current)} onOpenChange={(_, data) => { if (!busy) setDialogOpen(data.open); }}>
+    <DialogSurface ref={dialogSurface} className="team-decision-dialog">
+      <DialogBody>
+        <DialogTitle action={<Button appearance="subtle" disabled={busy} onClick={() => setDialogOpen(false)}>Закрыть</Button>}>Согласование отпуска</DialogTitle>
+        <DialogContent>{content}</DialogContent>
+      </DialogBody>
+    </DialogSurface>
+  </WorkspaceDialog>;
 }

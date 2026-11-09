@@ -2,14 +2,14 @@ import { useEffect, useState } from "react";
 import type { GrantSummary } from "@yuksalish/contracts";
 import { loadGrants } from "./workspace-api";
 
-export function useTeamGrantInbox(token: string, currentUserId: string, enabled: boolean) {
+export function useTeamGrantInbox(token: string, currentUserId: string, enabled: boolean, refreshRevision = 0) {
   const [revision, setRevision] = useState(0);
   const [resource, setResource] = useState<{
     key: string;
     grants?: readonly GrantSummary[];
     error?: string;
   }>();
-  const key = JSON.stringify([token, currentUserId, revision]);
+  const key = JSON.stringify([token, currentUserId, revision, refreshRevision]);
   useEffect(() => {
     if (!enabled) return;
     let active = true;
