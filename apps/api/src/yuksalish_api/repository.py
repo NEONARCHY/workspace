@@ -1167,6 +1167,52 @@ async def _active_stages_for_requests(
     return result
 
 
+async def _visible_approval_requests(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    request_rows: Sequence[Record] | None = None,
+) -> list[Record]:
+    if request_rows is None:
+        request_rows = (await connection.execute(
+            select(approval_requests).order_by(approval_requests.c.updated_at.desc()),
+        )).mappings().all()
+    if not request_rows or current_user.role in {"admin", "superadmin"}:
+        return list(request_rows)
+    template_ids = {row["template_id"] for row in request_rows}
+    nodes = (
+        (await connection.execute(
+            select(approval_nodes, approval_templates.c.status.label("template_status"))
+            .join(approval_templates, approval_templates.c.id == approval_nodes.c.template_id)
+            .where(
+                approval_templates.c.template_key == "payment",
+                approval_nodes.c.kind == "approval",
+                or_(
+                    approval_templates.c.status == "published",
+                    approval_nodes.c.template_id.in_(template_ids),
+                ),
+            )
+        )).mappings().all()
+    )
+    # Launch/correction permissions and unpublished edits do not grant a global queue.
+    if any(
+        node["template_status"] == "published"
+        and _can_act_from_config(current_user, {}, node["node_key"], node["config"] or {})
+        for node in nodes
+    ):
+        return list(request_rows)
+    nodes_by_template: dict[UUID, list[Record]] = {}
+    for node in nodes:
+        nodes_by_template.setdefault(node["template_id"], []).append(node)
+    return [
+        row for row in request_rows
+        if row["requester_user_id"] == current_user.id
+        or any(
+            _can_act_from_config(current_user, row, node["node_key"], node["config"] or {})
+            for node in nodes_by_template.get(row["template_id"], [])
+        )
+    ]
+
+
 async def _request_versions(
     connection: AsyncConnection,
     request_ids: Sequence[UUID],
@@ -2259,6 +2305,11 @@ async def _load_visible_notification_row(
     )
     if row is None:
         raise WorkspaceRepositoryError(404, "Notification was not found")
+    if row["section"] == "payment_requests":
+        await ensure_module_action(connection, current_user, "payment_requests", "view")
+        await validate_attachment_owner(
+            connection, current_user, "approval_request", row["entity_id"], write=False,
+        )
     await _ensure_ai_referent_notification_visible(connection, current_user, row)
     if row["section"] == "grants":
         from .grant_service import access_grant
@@ -2771,17 +2822,10 @@ async def load_workspace(
         task_efficiency_excluded,
     ) = await _task_detail_maps(connection, task_rows, current_user)
 
-    request_statement = select(approval_requests).order_by(approval_requests.c.updated_at.desc())
-    request_rows = (await connection.execute(request_statement)).mappings().all()
+    request_rows = await _visible_approval_requests(
+        connection, current_user,
+    ) if can("payment_requests") else []
     stages_by_request = await _active_stages_for_requests(connection, request_rows, current_user)
-    if current_user.role == "employee":
-        request_rows = [
-            row
-            for row in request_rows
-            if row["requester_user_id"] == current_user.id
-            or row["responsible_user_id"] == current_user.id
-            or any(stage.can_act for stage in stages_by_request.get(row["id"], []))
-        ]
     request_ids = [row["id"] for row in request_rows]
     versions_by_request = await _request_versions(connection, request_ids)
     actions_by_request = await _request_actions(connection, request_ids)
@@ -6735,7 +6779,7 @@ async def update_approval_request(
         .mappings()
         .first()
     )
-    if row is None:
+    if row is None or not await _visible_approval_requests(connection, current_user, [row]):
         raise WorkspaceRepositoryError(404, "Request was not found")
     if row["status"] not in {"running", "needs_revision"}:
         raise WorkspaceRepositoryError(409, "Only an active request can be edited")
@@ -7089,18 +7133,15 @@ async def validate_attachment_owner(
         .first()
     )
     assigned_actor = False
-    if row is not None:
+    if row is not None and write:
         assigned_actor = any(
             [
                 await _can_act_on_node(connection, current_user, row, node_key)
                 for node_key in row["active_node_keys"] or []
             ]
         )
-    accessible = row is not None and (
-        current_user.role in {"manager", "admin", "superadmin"}
-        or row["requester_user_id"] == current_user.id
-        or row["responsible_user_id"] == current_user.id
-        or assigned_actor
+    accessible = row is not None and bool(
+        await _visible_approval_requests(connection, current_user, [row])
     )
     writable = (
         row is not None
@@ -8276,7 +8317,7 @@ async def act_on_request(
         .mappings()
         .first()
     )
-    if row is None:
+    if row is None or not await _visible_approval_requests(connection, current_user, [row]):
         raise WorkspaceRepositoryError(404, "Request was not found")
     if payload.action == "move":
         if not payload.node_key:

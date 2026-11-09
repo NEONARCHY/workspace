@@ -28,9 +28,9 @@ from .auth import AuthenticatedUser
 from .organization_knowledge import relevant_knowledge
 from .project_hub_service import visible_employee_project_summaries
 from .recognition_service import load_profile
+from .repository import _visible_approval_requests
 from .tables import (
     approval_nodes,
-    approval_requests,
     assistant_messages,
     chat_members,
     chats,
@@ -601,10 +601,8 @@ async def _visible_notification_rows(
             task_participants.c.user_id == user.id
         )),
     ))
-    request_ids = select(approval_requests.c.id).where(or_(
-        approval_requests.c.requester_user_id == user.id,
-        approval_requests.c.responsible_user_id == user.id,
-    ))
+    request_ids = [row["id"] for row in await _visible_approval_requests(connection, user)] \
+        if permissions.get("payment_requests", {}).get("view", False) else []
     trip_ids = select(trip_requests.c.id).where(
         trip_requests.c.deleted_at.is_(None),
         or_(
@@ -692,27 +690,8 @@ async def personal_activity_context(connection: AsyncConnection, user: Authentic
     permissions = await module_permissions_for_user(connection, user)
     sections: list[str] = []
     if permissions.get("payment_requests", {}).get("view", False):
-        rows = (
-            await connection.execute(
-                select(
-                    approval_requests.c.template_id,
-                    approval_requests.c.title,
-                    approval_requests.c.status,
-                    approval_requests.c.active_node_keys,
-                    approval_requests.c.updated_at,
-                )
-                .where(
-                    trip_requests.c.deleted_at.is_(None),
-                    or_(
-                        approval_requests.c.requester_user_id == user.id,
-                        approval_requests.c.responsible_user_id == user.id,
-                    )
-                )
-                .order_by(approval_requests.c.updated_at.desc())
-                .limit(12)
-            )
-        ).all()
-        template_ids = {row.template_id for row in rows if row.template_id is not None}
+        payment_rows = (await _visible_approval_requests(connection, user))[:12]
+        template_ids = {row["template_id"] for row in payment_rows}
         node_titles = {}
         if template_ids:
             node_rows = (
@@ -723,14 +702,14 @@ async def personal_activity_context(connection: AsyncConnection, user: Authentic
                 )
             ).all()
             node_titles = {(node.template_id, node.node_key): node.title for node in node_rows}
-        for row in rows:
+        for payment in payment_rows:
             stage = ", ".join(
-                node_titles.get((row.template_id, key), key)
-                for key in (row.active_node_keys or [])
+                node_titles.get((payment["template_id"], key), key)
+                for key in (payment["active_node_keys"] or [])
             ) or "завершён"
             sections.append(
-                f"Заявка: {row.title[:150]} | {row.status} | этап: {stage} | "
-                f"обновлена {row.updated_at.isoformat()}"
+                f"Заявка: {payment['title'][:150]} | {payment['status']} | этап: {stage} | "
+                f"обновлена {payment['updated_at'].isoformat()}"
             )
     if permissions.get("trip_approvals", {}).get("view", False):
         trip_ids = select(trip_request_employees.c.request_id).where(
