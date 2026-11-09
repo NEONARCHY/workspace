@@ -44,7 +44,10 @@ Connection = Annotated[AsyncConnection, Depends(get_connection)]
 @router.get("", response_model=MonthlyOverview)
 async def get_overview(user: User, connection: Connection, response: Response) -> MonthlyOverview:
     response.headers["Cache-Control"] = "no-store"
-    return await overview(connection, user)
+    result = await overview(connection, user)
+    # First access can materialize the month. A following upload must see that roster.
+    await connection.commit()
+    return result
 
 
 @router.get("/template")
@@ -163,3 +166,4 @@ async def get_calendar(user: User, connection: Connection) -> list[CalendarDayWr
 @router.put("/calendar/days", status_code=204)
 async def put_calendar(payload: CalendarDayWrite, user: User, connection: Connection) -> None:
     await save_calendar(connection, user, payload)
+    await connection.commit()

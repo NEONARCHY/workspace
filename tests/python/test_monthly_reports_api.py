@@ -14,7 +14,12 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from yuksalish_api.access_control import request_module_action
 from yuksalish_api.auth import AuthenticatedUser, require_user
 from yuksalish_api.database import get_connection
-from yuksalish_api.monthly_report_schemas import MonthlyCycle, MonthlyReport, MonthlySubmission
+from yuksalish_api.monthly_report_schemas import (
+    MonthlyCycle,
+    MonthlyOverview,
+    MonthlyReport,
+    MonthlySubmission,
+)
 from yuksalish_api.object_storage import InMemoryObjectStorage, ObjectStorageError
 from yuksalish_api.routers import monthly_reports as endpoint
 
@@ -144,3 +149,40 @@ def test_module_actions_cover_direct_requests():
         "ai_monthly_reports",
         "admin",
     )
+
+
+def test_first_overview_commits_materialized_roster_before_http_success(monthly_api, monkeypatch):
+    client, _, _, _, _, connection = monthly_api
+    monkeypatch.setattr(
+        endpoint,
+        "overview",
+        AsyncMock(
+            return_value=MonthlyOverview(
+                today=date(2026, 11, 25),
+                active_month=None,
+                dashboard_visible=False,
+                can_review=False,
+                can_authorize=False,
+                can_configure=False,
+                reminder_month=None,
+                cycles=[],
+                reports=[],
+            )
+        ),
+    )
+    assert client.get("/monthly-reports").status_code == 200
+    connection.commit.assert_awaited_once()
+    connection.commit.side_effect = RuntimeError("synthetic commit failure")
+    with pytest.raises(RuntimeError, match="synthetic commit failure"):
+        client.get("/monthly-reports")
+
+
+def test_calendar_commit_failure_cannot_report_http_success(monthly_api, monkeypatch):
+    client, _, _, _, _, connection = monthly_api
+    monkeypatch.setattr(endpoint, "save_calendar", AsyncMock())
+    payload = {"day": "2026-11-27", "working": False, "note": "Organization holiday"}
+    assert client.put("/monthly-reports/calendar/days", json=payload).status_code == 204
+    connection.commit.assert_awaited_once()
+    connection.commit.side_effect = RuntimeError("synthetic commit failure")
+    with pytest.raises(RuntimeError, match="synthetic commit failure"):
+        client.put("/monthly-reports/calendar/days", json=payload)
