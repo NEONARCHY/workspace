@@ -4,6 +4,12 @@
 
 ## Product flow
 
+The «Мои» filter shows unfinished tasks where the employee is the author,
+primary assignee or another participant. Completed and cancelled tasks are excluded
+from both this filter and its count, including the «Моя работа» summary. Completed
+tasks remain available through «Завершённые». The same filtered dataset is used
+in the list, Kanban and calendar.
+
 A task is a persistent PostgreSQL object with an author, primary assignee, project,
 priority, deadline and lifecycle status. The desktop client presents one filtered
 dataset as a table, a Kanban board or a monthly task calendar. The former toolbar
