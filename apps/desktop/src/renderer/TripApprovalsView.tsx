@@ -237,7 +237,7 @@ export function TripApprovalsView({ token, focusRequestId, requests, people, dep
     return content;
   }, [onLoadBriefOffice]);
   const openDocument = (request: TripRequest, kind: "attachment" | "brief" | "brief-preview" | "order" | "order-preview") => {
-    const original = kind === "attachment" || (kind === "brief" && request.originalSignatureConfirmed);
+    const original = kind === "attachment" || (kind === "brief" && request.originalSignatureConfirmed && !request.hasResolution);
     setDocumentPreview({
       id: request.id, kind, updatedAt: request.updatedAt,
       fileName: original ? request.briefAttachmentName ?? "bildirgi" : kind === "brief" ? "bildirgi.pdf" : kind === "brief-preview" ? "bildirgi-preview.pdf"
@@ -258,7 +258,7 @@ export function TripApprovalsView({ token, focusRequestId, requests, people, dep
       const link = document.createElement("a");
       link.href = url;
       link.download = kind === "attachment" ? request.briefAttachmentName ?? "bildirgi"
-        : kind === "brief" ? request.originalSignatureConfirmed ? request.briefAttachmentName ?? "bildirgi" : "bildirgi.pdf"
+        : kind === "brief" ? request.originalSignatureConfirmed && !request.hasResolution ? request.briefAttachmentName ?? "bildirgi" : "bildirgi.pdf"
           : kind === "brief-preview" ? "bildirgi-preview.pdf"
           : kind === "order" ? `prikaz-${request.orderNumber ?? request.number}.pdf`
             : "prikaz-preview.pdf";

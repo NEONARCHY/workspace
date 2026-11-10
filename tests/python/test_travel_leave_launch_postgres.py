@@ -405,7 +405,10 @@ async def test_hr_order_registration_duplicates_refusal_and_storage_rollback(
     assert completed.status == "approved" and completed.order_series == "b/f"
 
 
-async def test_legacy_hr_trip_needs_real_resolution_and_keeps_revisions_on_return(launch_db):
+@pytest.mark.parametrize("action,actor", [("return", "hr"), ("withdraw", "employee")])
+async def test_legacy_hr_trip_needs_real_resolution_and_keeps_revisions_on_return(
+    launch_db, action, actor,
+):
     connection, actors, storage = launch_db
     request_id = await _trip(connection, actors["employee"])
     await connection.execute(update(trip_requests).where(trip_requests.c.id == request_id).values(
@@ -425,8 +428,8 @@ async def test_legacy_hr_trip_needs_real_resolution_and_keeps_revisions_on_retur
     await apply_resolution(connection, actors["chair"], storage, request_id)
     repeated = await read_document(connection, actors["hr"], storage, request_id, "brief")
     assert repeated[0] == before[0]
-    await act_on_trip_request(connection, actors["hr"], request_id,
-                              TripActionRequest(action="return", comment="Уточните программу"))
+    await act_on_trip_request(connection, actors[actor], request_id,
+                              TripActionRequest(action=action, comment="Уточните программу"))
     returned = await get_trip_request(connection, actors["employee"], request_id)
     assert not returned.has_resolution and returned.stage == "launch"
     assert await connection.scalar(select(func.count()).select_from(trip_document_revisions).where(

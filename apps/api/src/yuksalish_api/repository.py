@@ -784,7 +784,8 @@ def _trip_allowed_actions(
         return ["annul"] if _can_manage_trip(row, current_user) else []
     management_actions: list[TripAction] = (
         ["withdraw"] if status == "running" and not row.get("order_pdf_key")
-        and (row["workflow_version"] >= 2 or current_user.role == "superadmin")
+        and (row["workflow_version"] >= 2 or row.get("hr_processing_required")
+             or current_user.role == "superadmin")
         and _can_manage_trip(row, current_user) else []
     )
     if row.get("hr_processing_required"):
@@ -793,9 +794,10 @@ def _trip_allowed_actions(
                 if current_user.id == chair_user_id else management_actions
         if stage == "hr":
             if not row.get("resolved_brief_key"):
-                return ["approve"] if current_user.id == chair_user_id else []
-            return ["complete", "return", "reject"] \
-                if current_user.id == row.get("hr_processor_user_id") else []
+                return ["approve", *management_actions] \
+                    if current_user.id == chair_user_id else management_actions
+            return ["complete", "return", "reject", *management_actions] \
+                if current_user.id == row.get("hr_processor_user_id") else management_actions
     if stage == "launch" and row["requester_user_id"] == current_user.id:
         return ["resubmit"] if status == "needs_revision" else ["submit"]
     if stage == "deputy_approval" and row["workflow_version"] == 3 and (

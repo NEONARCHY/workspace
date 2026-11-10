@@ -42,6 +42,15 @@ const card = () => document.querySelector(".trip-board-card")!;
 async function drop(target: string) { await dropSpatialCard(card(), column(target)); }
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 describe("Trip approvals interaction", async () => {
+  it("opens a chairman resolution as PDF even when the source was a signed DOCX", async () => {
+    const trip = { ...request, workflowVersion: 3, hrProcessingRequired: true, hasResolution: true,
+      stage: "hr" as const, originalSignatureConfirmed: true, hasSignedBrief: true,
+      briefAttachmentName: "signed-original.docx", briefAttachmentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" };
+    setup(trip);
+    fireEvent.click(card().querySelector(".approval-card-open")!);
+    fireEvent.click(screen.getByRole("button", { name: "Билдирги с резолюцией председателя" }));
+    expect(await screen.findByText("bildirgi.pdf")).toBeInTheDocument();
+  });
   it("keeps the chair handoff in progress and presents the new HR route", async () => {
     const trip = { ...request, workflowVersion: 3, hrProcessingRequired: true };
     const onAction = vi.fn(async () => ({ ...trip, stage: "hr" as const, hasResolution: true }));

@@ -38,9 +38,11 @@ def test_new_trip_actions_require_the_actual_chair_and_pinned_hr():
     row["stage"] = "hr"
     assert _trip_allowed_actions(row, actor(hr), chair) == []
     assert _trip_allowed_actions(row, actor(chair), chair) == ["approve"]
+    assert _trip_allowed_actions(row, actor(outsider), chair) == ["withdraw"]
     row["resolved_brief_key"] = "resolution.pdf"
     assert _trip_allowed_actions(row, actor(hr), chair) == ["complete", "return", "reject"]
     assert _trip_allowed_actions(row, actor(chair), chair) == []
+    assert _trip_allowed_actions(row, actor(outsider), chair) == ["withdraw"]
     row["status"] = "approved"
     assert "complete" not in _trip_allowed_actions(row, actor(hr), chair)
 
