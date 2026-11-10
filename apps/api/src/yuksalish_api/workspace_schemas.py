@@ -566,6 +566,7 @@ class CreateTaskRequest(ApiModel):
     description: str = Field(default="", max_length=20_000)
     project: str = Field(default="Без проекта", max_length=240)
     project_id: str | None = None
+    plan_ids: list[UUID] | None = Field(default=None, max_length=100)
     assignee_id: str | None = None
     source_message_id: str | None = None
     calendar_event_id: str | None = None
@@ -591,6 +592,7 @@ class UpdateTaskRequest(ApiModel):
     description: str = Field(default="", max_length=20_000)
     project: str = Field(default="Без проекта", max_length=240)
     project_id: str | None = None
+    plan_ids: list[UUID] | None = Field(default=None, max_length=100)
     assignee_id: str
     priority: Literal["low", "normal", "high", "urgent"] = "normal"
     due_at: datetime | None = None

@@ -67,6 +67,10 @@ async def _validate(
     allow_unassigned_pending: bool = False,
 ) -> None:
     await ensure_module_action(connection, creator, "tasks", "create")
+    if task.plan_ids:
+        from .task_plan_service import validate_task_plan_ids
+
+        await validate_task_plan_ids(connection, creator, task.plan_ids)
     if allow_other_assignee:
         if creator.role not in {"admin", "superadmin"}:
             raise WorkspaceRepositoryError(403, "Импорт заявок доступен только администраторам")
@@ -137,6 +141,9 @@ async def propose_task(
         task_proposals.c.id == payload.request_id,
     ))).mappings().first()
     snapshot = payload.task.model_dump(mode="json", by_alias=True)
+    if not snapshot.get("planIds"):
+        # Older pending proposals do not contain the optional plan-selection field.
+        snapshot.pop("planIds", None)
     if existing:
         if (existing["creator_user_id"] == user.id
             and existing["author_user_id"] == payload.author_user_id

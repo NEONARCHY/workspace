@@ -1877,6 +1877,7 @@ export interface WorkspaceTaskCreateInput {
   readonly description?: string;
   readonly project?: string;
   readonly projectId?: string | null;
+  readonly planIds?: readonly string[] | null;
   readonly assigneeId: string;
   readonly sourceMessageId?: string;
   readonly calendarEventId?: string;
@@ -1893,6 +1894,18 @@ export interface WorkspaceTaskCreateInput {
     readonly dependencyKind: "blocks" | "relates";
   }[];
   readonly cycle?: TaskCycleInput | null;
+}
+
+export interface WorkspaceTaskUpdateInput {
+  readonly title: string;
+  readonly description: string;
+  readonly project: string;
+  readonly projectId?: string | null;
+  /** Omitted/null preserves links; an empty array removes all plan links. */
+  readonly planIds?: readonly string[] | null;
+  readonly assigneeId: string;
+  readonly priority: WorkspaceTask["priority"];
+  readonly dueAt?: string | null;
 }
 
 /** Pending imports may wait for the chair to select a primary assignee. */

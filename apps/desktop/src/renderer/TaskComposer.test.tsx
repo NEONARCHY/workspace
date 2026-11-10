@@ -5,7 +5,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { TaskComposer } from "./TaskComposer";
 import { resolveAssistantForm } from "./assistant-form-handoff";
 import { people } from "./test-fixtures/demo-data";
-import type { WorkspaceDepartment } from "@yuksalish/contracts";
+import type { TaskPlan, WorkspaceDepartment, WorkspaceTaskCreateInput } from "@yuksalish/contracts";
 
 const taskDepartments: readonly WorkspaceDepartment[] = [{
   id: "central-team", code: "central-team", name: "Проектный отдел", scope: "central",
@@ -15,6 +15,37 @@ const taskDepartments: readonly WorkspaceDepartment[] = [{
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+});
+
+const composerPlans: readonly TaskPlan[] = ["Иш режа", "Региональный план"].map((title, index) => ({
+  id: `plan-${index}`, title, kind: "work", status: "active", ownerUserId: "aziza", createdByUserId: "aziza",
+  periodStart: null, periodEnd: null, createdAt: "2026-11-10T10:00:00Z", updatedAt: "2026-11-10T10:00:00Z", taskIds: [],
+}));
+
+it("keeps multiple plan selections local, includes them in the task, and retains them on failure", async () => {
+  const onSubmit = vi.fn<(payload: WorkspaceTaskCreateInput) => Promise<undefined>>().mockResolvedValue(undefined);
+  render(<FluentProvider theme={webLightTheme}><TaskComposer open people={people} tasks={[]}
+    plans={composerPlans} currentUserId="aziza" initialTitle="Задача по планам" onClose={vi.fn()} onSubmit={onSubmit} /></FluentProvider>);
+  const picker = screen.getByRole("combobox", { name: "Планы · необязательно" });
+  fireEvent.click(picker);
+  fireEvent.click(await screen.findByRole("menuitemcheckbox", { name: "Иш режа" }));
+  fireEvent.click(await screen.findByRole("menuitemcheckbox", { name: "Региональный план" }));
+  expect(onSubmit).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Добавить задачу" }));
+  await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+  expect(onSubmit.mock.calls[0]?.[0]).toEqual(expect.objectContaining({ planIds: ["plan-0", "plan-1"] }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Не удалось добавить задачу");
+  expect(picker).toHaveValue("Выбрано планов: 2");
+});
+
+it("cancels a task without saving its selected plans", async () => {
+  const onSubmit = vi.fn(); const onClose = vi.fn();
+  render(<FluentProvider theme={webLightTheme}><TaskComposer open people={people} tasks={[]}
+    plans={composerPlans} currentUserId="aziza" onClose={onClose} onSubmit={onSubmit} /></FluentProvider>);
+  fireEvent.click(screen.getByRole("combobox", { name: "Планы · необязательно" }));
+  fireEvent.click(await screen.findByRole("menuitemcheckbox", { name: "Иш режа" }));
+  fireEvent.click(screen.getByRole("button", { name: "Отмена" }));
+  expect(onClose).toHaveBeenCalledOnce(); expect(onSubmit).not.toHaveBeenCalled();
 });
 
 it("keeps the complete deadline in its nonbreaking summary row when hours change", () => {

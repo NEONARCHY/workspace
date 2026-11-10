@@ -4515,6 +4515,9 @@ async def create_task(
     *,
     author_user_id: UUID | None = None,
 ) -> TaskResponse:
+    from .task_plan_service import _replace_task_plan_links, validate_task_plan_ids
+
+    selected_plans = await validate_task_plan_ids(connection, current_user, payload.plan_ids or [])
     # Internal plan import may assign the plan owner as task author while the
     # authenticated importer remains the actor of creation and audit events.
     task_author_id = author_user_id or current_user.id
@@ -4718,6 +4721,8 @@ async def create_task(
     from .telegram_notification_events import queue_task
 
     await queue_task(connection, task_id)
+    if selected_plans:
+        await _replace_task_plan_links(connection, current_user, task_id, selected_plans)
     return await _task_response(connection, task_id)
 
 
@@ -4774,11 +4779,18 @@ async def update_task(
     task_id: UUID,
     payload: UpdateTaskRequest,
 ) -> TaskResponse:
+    from .task_plan_service import _replace_task_plan_links, validate_task_plan_ids
+
     await _task_access_row(connection, current_user, task_id, edit=True)
     task_row = (
         (await connection.execute(select(tasks).where(tasks.c.id == task_id).with_for_update()))
         .mappings().one()
     )
+    selected_plans = None
+    if payload.plan_ids is not None:
+        await ensure_module_action(connection, current_user, "tasks", "edit")
+        await _task_access_row(connection, current_user, task_id, manage=True)
+        selected_plans = await validate_task_plan_ids(connection, current_user, payload.plan_ids)
     if task_row["due_at"] != payload.due_at:
         await _task_access_row(connection, current_user, task_id, manage=True)
     assignee_id = await _active_user_id(connection, payload.assignee_id)
@@ -4864,6 +4876,8 @@ async def update_task(
         assignee_user_id=assignee_id,
         occurred_at=now,
     )
+    if selected_plans is not None:
+        await _replace_task_plan_links(connection, current_user, task_id, selected_plans)
     return await _task_response(connection, task_id)
 
 

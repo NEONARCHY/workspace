@@ -70,3 +70,10 @@
 @media (max-width: 900px) { .task-plan-form { grid-template-columns: 1fr 1fr; } .task-plans-heading { flex-direction: column; } }
 @media (max-width: 900px) { .task-plan-import-fields { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 600px) { .task-plan-form, .task-plan-import-fields, .task-plan-import-rows fieldset { grid-template-columns: 1fr; } .task-plans-workspace { padding: 16px; } .task-plan-import { padding: 14px; } }
+.task-plan-picker { display: grid; align-content: start; gap: 6px; min-width: 0; }
+fieldset.task-card-editor { min-inline-size: 0; margin-inline: 0; }
+.task-plan-picker > label { font-size: 14px; }
+.task-plan-picker > .fui-Combobox { min-width: 0; width: 100%; min-height: 40px; }
+.task-plan-picker > small { color: var(--ws-muted); font-size: 12px; line-height: 1.4; }
+.task-plan-picker-selected { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.task-plan-picker-selected > span { max-width: 100%; padding: 4px 8px; border-radius: 8px; background: var(--ws-theme-surface-soft, var(--ws-muted-surface)); color: var(--ws-text); font-size: 12px; overflow-wrap: anywhere; }

@@ -186,6 +186,8 @@ async def change_link(
     if not any(plan.id == str(plan_id) for plan in await list_plans(connection, user)):
         raise WorkspaceRepositoryError(404, "Plan was not found")
     await _task_access_row(connection, user, task_id, manage=True)
+    # Serialize card link actions with the task editor's atomic plan replacement.
+    await connection.execute(select(tasks.c.id).where(tasks.c.id == task_id).with_for_update())
     if linked:
         changed = await connection.scalar(pg_insert(task_plan_links).values(
             plan_id=plan_id, task_id=task_id, linked_by_user_id=user.id,
@@ -199,6 +201,41 @@ async def change_link(
         return
     await _audit(connection, user, "task_plan.linked" if linked else "task_plan.unlinked",
                  plan_id, {"taskId": str(task_id)})
+
+
+async def validate_task_plan_ids(
+    connection: AsyncConnection, user: AuthenticatedUser, plan_ids: list[UUID],
+) -> set[UUID]:
+    """Validate before changing task visibility or creating any part of the task."""
+    selected = set(plan_ids)
+    if selected:
+        await ensure_module_action(connection, user, "tasks", "edit")
+        visible = {UUID(plan.id) for plan in await list_plans(connection, user)}
+        if not selected.issubset(visible):
+            raise WorkspaceRepositoryError(
+                404, "Выбранный план недоступен. Обновите список планов.",
+            )
+    return selected
+
+
+async def _replace_task_plan_links(
+    connection: AsyncConnection, user: AuthenticatedUser, task_id: UUID, selected: set[UUID],
+) -> None:
+    """Apply a previously authorized selection in the caller's task transaction."""
+    existing = set((await connection.execute(select(task_plan_links.c.plan_id).where(
+        task_plan_links.c.task_id == task_id,
+    ))).scalars())
+    for plan_id in sorted(existing - selected):
+        await connection.execute(delete(task_plan_links).where(
+            task_plan_links.c.plan_id == plan_id, task_plan_links.c.task_id == task_id,
+        ))
+        await _audit(connection, user, "task_plan.unlinked", plan_id, {"taskId": str(task_id)})
+    for plan_id in sorted(selected - existing):
+        await connection.execute(pg_insert(task_plan_links).values(
+            plan_id=plan_id, task_id=task_id, linked_by_user_id=user.id,
+            created_at=datetime.now(UTC),
+        ).on_conflict_do_nothing())
+        await _audit(connection, user, "task_plan.linked", plan_id, {"taskId": str(task_id)})
 
 
 async def confirm_import(
