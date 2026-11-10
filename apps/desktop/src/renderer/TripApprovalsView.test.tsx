@@ -37,7 +37,7 @@ function setup(item = request, onAction = vi.fn(async () => undefined as TripReq
   render(<FluentProvider theme={webLightTheme}><TripApprovalsView requests={[item]} people={people} currentUser={currentUser} onCreate={onCreate} onUpdate={vi.fn()} onAction={onAction} onOpenChat={onOpenChat} renderTripChat={renderTripChat} /></FluentProvider>);
   return { onAction, onCreate, onOpenChat };
 }
-const column = (key: string) => document.querySelector(`.trip-column[data-stage-key="${key}"]`)!;
+const column = (key: string) => document.querySelector<HTMLElement>(`.trip-column[data-stage-key="${key}"]`)!;
 const card = () => document.querySelector(".trip-board-card")!;
 async function drop(target: string) { await dropSpatialCard(card(), column(target)); }
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
@@ -281,19 +281,63 @@ describe("Trip approvals interaction", async () => {
     fireEvent.click(screen.getByRole("button", { name: "Список" }));
     expect(screen.getByLabelText("Список поездок").children).toHaveLength(1);
   });
-  it("keeps a legacy HR-stage request accessible in the list without an HR lane", () => {
+  it("shows a legacy HR-stage request next to the chair with its current route and list entry", () => {
     setup({ ...request, stage: "hr", stageLabel: "Кадровая служба" });
-    expect(column("hr")).toBeNull();
+    expect(column("manager_approval").nextElementSibling).toBe(column("hr"));
+    expect(within(column("hr")).getByLabelText("1 поездок на этапе «Кадровая служба»")).toHaveTextContent("1");
+    expect(column("hr").querySelector(".trip-board-card")).not.toBeNull();
+    expect(screen.queryByText(/кадровом этапе доступна во вкладке/)).not.toBeInTheDocument();
+    fireEvent.click(card().querySelector(".approval-card-open")!);
+    expect(within(screen.getByLabelText("Маршрут согласования")).getByText("Кадровая служба"))
+      .toHaveAttribute("aria-current", "step");
+    fireEvent.click(screen.getByRole("button", { name: "Закрыть карточку поездки" }));
     fireEvent.click(screen.getByRole("button", { name: "Список" }));
     expect(screen.getByLabelText("Список поездок")).toHaveTextContent(request.destination);
   });
-  it("routes a new signed trip directly to approved without showing the legacy HR column", async () => {
-    const modern = { ...request, workflowVersion: 2, hasSignedBrief: true, hasEmployeeSignature: true };
+  it("hands a legacy trip from the chair to HR using the protected approval action", async () => {
+    const { onAction } = setup();
+    await drop("hr");
+    await waitFor(() => expect(onAction).toHaveBeenCalledExactlyOnceWith(request, "approve", undefined));
+    expect(column("manager_approval").querySelector(".trip-board-card")).not.toBeNull();
+    expect(screen.getByRole("alert")).toHaveTextContent("Не удалось изменить стадию");
+  });
+  it("completes a legacy trip through HR only after the server confirms approval", async () => {
+    const legacy = { ...request, workflowVersion: 1, stage: "hr" as const, stageLabel: "Кадровая служба" };
+    const approved = { ...legacy, stage: "approved" as const, stageLabel: "Утверждено",
+      status: "approved" as const, statusLabel: "Утверждено", allowedActions: [] };
+    const onAction = vi.fn(async () => approved);
+    const { rerender } = render(<FluentProvider theme={webLightTheme}><TripApprovalsView
+      requests={[legacy]} people={people} currentUser={people[0]!}
+      onCreate={vi.fn()} onUpdate={vi.fn()} onAction={onAction}
+    /></FluentProvider>);
+    installSpatialGeometry();
+    await drop("approved");
+    await waitFor(() => expect(onAction).toHaveBeenCalledExactlyOnceWith(legacy, "approve", undefined));
+    rerender(<FluentProvider theme={webLightTheme}><TripApprovalsView
+      requests={[approved]} people={people} currentUser={people[0]!}
+      onCreate={vi.fn()} onUpdate={vi.fn()} onAction={onAction}
+    /></FluentProvider>);
+    expect(column("hr").querySelector(".trip-board-card")).toBeNull();
+    expect(column("approved").querySelector(".trip-board-card")).not.toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Завершённые/ }));
+    expect(column("approved").querySelector(".trip-board-card")).not.toBeNull();
+  });
+  it("does not allow an HR decision absent from the server permissions", async () => {
+    const { onAction } = setup({ ...request, stage: "hr", allowedActions: [] });
+    await drop("approved");
+    expect(onAction).not.toHaveBeenCalled();
+    fireEvent.click(card().querySelector(".approval-card-open")!);
+    expect(screen.queryByRole("button", { name: "Согласовать" })).not.toBeInTheDocument();
+  });
+  it.each([2, 3])("routes a version-%i trip directly to approved without an HR step in its detail route", async (workflowVersion) => {
+    const modern = { ...request, workflowVersion, hasSignedBrief: true, hasEmployeeSignature: true };
     const { onAction } = setup(modern);
-    expect(column("hr")).toBeNull();
+    expect(column("hr").querySelector(".trip-board-card")).toBeNull();
     await drop("approved");
     await waitFor(() => expect(onAction).toHaveBeenCalledExactlyOnceWith(modern, "approve", undefined));
     expect(column("manager_approval").querySelector(".trip-board-card")).not.toBeNull();
+    fireEvent.click(card().querySelector(".approval-card-open")!);
+    expect(within(screen.getByLabelText("Маршрут согласования")).queryByText("Кадровая служба")).not.toBeInTheDocument();
   });
   it("opens the order preview inside the shared viewer", async () => {
     const modern = { ...request, workflowVersion: 3, hasSignedBrief: true };

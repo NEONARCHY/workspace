@@ -1,8 +1,31 @@
 import { describe, expect, it } from "vitest";
 import type { TripRequest, TripStage, WorkflowDefinition } from "@yuksalish/contracts";
-import { currentTripWorkflow, tripColumns, tripColumnTotal, tripDropAction } from "./trip-board";
+import { currentTripWorkflow, tripBoardColumns, tripColumns, tripColumnTotal, tripDropAction } from "./trip-board";
 
 describe("Trip board", () => {
+  it("places the legacy HR handoff immediately after the chair, preserving configured columns", () => {
+    const columns = tripColumns.map((column) => column.key === "manager_approval"
+      ? { ...column, label: "Председатель", color: "#0091a8" } : column);
+    const board = tripBoardColumns(columns);
+    expect(board.map((column) => column.key)).toEqual([
+      "launch", "deputy_approval", "manager_approval", "hr", "approved", "rejected",
+    ]);
+    expect(board[2]).toEqual(columns[2]);
+    expect(board[3]?.label).toBe("Кадровая служба");
+    expect(columns).toHaveLength(5);
+  });
+  it("keeps the legacy handoff protected and excludes it from modern trips", () => {
+    const legacy = { workflowVersion: 1, stage: "manager_approval" as const,
+      status: "running" as const, allowedActions: ["approve" as const] };
+    expect(tripDropAction(legacy, "hr")).toBe("approve");
+    expect(tripDropAction(legacy, "approved")).toBeUndefined();
+    expect(tripDropAction({ ...legacy, stage: "hr" }, "approved")).toBe("approve");
+    expect(tripDropAction({ ...legacy, stage: "hr", allowedActions: [] }, "approved")).toBeUndefined();
+    for (const workflowVersion of [2, 3]) {
+      expect(tripDropAction({ ...legacy, workflowVersion }, "hr")).toBeUndefined();
+      expect(tripDropAction({ ...legacy, workflowVersion }, "approved")).toBe("approve");
+    }
+  });
   it("shows the deputy and chair route without a кадровая-служба column", () => {
     expect(tripColumns).toEqual([
       { key: "launch", label: "Запуск", color: "#72b9dc" },
