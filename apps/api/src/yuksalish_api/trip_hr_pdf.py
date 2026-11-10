@@ -81,6 +81,11 @@ def hr_brief_pdf(
         ))
         if facts.purpose:
             story.append(Paragraph(f"Хизмат сафарининг мақсади: {_text(facts.purpose)}", body))
+    if facts.employees:
+        story.append(Paragraph(
+            "Сафар иштирокчилари: "
+            + "; ".join(_text(name) for name, _ in facts.employees), body,
+        ))
     if facts.original_name:
         story.append(Paragraph(f"Илова: {escape(facts.original_name)}", body))
     # A signed source stays intact; its PDF/image pages follow the resolution cover.
