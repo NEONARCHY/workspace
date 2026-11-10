@@ -163,6 +163,7 @@ interface ApprovalsViewProps {
     documentRole?: "general" | "primary" | "additional",
   ) => void | Promise<void>;
   readonly onDownloadAttachment: (attachment: WorkspaceAttachment) => void | Promise<void>;
+  readonly onDeleteAttachment?: (attachment: WorkspaceAttachment) => Promise<void>;
 }
 
 const initialNodes: ApprovalNode[] = [
@@ -977,6 +978,7 @@ export function ApprovalsView({
   onReviseRequest,
   onUploadAttachments,
   onDownloadAttachment,
+  onDeleteAttachment,
 }: ApprovalsViewProps) {
   const boardScrollRef = useHorizontalBoardScroll<HTMLDivElement>();
   const [mode, setMode] = useState<ApprovalMode>("requests");
@@ -2125,6 +2127,8 @@ export function ApprovalsView({
                         canUpload={canEditRequest(selectedRequest)}
                         onUpload={(files) => onUploadAttachments(selectedRequest, files, "primary")}
                         onDownload={onDownloadAttachment}
+                        canDelete={() => canEditRequest(selectedRequest)}
+                        onDelete={onDeleteAttachment}
                       />
                       <AttachmentPanel
                         title="Дополнительные документы"
@@ -2136,6 +2140,8 @@ export function ApprovalsView({
                         canUpload={canEditRequest(selectedRequest)}
                         onUpload={(files) => onUploadAttachments(selectedRequest, files, "additional")}
                         onDownload={onDownloadAttachment}
+                        canDelete={() => canEditRequest(selectedRequest)}
+                        onDelete={onDeleteAttachment}
                       />
                     </section>
                   </section>
@@ -2230,7 +2236,7 @@ export function ApprovalsView({
                       {selectedRequest.versions.slice().reverse().map((version) => (
                         <div key={version.version}>
                           <strong>v{version.version} · {formatMoney(version.amount, version.currency)}</strong>
-                          <span>{version.changeReason === "initial" ? "Создание" : version.changeReason === "attachment_added" ? "Добавлен файл" : "Исправление"}{version.changeComment ? ` · ${version.changeComment}` : ""} · {peopleById.get(version.editedByUserId)?.name ?? "Сотрудник"}</span>
+                          <span>{version.changeReason === "initial" ? "Создание" : version.changeReason === "attachment_added" ? "Добавлен файл" : version.changeReason === "attachment_removed" ? "Удалён файл" : "Исправление"}{version.changeComment ? ` · ${version.changeComment}` : ""} · {peopleById.get(version.editedByUserId)?.name ?? "Сотрудник"}</span>
                         </div>
                       ))}
                     </section>

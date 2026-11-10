@@ -2191,6 +2191,11 @@ export function deleteWorkspaceApproval(token: string, requestId: string): Promi
   return apiRequest<void>(`/approval-requests/${requestId}`, { method: "DELETE" }, token);
 }
 
+export function deleteWorkspaceApprovalAttachment(token: string, requestId: string, attachmentId: string): Promise<void> {
+  return apiRequest<void>(`/approval-requests/${encodeURIComponent(requestId)}/attachments/${encodeURIComponent(attachmentId)}`,
+    { method: "DELETE" }, token);
+}
+
 export function createWorkspaceProject(
   token: string,
   payload: ProjectInput,

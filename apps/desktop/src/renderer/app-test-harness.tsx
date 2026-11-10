@@ -161,6 +161,7 @@ export function mockServer(
     readonly restrictPaymentCreators?: boolean;
     readonly extraNotifications?: readonly WorkspaceNotification[];
     readonly failApprovalActionOnce?: boolean;
+    readonly failApprovalAttachmentDeleteOnce?: boolean;
     readonly withSubsidyRequest?: boolean;
     readonly superadminLogin?: boolean;
     readonly chairmanLogin?: boolean;
@@ -168,6 +169,7 @@ export function mockServer(
   } = {},
 ) {
   let failApprovalActionOnce = serverOptions.failApprovalActionOnce ?? false;
+  let failApprovalAttachmentDeleteOnce = serverOptions.failApprovalAttachmentDeleteOnce ?? false;
   let currentUser = people[0]!;
   const messages: ChatMessage[] = [...initialMessages];
   let tasks: WorkspaceTask[] = initialTasks.map((task) => ({ ...task }));
@@ -621,6 +623,26 @@ export function mockServer(
       const changed: CalendarEvent = { ...calendarEvent, status: "cancelled" };
       calendarEvents = calendarEvents.map((item) => item.id === changed.id ? changed : item);
       return response(changed);
+    }
+    const approvalAttachmentDelete = url.match(/\/approval-requests\/([^/]+)\/attachments\/([^/?]+)$/);
+    if (approvalAttachmentDelete && options?.method === "DELETE") {
+      if (failApprovalAttachmentDeleteOnce) {
+        failApprovalAttachmentDeleteOnce = false;
+        return response({ detail: "Нет права удалить этот файл" }, 403);
+      }
+      const index = attachments.findIndex(item => item.ownerType === "approval_request"
+        && item.ownerId === approvalAttachmentDelete[1] && item.id === approvalAttachmentDelete[2]);
+      if (index < 0) return response({ detail: "Файл не найден" }, 404);
+      const removed = attachments.splice(index, 1)[0]!;
+      requests = requests.map(item => item.id === removed.ownerId ? {
+        ...item, revision: item.revision + 1,
+        versions: [...item.versions, { version: item.revision + 1, title: item.title,
+          amount: item.amount, currency: item.currency, purpose: item.purpose, details: item.details,
+          attachmentIds: attachments.filter(file => file.ownerId === item.id).map(file => file.id),
+          editedByUserId: currentUser.id, changeReason: "attachment_removed", changeComment: removed.fileName,
+          createdAt: "2026-11-10T10:00:00Z" }],
+      } : item);
+      return new Response(null, { status: 204 });
     }
     if (url.includes("/attachments/") && options?.method === "PUT") {
       const ownerParts = url.split("/attachments/")[1]!.split("?")[0]!.split("/");

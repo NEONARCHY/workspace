@@ -16,6 +16,37 @@ import "./FeedView";
 import "./CalendarView";
 
 describe("corporate workspace authentication alpha", () => {
+  it("removes an outdated payment file through the API and refreshes its revision history", async () => {
+    const fetchMock = mockServer({ withReturnedRequest: true, failApprovalAttachmentDeleteOnce: true });
+    render(<App />);
+    await loginToWorkspace("aziza", "payment_requests");
+    fireEvent.click(await screen.findByRole("button", { name: "Открыть заявку №501: Вернувшаяся заявка" }));
+    fireEvent.click(screen.getByRole("button", { name: "Файлы" }));
+    fireEvent.change(screen.getByLabelText("Добавить файлы: Основные документы"), {
+      target: { files: [new File(["old"], "old.pdf", { type: "application/pdf" })] },
+    });
+    await screen.findByRole("button", { name: "Удалить файл: old.pdf" });
+    fireEvent.change(screen.getByLabelText("Добавить файлы: Дополнительные документы"), {
+      target: { files: [new File(["budget"], "budget.pdf", { type: "application/pdf" })] },
+    });
+    await screen.findByRole("button", { name: "Удалить файл: budget.pdf" });
+    fireEvent.click(screen.getByRole("button", { name: "Удалить файл: old.pdf" }));
+    const confirmation = screen.getByRole("dialog", { name: "Удалить файл?" });
+    fireEvent.click(within(confirmation).getByRole("button", { name: "Удалить" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Нет права удалить этот файл");
+    expect(screen.getByRole("button", { name: "Удалить файл: old.pdf" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Удалить файл: old.pdf" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Удалить файл?" })).getByRole("button", { name: "Удалить" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/approval-requests/returned-request/attachments/attachment-1"),
+      expect.objectContaining({ method: "DELETE" }),
+    ));
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Удалить файл: old.pdf" })).not.toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Удалить файл: budget.pdf" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Активность" }));
+    expect(await screen.findByText(/Удалён файл · old.pdf/)).toBeInTheDocument();
+  }, 30_000);
+
   it("submits the complete payment card and publishes a workflow version", async () => {
     const fetchMock = mockServer();
     render(<App />);

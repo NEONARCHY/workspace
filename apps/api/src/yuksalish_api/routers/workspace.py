@@ -68,6 +68,7 @@ from yuksalish_api.repository import (
     create_task,
     create_trip_request,
     decide_task_deadline_extension,
+    delete_approval_attachment,
     delete_approval_request,
     delete_feed_comment,
     delete_feed_post,
@@ -1675,6 +1676,26 @@ async def _attachment_content(
     except ObjectStorageError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
     return metadata, content
+
+
+@router.delete("/approval-requests/{request_id}/attachments/{attachment_id}", status_code=204)
+async def remove_approval_attachment(
+    request_id: UUID,
+    attachment_id: UUID,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> Response:
+    await ensure_module_action(connection, current_user, "payment_requests", "edit")
+    try:
+        await delete_approval_attachment(connection, current_user, request_id, attachment_id)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await connection.commit()
+    await _event_bus(request).publish({
+        "type": "attachment.deleted", "entityId": str(attachment_id),
+    })
+    return Response(status_code=204)
 
 
 @router.delete("/tasks/{task_id}/attachments/{attachment_id}", status_code=204)

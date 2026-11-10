@@ -164,6 +164,7 @@ import {
   deleteWorkspaceFeedPost,
   deleteWorkspaceTask,
   deleteWorkspaceTaskAttachment,
+  deleteWorkspaceApprovalAttachment,
   decideWorkspaceTaskDeadline,
   createWorkspaceProject,
   createWorkspaceTask,
@@ -1008,6 +1009,17 @@ export function App() {
     await deleteWorkspaceTaskAttachment(session.accessToken, attachment.ownerId, attachment.id);
     setWorkspace(current => ({ ...current, attachments: current.attachments.filter(item => item.id !== attachment.id) }));
     setPreviewAttachment(current => current?.id === attachment.id ? undefined : current);
+  };
+
+  const handleDeleteApprovalAttachment = async (attachment: WorkspaceAttachment) => {
+    if (!session || attachment.ownerType !== "approval_request") throw new Error("Войдите снова");
+    const token = session.accessToken;
+    await deleteWorkspaceApprovalAttachment(token, attachment.ownerId, attachment.id);
+    if (activeToken.current !== token) return;
+    refreshWorkspace.invalidate(token);
+    setWorkspace(current => ({ ...current, attachments: current.attachments.filter(item => item.id !== attachment.id) }));
+    setPreviewAttachment(current => current?.id === attachment.id ? undefined : current);
+    void refreshWorkspace(token).catch(reportError);
   };
 
   const handleLoadAttachment = useCallback(async (attachment: WorkspaceAttachment, signal?: AbortSignal) => {
@@ -2567,6 +2579,7 @@ export function App() {
                 onReviseRequest={handleReviseApproval}
                 onUploadAttachments={handleUploadApprovalAttachments}
                 onDownloadAttachment={handleDownloadAttachment}
+                onDeleteAttachment={(modulePermissions.payment_requests?.edit ?? true) ? handleDeleteApprovalAttachment : undefined}
                 focusRequestId={teamDecision?.section === "payment_requests" ? teamDecision.entityId : focusTarget?.section === "payment_requests" ? focusTarget.entityId : undefined}
               /></TeamDecisionFrame>
             ) : null}
