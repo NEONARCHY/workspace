@@ -9,6 +9,13 @@ export const tripColumns: readonly { key: TripStage; label: string; color: strin
   { key: "rejected", label: "Отклонено", color: "#d97878" },
 ];
 
+/** Keep the legacy handoff visible without adding HR to the current approval route. */
+export function tripBoardColumns(columns = tripColumns): typeof tripColumns {
+  return columns.flatMap((column) => column.key === "manager_approval" ? [
+    column, { key: "hr", label: "Кадровая служба", color: "#d8b86c" },
+  ] : [column]);
+}
+
 /** Show the protected live route instead of the archived HR graph in old draft templates. */
 export function currentTripWorkflow(
   workflow: WorkflowDefinition, positions: readonly WorkflowPosition[],
