@@ -2270,7 +2270,13 @@ export interface ProjectHubOverview {
 
 export type TripStage = "launch" | "deputy_approval" | "manager_approval" | "hr" | "approved" | "rejected";
 export type TripStatus = "draft" | "running" | "needs_revision" | "approved" | "rejected" | "annulled";
-export type TripAction = "submit" | "approve" | "return" | "reject" | "resubmit" | "move" | "withdraw" | "annul";
+export type TripAction = "submit" | "approve" | "return" | "reject" | "resubmit" | "move" | "withdraw" | "annul" | "complete";
+
+export interface TripOrderInput {
+  readonly orderNumber: string;
+  readonly orderSeries: string;
+  readonly orderPurpose: string;
+}
 
 export interface TripActionHistory {
   readonly id: string;
@@ -2283,6 +2289,12 @@ export interface TripActionHistory {
 }
 
 export interface TripRequest {
+  readonly hrProcessingRequired?: boolean;
+  readonly hrProcessorUserId?: string | null;
+  readonly hasResolution?: boolean;
+  readonly resolutionAt?: string | null;
+  readonly orderSeries?: string;
+  readonly orderPurpose?: string;
   readonly id: string;
   readonly number: string;
   readonly requesterUserId: string;

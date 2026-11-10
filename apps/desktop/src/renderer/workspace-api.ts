@@ -141,6 +141,7 @@ import type {
   TaskPlanImportConfirm,
   TaskPlanImportPreview,
   TripAction,
+  TripOrderInput,
   TripStage,
   TripRequest,
   TripRequestInput,
@@ -2611,10 +2612,11 @@ export function actOnWorkspaceTripRequest(
   action: TripAction,
   comment = "",
   targetStage?: TripStage,
+  order?: TripOrderInput,
 ): Promise<TripRequest> {
   return apiRequest<TripRequest>(
     `/trip-requests/${requestId}/actions`,
-    { method: "POST", body: JSON.stringify({ action, comment, targetStage }) },
+    { method: "POST", body: JSON.stringify({ action, comment, targetStage, ...order }) },
     token,
   );
 }

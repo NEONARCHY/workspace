@@ -784,9 +784,20 @@ def _trip_allowed_actions(
         return ["annul"] if _can_manage_trip(row, current_user) else []
     management_actions: list[TripAction] = (
         ["withdraw"] if status == "running" and not row.get("order_pdf_key")
-        and (row["workflow_version"] >= 2 or current_user.role == "superadmin")
+        and (row["workflow_version"] >= 2 or row.get("hr_processing_required")
+             or current_user.role == "superadmin")
         and _can_manage_trip(row, current_user) else []
     )
+    if row.get("hr_processing_required"):
+        if stage == "manager_approval":
+            return ["approve", "return", "reject", *management_actions] \
+                if current_user.id == chair_user_id else management_actions
+        if stage == "hr":
+            if not row.get("resolved_brief_key"):
+                return ["approve", *management_actions] \
+                    if current_user.id == chair_user_id else management_actions
+            return ["complete", "return", "reject", *management_actions] \
+                if current_user.id == row.get("hr_processor_user_id") else management_actions
     if stage == "launch" and row["requester_user_id"] == current_user.id:
         return ["resubmit"] if status == "needs_revision" else ["submit"]
     if stage == "deputy_approval" and row["workflow_version"] == 3 and (
@@ -819,6 +830,13 @@ def _trip_request(
         number=f"TR-{str(row['id']).replace('-', '')[:8].upper()}",
         requester_user_id=str(row["requester_user_id"]),
         workflow_version=row["workflow_version"],
+        hr_processing_required=bool(row.get("hr_processing_required")),
+        hr_processor_user_id=str(row["hr_processor_user_id"])
+        if row.get("hr_processor_user_id") else None,
+        has_resolution=bool(row.get("resolved_brief_key")),
+        resolution_at=row.get("resolution_at"),
+        order_series=row.get("order_series") or "",
+        order_purpose=row.get("order_purpose") or "",
         purpose=row["purpose"],
         destination=row["destination"],
         start_date=row["start_date"],
@@ -843,6 +861,7 @@ def _trip_request(
             "Аннулировано" if row["status"] == "annulled"
             else "Утверждение руководителем"
             if row["workflow_version"] == 1 and row["stage"] == "manager_approval"
+            and not row.get("hr_processing_required")
             else TRIP_STAGE_LABELS[row["stage"]]
         ),
         status=row["status"],
@@ -2875,10 +2894,11 @@ async def load_workspace(
         visible_trips = (
             (trip_requests.c.requester_user_id == current_user.id)
             | trip_requests.c.id.in_(participating_trip_ids)
+            | (trip_requests.c.hr_processor_user_id == current_user.id)
         )
         if current_user.id == trip_chair_user_id:
             visible_trips = visible_trips | (
-                (trip_requests.c.workflow_version >= 2)
+                ((trip_requests.c.workflow_version >= 2) | trip_requests.c.hr_processing_required)
                 & (trip_requests.c.stage != "launch")
             )
         if current_user.id == legacy_trip_deputy_id:
@@ -7584,8 +7604,9 @@ async def _trip_response(
         and current_user.role == "employee"
         and row["requester_user_id"] != current_user.id
         and current_user.id not in employees.get(request_id, [])
+        and current_user.id != row.get("hr_processor_user_id")
         and not (
-            row["workflow_version"] >= 2
+            (row["workflow_version"] >= 2 or row.get("hr_processing_required"))
             and row["stage"] != "launch"
             and current_user.id == chair_user_id
         )
@@ -7643,17 +7664,22 @@ async def _validate_trip_employees(
 
 def _trip_brief_text(
     payload: TripWriteRequest, brief_format: Literal["manual", "generated", "edited"],
+    *, cyrillic: bool = False,
 ) -> str:
+    from .trip_cyrillic import uzbek_cyrillic
+
     if brief_format == "manual":
-        return payload.brief_text.strip()
+        manual = payload.brief_text.strip()
+        return uzbek_cyrillic(manual) if cyrillic else manual
     generated = generate_trip_brief(
         destination=payload.destination, start=payload.start_date,
         end=payload.end_date, purpose=payload.purpose,
         expense_source=payload.expense_source,
     )
-    return generated if brief_format == "generated" else validate_edited_trip_brief(
-        payload.brief_text
+    text = generated if brief_format == "generated" else validate_edited_trip_brief(
+        payload.brief_text, preserve_script=cyrillic,
     )
+    return uzbek_cyrillic(text) if cyrillic else text
 
 
 async def create_trip_request(
@@ -7662,7 +7688,7 @@ async def create_trip_request(
     payload: CreateTripRequest,
 ) -> TripRequestResponse:
     try:
-        brief_text = _trip_brief_text(payload, payload.brief_format)
+        brief_text = _trip_brief_text(payload, payload.brief_format, cyrillic=True)
     except ValueError as error:
         raise WorkspaceRepositoryError(422, str(error)) from error
     employee_ids = await _validate_trip_employees(connection, current_user, payload.employee_ids)
@@ -7673,6 +7699,7 @@ async def create_trip_request(
             id=request_id,
             requester_user_id=current_user.id,
             workflow_version=3,
+            hr_processing_required=True,
             purpose=payload.purpose,
             destination=payload.destination,
             start_date=payload.start_date,
@@ -7757,7 +7784,9 @@ async def update_trip_request(
             )
         brief_format = payload.brief_format
     try:
-        brief_text = _trip_brief_text(payload, brief_format)
+        brief_text = _trip_brief_text(
+            payload, brief_format, cyrillic=bool(row.get("hr_processing_required")),
+        )
     except ValueError as error:
         raise WorkspaceRepositoryError(422, str(error)) from error
     employee_ids = await _validate_trip_employees(connection, current_user, payload.employee_ids)
@@ -7955,7 +7984,7 @@ async def act_on_trip_request(
         # A repeated HTTP request must never allocate a second order number.
         return await _trip_response(connection, current_user, request_id)
     if payload.action == "move":
-        if row["workflow_version"] >= 2:
+        if row["workflow_version"] >= 2 or row.get("hr_processing_required"):
             raise WorkspaceRepositoryError(403, "Новый маршрут нельзя обойти ручным переносом")
         if current_user.role not in {"admin", "superadmin"}:
             raise WorkspaceRepositoryError(403, "Only administrators can move a trip freely")
@@ -8003,6 +8032,14 @@ async def act_on_trip_request(
         elif row["status"] == "approved":
             await _sync_trip_calendar_event(connection, row, approved=False, now=now)
         return await _trip_response(connection, current_user, request_id)
+    if row.get("hr_processing_required") and (
+        (payload.action == "approve" and row["stage"] == "hr"
+         and row.get("resolved_brief_key")
+         and row.get("resolution_actor_user_id") == current_user.id)
+        or (payload.action == "complete" and row["status"] == "approved"
+            and row.get("hr_processor_user_id") == current_user.id and row.get("order_pdf_key"))
+    ):
+        return await _trip_response(connection, current_user, request_id)
     allowed = _trip_allowed_actions(row, current_user, chair_user_id, effective_deputy_id)
     if payload.action not in allowed:
         raise WorkspaceRepositoryError(403, "This trip action is not allowed for the user")
@@ -8035,12 +8072,20 @@ async def act_on_trip_request(
             raise WorkspaceRepositoryError(409, "Назначьте председателя в настройках HR")
         to_stage, status, finished_at = "manager_approval", "running", None
     elif payload.action == "approve" and from_stage == "manager_approval":
-        if row["workflow_version"] >= 2:
+        if row.get("hr_processing_required"):
+            if not row.get("resolved_brief_key") or not row.get("hr_processor_user_id"):
+                raise WorkspaceRepositoryError(409, "Сначала сохраните резолюцию председателя")
+            to_stage, status, finished_at = "hr", "running", None
+        elif row["workflow_version"] >= 2:
             if not row["order_pdf_key"] or not row["order_number"]:
                 raise WorkspaceRepositoryError(409, "Подписанный приказ ещё не готов")
             to_stage, status, finished_at = "approved", "approved", datetime.now(UTC)
         else:
             to_stage, status, finished_at = "hr", "running", None
+    elif payload.action == "complete":
+        if not all(row.get(field) for field in ("order_pdf_key", "order_number", "order_series")):
+            raise WorkspaceRepositoryError(409, "Сначала оформите приказ")
+        to_stage, status, finished_at = "approved", "approved", datetime.now(UTC)
     elif payload.action == "approve":
         to_stage, status, finished_at = "approved", "approved", datetime.now(UTC)
     elif payload.action == "return":
@@ -8053,6 +8098,10 @@ async def act_on_trip_request(
         "stage": to_stage, "status": status, "updated_at": now,
         "finished_at": finished_at,
     }
+    if row.get("hr_processing_required") and payload.action in {"return", "withdraw"}:
+        changed.update(resolved_brief_key=None, resolved_brief_sha256=None,
+                       resolution_snapshot={}, resolution_actor_user_id=None,
+                       resolution_at=None, hr_processor_user_id=None)
     if status == "approved":
         await ensure_trip_available(connection, request_id, row["start_date"], row["end_date"])
     if row["workflow_version"] >= 2 and payload.action in {"return", "withdraw"}:
@@ -8088,13 +8137,14 @@ async def act_on_trip_request(
         await _sync_trip_calendar_event(connection, row, approved=True, now=now)
     elif status == "annulled":
         await _sync_trip_calendar_event(connection, row, approved=False, now=now)
-    if row["workflow_version"] >= 2 and payload.action in {"approve", "reject", "annul"} and (
+    if (row["workflow_version"] >= 2 or row.get("hr_processing_required")) \
+            and payload.action in {"approve", "complete", "reject", "annul"} and (
         payload.action in {"reject", "annul"} or to_stage == "approved"
     ):
         # Action-needed notifications for submission and return are produced by
         # _sync_notifications_for_user; do not send a second copy here.
         recipient_ids = {row["requester_user_id"]}
-        if payload.action in {"approve", "annul"}:
+        if payload.action in {"approve", "complete", "annul"}:
             participant_ids = (await connection.execute(
                 select(trip_request_employees.c.user_id).where(
                     trip_request_employees.c.request_id == request_id,
@@ -8103,7 +8153,7 @@ async def act_on_trip_request(
             recipient_ids.update(participant_ids)
             title, body = (
                 ("Командировка утверждена", f"{row['destination']} · приказ доступен в карточке.")
-                if payload.action == "approve" else
+                if payload.action in {"approve", "complete"} else
                 ("Приказ о командировке аннулирован", f"{row['destination']} · {comment}")  # noqa: RUF001
             )
         else:

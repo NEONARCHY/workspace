@@ -1150,6 +1150,7 @@ TripAction = Literal[
     "move",
     "withdraw",
     "annul",
+    "complete",
 ]
 
 AbsenceKind = Literal["vacation", "personal_time", "late_arrival", "sick_leave", "business_event"]
@@ -1369,6 +1370,7 @@ class TripActionHistoryResponse(ApiModel):
         "move",
         "withdraw",
         "annul",
+        "complete",
     ]
     comment: str | None
     created_at: datetime
@@ -1379,6 +1381,12 @@ class TripRequestResponse(ApiModel):
     number: str
     requester_user_id: str
     workflow_version: int = 1
+    hr_processing_required: bool = False
+    hr_processor_user_id: str | None = None
+    has_resolution: bool = False
+    resolution_at: datetime | None = None
+    order_series: str = ""
+    order_purpose: str = ""
     purpose: str
     destination: str
     start_date: date
@@ -1458,6 +1466,22 @@ class TripActionRequest(ApiModel):
     action: TripAction
     comment: str = Field(default="", max_length=4000)
     target_stage: TripStage | None = None
+    order_number: str = Field(default="", max_length=40)
+    order_series: str = Field(default="", max_length=24)
+    order_purpose: str = Field(default="", max_length=4000)
+
+    @model_validator(mode="after")
+    def validate_order_fields(self) -> "TripActionRequest":
+        self.order_number = self.order_number.strip()
+        self.order_series = self.order_series.strip()
+        self.order_purpose = self.order_purpose.strip()
+        if self.action == "complete" and (not self.order_number or not self.order_series):
+            raise ValueError("Укажите номер и серию приказа")
+        if self.action != "complete" and (
+            self.order_number or self.order_series or self.order_purpose
+        ):
+            raise ValueError("Реквизиты приказа доступны только при кадровом оформлении")
+        return self
 
 
 class FeedCommentResponse(ApiModel):

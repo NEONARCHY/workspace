@@ -42,6 +42,53 @@ const card = () => document.querySelector(".trip-board-card")!;
 async function drop(target: string) { await dropSpatialCard(card(), column(target)); }
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 describe("Trip approvals interaction", async () => {
+  it("opens a chairman resolution as PDF even when the source was a signed DOCX", async () => {
+    const trip = { ...request, workflowVersion: 3, hrProcessingRequired: true, hasResolution: true,
+      stage: "hr" as const, originalSignatureConfirmed: true, hasSignedBrief: true,
+      briefAttachmentName: "signed-original.docx", briefAttachmentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" };
+    setup(trip);
+    fireEvent.click(card().querySelector(".approval-card-open")!);
+    fireEvent.click(screen.getByRole("button", { name: "Билдирги с резолюцией председателя" }));
+    expect(await screen.findByText("bildirgi.pdf")).toBeInTheDocument();
+  });
+  it("keeps the chair handoff in progress and presents the new HR route", async () => {
+    const trip = { ...request, workflowVersion: 3, hrProcessingRequired: true };
+    const onAction = vi.fn(async () => ({ ...trip, stage: "hr" as const, hasResolution: true }));
+    setup(trip, onAction);
+    fireEvent.click(card().querySelector(".approval-card-open")!);
+    expect(within(screen.getByLabelText("Маршрут согласования")).getByText("Кадровая служба")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Поставить резолюцию и передать кадровику" }));
+    await waitFor(() => expect(onAction).toHaveBeenCalledExactlyOnceWith(trip, "approve", undefined));
+    expect(screen.getByRole("button", { name: /В работе/ })).toHaveAttribute("aria-pressed", "true");
+  });
+  it("keeps HR fields after refusal and completes only with the entered number, series and purpose", async () => {
+    const trip = { ...request, workflowVersion: 3, hrProcessingRequired: true, hasResolution: true,
+      stage: "hr" as const, allowedActions: ["complete" as const] };
+    const onAction = vi.fn(async () => undefined as TripRequest | undefined);
+    setup(trip, onAction);
+    fireEvent.click(card().querySelector(".approval-card-open")!);
+    fireEvent.click(screen.getByRole("button", { name: "Оформлено" }));
+    expect(onAction).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert")).toHaveTextContent("Укажите номер и серию");
+    fireEvent.change(screen.getByLabelText("Номер приказа *"), { target: { value: "29" } });
+    fireEvent.change(screen.getByLabelText("Серия приказа *"), { target: { value: "а/ф" } });
+    fireEvent.change(screen.getByLabelText("Цель поездки в приказе"), { target: { value: "Уточнённая цель приказа" } });
+    fireEvent.click(screen.getByRole("button", { name: "Оформлено" }));
+    await waitFor(() => expect(onAction).toHaveBeenCalledExactlyOnceWith(trip, "complete", undefined, undefined,
+      { orderNumber: "29", orderSeries: "а/ф", orderPurpose: "Уточнённая цель приказа" }));
+    expect(screen.getByLabelText("Номер приказа *")).toHaveValue("29");
+    expect(screen.getByLabelText("Цель поездки в приказе")).toHaveValue("Уточнённая цель приказа");
+    expect(screen.getByRole("button", { name: "Оформлено" })).toBeEnabled();
+    expect(trip.briefText).toBeUndefined();
+  });
+  it("opens the HR form on a completion drop without submitting blank order data", async () => {
+    const trip = { ...request, hrProcessingRequired: true, hasResolution: true, stage: "hr" as const,
+      allowedActions: ["complete" as const] };
+    const { onAction } = setup(trip);
+    await drop("approved");
+    expect(screen.getByRole("form", { name: "Кадровое оформление приказа" })).toBeInTheDocument();
+    expect(onAction).not.toHaveBeenCalled();
+  });
   it("replaces the summary strip with status filters in the navigation row", () => {
     setup();
     expect(document.querySelector(".trip-overview")).toBeNull();
@@ -155,7 +202,7 @@ describe("Trip approvals interaction", async () => {
     fireEvent.change(purpose, { target: { value: "Собственное основание поездки" } });
     fireEvent.click(screen.getByText("Посмотреть пример билдирги"));
     expect(screen.getByRole("region", { name: "Пример билдирги на поездку" })).toHaveTextContent("Samarqand");
-    expect(screen.getByRole("region", { name: "Пример билдирги на поездку" })).toHaveTextContent("Safar xarajatlarini qoplash manbai");
+    expect(screen.getByRole("region", { name: "Пример билдирги на поездку" })).toHaveTextContent("Сафар харажатларини қоплаш манбаи");
     expect(purpose).toHaveValue("Собственное основание поездки");
     expect(onCreate).not.toHaveBeenCalled();
   });
@@ -190,7 +237,7 @@ describe("Trip approvals interaction", async () => {
     fireEvent.change(screen.getByRole("combobox", { name: "Куда едем" }), { target: { value: "Термиз" } });
     fireEvent.change(screen.getByRole("textbox", { name: "Основание и мероприятие" }), { target: { value: "Yuridik klinika ishtirokchilari sayyor qabul o'tkazadi" } });
     fireEvent.change(screen.getByRole("textbox", { name: "Источник покрытия расходов" }), { target: { value: "KAS loyihasi mablagʻlari" } });
-    expect(screen.getByText(/Safarning maqsadi: Yuridik klinika/)).toBeInTheDocument();
+    expect(screen.getByText(/Сафарнинг мақсади: Юридик клиника/)).toBeInTheDocument();
     expect(onCreate).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
     await waitFor(() => expect(screen.getByText("bildirgi-preview.pdf")).toBeInTheDocument());
@@ -233,7 +280,7 @@ describe("Trip approvals interaction", async () => {
     fireEvent.change(screen.getByRole("textbox", { name: "Источник покрытия расходов" }), { target: { value: "KAS loyihasi mablagʻlari" } });
     fireEvent.click(screen.getByRole("button", { name: "Редактировать текст" }));
     const editor = screen.getByRole("textbox", { name: "Редактируемый текст билдирги" });
-    expect((editor as HTMLTextAreaElement).value).toContain("Safarning maqsadi:");
+    expect((editor as HTMLTextAreaElement).value).toContain("Сафарнинг мақсади:");
     fireEvent.change(editor, { target: { value: "test" } });
     fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
     expect(screen.getAllByText(/Проверьте текст билдирги/u).length).toBeGreaterThan(0);
@@ -242,9 +289,9 @@ describe("Trip approvals interaction", async () => {
     expect(screen.queryByRole("textbox", { name: "Редактируемый текст билдирги" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Редактировать текст" }));
     const reviewed = (screen.getByRole("textbox", { name: "Редактируемый текст билдирги" }) as HTMLTextAreaElement).value
-      .replace("Safarning maqsadi:", "Safar maqsadi:");
-    expect(reviewed).toContain("Safar maqsadi:");
-    expect(reviewed).not.toContain("Safarning maqsadi:");
+      .replace("Сафарнинг мақсади:", "Сафар мақсади:");
+    expect(reviewed).toContain("Сафар мақсади:");
+    expect(reviewed).not.toContain("Сафарнинг мақсади:");
     fireEvent.change(screen.getByRole("textbox", { name: "Редактируемый текст билдирги" }), { target: { value: reviewed } });
     fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
     await waitFor(() => expect(onCreate).toHaveBeenCalledWith(expect.objectContaining({

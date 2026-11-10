@@ -46,6 +46,7 @@ import type {
   TaskEfficiencyExclusionReason,
   TaskReturnReason,
   TripAction,
+  TripOrderInput,
   TripStage,
   TripRequest,
   TripRequestInput,
@@ -1707,8 +1708,9 @@ export function App() {
     action: TripAction,
     comment = "",
     targetStage?: TripStage,
+    order?: TripOrderInput,
   ) => runTripMutation((token) => actOnWorkspaceTripRequest(
-      token, tripRequest.id, action, comment, targetStage,
+      token, tripRequest.id, action, comment, targetStage, order,
   ));
 
   const refreshTeamDecision = async () => {

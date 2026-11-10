@@ -26,6 +26,7 @@ from fastapi import (
 from PIL import Image, ImageOps, UnidentifiedImageError
 from pillow_heif.as_plugin import register_heif_opener
 from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from yuksalish_api.absence_service import (
@@ -116,6 +117,7 @@ from yuksalish_api.repository import (
 )
 from yuksalish_api.tables import ai_referent_letters, trip_requests, users
 from yuksalish_api.trip_document_service import issue_order, prepare_signed_brief
+from yuksalish_api.trip_hr_service import apply_resolution, complete_order
 from yuksalish_api.web_security import is_allowed_web_origin
 from yuksalish_api.workspace_schemas import (
     AbsenceActionRequest,
@@ -1309,20 +1311,27 @@ async def post_trip_action(
     )
     await ensure_module_action(connection, current_user, "trip_approvals", permission_action)
     try:
-        if payload.action in {"submit", "resubmit", "approve"}:
-            workflow_version = await connection.scalar(select(
-                trip_requests.c.workflow_version,
-            ).where(trip_requests.c.id == request_id))
-            if workflow_version is not None and workflow_version >= 2:
+        if payload.action in {"submit", "resubmit", "approve", "complete"}:
+            route = (await connection.execute(select(
+                trip_requests.c.workflow_version, trip_requests.c.hr_processing_required,
+                trip_requests.c.stage,
+            ).where(trip_requests.c.id == request_id))).mappings().first()
+            if route and route["hr_processing_required"] and payload.action == "complete":
+                await complete_order(
+                    connection, current_user, _object_storage(request), request_id, payload,
+                )
+            elif route and route["hr_processing_required"] and payload.action == "approve" \
+                    and route["stage"] in {"manager_approval", "hr"}:
+                await apply_resolution(
+                    connection, current_user, _object_storage(request), request_id,
+                )
+            elif route and route["workflow_version"] >= 2 and payload.action != "complete":
                 if payload.action in {"submit", "resubmit"}:
                     await prepare_signed_brief(
                         connection, current_user, _object_storage(request), request_id,
                     )
                 else:
-                    stage = await connection.scalar(select(trip_requests.c.stage).where(
-                        trip_requests.c.id == request_id,
-                    ))
-                    if stage == "manager_approval":
+                    if route["stage"] == "manager_approval":
                         await issue_order(
                             connection, current_user, _object_storage(request), request_id,
                         )
@@ -1331,6 +1340,12 @@ async def post_trip_action(
         raise _translate(error) from error
     except ObjectStorageError as error:
         raise HTTPException(503, "Хранилище приказов недоступно") from error
+    except IntegrityError as error:
+        if "uq_trip_hr_order_number" not in str(error.orig):
+            raise
+        raise HTTPException(
+            409, "Номер и серия приказа уже зарегистрированы в этом году",
+        ) from error
     # Publish and acknowledge only after the signed order, stage, history and
     # calendar event are visible to independent workspace refresh connections.
     await connection.commit()

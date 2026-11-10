@@ -28,6 +28,9 @@ import type { FileViewerSource } from "./FileViewer";
 import { TripDestinationPicker } from "./TripDestinationPicker";
 import { editedTripBriefError, tripBriefError, tripBriefPreview } from "./trip-brief-generator";
 import { TripBriefEditor } from "./TripBriefEditor";
+import { TripHrOrderForm } from "./TripHrOrderForm";
+import { tripCyrillic } from "./trip-cyrillic";
+import type { TripOrderInput } from "@yuksalish/contracts";
 
 const ExternalFileViewer = lazy(() => import("./FileViewer").then(module => ({ default: module.ExternalFileViewer })));
 const TripWorldMap = lazy(() => import("./TripWorldMap").then(module => ({ default: module.TripWorldMap })));
@@ -36,11 +39,13 @@ const actionLabels: Readonly<Record<TripAction, string>> = {
   submit: "Отправить первому заместителю", resubmit: "Отправить повторно", approve: "Согласовать",
   return: "Вернуть на доработку", reject: "Отклонить", move: "Перемещено администратором",
   withdraw: "Отозвать заявку", annul: "Аннулировать приказ",
+  complete: "Оформлено",
 };
 const moveLabels: Readonly<Record<TripAction, string>> = {
   submit: "Передать →", resubmit: "Повторно →", approve: "Согласовать →",
   return: "На доработку", reject: "Отклонить", move: "Переместить",
   withdraw: "Отозвать", annul: "Аннулировать",
+  complete: "Оформить приказ",
 };
 const dateLabel = (value: string) => new Date(`${value}T00:00:00`).toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
 const isFinished = (request: TripRequest) => ["approved", "rejected", "annulled"].includes(request.status);
@@ -64,7 +69,7 @@ interface TripApprovalsViewProps {
   readonly onCreate: (payload: TripRequestInput) => Promise<TripRequest | undefined>;
   readonly onUpdate: (request: TripRequest, payload: TripRequestInput) => Promise<TripRequest | undefined>;
   readonly onDelete?: (request: TripRequest) => Promise<void>;
-  readonly onAction: (request: TripRequest, action: TripAction, comment?: string, targetStage?: TripStage) => Promise<TripRequest | undefined>;
+  readonly onAction: (request: TripRequest, action: TripAction, comment?: string, targetStage?: TripStage, order?: TripOrderInput) => Promise<TripRequest | undefined>;
   readonly onLoadBriefOffice?: (requestId: string, sheet: number, offset: number, signal?: AbortSignal) => Promise<OfficePreviewResult>;
   readonly onDownloadDocument?: (requestId: string, kind: "attachment" | "brief" | "brief-preview" | "order" | "order-preview", signal?: AbortSignal) => Promise<Blob | undefined>;
   readonly onOpenChat?: (chatId: string) => void;
@@ -232,7 +237,7 @@ export function TripApprovalsView({ token, focusRequestId, requests, people, dep
     return content;
   }, [onLoadBriefOffice]);
   const openDocument = (request: TripRequest, kind: "attachment" | "brief" | "brief-preview" | "order" | "order-preview") => {
-    const original = kind === "attachment" || (kind === "brief" && request.originalSignatureConfirmed);
+    const original = kind === "attachment" || (kind === "brief" && request.originalSignatureConfirmed && !request.hasResolution);
     setDocumentPreview({
       id: request.id, kind, updatedAt: request.updatedAt,
       fileName: original ? request.briefAttachmentName ?? "bildirgi" : kind === "brief" ? "bildirgi.pdf" : kind === "brief-preview" ? "bildirgi-preview.pdf"
@@ -253,7 +258,7 @@ export function TripApprovalsView({ token, focusRequestId, requests, people, dep
       const link = document.createElement("a");
       link.href = url;
       link.download = kind === "attachment" ? request.briefAttachmentName ?? "bildirgi"
-        : kind === "brief" ? request.originalSignatureConfirmed ? request.briefAttachmentName ?? "bildirgi" : "bildirgi.pdf"
+        : kind === "brief" ? request.originalSignatureConfirmed && !request.hasResolution ? request.briefAttachmentName ?? "bildirgi" : "bildirgi.pdf"
           : kind === "brief-preview" ? "bildirgi-preview.pdf"
           : kind === "order" ? `prikaz-${request.orderNumber ?? request.number}.pdf`
             : "prikaz-preview.pdf";
@@ -263,11 +268,11 @@ export function TripApprovalsView({ token, focusRequestId, requests, people, dep
     finally { busyRef.current = false; setBusy(false); }
   };
 
-  const commitAction = async (request: TripRequest, action: TripAction, comment?: string, targetStage?: TripStage) => {
+  const commitAction = async (request: TripRequest, action: TripAction, comment?: string, targetStage?: TripStage, order?: TripOrderInput) => {
     if (busyRef.current || (action === "move" ? !isAdministrator || !targetStage : !request.allowedActions.includes(action))) return false;
     busyRef.current = true; setBusy(true); setError("");
     try {
-      const updated = action === "move"
+      const updated = action === "complete" ? await onAction(request, action, comment, targetStage, order) : action === "move"
         ? await onAction(request, action, comment, targetStage)
         : await onAction(request, action, comment);
       if (!updated) { setError("Не удалось изменить стадию. Проверьте подключение и актуальные права на заявку."); return false; }
@@ -279,6 +284,7 @@ export function TripApprovalsView({ token, focusRequestId, requests, people, dep
   };
   const act = async (request: TripRequest, action: TripAction) => {
     if (busyRef.current || !request.allowedActions.includes(action)) return;
+    if (action === "complete") { openRequest(request.id); return; }
     if (action === "return" || action === "reject" || action === "withdraw" || action === "annul") {
       openRequest(request.id); setPendingDecision({ id: request.id, action }); return;
     }
@@ -333,7 +339,7 @@ export function TripApprovalsView({ token, focusRequestId, requests, people, dep
               <div className="approval-column-total" aria-label={`${items.length} поездок на этапе «${column.label}»`}><span>Поездок на этапе</span><strong>{items.length}</strong></div>
               <div className="approval-column-stack" tabIndex={0} aria-label={`Поездки на этапе «${column.label}»`}>
                 {items.map((request) => {
-                  const forward = request.allowedActions.find((action) => action === "submit" || action === "resubmit" || action === "approve");
+                  const forward = request.allowedActions.find((action) => action === "submit" || action === "resubmit" || action === "approve" || action === "complete");
                   const movable = !busy && displayTripColumns.some((target) => { const action = tripDropAction(request, target.key, isAdministrator); return action && !((action === "submit" || action === "resubmit") && needsBriefForSubmission(request)); });
                   return <SpatialCard id={request.id} lane={column.key} label={request.purpose || request.destination} disabled={!movable} key={request.id} data-trip-id={request.id} className={`approval-board-card trip-board-card ${movable ? "movable" : ""}`}>
                     <button type="button" className="approval-card-open" aria-label={`Открыть поездку ${request.number}: ${request.purpose || request.destination}`} onClick={() => openRequest(request.id)}>
@@ -382,31 +388,34 @@ export function TripApprovalsView({ token, focusRequestId, requests, people, dep
           {formMode === null && selected ? <div className="context-record-workspace"><article className="trip-detail">
             <header><div><span>{selected.number}</span><DialogTitle>{selected.destination}</DialogTitle><p>{selected.startDate} — {selected.endDate}</p></div><Button ref={detailCloseRef} appearance="subtle" icon={<Dismiss20Regular />} disabled={busy} onClick={closeDetail} aria-label="Закрыть карточку поездки" /></header>
             <Badge className="trip-detail-status" appearance="tint" color={selected.status === "rejected" ? "danger" : selected.status === "approved" ? "success" : "informative"}>{selected.statusLabel}</Badge>
-            <div className="trip-detail-stages" aria-label="Маршрут согласования">{displayTripColumns.filter((column) => selected.workflowVersion === 3 || column.key !== "deputy_approval").filter((column) => (selected.workflowVersion ?? 1) < 2 || column.key !== "hr").filter((column) => column.key !== (selected.stage === "rejected" ? "approved" : "rejected")).map((column) => <span key={column.key} aria-current={selected.stage === column.key ? "step" : undefined} style={{ "--approval-stage-color": column.color } as CSSProperties}>{column.label}</span>)}</div>
+            <div className="trip-detail-stages" aria-label="Маршрут согласования">{displayTripColumns.filter((column) => selected.workflowVersion === 3 || column.key !== "deputy_approval").filter((column) => selected.hrProcessingRequired || (selected.workflowVersion ?? 1) < 2 || column.key !== "hr").filter((column) => column.key !== (selected.stage === "rejected" ? "approved" : "rejected")).map((column) => <span key={column.key} aria-current={selected.stage === column.key ? "step" : undefined} style={{ "--approval-stage-color": column.color } as CSSProperties}>{column.label}</span>)}</div>
             {feedback}
             {pendingDecision?.id === selected.id ? <DecisionReason key={`${selected.id}:${pendingDecision.action}`} title={pendingDecision.action === "return" ? "Что нужно исправить?" : pendingDecision.action === "withdraw" ? "Причина отзыва заявки" : pendingDecision.action === "annul" ? "Причина аннулирования приказа" : "Причина отклонения"} onCancel={() => setPendingDecision(undefined)} onConfirm={(reason) => commitAction(selected, pendingDecision.action, reason)} /> : null}
             {selected.purpose ? <div className="trip-purpose"><span>Цель поездки</span><p>{selected.purpose}</p></div> : null}
             <dl className="bp7-facts"><div><dt>Инициатор</dt><dd>{personLink(selected.requesterUserId, <><PersonAvatar person={people.find((person) => person.id === selected.requesterUserId)} token={token} size={28} /><span>{personName(selected.requesterUserId)}</span></>, "trip-person")}</dd></div><div><dt>Период</dt><dd>{selected.startDate} — {selected.endDate}</dd></div></dl>
             <div className="trip-employees"><h3>Сотрудники</h3>{selected.employeeIds.map((id) => <span key={id}>{personLink(id, <><PersonAvatar person={people.find((person) => person.id === id)} token={token} size={28} /><span>{personName(id)}</span></>, "trip-employee-link trip-person")}</span>)}</div>
-            {(selected.workflowVersion ?? 1) >= 2 ? <section className="trip-document-panel" aria-label="Документы поездки">
-              <div className="trip-document-heading"><div><h3>Билдирги и приказ</h3><p>Проверьте текст и PDF билдирги до отправки первому заместителю.</p></div>{selected.orderNumber ? <Badge appearance="tint" color="success">Приказ № {selected.orderNumber}</Badge> : null}</div>
+            {((selected.workflowVersion ?? 1) >= 2 || selected.hrProcessingRequired) ? <section className="trip-document-panel" aria-label="Документы поездки">
+              <div className="trip-document-heading"><div><h3>Билдирги и приказ</h3><p>Проверьте текст и PDF билдирги до отправки первому заместителю.</p></div>{selected.orderNumber ? <Badge appearance="tint" color="success">Приказ № {selected.orderNumber} {selected.orderSeries}</Badge> : null}</div>
               <dl className="trip-document-facts">{selected.expenseSource ? <div><dt>Источник расходов</dt><dd>{selected.expenseSource}</dd></div> : null}<div><dt>Текст билдирги</dt><dd>{selected.briefText || (selected.briefAttachmentName ? "См. приложенный оригинал" : "Не добавлен")}</dd></div></dl>
               <div className="trip-document-files">
                 {selected.briefAttachmentName ? <Button type="button" disabled={busy} onClick={() => openDocument(selected, "attachment")}>Открыть прежний оригинал · {selected.briefAttachmentName}</Button> : null}
                 {selected.stage === "launch" && selected.briefText?.trim() ? <Button type="button" appearance="primary" disabled={busy} onClick={() => openDocument(selected, "brief-preview")}>Предпросмотр билдирги PDF</Button> : null}
-                {selected.hasSignedBrief ? <Button type="button" disabled={busy} onClick={() => openDocument(selected, "brief")}>{selected.originalSignatureConfirmed ? "Открыть прежний подписанный оригинал" : "Открыть билдирги PDF"}</Button> : null}
-                {selected.stage === "manager_approval" ? <Button type="button" disabled={busy} onClick={() => openDocument(selected, "order-preview")}>Предпросмотр приказа</Button> : null}
+                {(selected.hasSignedBrief || selected.hrProcessingRequired && selected.stage !== "launch") ? <Button type="button" disabled={busy} onClick={() => openDocument(selected, "brief")}>{selected.hasResolution ? "Билдирги с резолюцией председателя" : selected.hrProcessingRequired ? "Открыть билдирги PDF" : selected.originalSignatureConfirmed ? "Открыть прежний подписанный оригинал" : "Открыть билдирги PDF"}</Button> : null}
+                {selected.stage === "manager_approval" && !selected.hrProcessingRequired ? <Button type="button" disabled={busy} onClick={() => openDocument(selected, "order-preview")}>Предпросмотр приказа</Button> : null}
                 {selected.hasOrderPdf ? <Button type="button" appearance="primary" disabled={busy} onClick={() => openDocument(selected, "order")}>Открыть утверждённый приказ PDF</Button> : null}
               </div>
               {selected.canEdit && needsBriefForSubmission(selected) ? <WorkspaceNotice tone="warning" className="trip-document-reminder">Перед отправкой напишите текст билдирги, сохраните черновик и проверьте PDF. Для старых заявок с прикреплённым оригиналом действуют прежние требования к подписи.</WorkspaceNotice> : null}
-              {selected.status === "approved" ? <WorkspaceNotice tone="success" role="status" className="trip-document-approved">Приказ зарегистрирован и подписан председателем. Участникам направлены уведомления.</WorkspaceNotice> : null}
+              {selected.status === "approved" ? <WorkspaceNotice tone="success" role="status" className="trip-document-approved">{selected.hrProcessingRequired ? "Кадровое оформление завершено. Приказ зарегистрирован; участникам направлены уведомления." : "Приказ зарегистрирован и подписан председателем. Участникам направлены уведомления."}</WorkspaceNotice> : null}
               {selected.status === "annulled" ? <WorkspaceNotice tone="warning" role="status" className="trip-document-reminder">Приказ аннулирован. Исходный подписанный документ и история решений сохранены.</WorkspaceNotice> : null}
             </section> : selected.stage === "hr" ? <WorkspaceNotice tone="warning" className="trip-document-reminder">Эта поездка проходит прежний маршрут через кадровую службу.</WorkspaceNotice> : null}
+            {selected.hrProcessingRequired && selected.stage === "hr" && !selected.hasResolution ? <WorkspaceNotice tone="warning">Для оформления этой прежней заявки председателю нужно добавить резолюцию.</WorkspaceNotice> : null}
+            {selected.allowedActions.includes("complete") ? <TripHrOrderForm key={selected.id} request={selected} busy={busy}
+              onComplete={fields => commitAction(selected, "complete", undefined, undefined, fields)} /> : null}
             <div className="bp7-actions">
               {selected.canEdit ? <Button disabled={busy || Boolean(pendingDecision)} icon={<Edit24Regular />} onClick={() => { setDocumentPreview(undefined); setForm({ purpose: selected.purpose, destination: selected.destination, startDate: selected.startDate, endDate: selected.endDate, employeeIds: selected.employeeIds, briefText: selected.briefText ?? "", expenseSource: selected.expenseSource ?? "", briefFormat: selected.briefFormat ?? "manual", briefFontSize: selected.briefFontSize ?? 11, briefFontWeight: selected.briefFontWeight ?? "regular" }); setEmployeeQuery(""); setError(""); setFormMode("edit"); }}>Изменить</Button> : null}
               {selected.canDelete && onDelete ? <Button disabled={busy || Boolean(pendingDecision)} onClick={() => setConfirmDeleteId(selected.id)}>Удалить заявку</Button> : null}
-              {selected.allowedActions.map((action) => <Button className={`trip-decision-action action-${action}`} disabled={busy || Boolean(pendingDecision) || ((action === "submit" || action === "resubmit") && needsBriefForSubmission(selected))} appearance={action === "approve" || action === "submit" || action === "resubmit" ? "primary" : "secondary"} key={action} onClick={() => void act(selected, action)}>{action === "approve" && (selected.workflowVersion ?? 1) >= 2 && selected.stage === "manager_approval" ? "Утвердить и выпустить приказ" : action === "approve" && selected.stage === "deputy_approval" ? "Согласовать и передать председателю" : action === "submit" && selected.workflowVersion === 3 ? "Отправить первому заместителю" : action === "submit" && selected.workflowVersion === 2 ? "Отправить председателю" : actionLabels[action]}</Button>)}
-              {isAdministrator && (selected.workflowVersion ?? 1) === 1 ? displayTripColumns.filter((column) => column.key !== selected.stage).map((column) => <Button data-stage={column.key} disabled={busy || Boolean(pendingDecision)} key={`move:${column.key}`} onClick={() => void commitAction(selected, "move", `Перенос на этап «${column.label}»`, column.key)}>{column.label}</Button>) : null}
+              {selected.allowedActions.filter(action => action !== "complete").map((action) => <Button className={`trip-decision-action action-${action}`} disabled={busy || Boolean(pendingDecision) || ((action === "submit" || action === "resubmit") && needsBriefForSubmission(selected))} appearance={action === "approve" || action === "submit" || action === "resubmit" ? "primary" : "secondary"} key={action} onClick={() => void act(selected, action)}>{action === "approve" && selected.hrProcessingRequired && selected.stage !== "deputy_approval" ? "Поставить резолюцию и передать кадровику" : action === "approve" && (selected.workflowVersion ?? 1) >= 2 && selected.stage === "manager_approval" ? "Утвердить и выпустить приказ" : action === "approve" && selected.stage === "deputy_approval" ? "Согласовать и передать председателю" : action === "submit" && selected.workflowVersion === 3 ? "Отправить первому заместителю" : action === "submit" && selected.workflowVersion === 2 ? "Отправить председателю" : actionLabels[action]}</Button>)}
+              {isAdministrator && !selected.hrProcessingRequired && (selected.workflowVersion ?? 1) === 1 ? displayTripColumns.filter((column) => column.key !== selected.stage).map((column) => <Button data-stage={column.key} disabled={busy || Boolean(pendingDecision)} key={`move:${column.key}`} onClick={() => void commitAction(selected, "move", `Перенос на этап «${column.label}»`, column.key)}>{column.label}</Button>) : null}
             </div>
             {confirmDeleteId === selected.id ? <div className="trip-delete-confirm" role="group" aria-label="Подтверждение удаления заявки"><p>Удалить заявку из рабочего списка? История и документы останутся в архиве системы.</p><Button appearance="primary" disabled={busy} onClick={() => void deleteRequest(selected)}>Да, удалить</Button><Button disabled={busy} onClick={() => setConfirmDeleteId("")}>Отмена</Button></div> : null}
             <div className="bp7-history"><h3>История решений</h3>{[...selected.actions].reverse().map((entry) => <div key={entry.id}><i /><p><strong>{entry.action === "created" ? "Заявка создана" : entry.action === "deleted" ? "Заявка удалена" : actionLabels[entry.action]}</strong><span>{personLink(entry.actorUserId, personName(entry.actorUserId))} · {new Date(entry.createdAt).toLocaleString("ru-RU")}</span>{entry.comment ? <small>{entry.comment}</small> : null}</p></div>)}</div>
@@ -414,7 +423,7 @@ export function TripApprovalsView({ token, focusRequestId, requests, people, dep
           <form className="bp7-modal trip-form record-composer" noValidate aria-busy={busy} onSubmit={(event) => { event.preventDefault(); void save(); }}>
             <RecordComposer title={formMode === "create" ? "Создать заявку на поездку" : "Изменить заявку на поездку"} titleId="trip-composer-title" eyebrow="Согласование поездок" busy={busy} error={error} submitLabel="Сохранить" onClose={closeForm}
               hint="После сохранения откроется PDF билдирги. Проверьте его, при необходимости измените поля заявки, затем отправьте на согласование."
-              stages={<div className="record-stages" tabIndex={0} role="region" aria-label="Маршрут согласования">{displayTripColumns.filter((column) => column.key !== "rejected" && column.key !== "hr").map((column) => <span key={column.key} aria-current={column.key === (formMode === "edit" ? selected?.stage : "launch") ? "step" : undefined} style={{ "--record-stage-color": column.color } as CSSProperties}>{column.label}</span>)}</div>}
+              stages={<div className="record-stages" tabIndex={0} role="region" aria-label="Маршрут согласования">{displayTripColumns.filter((column) => column.key !== "rejected").map((column) => <span key={column.key} aria-current={column.key === (formMode === "edit" ? selected?.stage : "launch") ? "step" : undefined} style={{ "--record-stage-color": column.color } as CSSProperties}>{column.label}</span>)}</div>}
               aside={<>
                 <RecordSummary title="Сводка поездки"><div className="record-summary-title">{form.destination.trim() || "Место поездки не указано"}</div>
                   <dl className="record-summary-facts"><div><dt>Даты</dt><dd>{form.startDate || "Не указано"} — {form.endDate || "Не указано"}</dd></div><div><dt>Инициатор</dt><dd>{formMode === "edit" && selected ? personLink(selected.requesterUserId, personName(selected.requesterUserId)) : personLink(currentUser.id, currentUser.name)}</dd></div><div><dt>Участников</dt><dd>{form.employeeIds.length}</dd></div></dl>
@@ -430,7 +439,7 @@ export function TripApprovalsView({ token, focusRequestId, requests, people, dep
                       <div><dt>Дата</dt><dd>12.05.2030</dd></div>
                       <div><dt>Основание</dt><dd>{exampleTripFacts.purpose}</dd></div>
                       <div><dt>Источник расходов</dt><dd>{exampleTripFacts.expenseSource}</dd></div></dl>
-                    <div className="trip-brief-paper"><span className="trip-brief-paper-kicker">YUKSALISH · BILDIRGI</span><p>{tripBriefPreview(exampleTripFacts)}</p></div>
+                    <div className="trip-brief-paper"><span className="trip-brief-paper-kicker">YUKSALISH · БИЛДИРГИ</span><p>{tripCyrillic(tripBriefPreview(exampleTripFacts))}</p></div>
                   </div>
                 </details>
                 <div className="record-field-grid">
@@ -447,14 +456,14 @@ export function TripApprovalsView({ token, focusRequestId, requests, people, dep
               </div></RecordSection>
               {form.briefFormat !== "manual" ? <RecordSection title="Предварительный текст" description="Проверьте содержание будущей билдирги. После сохранения откроется официальный PDF с адресатом, участниками и местом для резолюции председателя.">
                 <div className="trip-brief-paper" role="region" aria-label="Предварительный текст билдирги">
-                  <span className="trip-brief-paper-kicker">YUKSALISH · BILDIRGI</span>
+                  <span className="trip-brief-paper-kicker">YUKSALISH · БИЛДИРГИ</span>
                   {form.briefFormat === "edited"
                     ? <Textarea className="trip-brief-paper-editor" aria-label="Редактируемый текст билдирги" resize="vertical" rows={8} required maxLength={6000} value={form.briefText} onChange={(_, data) => { setForm((current) => ({ ...current, briefText: data.value })); setError(""); }} disabled={busy} />
-                    : <p>{tripBriefPreview(form)}</p>}
+                    : <p>{tripCyrillic(tripBriefPreview(form))}</p>}
                   <div className="trip-brief-paper-actions"><span className="trip-brief-paper-foot">{form.briefFormat === "edited" ? "Ваш текст · проверьте даты, место и источник расходов после правок полей выше" : "Автоматический черновик · правки сохранятся в PDF"}</span>
                     {form.briefFormat === "edited"
                       ? <Button type="button" disabled={busy} onClick={() => { setForm((current) => ({ ...current, briefFormat: "generated", briefText: "" })); setError(""); }}>Вернуть автотекст</Button>
-                      : <Button type="button" disabled={busy || Boolean(tripBriefError(form))} onClick={() => { setForm((current) => ({ ...current, briefFormat: "edited", briefText: tripBriefPreview(current) })); setError(""); }}>Редактировать текст</Button>}
+                      : <Button type="button" disabled={busy || Boolean(tripBriefError(form))} onClick={() => { setForm((current) => ({ ...current, briefFormat: "edited", briefText: tripCyrillic(tripBriefPreview(current)) })); setError(""); }}>Редактировать текст</Button>}
                   </div>
                 </div>
               </RecordSection> : null}

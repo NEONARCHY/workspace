@@ -1,5 +1,5 @@
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
 import pytest
@@ -22,7 +22,11 @@ async def test_trip_decision_is_committed_before_clients_can_refresh(
         position_id=None, job_title=None,
     )
     connection = AsyncMock()
-    connection.scalar.side_effect = [3, "manager_approval"]
+    route = Mock()
+    route.mappings.return_value.first.return_value = {
+        "workflow_version": 3, "stage": "manager_approval", "hr_processing_required": False,
+    }
+    connection.execute.return_value = route
     order: list[str] = []
 
     async def commit() -> None:
@@ -58,3 +62,49 @@ async def test_trip_decision_is_committed_before_clients_can_refresh(
             uuid4(), TripActionRequest(action="approve"), request, user, connection,
         ) == result
         assert order == ["commit", "publish"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("action,stage,service_name", [
+    ("approve", "manager_approval", "apply_resolution"),
+    ("complete", "hr", "complete_order"),
+])
+@pytest.mark.parametrize("fails", [False, True])
+async def test_hr_route_uses_the_protected_service_and_commits_only_success(
+    monkeypatch, action, stage, service_name, fails,
+):
+    user = AuthenticatedUser(uuid4(), "actor", "Actor", None, None, "employee")
+    request_id = uuid4()
+    connection = AsyncMock()
+    route = Mock()
+    route.mappings.return_value.first.return_value = {
+        "workflow_version": 1, "hr_processing_required": True, "stage": stage,
+    }
+    connection.execute.return_value = route
+    service = AsyncMock(side_effect=WorkspaceRepositoryError(403, "Denied") if fails else None)
+    result = SimpleNamespace(id=str(request_id))
+    transition = AsyncMock(return_value=result)
+    bus = SimpleNamespace(publish=AsyncMock())
+    monkeypatch.setattr(workspace, "ensure_module_action", AsyncMock())
+    monkeypatch.setattr(workspace, service_name, service)
+    monkeypatch.setattr(workspace, "act_on_trip_request", transition)
+    monkeypatch.setattr(workspace, "_object_storage", lambda _: object())
+    monkeypatch.setattr(workspace, "_event_bus", lambda _: bus)
+    payload = TripActionRequest(action=action, **(
+        {"order_number": "29", "order_series": "a/f"} if action == "complete" else {}
+    ))
+    request = Request({"type": "http"})
+    if fails:
+        with pytest.raises(HTTPException) as error:
+            await workspace.post_trip_action(request_id, payload, request, user, connection)
+        assert error.value.status_code == 403
+        transition.assert_not_awaited()
+        connection.commit.assert_not_awaited()
+        bus.publish.assert_not_awaited()
+    else:
+        response = await workspace.post_trip_action(request_id, payload, request, user, connection)
+        assert response == result
+        service.assert_awaited_once()
+        transition.assert_awaited_once_with(connection, user, request_id, payload)
+        connection.commit.assert_awaited_once()
+        bus.publish.assert_awaited_once_with({"type": "trip.updated", "entityId": str(request_id)})

@@ -17,6 +17,7 @@ from yuksalish_api.trip_brief_generator import (
     generate_trip_brief,
     validate_edited_trip_brief,
 )
+from yuksalish_api.trip_cyrillic import uzbek_cyrillic
 from yuksalish_api.trip_order_pdf import brief_pdf
 from yuksalish_api.workspace_schemas import CreateTripRequest, UpdateTripRequest
 
@@ -118,7 +119,7 @@ def test_server_saves_reviewed_brief_instead_of_regenerating_it(
     assert asyncio.run(repository.create_trip_request(connection, user, payload)) == "saved"
     values = connection.execute.await_args_list[0].args[0].compile().params
     assert values["brief_format"] == "edited"
-    assert values["brief_text"] == edited
+    assert values["brief_text"] == uzbek_cyrillic(edited)
 
 
 def test_server_ignores_forged_brief_text_and_saves_generated_version(
@@ -140,7 +141,7 @@ def test_server_ignores_forged_brief_text_and_saves_generated_version(
     assert asyncio.run(repository.create_trip_request(connection, user, payload)) == "saved"
     values = connection.execute.await_args_list[0].args[0].compile().params
     assert values["brief_format"] == "generated"
-    assert values["brief_text"] == generate_trip_brief(**facts)
+    assert values["brief_text"] == uzbek_cyrillic(generate_trip_brief(**facts))
     assert "Forged client text" not in values["brief_text"]
 
 
