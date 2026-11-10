@@ -326,13 +326,15 @@ export function AttachmentPanel({
   const [busy, setBusy] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<WorkspaceAttachment>();
   const [deleting, setDeleting] = useState(false);
+  const deletingRef = useRef(false);
   const [deleteError, setDeleteError] = useState("");
   const remove = async () => {
-    if (!pendingDelete || !onDelete || deleting) return;
+    if (!pendingDelete || !onDelete || deletingRef.current) return;
+    deletingRef.current = true;
     setDeleting(true); setDeleteError("");
     try { await onDelete(pendingDelete); setPendingDelete(undefined); }
     catch (cause) { setDeleteError(cause instanceof Error ? cause.message : "Не удалось удалить файл"); setPendingDelete(undefined); }
-    finally { setDeleting(false); }
+    finally { deletingRef.current = false; setDeleting(false); }
   };
 
   const upload = async (files: readonly File[]) => {
@@ -364,7 +366,7 @@ export function AttachmentPanel({
             <Button
               appearance="subtle"
               icon={busy ? <Spinner size="tiny" /> : <Attach24Regular />}
-              disabled={busy}
+              disabled={busy || deleting}
               onClick={() => inputRef.current?.click()}
             >
               Добавить файл
@@ -378,14 +380,14 @@ export function AttachmentPanel({
         actionLabel={busy ? "Загрузка…" : "Выбрать файлы"}
         ariaLabel={`Добавить файлы: ${title}`}
         multiple
-        disabled={busy}
+        disabled={busy || deleting}
         onFiles={(files) => void upload(files)}
       /> : null}
       <AttachmentChips attachments={attachments} onDownload={onDownload} canDelete={canDelete} deleting={deleting || busy}
         onDelete={onDelete ? attachment => { setDeleteError(""); setPendingDelete(attachment); } : undefined} />
       {deleteError ? <WorkspaceNotice tone="error" className="auth-error" role="alert">{deleteError}</WorkspaceNotice> : null}
       <ConfirmActionDialog open={!!pendingDelete} title="Удалить файл?"
-        message={`Файл «${pendingDelete?.fileName ?? ""}» исчезнет из вложений задачи.`} busy={deleting}
+        message={`Файл «${pendingDelete?.fileName ?? ""}» исчезнет из вложений.`} busy={deleting}
         onCancel={() => setPendingDelete(undefined)} onConfirm={remove}
         onExited={() => {
           // A successfully removed file no longer provides a return-focus button.

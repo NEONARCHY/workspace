@@ -7287,6 +7287,44 @@ async def get_attachment(
     return _attachment(row), row["storage_key"]
 
 
+async def delete_approval_attachment(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    request_id: UUID,
+    attachment_id: UUID,
+) -> None:
+    # Serialize with decisions and revisions before checking the current permissions/stage.
+    request_row = (await connection.execute(select(approval_requests).where(
+        approval_requests.c.id == request_id,
+    ).with_for_update())).mappings().first()
+    if request_row is None:
+        raise WorkspaceRepositoryError(404, "Approval request was not found")
+    await validate_attachment_owner(
+        connection, current_user, "approval_request", request_id, write=True,
+    )
+    row = (await connection.execute(select(attachments).where(
+        attachments.c.id == attachment_id,
+        attachments.c.owner_type == "approval_request",
+        attachments.c.owner_id == request_id,
+    ).with_for_update())).mappings().first()
+    if row is None:
+        raise WorkspaceRepositoryError(404, "Attachment was not found")
+    # Revoke ordinary download/preview access, retaining the private object for recovery.
+    await connection.execute(delete(attachments).where(attachments.c.id == attachment_id))
+    version = await _append_request_version(
+        connection, request_row, current_user.id,
+        title=request_row["title"], payload=request_row["payload"] or {},
+        change_reason="attachment_removed", change_comment=row["file_name"],
+    )
+    await connection.execute(insert(audit_events).values(
+        id=uuid4(), actor_user_id=current_user.id, action="approval.attachment_deleted",
+        target_type="approval_request", target_id=request_id,
+        details={"attachmentId": str(attachment_id), "fileName": row["file_name"],
+                 "documentRole": row["document_role"], "storageKey": row["storage_key"],
+                 "version": version}, created_at=datetime.now(UTC),
+    ))
+
+
 async def delete_task_attachment(
     connection: AsyncConnection,
     current_user: AuthenticatedUser,
