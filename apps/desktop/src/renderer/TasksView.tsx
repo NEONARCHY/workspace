@@ -169,7 +169,8 @@ const taskFilterLabels: Readonly<Record<TaskFilter, string>> = {
   completed: "Завершённые",
 };
 
-function isMyTask(task: WorkspaceTask, userId: string): boolean {
+function isMyActiveTask(task: WorkspaceTask, userId: string): boolean {
+  if (task.status === "completed" || task.status === "cancelled") return false;
   return task.authorId === userId || task.assigneeId === userId
     || task.participants.some((participant) => participant.userId === userId);
 }
@@ -444,7 +445,7 @@ export function TasksView(props: TasksViewProps) {
     const search = query.trim().toLocaleLowerCase("ru");
     const names = new Map(people.map((person) => [person.id, person.name]));
     return planTasks.filter((task) => {
-      const matchesFilter = filter === "mine" ? isMyTask(task, currentUserId)
+      const matchesFilter = filter === "mine" ? isMyActiveTask(task, currentUserId)
         : filter === "review" ? task.status === "awaiting_review" && task.authorId === currentUserId
         : filter === "extensions" ? needsTaskDeadlineDecision(task, currentUserId)
         : filter === "overdue" ? isTaskOverdue(task, deadlineNow)
@@ -460,7 +461,7 @@ export function TasksView(props: TasksViewProps) {
 
   const taskCounts = useMemo(() => ({
     active: planTasks.filter((task) => !["completed", "cancelled"].includes(task.status)).length,
-    mine: planTasks.filter((task) => isMyTask(task, currentUserId)).length,
+    mine: planTasks.filter((task) => isMyActiveTask(task, currentUserId)).length,
     extensions: planTasks.filter((task) => needsTaskDeadlineDecision(task, currentUserId)).length,
     overdue: planTasks.filter((task) => isTaskOverdue(task, deadlineNow)).length,
     completed: planTasks.filter((task) => task.status === "completed").length,
@@ -757,7 +758,7 @@ export function TasksView(props: TasksViewProps) {
 
         {!(["calendar", "efficiency", "plans"] as TaskMode[]).includes(mode) ? <div className="task-workbench-summary" aria-label="Сводка задач">
           <div className="task-focus-object review"><span>Ждут решения</span><strong>{taskCounts.review}</strong><small>результатов на проверке</small></div>
-          <div className="task-focus-object mine"><span>Моя работа</span><strong>{taskCounts.mine}</strong><small>задач с вашим участием</small></div>
+          <div className="task-focus-object mine"><span>Моя работа</span><strong>{taskCounts.mine}</strong><small>незавершённых задач с вашим участием</small></div>
           <div className="task-focus-object overdue"><span>Риск срока</span><strong>{taskCounts.overdue}</strong><small>{taskCounts.overdue ? "нужно обратить внимание" : "всё идёт по плану"}</small></div>
         </div> : null}
 

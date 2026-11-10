@@ -9,7 +9,7 @@ import { DecisionReason } from "./DecisionReason";
 import { RecordComposer, RecordSection, RecordSummary } from "./RecordComposer";
 import { ChatIconPicker } from "./ChatAvatar";
 import type { ChatAvatarIconKey } from "@yuksalish/contracts";
-import { currentTripWorkflow, tripColumns, tripDropAction } from "./trip-board";
+import { currentTripWorkflow, tripBoardColumns, tripColumns, tripDropAction } from "./trip-board";
 import type { AssistantActionDraft, TripAction, TripRequest, TripRequestInput, TripStage, WorkflowDefinition, WorkflowPosition, WorkspaceDepartment, WorkspacePerson } from "@yuksalish/contracts";
 import type { OfficePreviewResult } from "./file-viewer-kind";
 import { Badge, Button, Checkbox, DialogSurface, DialogTitle, Textarea, useRestoreFocusTarget } from "@fluentui/react-components";
@@ -163,7 +163,7 @@ export function TripApprovalsView({ token, focusRequestId, requests, people, dep
         ),
       }))
     : tripColumns;
-  const displayTripColumns = allTripColumns.filter((column) => column.key !== "hr");
+  const displayTripColumns = tripBoardColumns(allTripColumns);
   const personName = (id: string) => people.find((person) => person.id === id)?.name ?? "Сотрудник";
   const personLink = (id: string, children: ReactNode, className?: string) => <EmployeeProfileLink userId={people.some((person) => person.id === id) ? id : undefined} personName={personName(id)} className={className}>{children}</EmployeeProfileLink>;
   const runningCount = requests.filter((request) => !isFinished(request)).length;
@@ -320,7 +320,6 @@ export function TripApprovalsView({ token, focusRequestId, requests, people, dep
         </SlidingSegmented>
       </div>
       {feedback}
-      {view === "kanban" && visibleRequests.some((request) => request.stage === "hr") ? <WorkspaceNotice tone="info" className="trip-board-help" role="status"><span>Заявка прежнего маршрута на кадровом этапе доступна во вкладке «Список».</span></WorkspaceNotice> : null}
       {visibleRequests.length === 0 ? <WorkspaceNotice tone="info" className="trip-board-help" role="status"><span>{requests.length ? "По выбранным фильтрам поездок нет. Измените поиск или выберите «Все»." : "Поездок пока нет. Создайте первую командировку — она появится в колонке «Запуск»."}</span></WorkspaceNotice> : null}
       {view === "kanban" ? (
         <SpatialBoard canDrop={(id, target) => { const request = requests.find(item => item.id === id); const action = request && tripDropAction(request, target as TripStage, isAdministrator); return !busy && !!action && !(request && (action === "submit" || action === "resubmit") && needsBriefForSubmission(request)); }} onMove={async (id, target) => { const request = requests.find(item => item.id === id); const targetStage = target as TripStage; const action = request && tripDropAction(request, targetStage, isAdministrator); if (request && action && !((action === "submit" || action === "resubmit") && needsBriefForSubmission(request))) { if (action === "move") await commitAction(request, action, `Перенос на этап «${displayTripColumns.find((column) => column.key === targetStage)?.label ?? targetStage}»`, targetStage); else await act(request, action); } }}>
@@ -383,7 +382,7 @@ export function TripApprovalsView({ token, focusRequestId, requests, people, dep
           {formMode === null && selected ? <div className="context-record-workspace"><article className="trip-detail">
             <header><div><span>{selected.number}</span><DialogTitle>{selected.destination}</DialogTitle><p>{selected.startDate} — {selected.endDate}</p></div><Button ref={detailCloseRef} appearance="subtle" icon={<Dismiss20Regular />} disabled={busy} onClick={closeDetail} aria-label="Закрыть карточку поездки" /></header>
             <Badge className="trip-detail-status" appearance="tint" color={selected.status === "rejected" ? "danger" : selected.status === "approved" ? "success" : "informative"}>{selected.statusLabel}</Badge>
-            <div className="trip-detail-stages" aria-label="Маршрут согласования">{displayTripColumns.filter((column) => selected.workflowVersion === 3 || column.key !== "deputy_approval").filter((column) => column.key !== (selected.stage === "rejected" ? "approved" : "rejected")).map((column) => <span key={column.key} aria-current={selected.stage === column.key ? "step" : undefined} style={{ "--approval-stage-color": column.color } as CSSProperties}>{column.label}</span>)}</div>
+            <div className="trip-detail-stages" aria-label="Маршрут согласования">{displayTripColumns.filter((column) => selected.workflowVersion === 3 || column.key !== "deputy_approval").filter((column) => (selected.workflowVersion ?? 1) < 2 || column.key !== "hr").filter((column) => column.key !== (selected.stage === "rejected" ? "approved" : "rejected")).map((column) => <span key={column.key} aria-current={selected.stage === column.key ? "step" : undefined} style={{ "--approval-stage-color": column.color } as CSSProperties}>{column.label}</span>)}</div>
             {feedback}
             {pendingDecision?.id === selected.id ? <DecisionReason key={`${selected.id}:${pendingDecision.action}`} title={pendingDecision.action === "return" ? "Что нужно исправить?" : pendingDecision.action === "withdraw" ? "Причина отзыва заявки" : pendingDecision.action === "annul" ? "Причина аннулирования приказа" : "Причина отклонения"} onCancel={() => setPendingDecision(undefined)} onConfirm={(reason) => commitAction(selected, pendingDecision.action, reason)} /> : null}
             {selected.purpose ? <div className="trip-purpose"><span>Цель поездки</span><p>{selected.purpose}</p></div> : null}
