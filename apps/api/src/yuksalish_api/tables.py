@@ -942,6 +942,15 @@ trip_requests = sa.Table(
     sa.Column("id", uuid_type, primary_key=True),
     sa.Column("requester_user_id", uuid_type),
     sa.Column("workflow_version", sa.Integer()),
+    sa.Column("hr_processing_required", sa.Boolean()),
+    sa.Column("hr_processor_user_id", uuid_type),
+    sa.Column("resolution_actor_user_id", uuid_type),
+    sa.Column("resolution_at", sa.DateTime(timezone=True)),
+    sa.Column("resolution_snapshot", postgresql.JSONB()),
+    sa.Column("resolved_brief_key", sa.String(300)),
+    sa.Column("resolved_brief_sha256", sa.String(64)),
+    sa.Column("order_series", sa.String(24)),
+    sa.Column("order_purpose", sa.Text()),
     sa.Column("deputy_approver_user_id", uuid_type),
     sa.Column("deleted_at", sa.DateTime(timezone=True)),
     sa.Column("purpose", sa.Text()),
@@ -982,6 +991,18 @@ trip_order_counters = sa.Table(
     metadata,
     sa.Column("year", sa.Integer(), primary_key=True),
     sa.Column("last_sequence", sa.Integer()),
+)
+
+trip_document_revisions = sa.Table(
+    "trip_document_revisions", metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("request_id", uuid_type),
+    sa.Column("actor_user_id", uuid_type),
+    sa.Column("kind", sa.String(16)),
+    sa.Column("storage_key", sa.String(300)),
+    sa.Column("sha256", sa.String(64)),
+    sa.Column("facts", postgresql.JSONB()),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
 )
 
 trip_request_employees = sa.Table(

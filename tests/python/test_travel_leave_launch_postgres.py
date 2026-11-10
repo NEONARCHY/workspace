@@ -14,7 +14,8 @@ from zoneinfo import ZoneInfo
 import pytest
 from PIL import Image, ImageDraw
 from pypdf import PdfReader
-from sqlalchemy import func, insert, select
+from reportlab.pdfgen.canvas import Canvas  # type: ignore[import-untyped]
+from sqlalchemy import func, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncConnection, create_async_engine
 
 from yuksalish_api.absence_service import AbsenceError, _ensure_no_conflict
@@ -31,7 +32,7 @@ from yuksalish_api.leave_service import (
     revise_leave,
     withdraw_leave,
 )
-from yuksalish_api.object_storage import InMemoryObjectStorage
+from yuksalish_api.object_storage import InMemoryObjectStorage, ObjectStorageError
 from yuksalish_api.repository import (
     act_on_trip_request,
     create_trip_request,
@@ -43,12 +44,20 @@ from yuksalish_api.tables import (
     calendar_events,
     hr_settings,
     positions,
+    trip_document_revisions,
     trip_order_counters,
     trip_requests,
     users,
     workspace_notifications,
 )
-from yuksalish_api.trip_document_service import issue_order, prepare_signed_brief, read_document
+from yuksalish_api.trip_cyrillic import uzbek_cyrillic
+from yuksalish_api.trip_document_service import (
+    confirm_original_signature,
+    prepare_signed_brief,
+    put_attachment,
+    read_document,
+)
+from yuksalish_api.trip_hr_service import apply_resolution, complete_order
 from yuksalish_api.workspace_schemas import (
     CreateTripRequest,
     LeaveHrDecisionRequest,
@@ -199,7 +208,8 @@ async def test_trip_full_cycle_documents_calendar_and_immutable_annulment(
     brief, _, _ = await read_document(connection, actors["employee"], storage,
                                       request_id, "brief")
     text = " ".join(page.extract_text() for page in PdfReader(BytesIO(brief)).pages)
-    assert "Test employee" in text and "Test admin" not in text
+    assert uzbek_cyrillic(actors["employee"].full_name) in text
+    assert uzbek_cyrillic(actors["admin"].full_name) not in text
     assert len(PdfReader(BytesIO(brief)).pages[0].images) == 1  # only logo
     with pytest.raises(WorkspaceRepositoryError):
         await read_document(connection, actors["other"], storage, request_id, "brief")
@@ -219,30 +229,44 @@ async def test_trip_full_cycle_documents_calendar_and_immutable_annulment(
                               TripActionRequest(action="resubmit"))
     await act_on_trip_request(connection, actors["deputy"], request_id,
                               TripActionRequest(action="approve"))
-    preview, _, _ = await read_document(connection, actors["chair"], storage,
-                                        request_id, "order-preview")
-    assert "IMZOLANMAGAN" in PdfReader(BytesIO(preview)).pages[0].extract_text()
-    assert "000-WS" not in PdfReader(BytesIO(preview)).pages[0].extract_text()
-    assert "Raqam tasdiqlangandan so'ng beriladi" in (
-        PdfReader(BytesIO(preview)).pages[0].extract_text()
-    )
     with pytest.raises(WorkspaceRepositoryError, match="подпись"):
-        await issue_order(connection, actors["chair"], storage, request_id)
+        await apply_resolution(connection, actors["chair"], storage, request_id)
     assert await connection.scalar(select(func.count()).select_from(trip_order_counters)) == 0
     await _sign(connection, storage, actors["chair"].id)
-    await issue_order(connection, actors["chair"], storage, request_id)
-    approved = await act_on_trip_request(connection, actors["chair"], request_id,
-                                         TripActionRequest(action="approve"))
+    await apply_resolution(connection, actors["chair"], storage, request_id)
+    handoff = await act_on_trip_request(connection, actors["chair"], request_id,
+                                        TripActionRequest(action="approve"))
+    assert handoff.stage == "hr" and handoff.status == "running" and handoff.finished_at is None
+    assert not handoff.has_order_pdf and handoff.has_resolution
+    assert await connection.scalar(select(func.count()).select_from(calendar_events).where(
+        calendar_events.c.trip_request_id == request_id,
+    )) == 0
+    with pytest.raises(WorkspaceRepositoryError):
+        await complete_order(connection, actors["chair"], storage, request_id,
+                             TripActionRequest(action="complete", order_number="29",
+                                               order_series="а/ф"))
+    resolution, _, _ = await read_document(connection, actors["hr"], storage, request_id, "brief")
+    assert "Буйруқ учун" in PdfReader(BytesIO(resolution)).pages[0].extract_text()
+    completion = TripActionRequest(action="complete", order_number="29", order_series="а/ф",
+                                   order_purpose="Кадровик уточнил цель только в приказе")
+    await complete_order(connection, actors["hr"], storage, request_id, completion)
+    approved = await act_on_trip_request(connection, actors["hr"], request_id, completion)
     assert approved.status == "approved"
     order, _, _ = await read_document(connection, actors["employee"], storage, request_id, "order")
     page = PdfReader(BytesIO(order)).pages[0]
-    assert len(page.images) == 2 and "2027-yil" in page.extract_text()
-    assert approved.order_number and f"{approved.order_number}-son a/f" in page.extract_text()
-    await issue_order(connection, actors["chair"], storage, request_id)
-    replay = await act_on_trip_request(connection, actors["chair"], request_id,
-                                       TripActionRequest(action="approve"))
+    assert len(page.images) == 2 and "2027" in page.extract_text()
+    assert "29-сон а/ф" in page.extract_text()
+    assert completion.order_purpose in page.extract_text()
+    assert (await read_document(connection, actors["hr"], storage, request_id, "brief"))[0] \
+        == resolution
+    assert completion.order_purpose not in PdfReader(BytesIO(resolution)).pages[0].extract_text()
+    await complete_order(connection, actors["hr"], storage, request_id, completion)
+    replay = await act_on_trip_request(connection, actors["hr"], request_id, completion)
     assert replay.order_number == approved.order_number
-    assert await connection.scalar(select(trip_order_counters.c.last_sequence)) == 1
+    assert await connection.scalar(select(func.count()).select_from(trip_order_counters)) == 0
+    assert await connection.scalar(select(func.count()).select_from(trip_document_revisions).where(
+        trip_document_revisions.c.request_id == request_id,
+    )) == 2
     event = (await connection.execute(select(calendar_events).where(
         calendar_events.c.trip_request_id == request_id,
     ))).mappings().one()
@@ -299,6 +323,115 @@ async def test_trip_cannot_overlap_leave_and_withdraw_does_not_lose_history(
     result = await get_trip_request(connection, actors["employee"], request_id)
     assert result.stage == "launch" and result.status == "needs_revision"
     assert result.actions[-1].action == "withdraw"
+
+
+async def _ready_for_hr(connection, actors, storage, original=None):
+    request_id = await _trip(connection, actors["employee"])
+    if original is not None:
+        await put_attachment(connection, actors["employee"], storage, request_id,
+                             "signed-original.pdf", original)
+        await confirm_original_signature(connection, actors["employee"], request_id, confirmed=True)
+    await prepare_signed_brief(connection, actors["employee"], storage, request_id)
+    if original is not None:
+        before = await read_document(connection, actors["employee"], storage, request_id, "brief")
+        assert before[0] == original
+    await act_on_trip_request(connection, actors["employee"], request_id,
+                              TripActionRequest(action="submit"))
+    await act_on_trip_request(connection, actors["deputy"], request_id,
+                              TripActionRequest(action="approve"))
+    if not await connection.scalar(select(hiring_signatures.c.user_id).where(
+        hiring_signatures.c.user_id == actors["chair"].id,
+    )):
+        await _sign(connection, storage, actors["chair"].id)
+    await apply_resolution(connection, actors["chair"], storage, request_id)
+    await act_on_trip_request(connection, actors["chair"], request_id,
+                              TripActionRequest(action="approve"))
+    return request_id
+
+
+async def test_hr_resolution_keeps_the_signed_original_as_unchanged_pages(launch_db):
+    connection, actors, storage = launch_db
+    output = BytesIO()
+    canvas = Canvas(output)
+    canvas.drawString(60, 750, "Signed source: employee-authored content must survive")
+    canvas.save()
+    original = output.getvalue()
+    request_id = await _ready_for_hr(connection, actors, storage, original)
+    resolved = await read_document(connection, actors["hr"], storage, request_id, "brief")
+    pages = PdfReader(BytesIO(resolved[0])).pages
+    assert len(pages) == 2
+    assert "Буйруқ учун" in pages[0].extract_text()
+    assert pages[1].extract_text() == PdfReader(BytesIO(original)).pages[0].extract_text()
+    attachment = await read_document(connection, actors["hr"], storage, request_id, "attachment")
+    assert attachment[0] == original
+
+
+async def test_hr_order_registration_duplicates_refusal_and_storage_rollback(
+    launch_db, monkeypatch,
+):
+    connection, actors, storage = launch_db
+    request_id = await _ready_for_hr(connection, actors, storage)
+    fields = TripActionRequest(action="complete", order_number="QA-29", order_series="a/f")
+    for actor in (actors["employee"], actors["deputy"], actors["other"], actors["admin"]):
+        with pytest.raises(WorkspaceRepositoryError) as denied:
+            await complete_order(connection, actor, storage, request_id, fields)
+        assert denied.value.status_code == 403
+    original_put = storage.put
+
+    async def unavailable(*_args, **_kwargs):
+        raise ObjectStorageError("Storage unavailable")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(storage, "put", unavailable)
+        with pytest.raises(ObjectStorageError):
+            async with connection.begin_nested():
+                await complete_order(connection, actors["hr"], storage, request_id, fields)
+    assert storage.put == original_put
+    unchanged = await get_trip_request(connection, actors["hr"], request_id)
+    assert unchanged.stage == "hr" and not unchanged.has_order_pdf
+    await complete_order(connection, actors["hr"], storage, request_id, fields)
+    await act_on_trip_request(connection, actors["hr"], request_id, fields)
+    await act_on_trip_request(connection, actors["employee"], request_id,
+                              TripActionRequest(action="annul", comment="Мероприятие отменено"))
+    second = await _ready_for_hr(connection, actors, storage)
+    with pytest.raises(WorkspaceRepositoryError, match="уже зарегистрированы"):
+        await complete_order(connection, actors["hr"], storage, second,
+                             TripActionRequest(action="complete", order_number="qa-29",
+                                               order_series="A/F"))
+    assert (await get_trip_request(connection, actors["hr"], second)).stage == "hr"
+    other_series = TripActionRequest(action="complete", order_number="QA-29", order_series="b/f")
+    await complete_order(connection, actors["hr"], storage, second, other_series)
+    completed = await act_on_trip_request(connection, actors["hr"], second, other_series)
+    assert completed.status == "approved" and completed.order_series == "b/f"
+
+
+async def test_legacy_hr_trip_needs_real_resolution_and_keeps_revisions_on_return(launch_db):
+    connection, actors, storage = launch_db
+    request_id = await _trip(connection, actors["employee"])
+    await connection.execute(update(trip_requests).where(trip_requests.c.id == request_id).values(
+        stage="hr", status="running", workflow_version=1,
+    ))
+    assert (await get_trip_request(connection, actors["chair"], request_id)).allowed_actions \
+        == ["approve"]
+    with pytest.raises(WorkspaceRepositoryError):
+        await complete_order(connection, actors["hr"], storage, request_id,
+                             TripActionRequest(action="complete", order_number="30",
+                                               order_series="a/f"))
+    await _sign(connection, storage, actors["chair"].id)
+    await apply_resolution(connection, actors["chair"], storage, request_id)
+    await act_on_trip_request(connection, actors["chair"], request_id,
+                              TripActionRequest(action="approve"))
+    before = await read_document(connection, actors["hr"], storage, request_id, "brief")
+    await apply_resolution(connection, actors["chair"], storage, request_id)
+    repeated = await read_document(connection, actors["hr"], storage, request_id, "brief")
+    assert repeated[0] == before[0]
+    await act_on_trip_request(connection, actors["hr"], request_id,
+                              TripActionRequest(action="return", comment="Уточните программу"))
+    returned = await get_trip_request(connection, actors["employee"], request_id)
+    assert not returned.has_resolution and returned.stage == "launch"
+    assert await connection.scalar(select(func.count()).select_from(trip_document_revisions).where(
+        trip_document_revisions.c.request_id == request_id,
+    )) == 1
 
 
 async def test_schedule_lock_serializes_connections_and_releases_on_rollback(

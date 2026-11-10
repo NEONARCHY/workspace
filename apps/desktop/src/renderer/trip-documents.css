@@ -134,3 +134,14 @@
   .trip-dialog .trip-document-approved,
   .trip-dialog .trip-brief-paper { background: Canvas; border: 1px solid CanvasText; color: CanvasText; }
 }
+.trip-hr-order-form { display: grid; gap: 14px; margin-block: 18px; padding: 16px; border: 1px solid var(--ws-line); border-radius: 16px; background: var(--ws-surface); }
+.trip-hr-order-form h3, .trip-hr-order-form p { margin: 0; }
+.trip-hr-order-form p { color: var(--ws-muted); font-size: 12px; line-height: 1.5; }
+.trip-hr-order-form label { display: grid; gap: 6px; min-width: 0; font-size: 14px; }
+.trip-hr-order-form > button { justify-self: start; }
+.trip-hr-order-numbers { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+@media (max-width: 600px) { .trip-hr-order-numbers { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 900px) {
+  .trip-dialog.context-record-dialog .context-record-workspace { grid-template-rows: max-content max-content; }
+  .trip-dialog.context-record-dialog .context-record-workspace > .trip-detail { overflow: visible; }
+}

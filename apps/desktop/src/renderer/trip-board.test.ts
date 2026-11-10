@@ -3,6 +3,15 @@ import type { TripRequest, TripStage, WorkflowDefinition } from "@yuksalish/cont
 import { currentTripWorkflow, tripBoardColumns, tripColumns, tripColumnTotal, tripDropAction } from "./trip-board";
 
 describe("Trip board", () => {
+  it("requires HR completion for enabled trips and prevents administrator shortcuts", () => {
+    const chair = { stage: "manager_approval" as const, status: "running" as const,
+      hrProcessingRequired: true, workflowVersion: 1, allowedActions: ["approve" as const] };
+    expect(tripDropAction(chair, "hr", true)).toBe("approve");
+    expect(tripDropAction(chair, "approved", true)).toBeUndefined();
+    const hr = { ...chair, stage: "hr" as const, allowedActions: ["complete" as const] };
+    expect(tripDropAction(hr, "approved", true)).toBe("complete");
+    expect(tripDropAction({ ...hr, allowedActions: [] }, "approved", true)).toBeUndefined();
+  });
   it("places the legacy HR handoff immediately after the chair, preserving configured columns", () => {
     const columns = tripColumns.map((column) => column.key === "manager_approval"
       ? { ...column, label: "Председатель", color: "#0091a8" } : column);
@@ -70,7 +79,7 @@ describe("Trip board", () => {
     expect(tripDropAction(deputy, "approved")).toBeUndefined();
     expect(tripDropAction(deputy, "manager_approval", true)).toBe("approve");
   });
-  it("updates the old editable graph without exposing the HR node", () => {
+  it("updates the old editable graph and includes HR after the chair", () => {
     const graph = { id: "trip", name: "Trips", version: 2, status: "draft", formSchema: {},
       nodes: ["launch", "manager_approval", "hr", "approved", "rejected"].map((id, index) => ({
         id, kind: id === "launch" ? "start" as const : "approval" as const,
@@ -83,9 +92,9 @@ describe("Trip board", () => {
     } satisfies WorkflowDefinition;
     const current = currentTripWorkflow(graph, []);
     expect(current.nodes.map((node) => node.id)).toContain("deputy_approval");
-    expect(current.nodes.map((node) => node.id)).not.toContain("hr");
+    expect(current.nodes.map((node) => node.id)).toContain("hr");
     expect(current.edges.map((edge) => `${edge.source}:${edge.target}`)).toEqual([
-      "launch:deputy_approval", "deputy_approval:manager_approval", "manager_approval:approved",
+      "launch:deputy_approval", "deputy_approval:manager_approval", "manager_approval:hr", "hr:approved",
     ]);
   });
   it("never grants an action absent from the server response", () => {

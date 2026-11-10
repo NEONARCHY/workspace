@@ -279,17 +279,25 @@ async def prepare_signed_brief(
         raise Error(409, "Инициатор или председатель не найден")
     cover = None
     if not use_original:
-        cover = await run_in_threadpool(
-            brief_pdf,
-            requester=str(requester), chair=str(chair), purpose=row["purpose"],
-            destination=row["destination"], start=row["start_date"], end=row["end_date"],
-            employees=[name for name, _ in names], expense_source=row["expense_source"],
-            brief_text=brief_text, attachment_name=row["brief_attachment_name"],
-            signature=signature, signed_on=datetime.now(_LOCAL).date(),
-            include_fact_lines=row.get("brief_format") not in {"generated", "edited"},
-            brief_font_size=row.get("brief_font_size") or 11,
-            brief_font_weight=row.get("brief_font_weight") or "regular",
-        )
+        if row.get("hr_processing_required"):
+            from .trip_hr_pdf import hr_brief_pdf
+            from .trip_hr_service import live_snapshot
+
+            cover = await run_in_threadpool(
+                hr_brief_pdf, await live_snapshot(connection, request_id),
+            )
+        else:
+            cover = await run_in_threadpool(
+                brief_pdf,
+                requester=str(requester), chair=str(chair), purpose=row["purpose"],
+                destination=row["destination"], start=row["start_date"], end=row["end_date"],
+                employees=[name for name, _ in names], expense_source=row["expense_source"],
+                brief_text=brief_text, attachment_name=row["brief_attachment_name"],
+                signature=signature, signed_on=datetime.now(_LOCAL).date(),
+                include_fact_lines=row.get("brief_format") not in {"generated", "edited"},
+                brief_font_size=row.get("brief_font_size") or 11,
+                brief_font_weight=row.get("brief_font_weight") or "regular",
+            )
     # Reject layouts that cannot become a usable order before entering the chair's queue.
     await run_in_threadpool(
         order_pdf,
@@ -393,13 +401,36 @@ async def read_document(
     if (
         user.role != "superadmin"
         and user.id != row["requester_user_id"]
+        and user.id != row.get("hr_processor_user_id")
         and not (user.id == chair_id and row["stage"] != "launch")
         and not (row.get("workflow_version") == 3 and user.id == deputy_id
                  and row["stage"] != "launch")
         and not (row["status"] in {"approved", "annulled"} and user.id in participants)
     ):
         raise Error(404, "Документ поездки не найден")
+    if row.get("hr_processing_required") and kind in {"brief", "brief-preview"}:
+        if kind == "brief" and row.get("resolved_brief_key"):
+            content = await _verified(
+                storage, row["resolved_brief_key"], row["resolved_brief_sha256"],
+            )
+            return content, "application/pdf", "bildirgi-resolution.pdf"
+        if kind == "brief" and row["signed_brief_key"]:
+            content = await _verified(storage, row["signed_brief_key"], row["signed_brief_sha256"])
+            return (content,
+                    row["brief_attachment_type"] if row.get("original_signature_confirmed_at")
+                    else "application/pdf",
+                    row["brief_attachment_name"] if row.get("original_signature_confirmed_at")
+                    else "bildirgi.pdf")
+        if kind == "brief-preview" and row["stage"] != "launch":
+            raise Error(404, "Предпросмотр билдирги недоступен")
+        from .trip_hr_pdf import hr_brief_pdf
+        from .trip_hr_service import live_snapshot
+
+        content = await run_in_threadpool(hr_brief_pdf, await live_snapshot(connection, request_id))
+        return content, "application/pdf", "bildirgi-preview.pdf"
     if kind == "order-preview":
+        if row.get("hr_processing_required"):
+            raise Error(404, "Приказ доступен после кадрового оформления")
         if row["stage"] != "manager_approval":
             raise Error(404, "Предпросмотр приказа недоступен")
         if chair_id is None:

@@ -9,7 +9,7 @@ export const tripColumns: readonly { key: TripStage; label: string; color: strin
   { key: "rejected", label: "Отклонено", color: "#d97878" },
 ];
 
-/** Keep the legacy handoff visible without adding HR to the current approval route. */
+/** The HR handoff sits directly after the chairman on the board. */
 export function tripBoardColumns(columns = tripColumns): typeof tripColumns {
   return columns.flatMap((column) => column.key === "manager_approval" ? [
     column, { key: "hr", label: "Кадровая служба", color: "#d8b86c" },
@@ -17,7 +17,7 @@ export function tripBoardColumns(columns = tripColumns): typeof tripColumns {
 }
 
 /** Show the protected live route instead of the archived HR graph in old draft templates. */
-export function currentTripWorkflow(
+function normalizeTripWorkflow(
   workflow: WorkflowDefinition, positions: readonly WorkflowPosition[],
 ): WorkflowDefinition {
   const historicHr = workflow.nodes.find((node) => node.id === "hr");
@@ -31,7 +31,7 @@ export function currentTripWorkflow(
       detail: "Решение первого заместителя председателя", positionX: manager?.positionX ?? node.positionX,
       config: deputyPosition ? { approverPositionId: deputyPosition.id } : {},
     } : node.id === "manager_approval" ? {
-      ...node, label: "Утверждение председателем", detail: "Решение председателя и выпуск приказа",
+      ...node, label: "Утверждение председателем", detail: "Резолюция председателя",
       positionX: historicHr.positionX,
     } : node),
     edges: workflow.edges.map((edge) => {
@@ -46,10 +46,33 @@ export function currentTripWorkflow(
   };
 }
 
+export function currentTripWorkflow(workflow: WorkflowDefinition, positions: readonly WorkflowPosition[]): WorkflowDefinition {
+  const current = normalizeTripWorkflow(workflow, positions);
+  if (current.nodes.some(node => node.id === "hr")) return current;
+  const chair = current.nodes.find(node => node.id === "manager_approval");
+  if (!chair) return current;
+  const x = chair.positionX + 260;
+  return { ...current,
+    nodes: [...current.nodes.map(node => node.positionX >= x ? { ...node, positionX: node.positionX + 260 } : node),
+      { id: "hr", kind: "approval", label: "Кадровая служба", detail: "Назначенный в HR кадровик оформляет приказ",
+        positionX: x, positionY: chair.positionY, config: {} }],
+    edges: current.edges.flatMap(edge => edge.source === "manager_approval" && edge.target === "approved"
+      ? [{ ...edge, target: "hr" }, { ...edge, id: `${edge.id}-hr`, source: "hr", target: "approved" }] : [edge]),
+  };
+}
+
 // UI only proposes an existing action. The server remains the authority on permissions.
-export function tripDropAction(request: Pick<TripRequest, "stage" | "status" | "allowedActions" | "workflowVersion">, target: TripStage, administrator = false): TripAction | undefined {
+export function tripDropAction(request: Pick<TripRequest, "stage" | "status" | "allowedActions" | "workflowVersion" | "hrProcessingRequired">, target: TripStage, administrator = false): TripAction | undefined {
   const modern = (request.workflowVersion ?? 1) >= 2;
-  if (administrator && !modern && request.stage !== target) return "move";
+  if (administrator && !modern && !request.hrProcessingRequired && request.stage !== target) return "move";
+  if (request.hrProcessingRequired && request.stage === "manager_approval") {
+    const action = target === "hr" ? "approve" : target === "launch" ? "return" : target === "rejected" ? "reject" : undefined;
+    return action && request.allowedActions.includes(action) ? action : undefined;
+  }
+  if (request.hrProcessingRequired && request.stage === "hr") {
+    const action = target === "approved" ? "complete" : target === "launch" ? "return" : target === "rejected" ? "reject" : undefined;
+    return action && request.allowedActions.includes(action) ? action : undefined;
+  }
   let action: TripAction | undefined;
   if (request.stage === "launch" && target === (request.workflowVersion === 3 ? "deputy_approval" : "manager_approval")) {
     action = request.status === "needs_revision" ? "resubmit" : "submit";

@@ -79,6 +79,8 @@ async def team_approval_inbox(
             trip_requests.c.start_date, trip_requests.c.end_date,
             trip_requests.c.stage, trip_requests.c.status, trip_requests.c.workflow_version,
             trip_requests.c.deputy_approver_user_id, trip_requests.c.order_pdf_key,
+            trip_requests.c.hr_processing_required, trip_requests.c.hr_processor_user_id,
+            trip_requests.c.resolved_brief_key,
             users.c.full_name,
         ).join(users, users.c.id == trip_requests.c.requester_user_id)
         .where(
@@ -95,8 +97,15 @@ async def team_approval_inbox(
                 ),
                 and_(
                     trip_requests.c.stage == "manager_approval",
-                    trip_requests.c.workflow_version >= 2,
+                    or_(trip_requests.c.workflow_version >= 2,
+                        trip_requests.c.hr_processing_required),
                     literal(chair_id == user.id),
+                ),
+                and_(
+                    trip_requests.c.stage == "hr", trip_requests.c.hr_processing_required,
+                    or_(trip_requests.c.hr_processor_user_id == user.id,
+                        and_(trip_requests.c.resolved_brief_key.is_(None),
+                             literal(chair_id == user.id))),
                 ),
             ),
         ).order_by(trip_requests.c.start_date, trip_requests.c.created_at, trip_requests.c.id)
@@ -104,10 +113,10 @@ async def team_approval_inbox(
     items = [TeamApprovalItem(
         id=str(row["id"]), title=row["destination"], requester_name=row["full_name"],
         starts_on=row["start_date"], ends_on=row["end_date"],
-    ) for row in rows if "approve" in _trip_allowed_actions(
+    ) for row in rows if {"approve", "complete"}.intersection(_trip_allowed_actions(
         row, user, chair_user_id=chair_id,
         deputy_user_id=_trip_row_deputy_id(row, configured_id, directory_id),
-    )]
+    ))]
     return TeamApprovalInbox(
         enabled=user.id in {configured_id, directory_id, chair_id} or bool(items), items=items,
     )

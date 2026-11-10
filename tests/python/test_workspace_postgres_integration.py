@@ -1140,10 +1140,11 @@ async def _exercise_live_workspace(database_url: str) -> None:
                     employee_ids=[str(dilshod_auth.id)],
                 ),
             )
-            # Records created before the new signed-document route retain the legacy HR stage.
+            # Explicit historical-route fixture: current unfinished records are migrated
+            # to HR processing, while disabled historical routes retain compatibility.
             await connection.execute(
                 update(trip_requests).where(trip_requests.c.id == UUID(trip.id))
-                .values(workflow_version=1)
+                .values(workflow_version=1, hr_processing_required=False)
             )
             assert trip.stage == "launch"
             assert trip.chat_id is not None
