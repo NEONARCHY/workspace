@@ -9,6 +9,7 @@ import type {
   WorkspaceTaskCreateInput,
   TaskProjectOption,
   TaskProposalWrite,
+  TaskPlan,
 } from "@yuksalish/contracts";
 import {
   Button,
@@ -39,6 +40,7 @@ import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { DepartmentIcon } from "./DepartmentIcon";
 import { employeeScope, type EmployeeScope } from "./employee-scope";
 import { assistantLines, assistantResolvedIds } from "./assistant-form-handoff";
+import { TaskPlanPicker } from "./TaskPlanPicker";
 
 type DraftParticipant = NonNullable<WorkspaceTaskCreateInput["participants"]>[number];
 type DraftDependency = NonNullable<WorkspaceTaskCreateInput["dependencies"]>[number];
@@ -53,6 +55,10 @@ interface TaskComposerProps {
   readonly projectsLoading?: boolean;
   readonly projectsError?: string;
   readonly onRetryProjects?: () => void;
+  readonly plans?: readonly TaskPlan[];
+  readonly plansLoading?: boolean;
+  readonly plansError?: string;
+  readonly onRetryPlans?: () => void;
   readonly currentUserId: string;
   readonly initialTitle?: string;
   readonly initialDescription?: string;
@@ -93,6 +99,10 @@ export function TaskComposer({
   projectsLoading = false,
   projectsError = "",
   onRetryProjects,
+  plans,
+  plansLoading,
+  plansError,
+  onRetryPlans,
   currentUserId,
   initialTitle = "",
   initialDescription = "",
@@ -112,6 +122,7 @@ export function TaskComposer({
   const [title, setTitle] = useState(initialTitle);
   const [description, setDescription] = useState(initialDescription);
   const [projectId, setProjectId] = useState(assistantFields.projectId ?? "");
+  const [planIds, setPlanIds] = useState<readonly string[]>([]);
   const [suggestedProject, setSuggestedProject] = useState(assistantFields.project ?? "");
   const [projectTouched, setProjectTouched] = useState(false);
   const [assigneeId, setAssigneeId] = useState(() => {
@@ -174,6 +185,7 @@ export function TaskComposer({
         if (typeof value.title === "string") setTitle(value.title);
         if (typeof value.description === "string") setDescription(value.description);
         if (typeof value.projectId === "string") setProjectId(value.projectId);
+        if (Array.isArray(value.planIds)) setPlanIds(value.planIds.filter((id): id is string => typeof id === "string"));
         if (typeof value.project === "string") setSuggestedProject(value.project);
         if (typeof value.projectTouched === "boolean") setProjectTouched(value.projectTouched);
         if (typeof value.assigneeId === "string") setAssigneeId(value.assigneeId);
@@ -199,7 +211,7 @@ export function TaskComposer({
   useEffect(() => {
     if (!persistDraft || !draftReady.current || !draftEdited.current) return;
     const snapshot = JSON.stringify({
-      title, description, projectId, project: suggestedProject, projectTouched,
+      title, description, projectId, planIds, project: suggestedProject, projectTouched,
       assigneeId, authorId, priority, dueAt, participants,
       checklist, dependencies, repeatEnabled, cycleKind, cycleInterval,
       cycleNextRun, cycleCalendarRule, cycleWeekdays, cycleMonthDays,
@@ -213,7 +225,7 @@ export function TaskComposer({
       window.clearTimeout(timer);
       window.removeEventListener("yuksalish:prepare-web-update", save);
     };
-  }, [draftKey, persistDraft, title, description, projectId, suggestedProject, projectTouched,
+  }, [draftKey, persistDraft, title, description, projectId, planIds, suggestedProject, projectTouched,
     assigneeId, authorId, priority, dueAt, participants,
     checklist, dependencies, repeatEnabled, cycleKind, cycleInterval, cycleNextRun,
     cycleCalendarRule, cycleWeekdays, cycleMonthDays]);
@@ -388,6 +400,7 @@ export function TaskComposer({
         description: description.trim(),
         project: selectedProject?.title ?? "Без проекта",
         projectId: selectedProject?.id ?? null,
+        ...(planIds.length ? { planIds } : {}),
         assigneeId: needsConsent ? currentUserId : assigneeId,
         calendarEventId,
         priority,
@@ -450,6 +463,7 @@ export function TaskComposer({
                       {onPropose ? <div><dt>Постановщик</dt><dd>{peopleById.get(authorId)?.name ?? "Выберите сотрудника"}</dd></div> : null}
                       <div><dt>Ответственный</dt><dd>{assignee ? <EmployeeProfileLink userId={assignee.id} personName={assignee.name}>{assignee.name}</EmployeeProfileLink> : "Не выбран"}</dd></div>
                       <div><dt>Проект</dt><dd>{selectedProject?.title ?? "Без проекта"}</dd></div>
+                      <div><dt>Планы</dt><dd>{planIds.length ? `Выбрано: ${planIds.length}` : "Без плана"}</dd></div>
                       <div className="record-summary-deadline"><dt>Срок</dt><dd>{dateTimeLabel(dueAt)}</dd></div>
                     </dl>
                   </div>
@@ -503,6 +517,8 @@ export function TaskComposer({
                     ? <small>Проект «{suggestedProject}» не найден в доступных. Выберите его вручную или оставьте задачу без проекта.</small> : null}
                   {projectsError ? <small role="alert">{projectsError} {onRetryProjects ? <Button type="button" appearance="subtle" onClick={onRetryProjects}>Повторить</Button> : null}</small> : null}
                 </label>
+                <TaskPlanPicker token={token} plans={plans} loading={plansLoading} error={plansError} onRetry={onRetryPlans}
+                  value={planIds} disabled={busy} onChange={ids => { draftEdited.current = true; setPlanIds(ids); }} />
                 {onPropose ? <label>
                   <span>Постановщик</span>
                   <PersonPicker label="Постановщик новой задачи" people={activePeople}

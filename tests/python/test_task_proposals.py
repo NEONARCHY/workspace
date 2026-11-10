@@ -100,6 +100,10 @@ async def test_consent_creates_one_task_and_chat_with_complete_draft():
                         checklist=[{"title": "Step one"}, {"title": "Step two"}],
                         cycle={"title": "Repeat", "scheduleKind": "weekly"})
         proposal = await propose_task(connection, creator, payload)
+        stored = await connection.scalar(select(task_proposals.c.payload).where(
+            task_proposals.c.id == UUID(proposal.id),
+        ))
+        assert "planIds" not in stored
         assert proposal.status == "pending" and proposal.task_id is None
         assert await connection.scalar(select(func.count()).select_from(tasks)) == before
         assert await connection.scalar(

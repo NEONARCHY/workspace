@@ -62,6 +62,7 @@ import type {
   WorkspaceSection,
   WorkspaceTask,
   WorkspaceTaskCreateInput,
+  WorkspaceTaskUpdateInput,
 } from "@yuksalish/contracts";
 import { moduleKeys } from "@yuksalish/contracts";
 import { setInterfaceLocale } from "@yuksalish/i18n";
@@ -1291,15 +1292,7 @@ export function App() {
 
   const handleUpdateTask = (
     task: WorkspaceTask,
-    payload: {
-      readonly title: string;
-      readonly description: string;
-      readonly project: string;
-      readonly projectId?: string | null;
-      readonly assigneeId: string;
-      readonly priority: WorkspaceTask["priority"];
-      readonly dueAt?: string | null;
-    },
+    payload: WorkspaceTaskUpdateInput,
   ) => runTaskMutation((token) => updateWorkspaceTask(token, task.id, payload));
 
   const handleDeleteTask = async (task: WorkspaceTask): Promise<boolean> => {

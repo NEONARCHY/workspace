@@ -21,6 +21,7 @@ import type {
   WorkspaceDepartment,
   WorkspaceTask,
   WorkspaceTaskCreateInput,
+  WorkspaceTaskUpdateInput,
 } from "@yuksalish/contracts";
 import {
   Badge,
@@ -52,6 +53,7 @@ import { EfficiencyView } from "./EfficiencyView";
 import { FeedReactions } from "./FeedView";
 import { TaskCalendarView } from "./TaskCalendarView";
 import { TaskComposer } from "./TaskComposer";
+import { TaskPlanPicker } from "./TaskPlanPicker";
 import { TaskProposals } from "./TaskProposals";
 import { proposeWorkspaceTask } from "./workspace-api";
 import { SpatialBoard, SpatialCard, SpatialLane } from "./SpatialBoard";
@@ -182,15 +184,7 @@ function taskJourneyStep(status: TaskStatus): number {
   return 0;
 }
 
-interface TaskEditPayload {
-  readonly title: string;
-  readonly description: string;
-  readonly project: string;
-  readonly projectId?: string | null;
-  readonly assigneeId: string;
-  readonly priority: WorkspaceTask["priority"];
-  readonly dueAt?: string | null;
-}
+type TaskEditPayload = WorkspaceTaskUpdateInput;
 
 interface CyclePayload {
   readonly title: string;
@@ -307,6 +301,10 @@ export function TasksView(props: TasksViewProps) {
   const [editDescription, setEditDescription] = useState("");
   const [editProject, setEditProject] = useState("");
   const [editProjectId, setEditProjectId] = useState("");
+  const [editPlanIds, setEditPlanIds] = useState<readonly string[] | null>(null);
+  const [editBusy, setEditBusy] = useState(false);
+  const editSaveRef = useRef(false);
+  const [editError, setEditError] = useState("");
   const [projectState, setProjectState] = useState<{
     readonly key: string;
     readonly options: readonly TaskProjectOption[];
@@ -512,6 +510,7 @@ export function TasksView(props: TasksViewProps) {
   const createTask = async (payload: WorkspaceTaskCreateInput) => {
     const task = await onCreateTask(payload);
     if (task !== undefined) {
+      if (payload.planIds?.length) setPlansRevision(current => current + 1);
       setSelectedId(task.id);
       setCreating(false);
     }
@@ -520,6 +519,8 @@ export function TasksView(props: TasksViewProps) {
 
   const startEditing = () => {
     if (selectedTask === undefined) return;
+    setEditPlanIds(null);
+    setEditError("");
     setEditTitle(selectedTask.title);
     setEditDescription(selectedTask.description ?? "");
     setEditProject(selectedTask.project);
@@ -532,17 +533,27 @@ export function TasksView(props: TasksViewProps) {
   };
 
   const saveTask = async () => {
-    if (selectedTask === undefined || !editTitle.trim() || !editAssigneeId) return;
+    if (editSaveRef.current || selectedTask === undefined || !editTitle.trim() || !editAssigneeId) return;
     if (editDueAt && !Number.isFinite(new Date(editDueAt).getTime())) { setDateError("Проверьте срок задачи."); return; }
     setDateError("");
-    const updated = await onUpdateTask(selectedTask, {
-      title: editTitle.trim(), description: editDescription.trim(), project: editProject.trim() || "Без проекта",
-      ...(editProjectId !== "__legacy__" && editProjectId !== (selectedTask.projectId ?? "")
-        ? { projectId: editProjectId || null } : {}),
-      assigneeId: editAssigneeId, priority: editPriority,
-      dueAt: editDueAt ? new Date(editDueAt).toISOString() : null,
-    });
-    if (updated !== undefined) setEditing(false);
+    editSaveRef.current = true;
+    setEditBusy(true); setEditError("");
+    try {
+      const updated = await onUpdateTask(selectedTask, {
+        title: editTitle.trim(), description: editDescription.trim(), project: editProject.trim() || "Без проекта",
+        ...(editProjectId !== "__legacy__" && editProjectId !== (selectedTask.projectId ?? "")
+          ? { projectId: editProjectId || null } : {}),
+        assigneeId: editAssigneeId, priority: editPriority,
+        dueAt: editDueAt ? new Date(editDueAt).toISOString() : null,
+        ...(editPlanIds !== null ? { planIds: editPlanIds } : {}),
+      });
+      if (updated !== undefined) {
+        if (editPlanIds !== null) setPlansRevision(current => current + 1);
+        setEditing(false);
+      } else setEditError("Не удалось сохранить карточку. Проверьте подключение и повторите.");
+    } catch (error) {
+      setEditError(error instanceof Error ? error.message : "Не удалось сохранить карточку.");
+    } finally { editSaveRef.current = false; setEditBusy(false); }
   };
 
   const deleteSelectedTask = async () => {
@@ -803,6 +814,8 @@ export function TasksView(props: TasksViewProps) {
         projectsLoading={projectsLoading}
         projectsError={projectsError}
         onRetryProjects={() => setProjectsRevision((current) => current + 1)}
+        plans={plans} plansLoading={plansLoading} plansError={plansError}
+        onRetryPlans={() => setPlansRevision(current => current + 1)}
         currentUserId={currentUserId}
         initialTitle={assistantTaskFields.title}
         initialDescription={assistantTaskFields.description}
@@ -879,7 +892,7 @@ export function TasksView(props: TasksViewProps) {
         </ol>
         {selectedTask.parentTaskId ? <div className="task-parent-link"><span>Подзадача для</span><button type="button" disabled={!selectedParent} onClick={() => { if (selectedParent) setSelectedId(selectedParent.id); }}>{selectedTask.parentTaskTitle ?? selectedParent?.title ?? "родительской задачи"}</button></div> : null}
 
-        {editing ? <div className="task-card-editor" aria-label="Редактирование карточки задачи">
+        {editing ? <fieldset className="task-card-editor" disabled={editBusy} aria-busy={editBusy} aria-label="Редактирование карточки задачи">
           <Input aria-label="Название в карточке" value={editTitle} onChange={(_event, data) => setEditTitle(data.value)} />
           <Textarea aria-label="Описание задачи" value={editDescription} onChange={(_event, data) => setEditDescription(data.value)} />
           <label><span>Проект · необязательно</span><WorkspaceSelect aria-label="Проект задачи" value={editProjectId} onChange={(event) => {
@@ -892,11 +905,16 @@ export function TasksView(props: TasksViewProps) {
               ? <option value={editProjectId}>{editProject} · недоступен для нового выбора</option> : null}
             {projectOptions.map((option) => <option key={option.id} value={option.id}>{option.code} · {option.title}</option>)}
           </WorkspaceSelect>{projectsError ? <small role="alert">{projectsError}</small> : null}</label>
+          <TaskPlanPicker token={props.token} plans={plans} loading={plansLoading} error={plansError}
+            onRetry={() => setPlansRevision(current => current + 1)}
+            value={editPlanIds ?? plans.filter(plan => plan.taskIds.includes(selectedTask.id)).map(plan => plan.id)}
+            onChange={setEditPlanIds} disabled={editBusy} readOnly={!canManageParticipants} />
           <div className="task-people-scope-field"><span>Ответственный</span>{departments ? <EmployeeScopeSwitch value={editAssigneeScope} onChange={(next) => { setEditAssigneeScope(next); setEditAssigneeId(""); }} label="Группа ответственных" /> : null}<WorkspaceSelect aria-label="Ответственный задачи" value={editAssigneeId} onChange={(event) => setEditAssigneeId(event.target.value)}><option value="">Выберите сотрудника</option>{people.filter((person) => inEmployeeScope(person, editAssigneeScope)).map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</WorkspaceSelect></div>
           <label><span>Приоритет</span><WorkspaceSelect aria-label="Приоритет задачи" variant="priority" value={editPriority} onChange={(event) => setEditPriority(event.target.value as WorkspaceTask["priority"])}><option value="low">Низкий</option><option value="normal">Обычный</option><option value="high">Высокий</option><option value="urgent">Срочный</option></WorkspaceSelect></label>
           <label><span>Срок</span><WorkspaceDateTimePicker ariaLabel="Срок задачи" value={editDueAt} onChange={setEditDueAt} /></label>
-          <div className="task-editor-actions"><Button appearance="primary" onClick={() => void saveTask()}>Сохранить карточку</Button><Button appearance="subtle" onClick={() => setEditing(false)}>Отмена</Button></div>
-        </div> : null}
+          {editError && <WorkspaceNotice tone="error" role="alert">{editError}</WorkspaceNotice>}
+          <div className="task-editor-actions"><Button appearance="primary" disabled={editBusy} onClick={() => void saveTask()}>{editBusy ? "Сохраняем…" : "Сохранить карточку"}</Button><Button appearance="subtle" disabled={editBusy} onClick={() => setEditing(false)}>Отмена</Button></div>
+        </fieldset> : null}
 
 
         {!editing ? <div className="detail-section task-description-section"><TaskSectionHeading title="Описание" help="Здесь указаны цель и условия задачи. Изменить их можно через действие «Редактировать карточку», если у вас есть право редактирования." /><p>{selectedTask.description || "Описание пока не добавлено."}</p></div> : null}
@@ -914,14 +932,14 @@ export function TasksView(props: TasksViewProps) {
           {selectedTask.participants.map((participant) => <ParticipantChip key={`${participant.userId}-${participant.role}`} person={personById(participant.userId)} label={participant.role === "co_assignee" ? "Соисполнитель" : "Наблюдатель"} token={props.token} onRemove={canManageParticipants ? () => void onRemoveParticipant(selectedTask, participant.userId) : undefined} />)}
         </div>{canManageParticipants ? <div className="inline-task-form">{departments ? <EmployeeScopeSwitch value={participantScope} onChange={(next) => { setParticipantScope(next); setParticipantId(""); }} label="Группа новых участников" /> : null}<WorkspaceSelect aria-label="Новый участник" value={participantId} onChange={(event) => setParticipantId(event.target.value)}><option value="">Выберите сотрудника</option>{people.filter((person) => inEmployeeScope(person, participantScope) && person.id !== selectedTask.assigneeId && !selectedTask.participants.some((item) => item.userId === person.id)).map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</WorkspaceSelect><WorkspaceSelect aria-label="Роль участника" value={participantRole} onChange={(event) => setParticipantRole(event.target.value as TaskParticipantRole)}><option value="co_assignee">Соисполнитель</option><option value="observer">Наблюдатель</option></WorkspaceSelect><Button appearance="secondary" onClick={() => void addParticipant()} disabled={!participantId}>Добавить</Button></div> : null}</div>
 
-        <div className="detail-section task-plan-links"><TaskSectionHeading title="Планы" help="Задача может входить в несколько планов. Связи меняет постановщик или уполномоченный сотрудник." meta={plans.filter((plan) => plan.taskIds.includes(selectedTask.id)).length} />
+        {!editing && <div className="detail-section task-plan-links"><TaskSectionHeading title="Планы" help="Задача может входить в несколько планов. Связи меняет постановщик или уполномоченный сотрудник." meta={plans.filter((plan) => plan.taskIds.includes(selectedTask.id)).length} />
           {plansLoading ? <LoadingSkeleton layout="lines" rows={3} label="Загружаем планы…" /> : plansError ? <WorkspaceNotice tone="error" className="task-plan-error" role="alert">{plansError}</WorkspaceNotice> : <>
             <ul>{plans.filter((plan) => plan.taskIds.includes(selectedTask.id)).map((plan) => <li key={plan.id}><span>{plan.title}</span>{canManageParticipants ? <Button appearance="subtle" size="small" disabled={planLinkBusy} aria-label={`Убрать задачу из плана ${plan.title}`} onClick={() => void changePlanLink(plan.id, selectedTask.id, false)}>Убрать</Button> : null}</li>)}</ul>
             {canManageParticipants && plans.some((plan) => !plan.taskIds.includes(selectedTask.id)) ? <div className="inline-task-form"><WorkspaceSelect aria-label="Добавить задачу в план" value={planChoice} onChange={(event) => setPlanChoice(event.target.value)}><option value="">Выберите план</option>{plans.filter((plan) => !plan.taskIds.includes(selectedTask.id)).map((plan) => <option key={plan.id} value={plan.id}>{plan.title}</option>)}</WorkspaceSelect><Button appearance="secondary" disabled={!planChoice || planLinkBusy} onClick={() => void changePlanLink(planChoice, selectedTask.id, true)}>Привязать</Button></div> : null}
             {!plans.some((plan) => plan.taskIds.includes(selectedTask.id)) ? <p className="task-section-empty">План пока не назначен.</p> : null}
           </>}
           {planLinkError ? <WorkspaceNotice tone="error" className="task-plan-error" role="alert">{planLinkError}</WorkspaceNotice> : null}
-        </div>
+        </div>}
 
 
         <div className="detail-section task-subtasks-section"><TaskSectionHeading title="Подзадачи" help="Большую задачу можно разбить на отдельные шаги с собственным исполнителем и сроком. Открытая подзадача блокирует окончательное принятие родительской задачи." meta={`${selectedSubtasks.filter((task) => task.status === "completed").length}/${selectedSubtasks.length}`} />
