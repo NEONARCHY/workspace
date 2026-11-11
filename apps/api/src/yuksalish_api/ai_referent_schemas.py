@@ -46,6 +46,10 @@ AIReferentAction = Literal[
     "replace_document",
     "mark_sent",
     "prepare_replacement",
+    "stop_mailing",
+    "retry_recipient",
+    "confirm_recipient_sent",
+    "confirm_recipient_not_sent",
 ]
 
 
@@ -63,8 +67,30 @@ def delivery_route_error(address: str, route: str) -> str:
     )
 
 
+class AIReferentMailingRecipientInput(ApiModel):
+    organization: str = Field(min_length=1, max_length=500)
+    address: str = Field(min_length=1, max_length=500)
+    directory_id: str | None = Field(default=None, max_length=128)
+
+    @field_validator("organization", "address", mode="before")
+    @classmethod
+    def trim_recipient(cls, value: object) -> object:
+        return value.strip() if isinstance(value, str) else value
+
+
+class AIReferentMailingRecipient(AIReferentMailingRecipientInput):
+    id: UUID
+    route: AIReferentRoute
+    status: Literal["draft", "queued", "sending", "sent", "failed", "unknown", "stopped"]
+    detail: str
+    attempts: int
+
+
 class AIReferentLetterFields(ApiModel):
     workflow_kind: AIReferentWorkflowKind = "delivery"
+    mailing_recipients: list[AIReferentMailingRecipientInput] | None = Field(
+        default=None, min_length=2, max_length=50
+    )
     subject: str = Field(default="", max_length=300)
     recipient_organization: str = Field(default="", max_length=300)
     recipient_address: str = Field(default="", max_length=500)
@@ -80,6 +106,13 @@ class AIReferentLetterFields(ApiModel):
 
     @model_validator(mode="after")
     def delivery_channel_matches_address(self) -> Self:
+        if self.mailing_recipients is not None:
+            if self.workflow_kind != "delivery":
+                raise ValueError("Рассылка доступна для исходящего письма.")
+            addresses = [recipient.address.casefold() for recipient in self.mailing_recipients]
+            if len(set(addresses)) != len(addresses):
+                raise ValueError("Уберите повторяющиеся адреса.")
+            return self
         if self.workflow_kind == "delivery":
             error = delivery_route_error(self.recipient_address, self.route)
             if error:
@@ -102,6 +135,8 @@ class AIReferentActionRequest(ApiModel):
     expected_revision: int = Field(ge=1)
     operation_id: UUID | None = None
     comment_audio_id: UUID | None = None
+    recipient_id: UUID | None = None
+    mailing: bool | None = None
 
     @field_validator("comment")
     @classmethod
@@ -143,6 +178,7 @@ class OfflineAuthorityHeartbeat(ApiModel):
 
 
 class OfflineAuthorityStatus(ApiModel):
+    mailing_enabled: bool = False
     writable: bool
     mode: Literal["legacy", "online", "replay_required"]
     lease_until: datetime | None = None
@@ -234,10 +270,12 @@ class AIReferentEventResponse(ApiModel):
     to_status: AIReferentStatus | None = None
     comment: str = ""
     audio: AIReferentCommentAudio | None = None
+    recipient_id: UUID | None = None
     created_at: datetime
 
 
 class AIReferentLetterResponse(ApiModel):
+    mailing_recipients: list[AIReferentMailingRecipient] | None = None
     retry_block_reason: str = ""
     submission_block_reason: str = ""
     id: str

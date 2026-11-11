@@ -1254,7 +1254,25 @@ export type AIReferentAction =
   | "reject"
   | "cancel"
   | "queue_delivery"
-  | "retry_delivery";
+  | "retry_delivery"
+  | "stop_mailing"
+  | "retry_recipient"
+  | "confirm_recipient_sent"
+  | "confirm_recipient_not_sent";
+
+export interface AIReferentMailingRecipientInput {
+  readonly organization: string;
+  readonly address: string;
+  readonly directoryId?: string | null;
+}
+
+export interface AIReferentMailingRecipient extends AIReferentMailingRecipientInput {
+  readonly id: string;
+  readonly route: AIReferentRoute;
+  readonly status: "draft" | "queued" | "sending" | "sent" | "failed" | "unknown" | "stopped";
+  readonly detail: string;
+  readonly attempts: number;
+}
 
 export interface AIReferentDocumentCheck {
   readonly id: string;
@@ -1279,10 +1297,12 @@ export interface AIReferentEvent {
   readonly toStatus?: AIReferentStatus | null;
   readonly comment: string;
   readonly audio?: AIReferentCommentAudio | null;
+  readonly recipientId?: string | null;
   readonly createdAt: string;
 }
 
 export interface AIReferentLetter {
+  readonly mailingRecipients?: readonly AIReferentMailingRecipient[] | null;
   readonly retryBlockReason?: string;
   readonly submissionBlockReason?: string;
   readonly documentCheck?: AIReferentDocumentCheck | null;
@@ -1353,6 +1373,7 @@ export interface AIReferentManualRecipientInput {
 }
 
 export interface AIReferentLetterInput {
+  readonly mailingRecipients?: readonly AIReferentMailingRecipientInput[];
   readonly workflowKind?: AIReferentWorkflowKind;
   readonly finalReviewerUserId?: string | null;
   readonly operationId?: string;
@@ -1589,6 +1610,7 @@ export interface AIReferentConfiguration {
 }
 
 export interface AIReferentAuthorityStatus {
+  readonly mailingEnabled?: boolean;
   readonly writable: boolean;
   readonly mode: "legacy" | "online" | "replay_required";
   readonly leaseUntil: string | null;
@@ -1608,7 +1630,7 @@ export interface AIReferentConfigurationUpdate {
 export type TelegramBotKey = "ai_referent" | "hisobot" | "takliflar" | "hudud_rating" | "ai_news_reader" | "workspace_notifications";
 
 export interface WorkspaceNoticeTarget {
-  readonly section: "tasks" | "payment_requests";
+  readonly section: "tasks" | "payment_requests" | "ai_referent";
   readonly entityId: string;
 }
 

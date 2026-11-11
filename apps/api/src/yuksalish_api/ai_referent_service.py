@@ -15,6 +15,14 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 
 from .access_control import ensure_module_action, module_permissions_for_user
 from .ai_referent_audio import audio_response, decision_audio
+from .ai_referent_mailing import (
+    enqueue_recipient,
+    load_recipients_for_letter,
+    mailing_status,
+    replace_recipients,
+    set_recipient_status,
+    stop_pending,
+)
 from .ai_referent_preflight import check_response, letter_check, require_passed
 from .ai_referent_retry import failed_delivery_retry_plan
 from .ai_referent_schemas import (
@@ -29,6 +37,7 @@ from .ai_referent_schemas import (
 )
 from .ai_referent_shared_service import notify_letter, operation_replay, remember_operation
 from .ai_referent_visibility import (
+    MAILING_OPERATOR_STATUSES,
     OPERATOR_VISIBLE_STATUSES,
     may_view_all_workspace_letters,
     may_view_letter,
@@ -40,6 +49,7 @@ from .tables import (
     ai_referent_delivery_commands,
     ai_referent_events,
     ai_referent_letters,
+    ai_referent_mailing_recipients,
     ai_referent_number_counters,
     ai_referent_reviewers,
     attachments,
@@ -141,10 +151,12 @@ def _available_actions(
     if status == "awaiting_final_send" and is_creator:
         actions.extend(("release_delivery", "return_for_revision"))
     if status == "referent_review_pending" and may_operate:
-        actions.extend(("send", "return_for_revision", "replace_document", "mark_sent"))
+        actions.extend(("send", "return_for_revision"))
+        if not row.get("is_mailing"):
+            actions.extend(("replace_document", "mark_sent"))
     if status == "operator_revision" and may_operate and replacement_file_ready:
         actions.append("prepare_replacement")
-    if status == "delivery_unknown" and may_operate:
+    if status == "delivery_unknown" and may_operate and not row.get("is_mailing"):
         actions.extend(("confirm_sent", "confirm_not_sent"))
     if status not in _FINAL_STATUSES | {"queued", "sending", "delivery_unknown"} and (
         is_creator and status != "operator_revision"
@@ -293,6 +305,7 @@ async def _letter_events(
             to_status=row["to_status"],
             comment=row["comment"] or "",
             audio=audio_by_id.get((row["metadata"] or {}).get("audioId", "")),
+            recipient_id=(row["metadata"] or {}).get("recipientId"),
             created_at=row["created_at"],
         )
         for row in rows
@@ -386,6 +399,9 @@ async def _response(
     may_approve: bool | None = None,
 ) -> AIReferentLetterResponse:
     letter_attachments = await _letter_attachments(connection, row["id"])
+    mailing = (
+        await load_recipients_for_letter(connection, row["id"]) if row.get("is_mailing") else None
+    )
     permissions = await module_permissions_for_user(connection, current_user)
     replacement_ready = await _replacement_ready(connection, row)
     if may_approve is None:
@@ -402,8 +418,21 @@ async def _response(
         may_operate=permissions.get("ai_referent", {}).get("admin", False),
         replacement_file_ready=replacement_ready,
     )
+    if mailing and any(item.status != "draft" for item in mailing):
+        actions = []
+        if any(item.status == "queued" for item in mailing) and (
+            permissions.get("ai_referent", {}).get("admin", False)
+            or (row["created_by_user_id"] == current_user.id
+                and permissions.get("ai_referent", {}).get("edit", False))
+        ):
+            actions.append("stop_mailing")
+        if permissions.get("ai_referent", {}).get("admin", False):
+            if any(item.status == "failed" for item in mailing) and row["status"] != "sending":
+                actions.append("retry_recipient")
+            if any(item.status == "unknown" for item in mailing) and row["status"] != "sending":
+                actions.extend(("confirm_recipient_sent", "confirm_recipient_not_sent"))
     retry_block = ""
-    if (row["status"] == "failed" and row["workflow_kind"] == "delivery"
+    if (not mailing and row["status"] == "failed" and row["workflow_kind"] == "delivery"
             and permissions.get("ai_referent", {}).get("admin", False)):
         _, retry_block = await failed_delivery_retry_plan(connection, row)
         if not retry_block:
@@ -416,6 +445,7 @@ async def _response(
     if "submit" in actions and submission_block:
         actions.remove("submit")
     return AIReferentLetterResponse(
+        mailing_recipients=mailing,
         retry_block_reason=retry_block,
         submission_block_reason=submission_block,
         id=str(row["id"]),
@@ -452,7 +482,7 @@ async def _response(
         document_check=check_response(check) if check else None,
         final_pdf_file_id=str(row["final_pdf_file_id"]) if row.get("final_pdf_file_id") else None,
         can_edit=can_edit,
-        can_delete=bool(
+        can_delete=not bool(mailing) and bool(
             _is_privileged(current_user)
             or (permissions.get("ai_referent", {}).get("edit")
                 and row["created_by_user_id"] == current_user.id)
@@ -490,13 +520,34 @@ async def _event(
     )
 
 
+async def _save_mailing_recipients(
+    connection: AsyncConnection,
+    letter_id: UUID,
+    payload: CreateAIReferentLetterRequest | UpdateAIReferentLetterRequest,
+) -> None:
+    assert payload.mailing_recipients is not None
+    mailing = await replace_recipients(connection, letter_id, payload.mailing_recipients)
+    first = mailing[0]
+    await connection.execute(update(ai_referent_letters).where(
+        ai_referent_letters.c.id == letter_id,
+    ).values(
+        recipient_organization=f"Рассылка · {len(mailing)}",
+        recipient_address=first.address,
+        route=first.route,
+    ))
+
+
 async def create_letter(
     connection: AsyncConnection,
     current_user: AuthenticatedUser,
     payload: CreateAIReferentLetterRequest,
+    *,
+    workspace: bool = True,
 ) -> AIReferentLetterResponse:
     await connection.execute(select(ai_referent_configuration).with_for_update())
     await ensure_module_action(connection, current_user, "ai_referent", "create")
+    if payload.mailing_recipients is not None and (not workspace or payload.operation_id is None):
+        raise AIReferentServiceError(422, "Сохраните рассылку из Workspace с ID операции.")
     replay = await operation_replay(connection, current_user, payload, "create")
     if replay:
         return await load_letter(connection, current_user, replay)
@@ -517,6 +568,7 @@ async def create_letter(
     await connection.execute(
         insert(ai_referent_letters).values(
             id=letter_id,
+            is_mailing=payload.mailing_recipients is not None,
             outgoing_number=None,
             year_suffix=None,
             subject=payload.subject,
@@ -547,6 +599,8 @@ async def create_letter(
             updated_at=now,
         )
     )
+    if payload.mailing_recipients is not None:
+        await _save_mailing_recipients(connection, letter_id, payload)
     await _event(
         connection,
         letter_id,
@@ -569,6 +623,7 @@ async def load_letters(
     participation: Literal["all", "mine"] = "all",
     active_only: bool = False,
     history_only: bool = False,
+    include_mailings: bool = True,
     awaiting_my_signature: bool = False,
     offset: int = 0,
     limit: int = 50,
@@ -592,6 +647,8 @@ async def load_letters(
         )
     )
     permissions = await module_permissions_for_user(connection, current_user)
+    if not include_mailings:
+        statement = statement.where(ai_referent_letters.c.is_mailing.is_(False))
     # This is an additional selection, never a replacement for access control below.
     # Apply before counts and pagination so every page and summary use the same scope.
     if participation == "mine":
@@ -632,6 +689,10 @@ async def load_letters(
             non_sent = or_(
                 non_sent,
                 ai_referent_letters.c.status.in_(OPERATOR_VISIBLE_STATUSES),
+                and_(
+                    ai_referent_letters.c.is_mailing.is_(True),
+                    ai_referent_letters.c.status.in_(MAILING_OPERATOR_STATUSES),
+                ),
             )
         sent = ai_referent_letters.c.status == "sent"
         if not _may_view_all_sent(current_user) and not may_operate:
@@ -653,6 +714,13 @@ async def load_letters(
                 ai_referent_letters.c.subject.ilike(pattern),
                 ai_referent_letters.c.recipient_organization.ilike(pattern),
                 ai_referent_letters.c.recipient_address.ilike(pattern),
+                select(ai_referent_mailing_recipients.c.id).where(
+                    ai_referent_mailing_recipients.c.letter_id == ai_referent_letters.c.id,
+                    or_(
+                        ai_referent_mailing_recipients.c.address.ilike(pattern),
+                        ai_referent_mailing_recipients.c.organization.ilike(pattern),
+                    ),
+                ).exists(),
                 func.concat(
                     func.lpad(
                         cast(ai_referent_letters.c.outgoing_number, String),
@@ -734,6 +802,8 @@ async def update_letter(
     current_user: AuthenticatedUser,
     letter_id: UUID,
     payload: UpdateAIReferentLetterRequest,
+    *,
+    workspace: bool = True,
 ) -> AIReferentLetterResponse:
     await connection.execute(select(ai_referent_configuration).with_for_update())
     await ensure_module_action(connection, current_user, "ai_referent", "edit")
@@ -744,6 +814,10 @@ async def update_letter(
     row = await _letter_row(connection, letter_id, lock=True)
     if row["revision"] != payload.expected_revision:
         raise AIReferentServiceError(409, "Письмо уже изменилось. Обновите данные.")
+    if bool(row.get("is_mailing")) != (payload.mailing_recipients is not None):
+        raise AIReferentServiceError(422, "Режим адресатов зафиксирован при создании черновика.")
+    if row.get("is_mailing") and not workspace:
+        raise AIReferentServiceError(403, "Редактируйте рассылку в Workspace.")
     if payload.workflow_kind != row["workflow_kind"]:
         raise AIReferentServiceError(422, "Вид заявки нельзя изменить после создания.")
     if row["status"] not in _EDITABLE_STATUSES:
@@ -783,6 +857,8 @@ async def update_letter(
             updated_at=datetime.now(UTC),
         )
     )
+    if payload.mailing_recipients is not None:
+        await _save_mailing_recipients(connection, letter_id, payload)
     await _event(
         connection,
         letter_id,
@@ -829,6 +905,8 @@ async def act_on_letter(
     current_user: AuthenticatedUser,
     letter_id: UUID,
     payload: AIReferentActionRequest,
+    *,
+    workspace: bool = True,
 ) -> AIReferentLetterResponse:
     await connection.execute(select(ai_referent_configuration).with_for_update())
     scope = f"action:{letter_id}"
@@ -839,6 +917,23 @@ async def act_on_letter(
     if row["revision"] != payload.expected_revision:
         raise AIReferentServiceError(409, "Письмо уже изменилось. Обновите данные.")
     action = payload.action
+    mailing = (
+        await load_recipients_for_letter(connection, letter_id) if row.get("is_mailing") else None
+    )
+    recipient_actions = {
+        "stop_mailing", "retry_recipient", "confirm_recipient_sent", "confirm_recipient_not_sent",
+    }
+    if mailing is not None:
+        await ensure_module_action(connection, current_user, "ai_referent", "view")
+        if not workspace or payload.mailing is not True:
+            raise AIReferentServiceError(403, "Откройте рассылку в актуальной версии Workspace.")
+        if action in {"retry_failed_delivery", "prepare_replacement", "replace_document",
+                      "mark_sent", "confirm_sent", "confirm_not_sent"} or (
+            action not in recipient_actions and any(item.status != "draft" for item in mailing)
+        ):
+            raise AIReferentServiceError(409, "Выберите действие для получателя рассылки.")
+    elif action in recipient_actions or payload.recipient_id is not None:
+        raise AIReferentServiceError(422, "Действие доступно в рассылке.")
     current_status = row["status"]
     is_creator = row["created_by_user_id"] == current_user.id
     is_reviewer = row["reviewer_user_id"] == current_user.id
@@ -852,7 +947,32 @@ async def act_on_letter(
             connection, payload.comment_audio_id, letter_id, current_user.id, row["revision"]
         )
 
-    if action == "remind":
+    if action == "stop_mailing":
+        await ensure_module_action(
+            connection, current_user, "ai_referent", "edit" if is_creator else "admin"
+        )
+        if not await stop_pending(connection, letter_id):
+            raise AIReferentServiceError(409, "В очереди больше нет получателей.")
+        next_status = await mailing_status(connection, letter_id)
+    elif action in recipient_actions:
+        await ensure_module_action(connection, current_user, "ai_referent", "admin")
+        recipient = next((item for item in mailing or [] if item.id == payload.recipient_id), None)
+        expected = "failed" if action == "retry_recipient" else "unknown"
+        if recipient is None or recipient.status != expected or current_status == "sending":
+            raise AIReferentServiceError(409, "Состояние отправки адресату изменилось.")
+        if len(payload.comment) < 12:
+            raise AIReferentServiceError(422, "Укажите основание или результат сверки.")
+        if action == "retry_recipient":
+            await enqueue_recipient(connection, row, recipient, current_user.id)
+        else:
+            await set_recipient_status(
+                connection, recipient.id,
+                "sent" if action == "confirm_recipient_sent" else "failed", payload.comment,
+            )
+        next_status = await mailing_status(connection, letter_id)
+        if next_status == "sent":
+            values["sent_at"] = datetime.now(UTC)
+    elif action == "remind":
         await ensure_module_action(connection, current_user, "ai_referent", "edit")
         if current_status != "pending_review" or not is_creator:
             raise AIReferentServiceError(403, "Напомнить о согласовании может автор письма.")
@@ -989,7 +1109,10 @@ async def act_on_letter(
                 raise AIReferentServiceError(422, "Укажите причину возврата на доработку.")
             next_status = "needs_revision"
         else:
-            next_status, command_kind = "queued", "dispatch"
+            if mailing is None:
+                next_status, command_kind = "queued", "dispatch"
+            else:
+                next_status = "referent_review_pending"
     elif action in {
         "send",
         "confirm_sent",
@@ -1020,7 +1143,13 @@ async def act_on_letter(
             "replace_document": "queued",
         }[action]
         if action == "send":
-            command_kind = "send"
+            if mailing is None:
+                command_kind = "send"
+            else:
+                if not row["final_pdf_file_id"]:
+                    raise AIReferentServiceError(409, "Подтвердите итоговый PDF рассылки.")
+                for recipient in mailing:
+                    await enqueue_recipient(connection, row, recipient, current_user.id)
         elif action == "mark_sent":
             command_kind = "record_sent"
         elif action == "replace_document":
@@ -1084,7 +1213,7 @@ async def act_on_letter(
         if current_status == "operator_revision" or not is_creator:
             raise AIReferentServiceError(403, "Отменить письмо может его автор.")
         next_status = "cancelled"
-        if row["outgoing_number"] is not None:
+        if row["outgoing_number"] is not None and mailing is None:
             next_status, command_kind = "queued", "cancel"
     else:
         raise AIReferentServiceError(422, "Неизвестное действие.")
@@ -1103,7 +1232,7 @@ async def act_on_letter(
     await connection.execute(
         update(ai_referent_letters).where(ai_referent_letters.c.id == letter_id).values(**values)
     )
-    if next_status == "queued":
+    if next_status == "queued" and (mailing is None or command_kind is not None):
         await connection.execute(
             insert(ai_referent_delivery_commands).values(
                 id=uuid4(),
@@ -1129,7 +1258,10 @@ async def act_on_letter(
         from_status=current_status,
         to_status=next_status,
         comment=payload.comment,
-        metadata={"audioId": str(payload.comment_audio_id)} if payload.comment_audio_id else None,
+        metadata=(
+            {"recipientId": str(payload.recipient_id)} if payload.recipient_id
+            else {"audioId": str(payload.comment_audio_id)} if payload.comment_audio_id else None
+        ),
     )
     await connection.execute(
         insert(audit_events).values(
@@ -1158,6 +1290,10 @@ async def act_on_letter(
         "retry_failed_delivery": "Администратор повторяет отправку без нового согласования",
         "release_delivery": "Окончательный PDF подтверждён: подготовка отправки",
         "send": "Письмо передано на отправку",
+        "stop_mailing": "Очередь рассылки остановлена",
+        "retry_recipient": "Адресат повторно поставлен в очередь",
+        "confirm_recipient_sent": "Результат отправки адресату подтверждён",
+        "confirm_recipient_not_sent": "Подтверждено отсутствие отправки адресату",
         "cancel": "Письмо отменено",
         "confirm_sent": "Доставка письма подтверждена",
         "confirm_not_sent": "Отсутствие доставки подтверждено",

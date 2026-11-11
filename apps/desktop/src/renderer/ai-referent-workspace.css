@@ -733,3 +733,69 @@ html[data-color-theme="dark"] .ai-referent-register-actions .ai-referent-registe
   border-radius: 16px;
 }
 .ai-incoming-table tr.is-focused { outline: 2px solid var(--ws-link); outline-offset: -2px; }
+
+.ai-referent-mailing-editor,
+.ai-referent-mailing-decision {
+  display: grid;
+  justify-items: start;
+  min-width: 0;
+  gap: 8px;
+}
+
+.ai-referent-mailing-editor > :is(section, label, ul),
+.ai-referent-mailing-decision > label {
+  width: 100%;
+  min-width: 0;
+}
+
+.ai-referent-mailing-list {
+  display: grid;
+  gap: 8px;
+  max-height: 15rem;
+  overflow: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ai-referent-mailing-list li {
+  display: flex;
+  gap: 12px;
+  align-items: start;
+  justify-content: space-between;
+  padding-block: 6px;
+  border-bottom: 1px solid var(--ws-line);
+  overflow-wrap: anywhere;
+}
+
+.ai-referent-mailing-results {
+  min-width: 0;
+}
+
+.ai-referent-mailing-table {
+  width: 100%;
+  max-height: 20rem;
+  overflow: auto;
+}
+
+.ai-referent-mailing-table table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.ai-referent-mailing-table :is(th, td) {
+  padding: 8px;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+  border-bottom: 1px solid var(--ws-line);
+}
+
+.ai-referent-mailing-table :is(strong, small),
+.ai-referent-mailing-list small {
+  display: block;
+}
+
+.ai-referent-mailing-table button {
+  margin: 4px 4px 0 0;
+}
