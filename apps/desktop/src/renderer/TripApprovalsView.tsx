@@ -341,11 +341,10 @@ export function TripApprovalsView({ token, focusRequestId, requests, people, dep
                 {items.map((request) => {
                   const forward = request.allowedActions.find((action) => action === "submit" || action === "resubmit" || action === "approve" || action === "complete");
                   const movable = !busy && displayTripColumns.some((target) => { const action = tripDropAction(request, target.key, isAdministrator); return action && !((action === "submit" || action === "resubmit") && needsBriefForSubmission(request)); });
-                  return <SpatialCard id={request.id} lane={column.key} label={request.purpose || request.destination} disabled={!movable} key={request.id} data-trip-id={request.id} className={`approval-board-card trip-board-card ${movable ? "movable" : ""}`}>
-                    <button type="button" className="approval-card-open" aria-label={`Открыть поездку ${request.number}: ${request.purpose || request.destination}`} onClick={() => openRequest(request.id)}>
+                  return <SpatialCard id={request.id} lane={column.key} label={request.destination} disabled={!movable} key={request.id} data-trip-id={request.id} className={`approval-board-card trip-board-card ${movable ? "movable" : ""}`}>
+                    <button type="button" className="approval-card-open" aria-label={`Открыть поездку ${request.number}: ${request.destination}`} onClick={() => openRequest(request.id)}>
                       <span className="approval-card-topline"><span>{request.number}</span>{request.status === "needs_revision" ? <em>Доработка</em> : null}</span>
-                      <strong>{request.purpose || request.destination}</strong>
-                      {request.purpose ? <span className="trip-card-destination">{request.destination}</span> : null}
+                      <strong className="trip-list-title" title={request.destination}>{request.destination}</strong>
                       <span className="approval-card-project">{dateLabel(request.startDate)} — {dateLabel(request.endDate)}</span>
                       {personLink(request.requesterUserId, <><PersonAvatar size={24} person={people.find((person) => person.id === request.requesterUserId)} token={token} /><span>{personName(request.requesterUserId)}</span></>, "approval-card-owner")}
                       <span className="approval-card-meta"><span>{request.stageLabel}</span><span>{request.employeeIds.length} участн.</span></span>
@@ -361,7 +360,7 @@ export function TripApprovalsView({ token, focusRequestId, requests, people, dep
         </SpatialBoard>
       ) : (
         <div className="trip-list" aria-label="Список поездок">{visibleRequests.map((request) => <button className="trip-list-item" key={request.id} onClick={() => openRequest(request.id)} type="button">
-          <span><strong>{request.number}</strong><Badge appearance="tint">{request.stageLabel}</Badge></span><b>{request.destination}</b>{request.purpose ? <p>{request.purpose}</p> : null}<small>{request.startDate} — {request.endDate} · {request.employeeIds.length} сотруд. · {request.statusLabel}</small>
+          <span><strong>{request.number}</strong><Badge appearance="tint">{request.stageLabel}</Badge></span><b className="trip-list-title" title={request.destination}>{request.destination}</b><small>{request.startDate} — {request.endDate} · {request.employeeIds.length} сотруд. · {request.statusLabel}</small>
         </button>)}</div>
       )}
       </>}

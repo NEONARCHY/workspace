@@ -42,6 +42,19 @@ const card = () => document.querySelector(".trip-board-card")!;
 async function drop(target: string) { await dropSpatialCard(card(), column(target)); }
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 describe("Trip approvals interaction", async () => {
+  it("uses the route as a short list title and keeps the full purpose in search and details", () => {
+    const purpose = request.purpose.repeat(7);
+    setup({ ...request, purpose });
+    expect(card()).toHaveTextContent(request.destination);
+    expect(card()).not.toHaveTextContent(purpose);
+    fireEvent.click(screen.getByRole("button", { name: "Список" }));
+    const list = screen.getByLabelText("Список поездок");
+    expect(list).toHaveTextContent(request.destination);
+    expect(list).not.toHaveTextContent(purpose);
+    fireEvent.change(screen.getByRole("textbox", { name: "Поиск поездок" }), { target: { value: "региональной командой" } });
+    fireEvent.click(within(list).getByRole("button", { name: /Самарканд/ }));
+    expect(screen.getByRole("dialog")).toHaveTextContent(purpose);
+  });
   it("opens a chairman resolution as PDF even when the source was a signed DOCX", async () => {
     const trip = { ...request, workflowVersion: 3, hrProcessingRequired: true, hasResolution: true,
       stage: "hr" as const, originalSignatureConfirmed: true, hasSignedBrief: true,

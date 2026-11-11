@@ -1086,10 +1086,9 @@ button { -webkit-tap-highlight-color: transparent; }
 .trip-feedback.error { color: var(--ws-theme-ink-danger, #8b1a24); background: var(--ws-theme-wash-danger, #fdecee); }
 .trip-board-help { color: var(--ws-theme-ink-blue, #566d80); background: var(--ws-theme-surface, #f5f8fa); }
 .trip-kanban { grid-auto-columns: minmax(272px, 1fr); }
-.trip-card-destination { color: var(--ws-theme-ink-blue, #38566f); font-size: 12px; }
 .trip-board-card .approval-card-meta { align-items: start; font-size: 12px; }
 .trip-board-card .approval-card-meta > span:last-child { flex: none; }
-.trip-board-card .approval-card-open > strong, .trip-board-card .approval-card-meta > span, .trip-card-destination { overflow-wrap: anywhere; }
+.trip-board-card .approval-card-open > strong, .trip-board-card .approval-card-meta > span { overflow-wrap: anywhere; }
 .trip-board-card > footer { flex-wrap: wrap; font-size: 11px; }
 .trips-view > .trip-list { flex: 1; min-height: 0; }
 .trip-list-item p { white-space: normal; overflow-wrap: anywhere; }

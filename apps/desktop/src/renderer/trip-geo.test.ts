@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createTripGeoIndex, resolveTripDestination, searchTripPlaces } from "./trip-geo";
+import tripPlaces from "./assets/trip-places.json";
+import { createTripGeoIndex, resolveTripDestination, resolveTripDestinations, searchTripPlaces } from "./trip-geo";
 
 const places = createTripGeoIndex({
   countries: [
@@ -35,5 +36,38 @@ describe("offline trip place suggestions", () => {
 
   it("rejects malformed geographical data", () => {
     expect(() => createTripGeoIndex({ cities: [[1, "Bad"]], countries: [] })).toThrow();
+  });
+});
+
+
+describe("saved trip routes", () => {
+  const index = createTripGeoIndex(tripPlaces);
+
+  it.each([
+    ["Андижон, Фаргона, Наманган", ["city:1514588", "city:1514019", "city:1513157"]],
+    ["Surxondaryo viloyati, Termiz shahri", ["city:1215957"]],
+    ["Сурхандарьинская область, г. Термез", ["city:1215957"]],
+    ["Бухара, Узбекистан → Термиз, Узбекистан", ["city:1217662", "city:1215957"]],
+  ])("resolves every known stop in %s", (route, expected) => {
+    const result = resolveTripDestinations(index, route);
+    expect(result.places.map(({ id }) => id)).toEqual(expected);
+    expect(result.incomplete).toBe(false);
+  });
+
+  it("marks a region at its labeled administrative center", () => {
+    expect(resolveTripDestinations(index, "Qoraqalpog'iston Respublikasi")).toMatchObject({
+      places: [{ id: "region:UZ:09", kind: "region", context: "Административный центр · Нукус" }],
+      incomplete: false,
+    });
+  });
+
+  it("deduplicates repeated stops and keeps unresolved or contradictory stops visible", () => {
+    expect(resolveTripDestinations(index, "Андижон, Андижан; офис партнёра возле вокзала")).toMatchObject({
+      places: [{ id: "city:1514588" }], incomplete: true,
+    });
+    expect(resolveTripDestinations(index, "Surxondaryo viloyati, Andijon")).toEqual({
+      places: [], incomplete: true,
+    });
+    expect(resolveTripDestinations(places, "Paris")).toEqual({ places: [], incomplete: true });
   });
 });
