@@ -55,6 +55,27 @@ describe("Trip approvals interaction", async () => {
     fireEvent.click(within(list).getByRole("button", { name: /Самарканд/ }));
     expect(screen.getByRole("dialog")).toHaveTextContent(purpose);
   });
+  it("shows a compact participant roster on the board and in the list", () => {
+    const participants = people.slice(0, 4);
+    const participantIds = [...participants.map(({ id }) => id), "unavailable-employee"];
+    const participantNames = [...participants.map(({ name }) => name), "Сотрудник"];
+    const rosterName = `Участники (5): ${participantNames.join(", ")}`;
+    setup({ ...request, employeeIds: participantIds });
+
+    const openTrip = within(card() as HTMLElement).getByRole("button", { name: /Открыть поездку/ });
+    expect(openTrip).toHaveAccessibleDescription(rosterName);
+    const boardRoster = within(openTrip).getByRole("img", { name: rosterName });
+    expect(boardRoster.querySelectorAll(".trip-participant-avatar")).toHaveLength(4);
+    expect(within(boardRoster).getByText("+1")).toHaveAttribute("title", "Сотрудник");
+
+    fireEvent.click(screen.getByRole("button", { name: "Список" }));
+    const list = screen.getByLabelText("Список поездок");
+    const listRoster = within(list).getByRole("img", { name: rosterName });
+    expect(listRoster.querySelectorAll(".trip-participant-avatar")).toHaveLength(4);
+    expect(within(listRoster).getByText("+1")).toBeInTheDocument();
+    fireEvent.click(within(list).getByRole("button", { name: /Самарканд/ }));
+    expect(screen.getByRole("dialog")).toHaveTextContent(participants[3]!.name);
+  });
   it("opens a chairman resolution as PDF even when the source was a signed DOCX", async () => {
     const trip = { ...request, workflowVersion: 3, hrProcessingRequired: true, hasResolution: true,
       stage: "hr" as const, originalSignatureConfirmed: true, hasSignedBrief: true,
