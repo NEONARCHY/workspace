@@ -21,7 +21,7 @@ from .telegram_notification_tables import deliveries
 def payment_actor(
     user: AuthenticatedUser, row: RowMapping, key: str, config: dict[str, object]
 ) -> bool:
-    from .repository import SUBSIDY_APPROVAL_NODE, SUBSIDY_ROUTE_VARIANT, _can_act_from_config
+    from .repository import PAYMENT_DEPUTY_APPROVAL_NODE, _can_act_from_config
 
     # Global administrative read/repair authority must not subscribe every admin to payments.
     # Retain explicit account/position assignments; role stages target that actual role.
@@ -31,10 +31,7 @@ def payment_actor(
             config.get(name)
             for name in ("approverUserId", "approverPositionId", "approverPositionIds")
         )
-        or (
-            key == SUBSIDY_APPROVAL_NODE
-            and (row.get("payload") or {}).get("payment_route_variant") == SUBSIDY_ROUTE_VARIANT
-        )
+        or key == PAYMENT_DEPUTY_APPROVAL_NODE
     ):
         return _can_act_from_config(replace(user, role="employee"), row, key, config)
     role = config.get("approverRole", "manager")
