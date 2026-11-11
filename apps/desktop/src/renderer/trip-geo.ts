@@ -7,7 +7,7 @@ export interface TripPlace {
   readonly destination: string;
   readonly latitude: number;
   readonly longitude: number;
-  readonly kind: "city" | "country";
+  readonly kind: "city" | "country" | "region";
 }
 
 type CityRow = readonly [number, string, string, number, number, number, string, readonly string[]];
@@ -46,6 +46,7 @@ interface Gazetteer { readonly cities: readonly CityRow[]; readonly countries: r
 const extraNames: Readonly<Record<number, readonly string[]>> = {
   // Common Uzbek spelling not present in the source's older alternate-name row.
   1215957: ["Термиз"],
+  1514019: ["Фаргона"],
 };
 const preferredCyrillicNames: Readonly<Record<number, string>> = {
   1512569: "Ташкент", 1216265: "Самарканд", 1217662: "Бухара",
@@ -61,7 +62,56 @@ const extraCountryNames: Readonly<Record<string, readonly string[]>> = {
 export function normalizeTripPlace(value: string): string {
   return value.normalize("NFD").replace(/\p{M}/gu, "")
     .toLocaleLowerCase("ru-RU").replaceAll("ё", "е").replaceAll("ў", "у")
-    .replace(/[ʻ‘’`']/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+    .replace(/[ʻʼ‘’`']/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+}
+
+interface UzbekRegion {
+  readonly code: string;
+  readonly name: string;
+  readonly centerId: number;
+  readonly aliases: readonly string[];
+}
+
+// GeoNames region codes and city IDs. A region pin is labeled as its administrative center.
+const uzbekRegions: readonly UzbekRegion[] = [
+  { code: "01", name: "Андижанская область", centerId: 1514588, aliases: ["Andijon", "Андижон"] },
+  { code: "02", name: "Бухарская область", centerId: 1217662, aliases: ["Buxoro", "Бухоро"] },
+  { code: "03", name: "Ферганская область", centerId: 1514019, aliases: ["Fargʻona", "Фарғона", "Фаргона"] },
+  { code: "05", name: "Хорезмская область", centerId: 1512473, aliases: ["Xorazm", "Хоразм"] },
+  { code: "06", name: "Наманганская область", centerId: 1513157, aliases: ["Namangan", "Наманган"] },
+  { code: "07", name: "Навоийская область", centerId: 1513131, aliases: ["Navoiy", "Навоий"] },
+  { code: "08", name: "Кашкадарьинская область", centerId: 1216311, aliases: ["Qashqadaryo", "Қашқадарё"] },
+  { code: "09", name: "Республика Каракалпакстан", centerId: 601294, aliases: [
+    "Qoraqalpogʻiston Respublikasi", "Қорақалпоғистон Республикаси", "Каракалпакстан",
+  ] },
+  { code: "10", name: "Самаркандская область", centerId: 1216265, aliases: ["Samarqand", "Самарқанд"] },
+  { code: "12", name: "Сурхандарьинская область", centerId: 1215957, aliases: [
+    "Surxondaryo", "Surxandaryo", "Сурхондарё", "Сурхандарья",
+  ] },
+  { code: "14", name: "Ташкентская область", centerId: 1512524, aliases: ["Toshkent", "Тошкент"] },
+  { code: "15", name: "Джизакская область", centerId: 1513886, aliases: ["Jizzax", "Жиззах"] },
+  { code: "16", name: "Сырдарьинская область", centerId: 1513966, aliases: ["Sirdaryo", "Сирдарё"] },
+];
+
+const uzbekRegionNames = new Map(uzbekRegions.flatMap((region) => [
+  region.name, ...region.aliases.flatMap((alias) => region.code === "09"
+    ? [alias] : [alias + " viloyati", alias + " вилояти"]),
+].map((alias) => [normalizeTripPlace(alias), region] as const)));
+
+export interface TripDestinationResolution {
+  readonly places: readonly TripPlace[];
+  readonly incomplete: boolean;
+}
+
+function regionPlace(index: TripGeoIndex, region: UzbekRegion): TripPlace | undefined {
+  const center = index.cities.find((city) => city.code === "UZ" && city.id === region.centerId);
+  if (!center) return undefined;
+  const centerName = preferredCyrillicNames[center.id] ?? center.names.find((name) => /^[А-Яа-яЁё]+$/u.test(name)) ?? center.name;
+  return {
+    id: "region:UZ:" + region.code, name: region.name,
+    context: "Административный центр · " + centerName, destination: region.name,
+    latitude: center.latitude, longitude: center.longitude, kind: "region",
+  };
 }
 
 function isGazetteer(value: unknown): value is Gazetteer {
@@ -179,4 +229,56 @@ export function resolveTripDestination(index: TripGeoIndex, destination: string)
     (!regionMatch || city.region === regionMatch[2]));
   if (matches.length !== 1) return undefined;
   return cityPlace(matches[0]!, regionMatch?.[1] ?? rawName, index);
+}
+
+
+// Match complete place names. Unknown route segments stay in the review list.
+export function resolveTripDestinations(index: TripGeoIndex, destination: string): TripDestinationResolution {
+  const places = new Map<string, TripPlace>();
+  let incomplete = false;
+  for (const segment of destination.split(/(?:[;\r\n]+|→|->)/u).map((part) => part.trim()).filter(Boolean)) {
+    const direct = resolveTripDestination(index, segment);
+    if (direct) {
+      places.set(direct.id, direct);
+      continue;
+    }
+    const names: string[] = [];
+    const countries = new Set<string>();
+    const regions = new Set<UzbekRegion>();
+    for (const part of segment.split(",")) {
+      const name = normalizeTripPlace(part);
+      const country = index.countryNames.get(name);
+      const region = uzbekRegionNames.get(name);
+      if (country) countries.add(country.code);
+      else if (region) regions.add(region);
+      else if (name) names.push(name.replace(/^(?:г|город) +| +(?:г|город|shahri|shahar|шаҳри|шахри|шаҳар|шахар)$/gu, ""));
+    }
+    if (regions.size) countries.add("UZ");
+    if (countries.size > 1) {
+      incomplete = true;
+      continue;
+    }
+    const regionCodes = new Set([...regions].map((region) => region.code));
+    if (!names.length) {
+      for (const region of regions) {
+        const place = regionPlace(index, region);
+        if (place) places.set(place.id, place);
+        else incomplete = true;
+      }
+      continue;
+    }
+    const countryCode = countries.values().next().value;
+    for (const name of names) {
+      const matches = (index.cityNames.get(name) ?? []).filter((city) =>
+        (!countryCode || city.code === countryCode) && (!regionCodes.size || regionCodes.has(city.region)));
+      if (matches.length !== 1) {
+        incomplete = true;
+        continue;
+      }
+      const city = matches[0]!;
+      const place = cityPlace(city, preferredCyrillicNames[city.id] ?? city.name, index);
+      places.set(place.id, place);
+    }
+  }
+  return { places: [...places.values()], incomplete: incomplete || !places.size };
 }

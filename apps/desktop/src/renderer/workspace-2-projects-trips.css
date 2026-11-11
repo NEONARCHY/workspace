@@ -417,7 +417,15 @@
 .trip-dialog .trip-person > span:last-child { min-width: 0; overflow-wrap: anywhere; }
 .projects-view .budget-progress { height: 5px; margin-top: 4px; overflow: hidden; border-radius: 999px; background: var(--ws-theme-surface-soft, #e6eeed); }
 .projects-view .budget-progress > i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--ws-theme-wash-teal, #78c7b5), #68a8c5); }
-.trips-view .trip-card-destination { color: var(--ws-theme-muted, #31566a); font-size: 16px; font-weight: 600; }
+/* The full route and purpose are available when the record is opened. */
+.trips-view .trip-list-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .trips-view .approval-card-meta { color: var(--ws-theme-muted, #526c78); font-size: 10px; }
 
 .projects-view .spatial-inspector {
