@@ -58,6 +58,38 @@ def test_other_actions_cannot_change_hr_order_fields():
         TripActionRequest(action="approve", order_number="29", order_series="a/f")
 
 
+@pytest.mark.parametrize("brief_text", [
+    "Safarga ruxsat so'rayman.", "Сафарга рухсат сўрайман.", "",
+])
+def test_new_brief_lists_all_selected_participants(brief_text: str) -> None:
+    facts = TripDocumentSnapshot(
+        requester="Тестовый Инициатор", requester_title="Bosh mutaxassis", chair="Тестовый Раис",
+        brief_text=brief_text, purpose="Мониторинг", destination="Farg'ona shahri",
+        start=date(2030, 5, 1), end=date(2030, 5, 2),
+        employees=[("Testova Zebo", "Mutaxassis"), ("Тестов Али", "Мутахассис")],
+        expense_source="",
+    )
+    content = hr_brief_pdf(facts)
+    document = PdfReader(BytesIO(content))
+    text = " ".join(page.extract_text() for page in document.pages)
+
+    assert "Сафар иштирокчилари: " in text
+    participants = text.split("Сафар иштирокчилари: ")[1].strip()
+    assert participants == "Тестова \u0417\u0435\u0431\u043e; Тестов Али"
+    assert len(document.pages) == 1
+
+
+def test_new_brief_does_not_invent_participants_when_none_selected() -> None:
+    facts = TripDocumentSnapshot(
+        requester="Тестовый Инициатор", requester_title="Мутахассис", chair="Тестовый Раис",
+        brief_text="Сафарга рухсат сўрайман.", purpose="", destination="Нукус",
+        start=date(2030, 5, 1), end=date(2030, 5, 2), employees=[], expense_source="",
+    )
+    text = PdfReader(BytesIO(hr_brief_pdf(facts))).pages[0].extract_text()
+
+    assert "Сафар иштирокчилари:" not in text
+
+
 def test_cyrillic_brief_and_order_keep_the_employee_and_hr_purposes_separate():
     image = Image.new("RGBA", (240, 70), (0, 0, 0, 0))
     ImageDraw.Draw(image).line([(5, 60), (70, 5), (160, 60), (230, 15)], fill="blue", width=3)
@@ -77,6 +109,7 @@ def test_cyrillic_brief_and_order_keep_the_employee_and_hr_purposes_separate():
     brief_text = brief_page.extract_text()
     assert facts.brief_text in brief_text
     assert "Буйруқ учун" in brief_text and "Бош мутахассис" in brief_text
+    assert "Сафар иштирокчилари: Тестовый Инициатор" in brief_text
     assert "Уточнение кадровика" not in brief_text and "Резолюция санаси" not in brief_text
     assert len(brief_page.images) == 2
     order_text = " ".join(page.extract_text() for page in PdfReader(BytesIO(order)).pages)
