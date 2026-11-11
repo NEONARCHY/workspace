@@ -427,6 +427,39 @@
   overflow-wrap: anywhere;
 }
 .trips-view .approval-card-meta { color: var(--ws-theme-muted, #526c78); font-size: 10px; }
+.trips-view .trip-participant-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px 8px;
+  min-width: 0;
+  color: var(--ws-theme-muted, #48616e);
+  font-size: 12px;
+}
+.trip-participant-label { font-weight: 550; }
+.trip-participant-avatars { display: inline-flex; align-items: center; }
+.trip-participant-avatar {
+  display: inline-flex;
+  flex: none;
+  border: 2px solid var(--ws-theme-surface, #f8fbfa);
+  border-radius: 50%;
+}
+.trip-participant-avatar + .trip-participant-avatar { margin-inline-start: -6px; }
+.trip-participant-overflow {
+  display: inline-grid;
+  place-items: center;
+  min-inline-size: 24px;
+  min-block-size: 24px;
+  margin-inline-start: 2px;
+  padding-inline: 4px;
+  border: 1px solid var(--ws-theme-line, #e0e6eb);
+  border-radius: 999px;
+  background: var(--ws-theme-surface-soft, #e6eeed);
+  color: var(--ws-text);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
 
 .projects-view .spatial-inspector {
   position: fixed;
