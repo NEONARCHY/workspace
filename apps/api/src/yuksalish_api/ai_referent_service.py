@@ -30,6 +30,7 @@ from .ai_referent_schemas import (
     AIReferentActionRequest,
     AIReferentEventResponse,
     AIReferentLetterResponse,
+    AIReferentMailingRecipientInput,
     AIReferentRegistryResponse,
     CreateAIReferentLetterRequest,
     UpdateAIReferentLetterRequest,
@@ -523,10 +524,9 @@ async def _event(
 async def _save_mailing_recipients(
     connection: AsyncConnection,
     letter_id: UUID,
-    payload: CreateAIReferentLetterRequest | UpdateAIReferentLetterRequest,
+    recipients: list[AIReferentMailingRecipientInput],
 ) -> None:
-    assert payload.mailing_recipients is not None
-    mailing = await replace_recipients(connection, letter_id, payload.mailing_recipients)
+    mailing = await replace_recipients(connection, letter_id, recipients)
     first = mailing[0]
     await connection.execute(update(ai_referent_letters).where(
         ai_referent_letters.c.id == letter_id,
@@ -600,7 +600,7 @@ async def create_letter(
         )
     )
     if payload.mailing_recipients is not None:
-        await _save_mailing_recipients(connection, letter_id, payload)
+        await _save_mailing_recipients(connection, letter_id, payload.mailing_recipients)
     await _event(
         connection,
         letter_id,
@@ -858,7 +858,7 @@ async def update_letter(
         )
     )
     if payload.mailing_recipients is not None:
-        await _save_mailing_recipients(connection, letter_id, payload)
+        await _save_mailing_recipients(connection, letter_id, payload.mailing_recipients)
     await _event(
         connection,
         letter_id,
