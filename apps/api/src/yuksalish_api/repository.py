@@ -155,7 +155,8 @@ from .workspace_schemas import (
 
 PERSON_COLORS = ("#0f6cbd", "#6b5b95", "#0e7a0d", "#9b3a4d", "#8a4f12")
 SUBSIDY_ROUTE_VARIANT: Literal["subsidy"] = "subsidy"
-SUBSIDY_APPROVAL_NODE = "deputy_chair"
+PAYMENT_DEPUTY_APPROVAL_NODE = "deputy_chair"
+PAYMENT_DEPUTY_USERNAME = "umid_rajabov"
 SUBSIDY_APPROVAL_LABEL = "Утверждение первым заместителем председателя"
 STATUS_LABELS = {
     "draft": "Черновик",
@@ -598,19 +599,27 @@ def _approval_deadline_control(
     )
 
 
+def _is_ordinary_payment_deputy_stage(request_row: Record, node_key: str) -> bool:
+    return node_key == PAYMENT_DEPUTY_APPROVAL_NODE and (
+        (request_row.get("payload") or {}).get("payment_route_variant") != SUBSIDY_ROUTE_VARIANT
+    )
+
+
 def _can_act_from_config(
     current_user: AuthenticatedUser,
     request_row: Record,
     node_key: str,
     config: Mapping[str, Any],
 ) -> bool:
+    if _is_ordinary_payment_deputy_stage(request_row, node_key):
+        return current_user.username.casefold() == PAYMENT_DEPUTY_USERNAME
     if current_user.role in {"admin", "superadmin"}:
         return True
     override = (request_row.get("actor_overrides") or {}).get(node_key)
     if override is not None:
         return str(current_user.id) == str(override)
     request_payload = request_row.get("payload") or {}
-    if (node_key == SUBSIDY_APPROVAL_NODE
+    if (node_key == PAYMENT_DEPUTY_APPROVAL_NODE
             and request_payload.get("payment_route_variant") == SUBSIDY_ROUTE_VARIANT):
         approver_id = request_payload.get("subsidy_approver_user_id")
         return bool(approver_id) and str(current_user.id) == str(approver_id)
@@ -1168,7 +1177,7 @@ async def _active_stages_for_requests(
                     key=node["node_key"],
                     label=(
                         SUBSIDY_APPROVAL_LABEL
-                        if key == SUBSIDY_APPROVAL_NODE
+                        if key == PAYMENT_DEPUTY_APPROVAL_NODE
                         and (request_row.get("payload") or {}).get("payment_route_variant")
                         == SUBSIDY_ROUTE_VARIANT
                         else node["title"]
@@ -6518,7 +6527,7 @@ async def _payment_route_variant_payload(
     subsidy_node = await connection.scalar(
         select(approval_nodes.c.node_key).where(
             approval_nodes.c.template_id == template_id,
-            approval_nodes.c.node_key == SUBSIDY_APPROVAL_NODE,
+            approval_nodes.c.node_key == PAYMENT_DEPUTY_APPROVAL_NODE,
             approval_nodes.c.kind == "approval",
         )
     )
@@ -8518,6 +8527,10 @@ async def act_on_request(
         raise WorkspaceRepositoryError(403, "This user cannot decide on the selected stage")
     delegated_to_user_id = None
     if payload.action == "delegate":
+        if _is_ordinary_payment_deputy_stage(row, active_node):
+            raise WorkspaceRepositoryError(
+                403, "Решение заместителя принимает Умид Ражабов."
+            )
         if not payload.delegate_to_user_id:
             raise WorkspaceRepositoryError(422, "A delegation target is required")
         delegated_to_user_id = await _active_user_id(connection, payload.delegate_to_user_id)
