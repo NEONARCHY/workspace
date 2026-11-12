@@ -2674,9 +2674,10 @@ export function downloadWorkspaceTripDocument(
   token: string, requestId: string,
   kind: "attachment" | "brief" | "brief-preview" | "order" | "order-preview",
   signal?: AbortSignal,
+  preview = false,
 ): Promise<Blob> {
   return boundedRequest(
-    `${getApiBaseUrl()}/api/v1/trip-requests/${encodeURIComponent(requestId)}/documents/${kind}`,
+    `${getApiBaseUrl()}/api/v1/trip-requests/${encodeURIComponent(requestId)}/documents/${kind}${preview ? "?preview=true" : ""}`,
     { headers: { Authorization: `Bearer ${token}` }, signal },
     (response) => response.blob(), 120_000,
   );

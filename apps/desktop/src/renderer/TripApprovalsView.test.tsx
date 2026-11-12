@@ -8,13 +8,15 @@ import { people } from "./test-fixtures/demo-data";
 import type { FileViewerSource } from "./FileViewer";
 
 vi.mock("./FileViewer", () => ({
-  ExternalFileViewer: ({ attachment, onLoad, onClose, onEdit }: {
+  ExternalFileViewer: ({ attachment, onLoad, onClose, onEdit, downloadLabel }: {
     attachment: FileViewerSource;
     onLoad: (file: FileViewerSource, signal?: AbortSignal) => Promise<Blob>;
     onClose: () => void;
     onEdit?: () => void;
+    downloadLabel?: string;
   }) => <div role="dialog" aria-label="Просмотр билдирги"><span>{attachment.fileName}</span>
     {onEdit && <button type="button" onClick={onEdit}>Редактировать билдирги</button>}
+    {downloadLabel && <button type="button">{downloadLabel}</button>}
     <button type="button" onClick={() => void onLoad(attachment, new AbortController().signal).then(onClose)}>Показать файл</button>
   </div>,
 }));
@@ -80,10 +82,20 @@ describe("Trip approvals interaction", async () => {
     const trip = { ...request, workflowVersion: 3, hrProcessingRequired: true, hasResolution: true,
       stage: "hr" as const, originalSignatureConfirmed: true, hasSignedBrief: true,
       briefAttachmentName: "signed-original.docx", briefAttachmentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" };
-    setup(trip);
+    installSpatialGeometry();
+    const onDownloadDocument = vi.fn(async () => new Blob([], { type: "application/pdf" }));
+    render(<FluentProvider theme={webLightTheme}><TripApprovalsView
+      requests={[trip]} people={people} currentUser={people[0]!}
+      onCreate={vi.fn()} onUpdate={vi.fn()} onAction={vi.fn()} onDownloadDocument={onDownloadDocument}
+    /></FluentProvider>);
     fireEvent.click(card().querySelector(".approval-card-open")!);
     fireEvent.click(screen.getByRole("button", { name: "Билдирги с резолюцией председателя" }));
     expect(await screen.findByText("bildirgi.pdf")).toBeInTheDocument();
+    expect(screen.getByText("Скачать оригинал")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Показать файл"));
+    await waitFor(() => expect(onDownloadDocument).toHaveBeenCalledExactlyOnceWith(
+      trip.id, "brief", expect.any(AbortSignal), true,
+    ));
   });
   it("keeps the chair handoff in progress and presents the new HR route", async () => {
     const trip = { ...request, workflowVersion: 3, hrProcessingRequired: true };

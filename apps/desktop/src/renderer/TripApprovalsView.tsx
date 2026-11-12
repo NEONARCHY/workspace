@@ -72,7 +72,7 @@ interface TripApprovalsViewProps {
   readonly onDelete?: (request: TripRequest) => Promise<void>;
   readonly onAction: (request: TripRequest, action: TripAction, comment?: string, targetStage?: TripStage, order?: TripOrderInput) => Promise<TripRequest | undefined>;
   readonly onLoadBriefOffice?: (requestId: string, sheet: number, offset: number, signal?: AbortSignal) => Promise<OfficePreviewResult>;
-  readonly onDownloadDocument?: (requestId: string, kind: "attachment" | "brief" | "brief-preview" | "order" | "order-preview", signal?: AbortSignal) => Promise<Blob | undefined>;
+  readonly onDownloadDocument?: (requestId: string, kind: "attachment" | "brief" | "brief-preview" | "order" | "order-preview", signal?: AbortSignal, preview?: boolean) => Promise<Blob | undefined>;
   readonly onOpenChat?: (chatId: string) => void;
   readonly renderTripChat?: (request: TripRequest) => ReactNode;
   readonly workflow?: WorkflowDefinition;
@@ -152,6 +152,7 @@ export function TripApprovalsView({ token, focusRequestId, requests, people, dep
   const busyRef = useRef(false);
   const [documentPreview, setDocumentPreview] = useState<FileViewerSource & {
     updatedAt: string; kind: "attachment" | "brief" | "brief-preview" | "order" | "order-preview";
+    isResolution: boolean;
   }>();
   const [briefEditorRequest, setBriefEditorRequest] = useState<TripRequest>();
   const [error, setError] = useState("");
@@ -250,7 +251,9 @@ export function TripApprovalsView({ token, focusRequestId, requests, people, dep
   };
 
   const loadDocumentPreview = useCallback(async (file: FileViewerSource, signal?: AbortSignal) => {
-    const content = await onDownloadDocument?.(file.id, documentPreview?.kind ?? "attachment", signal);
+    const content = documentPreview?.isResolution
+      ? await onDownloadDocument?.(file.id, "brief", signal, true)
+      : await onDownloadDocument?.(file.id, documentPreview?.kind ?? "attachment", signal);
     if (!content) throw new Error("Не удалось открыть документ поездки");
     return content;
   }, [onDownloadDocument, documentPreview]);
@@ -263,6 +266,7 @@ export function TripApprovalsView({ token, focusRequestId, requests, people, dep
     const original = kind === "attachment" || (kind === "brief" && request.originalSignatureConfirmed && !request.hasResolution);
     setDocumentPreview({
       id: request.id, kind, updatedAt: request.updatedAt,
+      isResolution: kind === "brief" && request.hasResolution === true,
       fileName: original ? request.briefAttachmentName ?? "bildirgi" : kind === "brief" ? "bildirgi.pdf" : kind === "brief-preview" ? "bildirgi-preview.pdf"
         : kind === "order" ? `prikaz-${request.orderNumber ?? request.number}.pdf` : "prikaz-preview.pdf",
       contentType: original ? request.briefAttachmentType ?? "" : "application/pdf",
@@ -501,7 +505,7 @@ export function TripApprovalsView({ token, focusRequestId, requests, people, dep
           </form>) : null}
         </DialogSurface>
       </Dialog>
-      {documentPreview ? <Suspense fallback={<span role="status">Открываем документ…</span>}><ExternalFileViewer key={`${documentPreview.id}:${documentPreview.kind}:${documentPreview.updatedAt}`} attachment={documentPreview} onClose={() => setDocumentPreview(undefined)} onLoad={loadDocumentPreview} onLoadOffice={loadBriefOffice} onDownload={() => { const request = requests.find(item => item.id === documentPreview.id); if (request) return downloadDocument(request, documentPreview.kind); }} onEdit={documentPreview.kind === "brief-preview" && selected?.id === documentPreview.id && selected.canEdit ? () => { setDocumentPreview(undefined); setBriefEditorRequest(selected); } : undefined} editLabel="Редактировать билдирги" /></Suspense> : null}
+      {documentPreview ? <Suspense fallback={<span role="status">Открываем документ…</span>}><ExternalFileViewer key={`${documentPreview.id}:${documentPreview.kind}:${documentPreview.updatedAt}`} attachment={documentPreview} onClose={() => setDocumentPreview(undefined)} onLoad={loadDocumentPreview} onLoadOffice={loadBriefOffice} onDownload={() => { const request = requests.find(item => item.id === documentPreview.id); if (request) return downloadDocument(request, documentPreview.kind); }} downloadLabel={documentPreview.isResolution ? "Скачать оригинал" : undefined} onEdit={documentPreview.kind === "brief-preview" && selected?.id === documentPreview.id && selected.canEdit ? () => { setDocumentPreview(undefined); setBriefEditorRequest(selected); } : undefined} editLabel="Редактировать билдирги" /></Suspense> : null}
       {briefEditorRequest && <TripBriefEditor key={briefEditorRequest.id} request={briefEditorRequest} onClose={() => setBriefEditorRequest(undefined)} onSave={onUpdate} onSaved={saved => { setBriefEditorRequest(undefined); setSelectedId(saved.id); openDocument(saved, "brief-preview"); }} />}
     </section>
   );

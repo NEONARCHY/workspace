@@ -1731,11 +1731,11 @@ export function App() {
   };
   const handleTripDocument = async (
     requestId: string, kind: "attachment" | "brief" | "brief-preview" | "order" | "order-preview",
-    signal?: AbortSignal,
+    signal?: AbortSignal, preview?: boolean,
   ): Promise<Blob | undefined> => {
     if (session === undefined) return undefined;
     try {
-      return await downloadWorkspaceTripDocument(session.accessToken, requestId, kind, signal);
+      return await downloadWorkspaceTripDocument(session.accessToken, requestId, kind, signal, preview);
     } catch (error) {
       if (!signal?.aborted) reportError(error);
       return undefined;

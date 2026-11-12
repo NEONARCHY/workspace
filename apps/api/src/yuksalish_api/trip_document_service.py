@@ -386,7 +386,7 @@ async def issue_order(
 
 async def read_document(
     connection: AsyncConnection, user: AuthenticatedUser, storage: ObjectStorage,
-    request_id: UUID, kind: DocumentKind,
+    request_id: UUID, kind: DocumentKind, *, preview: bool = False,
 ) -> tuple[bytes, str, str]:
     row = await _row(connection, request_id)
     chair_id = await connection.scalar(select(hr_settings.c.chair_user_id).where(
@@ -413,6 +413,14 @@ async def read_document(
             content = await _verified(
                 storage, row["resolved_brief_key"], row["resolved_brief_sha256"],
             )
+            if preview and row.get("resolution_snapshot"):
+                from .trip_hr_pdf import TripDocumentSnapshot, hr_brief_resolution_preview
+
+                facts = TripDocumentSnapshot.model_validate(row["resolution_snapshot"])
+                preview_content = await run_in_threadpool(
+                    hr_brief_resolution_preview, content, facts,
+                )
+                return preview_content, "application/pdf", "bildirgi-resolution-preview.pdf"
             return content, "application/pdf", "bildirgi-resolution.pdf"
         if kind == "brief" and row["signed_brief_key"]:
             content = await _verified(storage, row["signed_brief_key"], row["signed_brief_sha256"])
