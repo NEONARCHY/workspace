@@ -101,11 +101,7 @@
   .web-platform .approvals-view .approval-metric { min-width: 0; flex: 1 1 120px; }
   .web-platform .approvals-view .approval-metric-actionable { min-width: 0; }
   .web-platform :is(.approvals-view, .trips-view) :is(.approval-board-filters, .ws2-segmented) { max-width: 100%; overflow-x: auto; }
-  .web-platform .approvals-view .approval-detail-header { grid-template-columns: minmax(0, 1fr) auto; padding: 12px; }
-  .web-platform .approvals-view .approval-detail-header > div:first-child { grid-column: 1; }
-  .web-platform .approvals-view .approval-detail-header > button:last-child { grid-column: 2; }
-  .web-platform .approvals-view .approval-detail-header > .fui-Badge { justify-self: start; }
-  .web-platform .approvals-view .approval-detail-header h2 { white-space: normal; overflow-wrap: anywhere; }
+  .web-platform .approvals-view .approval-detail-header { padding: 12px; }
   .web-platform .approvals-view .approval-detail-tabs { padding-inline: 12px; flex: none; overflow-x: auto; }
   .web-platform .approvals-view .approval-detail-tabs button { flex: none; }
   .web-platform .approvals-view .approval-detail-content > :is(.approval-detail-facts, .approval-detail-process) > * { margin-inline: 12px; }
