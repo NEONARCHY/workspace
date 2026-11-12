@@ -1,6 +1,7 @@
 """Synthetic trip documents only; no personnel records or real signatures."""
 
 import asyncio
+import hashlib
 import re
 from datetime import UTC, date, datetime
 from io import BytesIO
@@ -23,6 +24,7 @@ from yuksalish_api.repository import (
 )
 from yuksalish_api.trip_document_service import validate_attachment
 from yuksalish_api.trip_document_text import trip_destination_text
+from yuksalish_api.trip_hr_pdf import TripDocumentSnapshot, hr_brief_pdf
 from yuksalish_api.trip_order_pdf import _signature_image, brief_pdf, order_pdf
 from yuksalish_api.workspace_schemas import CreateTripRequest, TripActionRequest, TripWriteRequest
 
@@ -791,6 +793,65 @@ def test_written_brief_preview_is_private_and_only_available_before_submission(
             connection, requester, storage, uuid4(), "brief-preview",
         ))
     assert wrong_stage.value.status_code == 404
+
+
+@pytest.mark.parametrize("has_participants", [False, True])
+def test_resolution_preview_shows_snapshot_participants_and_download_preserves_signed_file(
+    monkeypatch: pytest.MonkeyPatch, has_participants: bool,
+) -> None:
+    requester_id, request_id = uuid4(), uuid4()
+    facts = TripDocumentSnapshot(
+        requester="Тестовый Инициатор", requester_title="Мутахассис", chair="Тестовый Раис",
+        brief_text="Сафарга рухсат сўрайман.", purpose="", destination="Нукус",
+        start=date(2026, 10, 15), end=date(2026, 10, 16),
+        employees=[("Testova Zebo", ""), ("Тестов Али", "")], expense_source="",
+    )
+    original_facts = facts if has_participants else facts.model_copy(update={"employees": []})
+    original = hr_brief_pdf(original_facts, signature())
+    row = {
+        "requester_user_id": requester_id, "workflow_version": 3, "stage": "hr",
+        "status": "running", "hr_processing_required": True, "deputy_approver_user_id": uuid4(),
+        "resolved_brief_key": "resolution.pdf",
+        "resolved_brief_sha256": hashlib.sha256(original).hexdigest(),
+        "resolution_snapshot": facts.model_dump(mode="json"),
+    }
+    monkeypatch.setattr(trip_document_service, "_row", AsyncMock(return_value=row))
+    connection, storage = AsyncMock(), AsyncMock()
+    connection.scalar.return_value = uuid4()
+    result = MagicMock()
+    result.scalars.return_value.all.return_value = []
+    connection.execute.return_value = result
+    storage.get.return_value = original
+    requester = AuthenticatedUser(requester_id, "qa", "QA", None, None, "employee")
+    stranger = AuthenticatedUser(uuid4(), "other", "Other", None, None, "employee")
+
+    async def read(user: AuthenticatedUser, *, preview: bool = False) -> bytes:
+        content, media_type, _ = await trip_document_service.read_document(
+            connection, user, storage, request_id, "brief", preview=preview,
+        )
+        assert media_type == "application/pdf"
+        return content
+
+    with pytest.raises(WorkspaceRepositoryError) as denied:
+        asyncio.run(read(stranger, preview=True))
+    assert denied.value.status_code == 404
+    storage.get.assert_not_called()
+
+    preview = asyncio.run(read(requester, preview=True))
+    pages = PdfReader(BytesIO(preview)).pages
+    assert "Сафар иштирокчилари: Тестова \u0417\u0435\u0431\u043e; Тестов Али" in text_of(preview)
+    if has_participants:
+        assert preview == original
+    else:
+        assert len(pages) == 2
+        original_page = PdfReader(BytesIO(original)).pages[0]
+        assert pages[0].extract_text() == original_page.extract_text()
+        assert [image.data for image in pages[0].images] == [
+            image.data for image in original_page.images
+        ]
+        assert "Билдиргига илова" in pages[1].extract_text()
+    assert asyncio.run(read(requester)) == original
+    storage.put.assert_not_called()
 
 
 def test_only_appointed_chair_can_decide_new_trip_and_legacy_route_remains() -> None:
