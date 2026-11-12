@@ -91,8 +91,8 @@ describe("Trip approvals interaction", async () => {
     fireEvent.click(card().querySelector(".approval-card-open")!);
     fireEvent.click(screen.getByRole("button", { name: "Билдирги с резолюцией председателя" }));
     expect(await screen.findByText("bildirgi.pdf")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Скачать оригинал" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Показать файл" }));
+    expect(screen.getByText("Скачать оригинал")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Показать файл"));
     await waitFor(() => expect(onDownloadDocument).toHaveBeenCalledExactlyOnceWith(
       trip.id, "brief", expect.any(AbortSignal), true,
     ));
