@@ -701,13 +701,12 @@ button { -webkit-tap-highlight-color: transparent; }
 .approval-create-panel { grid-template-rows: auto minmax(0, 1fr) auto; }
 .approval-create-panel > header, .approval-detail-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 22px; border-bottom: 1px solid var(--ws-theme-line, #d8e1e8); background: var(--ws-theme-surface, #ffffff); }
 .approval-create-panel > header > div, .approval-detail-header > div { min-width: 0; }
-.approval-create-panel > header span, .approval-detail-header > div > span { color: var(--ws-link, var(--ws-theme-ink-blue, #0f6cbd)); font-size: 11px; font-weight: 750; letter-spacing: .07em; text-transform: uppercase; }
+.approval-create-panel > header span, .approval-detail-header > div:first-child > span { color: var(--ws-link, var(--ws-theme-ink-blue, #0f6cbd)); font-size: 11px; font-weight: 750; letter-spacing: .07em; text-transform: uppercase; }
 .approval-create-panel > header h2, .approval-detail-header h2 { margin: 3px 0 2px; color: var(--ws-theme-ink, #172f43); font-size: 21px; font-weight: 680; letter-spacing: -.025em; text-wrap: balance; }
 .approval-create-panel > header p { margin: 0; color: var(--ws-theme-muted, #687c8e); font-size: 12px; }
 .approval-create-panel > header > button, .approval-detail-header > button { display: grid; width: 32px; height: 32px; flex: none; padding: 0; place-items: center; border: 0; border-radius: 7px; color: var(--ws-theme-muted, #5d7184); background: var(--ws-theme-surface-soft, #edf2f6); font-size: 21px; cursor: pointer; transition: color 140ms ease, background-color 140ms ease, transform 80ms ease; }
 .approval-create-panel > header > button:hover, .approval-detail-header > button:hover { color: var(--ws-theme-ink, #173f5f); background: var(--ws-theme-wash-blue, #dfe9f1); }
 .approval-create-panel > header > button:active, .approval-detail-header > button:active { transform: translateY(1px); }
-.approval-detail-header > .approval-delete-button { display: inline-flex; width: auto; min-width: 0; height: 32px; padding: 0 10px; border-radius: 9px; font-size: 12px; }
 .approval-create-scroll { display: grid; gap: 10px; min-height: 0; padding: 16px 20px 26px; overflow-y: auto; }
 .approval-create-panel > footer { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--ws-theme-line, #d8e1e8); background: var(--ws-theme-surface, #ffffff); }
 .approval-create-panel > footer > span { color: var(--ws-theme-muted, #6d7f90); font-size: 11px; }

@@ -2005,28 +2005,39 @@ export function ApprovalsView({
                     <span>{selectedRequest.details.projectCode ? `${selectedRequest.details.projectCode} · ` : ""}Заявка №{selectedRequest.number} · v{selectedRequest.revision}</span>
                     <h2 id="approval-detail-title">{selectedRequest.title}</h2>
                   </div>
-                  <Badge
-                    appearance="tint"
-                    color={selectedRequest.status === "approved" ? "success" : selectedRequest.status === "rejected" ? "danger" : selectedRequest.status === "needs_revision" ? "warning" : "brand"}
-                  >
-                    {selectedRequest.statusLabel}
-                  </Badge>
-                  {canEditRequest(selectedRequest) && editingRequestId !== selectedRequest.id ? (
-                    <Button className="approval-edit-button" appearance="subtle" icon={<CircleEdit24Regular />} disabled={actionBusy} onClick={() => startRevision(selectedRequest)}>Исправить заявку</Button>
-                  ) : null}
-                  {canManage ? (
-                    <Button
-                      className="approval-delete-button"
-                      appearance="subtle"
-                      icon={<Delete24Regular />}
-                      aria-label="Удалить заявку"
-                      disabled={actionBusy}
-                      onClick={() => void removeRequest(selectedRequest)}
+                  <button className="approval-detail-close" type="button" aria-label="Закрыть карточку заявки" onClick={closeDetail}>×</button>
+                  <div className="approval-detail-actions">
+                    <Badge
+                      appearance="tint"
+                      color={selectedRequest.status === "approved" ? "success" : selectedRequest.status === "rejected" ? "danger" : selectedRequest.status === "needs_revision" ? "warning" : "brand"}
                     >
-                      Удалить
-                    </Button>
-                  ) : null}
-                  <button type="button" aria-label="Закрыть карточку заявки" onClick={closeDetail}>×</button>
+                      {selectedRequest.statusLabel}
+                    </Badge>
+                    {canEditRequest(selectedRequest) && editingRequestId !== selectedRequest.id ? (
+                      <Button
+                        size="small"
+                        appearance="subtle"
+                        icon={<CircleEdit24Regular />}
+                        disabled={actionBusy}
+                        onClick={() => startRevision(selectedRequest)}
+                      >
+                        Исправить заявку
+                      </Button>
+                    ) : null}
+                    {canManage ? (
+                      <Button
+                        className="approval-delete-button"
+                        size="small"
+                        appearance="subtle"
+                        icon={<Delete24Regular />}
+                        aria-label="Удалить заявку"
+                        disabled={actionBusy}
+                        onClick={() => void removeRequest(selectedRequest)}
+                      >
+                        Удалить
+                      </Button>
+                    ) : null}
+                  </div>
                 </header>
 
                 <SlidingSegmented as="nav" className="approval-detail-tabs" aria-label="Разделы заявки">
