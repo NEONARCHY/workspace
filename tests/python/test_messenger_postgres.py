@@ -1,5 +1,6 @@
 import asyncio
 import os
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
@@ -14,8 +15,10 @@ from yuksalish_api import messenger_service as service
 from yuksalish_api.auth import load_authenticated_user
 from yuksalish_api.errors import WorkspaceRepositoryError
 from yuksalish_api.main import create_app
+from yuksalish_api.position_policy import EXECUTIVE_LEADER_POSITION_NAME
 from yuksalish_api.repository import (
     create_attachment,
+    create_task,
     find_active_user_by_username,
     get_attachment,
     load_workspace,
@@ -39,6 +42,7 @@ from yuksalish_api.workspace_schemas import (
     AddChatMembersRequest,
     ChatPermissions,
     CreateChatRequest,
+    CreateTaskRequest,
     DeleteMessageRequest,
     EditMessageRequest,
     MessageReactionRequest,
@@ -229,6 +233,58 @@ async def exercise_permissions(url: str) -> None:
                 ].id == attachment.id
                 with pytest.raises(WorkspaceRepositoryError):
                     await get_attachment(connection, admin, UUID(attachment.id))
+                chairman = replace(admin, role="employee", job_title=EXECUTIVE_LEADER_POSITION_NAME)
+                with pytest.raises(WorkspaceRepositoryError) as private_file_denied:
+                    await get_attachment(connection, chairman, UUID(attachment.id))
+                assert private_file_denied.value.status_code == 404
+
+                task = await create_task(
+                    connection,
+                    owner,
+                    CreateTaskRequest(
+                        title="Task chat attachment access", assignee_id=str(peer.id),
+                    ),
+                )
+                assert task.chat_id is not None
+                task_chat_id = UUID(task.chat_id)
+                task_message = await service.send_chat_message(
+                    connection, peer, task_chat_id, SendMessageRequest(body="Task result")
+                )
+                task_file = await create_attachment(
+                    connection, peer, "message", UUID(task_message.id),
+                    file_name="result.docx", byte_size=10, sha256="b" * 64,
+                    content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    storage_key="test/task-result",
+                )
+                assert await connection.scalar(select(chat_members.c.user_id).where(
+                    chat_members.c.chat_id == task_chat_id,
+                    chat_members.c.user_id == chairman.id,
+                )) is None
+                chairman_workspace = await load_workspace(connection, chairman)
+                assert task_message.id in {item.id for item in chairman_workspace.messages}
+                assert task_file.id in {item.id for item in chairman_workspace.attachments}
+                for reader in (chairman, admin, owner):
+                    metadata, key = await get_attachment(connection, reader, UUID(task_file.id))
+                    assert metadata.id == task_file.id and key == "test/task-result"
+                ordinary_employee = replace(chairman, job_title=None)
+                with pytest.raises(WorkspaceRepositoryError) as task_file_denied:
+                    await get_attachment(connection, ordinary_employee, UUID(task_file.id))
+                assert task_file_denied.value.status_code == 404
+                chairman_message = await service.send_chat_message(
+                    connection, chairman, task_chat_id, SendMessageRequest(body="Review comment")
+                )
+                with pytest.raises(WorkspaceRepositoryError) as upload_denied:
+                    await validate_attachment_owner(
+                        connection, chairman, "message", UUID(chairman_message.id), write=True,
+                    )
+                assert upload_denied.value.status_code == 404
+                await service.change_message(
+                    connection, peer, UUID(task_message.id),
+                    DeleteMessageRequest(expected_revision=1),
+                )
+                with pytest.raises(WorkspaceRepositoryError) as deleted_file_denied:
+                    await get_attachment(connection, chairman, UUID(task_file.id))
+                assert deleted_file_denied.value.status_code == 404
                 with pytest.raises(WorkspaceRepositoryError):
                     await service.send_chat_message(
                         connection, admin, group_id, SendMessageRequest(body="No access")

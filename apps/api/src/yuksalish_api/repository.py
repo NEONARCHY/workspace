@@ -7039,33 +7039,22 @@ async def validate_attachment_owner(
             permissions = messenger_service.member_permissions(member)
             if not permissions.send_messages or not permissions.upload_files:
                 raise WorkspaceRepositoryError(403, "Нет права отправлять файлы в этой группе")
-        row = (
-            (
-                await connection.execute(
-                    select(messages.c.author_user_id, chat_members.c.user_id)
-                    .select_from(
-                        messages.join(chat_members, chat_members.c.chat_id == messages.c.chat_id)
-                    )
-                    .where(
-                        messages.c.id == owner_id,
-                        messages.c.deleted_at.is_(None),
-                        messages.c.system_kind.is_(None),
-                        chat_members.c.user_id == current_user.id,
-                        or_(
-                            chat_members.c.history_visible_from.is_(None),
-                            messages.c.created_at >= chat_members.c.history_visible_from,
-                        ),
-                        or_(
-                            messages.c.system_target_user_id.is_(None),
-                            messages.c.system_target_user_id == current_user.id,
-                        ),
-                    )
-                )
-            )
-            .mappings()
-            .first()
+        # Leadership can read managed chats without a physical membership row.
+        statement = select(messages.c.id).where(
+            messages.c.id == owner_id,
+            messages.c.chat_id == chat_id,
+            messages.c.deleted_at.is_(None),
+            messages.c.system_kind.is_(None),
+            messenger_service.message_access_filter(member, current_user.id),
         )
-        if row is None or (write and row["author_user_id"] != current_user.id):
+        if write:
+            statement = statement.join(
+                chat_members, chat_members.c.chat_id == messages.c.chat_id,
+            ).where(
+                chat_members.c.user_id == current_user.id,
+                messages.c.author_user_id == current_user.id,
+            )
+        if await connection.scalar(statement) is None:
             raise WorkspaceRepositoryError(404, "Message was not found")
         return
 
