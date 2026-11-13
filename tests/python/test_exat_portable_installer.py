@@ -66,6 +66,25 @@ def test_portable_spec_excludes_config_signatures_and_address_book(installer):
     assert namespace["result"]["datas"] == []
 
 
+def test_legacy_spec_collects_only_timezone_data(installer):
+    original = (
+        "from PyInstaller.utils.hooks import collect_submodules\n"
+        "a = Analysis(\n"
+        "    datas=[\n"
+        "        ('config', 'config'),\n"
+        "        ('organizations_unified.md', '.'),\n"
+        "        ('actual list of organizations.md', '.'),\n"
+        "        ('assets\\\\signatures', 'assets\\\\signatures'),\n"
+        "    ],\n"
+        ")\n"
+    )
+    patched = installer.patch_portable_spec(original)
+    assert "collect_data_files('tzdata')" in patched
+    assert "datas=tzdata_files" in patched
+    assert all(name not in patched for name in ("signatures", "organizations", "config"))
+    assert installer.patch_portable_spec(patched) == patched
+
+
 def test_incoming_worker_uses_same_external_project_root(installer):
     original = (
         "from pathlib import Path\n"

@@ -6,9 +6,15 @@ from uuid import UUID, uuid4
 
 from fastapi import HTTPException
 from sqlalchemy import insert, literal, or_, select, update
+from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from .ai_referent_deletion import purge_letter
+from .ai_referent_mailing import (
+    mailing_status,
+    may_send_recipient,
+    set_recipient_status,
+)
 from .ai_referent_service import _display_number, _event, _letter_row
 from .ai_referent_shared_service import notify_letter, telegram_id_for
 from .tables import (
@@ -23,9 +29,31 @@ from .tables import (
 from .tables import (
     ai_referent_delivery_commands as commands,
 )
-from .tables import (
-    ai_referent_letters as letters,
-)
+from .tables import ai_referent_letters as letters
+from .tables import ai_referent_mailing_recipients as recipients
+
+
+async def _record_recipient_result(
+    connection: AsyncConnection, row: RowMapping, job: RowMapping, status: str, detail: str,
+) -> None:
+    await set_recipient_status(connection, job["recipient_id"], status, detail)
+    next_status = await mailing_status(connection, row["id"])
+    now = datetime.now(UTC)
+    await connection.execute(update(letters).where(letters.c.id == row["id"]).values(
+        status=next_status, revision=row["revision"] + 1, updated_at=now,
+        sent_at=now if next_status == "sent" else row["sent_at"],
+    ))
+    await _event(
+        connection, row["id"], None, f"mailing.recipient_{status}",
+        from_status=row["status"], to_status=next_status, comment=detail,
+        metadata={"recipientId": str(job["recipient_id"]), "jobId": str(job["id"])},
+    )
+    if next_status != "queued":
+        title = "Результаты рассылки обновлены"
+        if next_status == "delivery_unknown":
+            title = "Рассылке требуется сверка результата"
+        await notify_letter(connection, await _letter_row(connection, row["id"]), title)
+
 
 
 async def expire_jobs(connection: AsyncConnection) -> int:
@@ -67,6 +95,11 @@ async def expire_jobs(connection: AsyncConnection) -> int:
             )
         )
         row = await _letter_row(connection, job["letter_id"], lock=True)
+        if job.get("recipient_id") is not None:
+            await _record_recipient_result(
+                connection, row, job, "unknown", "Робот отключился. Сверьте внешний журнал."
+            )
+            continue
         if row["status"] != "sending":
             continue
         deleting = await connection.scalar(select(commands.c.id).where(
@@ -101,7 +134,9 @@ async def expire_jobs(connection: AsyncConnection) -> int:
     return len(rows)
 
 
-async def claim_job(connection: AsyncConnection, agent_id: str) -> dict[str, object] | None:
+async def claim_job(
+    connection: AsyncConnection, agent_id: str, *, mailing_supported: bool = False,
+) -> dict[str, object] | None:
     await connection.execute(select(ai_referent_configuration).with_for_update())
     assigned = await connection.scalar(select(ai_referent_configuration.c.execution_agent_id))
     if assigned != agent_id:
@@ -133,7 +168,10 @@ async def claim_job(connection: AsyncConnection, agent_id: str) -> dict[str, obj
         (
             await connection.execute(
                 select(commands)
+                .join(letters, letters.c.id == commands.c.letter_id)
                 .where(commands.c.status == "pending")
+                .where(or_(letters.c.is_mailing.is_(False), literal(mailing_supported)))
+                .where(or_(commands.c.recipient_id.is_(None), letters.c.status == "queued"))
                 .where(
                     or_(
                         commands.c.kind.not_in(["prepare", "reprepare"]),
@@ -156,6 +194,26 @@ async def claim_job(connection: AsyncConnection, agent_id: str) -> dict[str, obj
             update(commands).where(commands.c.id == job["id"]).values(status="cancelled")
         )
         return None
+    recipient = None
+    if job.get("recipient_id") is not None:
+        recipient = (await connection.execute(select(recipients).where(
+            recipients.c.id == job["recipient_id"], recipients.c.letter_id == row["id"],
+            recipients.c.status == "queued",
+        ))).mappings().one()
+        if not await may_send_recipient(connection, job, row):
+            detail = "Права отправки или согласованный PDF изменились."
+            await connection.execute(update(commands).where(commands.c.id == job["id"]).values(
+                status="failed", updated_at=datetime.now(UTC), last_error=detail,
+            ))
+            await set_recipient_status(connection, recipient["id"], "sending", "")
+            await _record_recipient_result(connection, row, job, "failed", detail)
+            return None
+        await set_recipient_status(connection, recipient["id"], "sending", "")
+        await _event(
+            connection, row["id"], None, "mailing.recipient_started",
+            from_status="queued", to_status="sending", comment=recipient["address"],
+            metadata={"recipientId": str(recipient["id"]), "jobId": str(job["id"])},
+        )
     now, lease = datetime.now(UTC), uuid4()
     await connection.execute(
         update(commands)
@@ -235,9 +293,13 @@ async def claim_job(connection: AsyncConnection, agent_id: str) -> dict[str, obj
         "outgoingNumber": row["outgoing_number"],
         "yearSuffix": row["year_suffix"],
         "subject": row["subject"] or _display_number(row) or "",
-        "recipientOrganization": row["recipient_organization"],
-        "recipientAddress": row["recipient_address"],
-        "route": row["route"],
+        "recipientOrganization": (
+            recipient["organization"] if recipient else row["recipient_organization"]
+        ),
+        "recipientAddress": recipient["address"] if recipient else row["recipient_address"],
+        "route": recipient["route"] if recipient else row["route"],
+        **({"mailing": True} if row.get("is_mailing") else {}),
+        **({"recipientId": str(recipient["id"])} if recipient else {}),
         "senderName": row["creator_name"],
         "reviewerName": approval_name or row["reviewer_name"],
         "senderTelegramId": await telegram_id_for(connection, row["created_by_user_id"]),
@@ -259,6 +321,14 @@ async def claim_job(connection: AsyncConnection, agent_id: str) -> dict[str, obj
 async def heartbeat_job(
     connection: AsyncConnection, job_id: UUID, lease: UUID, agent_id: str
 ) -> None:
+    job = (await connection.execute(
+        select(commands).where(commands.c.id == job_id, commands.c.recipient_id.is_not(None))
+    )).mappings().one_or_none()
+    if job is not None:
+        row = await _letter_row(connection, job["letter_id"])
+        assigned = await connection.scalar(select(ai_referent_configuration.c.execution_agent_id))
+        if assigned != agent_id or not await may_send_recipient(connection, job, row):
+            raise HTTPException(409, "Права отправки или согласованный PDF изменились.")
     result = await connection.execute(
         update(commands)
         .where(
@@ -322,6 +392,16 @@ async def complete_job(
     row = await _letter_row(connection, job["letter_id"], lock=True)
     if row["status"] != "sending":
         raise HTTPException(409, "Состояние письма уже изменилось.")
+    if job.get("recipient_id") is not None:
+        if outcome not in {"sent", "failed", "unknown"} or len(detail.strip()) < 3:
+            raise HTTPException(422, "Укажите результат отправки получателю.")
+        now = datetime.now(UTC)
+        await connection.execute(update(commands).where(commands.c.id == job_id).values(
+            status="completed", result=result, completed_at=now, updated_at=now,
+            last_error=detail if outcome != "sent" else "",
+        ))
+        await _record_recipient_result(connection, row, job, outcome, detail)
+        return
     if outcome == "deleted":
         if job["kind"] != "delete":
             raise HTTPException(422, "Удаление не было запрошено.")
@@ -385,9 +465,12 @@ async def complete_job(
             if not signed:
                 raise HTTPException(422, "Сначала загрузите подписанный PDF этого задания.")
             final_pdf_id = signed
+            requires_author = row.get("is_mailing") or (
+                row["reviewer_key"] == "bobur" and job["kind"] == "prepare"
+            )
             status = (
                 "awaiting_final_send"
-                if row["reviewer_key"] == "bobur" and job["kind"] == "prepare"
+                if requires_author
                 else "queued"
                 if auto_send and job["kind"] == "prepare"
                 else "referent_review_pending"

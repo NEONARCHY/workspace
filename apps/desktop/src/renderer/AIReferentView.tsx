@@ -59,6 +59,12 @@ import { AIReferentIncomingAccess } from "./AIReferentIncomingAccess";
 import { AIReferentFiles, AIReferentPacketViewer, referentDownloadName, saveReferentBlob } from "./AIReferentFiles";
 import { AIReferentPagination } from "./AIReferentPagination";
 import { AIReferentAudioComposer, AIReferentAudioPlayer } from "./AIReferentAudioComment";
+import {
+  AIReferentMailingEditor,
+  AIReferentMailingResults,
+  isMailingRecipientAction,
+  type MailingDraftRecipient,
+} from "./AIReferentMailing";
 import { AIReferentRecipientPicker } from "./AIReferentRecipientPicker";
 import { AIReferentAddressBook } from "./AIReferentAddressBook";
 import { AIReferentArchive, AIReferentTelegram } from "./AIReferentArchive";
@@ -133,9 +139,14 @@ const actionLabels: Readonly<Record<AIReferentAction, string>> = {
   replace_document: "Заменить письмо",
   mark_sent: "Отправлено вручную",
   prepare_replacement: "Применить замену без согласования",
+  stop_mailing: "Остановить очередь",
+  retry_recipient: "Повторить отправку адресату",
+  confirm_recipient_sent: "Подтвердить отправку адресату",
+  confirm_recipient_not_sent: "Подтвердить отсутствие отправки",
 };
 
 interface LetterForm {
+  mailingRecipients?: readonly MailingDraftRecipient[];
   workflowKind: "delivery" | "sign_only";
   subject: string;
   recipientOrganization: string;
@@ -162,6 +173,7 @@ const emptyForm = (workflowKind: LetterForm["workflowKind"] = "delivery"): Lette
 function letterForm(letter: AIReferentLetter): LetterForm {
   return {
     workflowKind: letter.workflowKind,
+    mailingRecipients: letter.mailingRecipients ?? undefined,
     subject: letter.subject,
     recipientOrganization: letter.recipientOrganization,
     recipientAddress: letter.recipientAddress,
@@ -175,6 +187,9 @@ function letterForm(letter: AIReferentLetter): LetterForm {
 function formPayload(form: LetterForm): AIReferentLetterInput {
   return {
     workflowKind: form.workflowKind,
+    mailingRecipients: form.mailingRecipients?.map(({ address, organization, directoryId }) => ({
+      address, organization, directoryId,
+    })),
     subject: form.subject.trim(),
     recipientOrganization: form.workflowKind === "sign_only" ? "Подписание без отправки" : form.recipientOrganization.trim(),
     recipientAddress: form.workflowKind === "sign_only" ? "" : form.recipientAddress.trim(),
@@ -298,7 +313,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, pre
   const readOnly = authority?.writable !== true;
   const requiredRoute = addressRoute(form.recipientAddress);
   const needsManualRecipientChoice = manualRecipientChoice === "ask" && Boolean(requiredRoute)
-    && form.recipientOrganization.trim().length >= 2;
+    && !form.mailingRecipients && form.recipientOrganization.trim().length >= 2;
   const savedPrimary = editingLetter?.attachments.find((attachment) => attachment.documentRole === "primary");
   const savedAdditional = editingLetter?.attachments.filter((attachment) => attachment.documentRole !== "primary") ?? [];
   const signerKey = reviewerConfig?.reviewers.find((reviewer) => reviewer.userId === form.reviewerUserId)?.key;
@@ -461,6 +476,9 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, pre
   const save = async (submit = false) => {
     if (readOnly) { setError("AI Referent временно доступен только для просмотра."); return; }
     if (busyRef.current) return;
+    if (form.mailingRecipients && form.mailingRecipients.length < 2) {
+      setError("Добавьте хотя бы двух получателей рассылки."); return;
+    }
     if (needsManualRecipientChoice) {
       setError("Выберите, сохранять ли новый адрес в общий справочник."); return;
     }
@@ -470,7 +488,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, pre
       if (formSignatureMismatch) { setError("В DOCX не найдено место для подписи выбранного руководителя. Проверьте документ или выбор согласующего."); return; }
       if (reviewersLoading || reviewersError) { setError("Дождитесь загрузки списка согласующих или повторите её."); return; }
       if (!reviewers.some((person) => person.id === form.reviewerUserId)) { setError("Выберите согласующего."); return; }
-      if (form.workflowKind === "delivery" && (!form.recipientOrganization.trim() || !form.recipientAddress.trim())) { setError("Укажите организацию и адрес получателя."); return; }
+      if (form.workflowKind === "delivery" && !form.mailingRecipients && (!form.recipientOrganization.trim() || !form.recipientAddress.trim())) { setError("Укажите организацию и адрес получателя."); return; }
       if (!form.file && !editingId) { setError("Приложите основной документ DOCX."); return; }
     }
     busyRef.current = true;
@@ -547,21 +565,29 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, pre
     }
   };
 
-  const act = async (letter: AIReferentLetter, action: AIReferentAction) => {
-    if (readOnly) { setError("AI Referent временно доступен только для просмотра."); return; }
-    if (busyRef.current) return;
+  const act = async (
+    letter: AIReferentLetter, action: AIReferentAction, recipientId?: string, comment = decisionComment,
+  ) => {
+    if (readOnly) { setError("AI Referent временно доступен только для просмотра."); return false; }
+    if (busyRef.current) return false;
     busyRef.current = true;
     setBusy(true);
     setError("");
     try {
-      const updated = await actOnAIReferentLetter(token, letter, action, decisionComment, crypto.randomUUID(), action === "return_for_revision" ? selectedAudio?.id : undefined);
+      const updated = await actOnAIReferentLetter(
+        token, letter, action, comment, crypto.randomUUID(),
+        action === "return_for_revision" ? selectedAudio?.id : undefined,
+        ...(recipientId ? [recipientId] as const : []),
+      );
       replaceLetter(updated);
       setDecisionComment("");
       setDecisionAudio(undefined);
       setConfirmAction(undefined);
       void refresh();
+      return true;
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Не удалось выполнить действие.");
+      return false;
     } finally {
       busyRef.current = false;
       setBusy(false);
@@ -776,7 +802,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, pre
               onClick={() => { setSelectedId(letter.id); setDetailTab("overview"); setDecisionComment(""); setError(""); }}
             >
               <span className={`ai-referent-status status-${letter.status}`}>
-                {statusLabels[letter.status]}
+                {letter.mailingRecipients && letter.status === "failed" && letter.finalPdfFileId ? "Завершено с исключениями" : statusLabels[letter.status]}
               </span>
               <span className="ai-referent-row-main">
                 <strong>{letter.subject}</strong>
@@ -825,7 +851,24 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, pre
                 <label>Тема письма (необязательно)<Input maxLength={300} placeholder="Если пропустить — исходящий номер" value={form.subject} onChange={(_e, d) => setForm((current) => ({ ...current, subject: d.value }))} /></label>
                 <small>Оставьте пустой — робот использует исходящий номер. Введённая тема уйдёт без добавления номера.</small>
                 {form.workflowKind === "sign_only" ? <p className="ai-referent-sign-hint">Загрузите DOCX, выберите одного согласующего. После его решения робот вернёт каждый лист отдельным подписанным PDF. Адресатам письма не отправляются.</p> : null}
-                {form.workflowKind === "delivery" ? <AIReferentRecipientPicker
+                {form.workflowKind === "delivery" && authority?.mailingEnabled && !editingId ? <div className="ai-referent-select-field">
+                  <span id="referent-address-mode-label">Режим адресатов</span>
+                  <Select aria-labelledby="referent-address-mode-label" disabled={busy || manualRecipientBusy}
+                    value={form.mailingRecipients ? "mailing" : "single"} onChange={(event) => {
+                      setError("");
+                      setForm((current) => ({ ...current, mailingRecipients: event.target.value === "mailing" ? [] : undefined }));
+                    }}>
+                    <option value="single">Один адресат</option>
+                    <option value="mailing">Рассылка</option>
+                  </Select>
+                </div> : null}
+                {form.mailingRecipients ? <AIReferentMailingEditor
+                  token={token}
+                  recipients={form.mailingRecipients}
+                  onChange={(mailingRecipients) => setForm((current) => ({ ...current, mailingRecipients }))}
+                  disabled={busy || readOnly}
+                /> : null}
+                {form.workflowKind === "delivery" && !form.mailingRecipients ? <AIReferentRecipientPicker
                   token={token}
                   organization={form.recipientOrganization}
                   address={form.recipientAddress}
@@ -840,7 +883,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, pre
                     route: addressRoute(recipientAddress) ?? current.route,
                   })); }}
                 /> : null}
-                {form.workflowKind === "delivery" && manualRecipientChoice !== "hidden" && requiredRoute && form.recipientOrganization.trim().length >= 2 ? <div className="ai-referent-manual-save" role="group" aria-label="Сохранение нового адресата">
+                {form.workflowKind === "delivery" && !form.mailingRecipients && manualRecipientChoice !== "hidden" && requiredRoute && form.recipientOrganization.trim().length >= 2 ? <div className="ai-referent-manual-save" role="group" aria-label="Сохранение нового адресата">
                   <strong>Сохранить введённый адрес в справочник?</strong>
                   <small>«{form.recipientOrganization.trim()}» · {form.recipientAddress.trim()} — будет доступен всем сотрудникам и в Telegram-боте после синхронизации.</small>
                   {manualRecipientChoice === "ask" ? <div>
@@ -856,10 +899,10 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, pre
                   {manualRecipientError ? <span role="alert">{manualRecipientError}</span> : null}
                 </div> : null}
                 <div className="ai-referent-form-grid">
-                  {form.workflowKind === "delivery" ? <div className="ai-referent-select-field"><span id="referent-route-label">Канал отправки</span><Select aria-labelledby="referent-route-label" value={requiredRoute ?? form.route} onChange={(event) => setForm((current) => ({ ...current, route: requiredRoute ?? event.target.value as LetterForm["route"] }))}><option value="exat" disabled={requiredRoute === "webmail"}>E-XAT</option><option value="webmail" disabled={requiredRoute === "exat"}>Webmail</option></Select></div> : null}
+                  {form.workflowKind === "delivery" && !form.mailingRecipients ? <div className="ai-referent-select-field"><span id="referent-route-label">Канал отправки</span><Select aria-labelledby="referent-route-label" value={requiredRoute ?? form.route} onChange={(event) => setForm((current) => ({ ...current, route: requiredRoute ?? event.target.value as LetterForm["route"] }))}><option value="exat" disabled={requiredRoute === "webmail"}>E-XAT</option><option value="webmail" disabled={requiredRoute === "exat"}>Webmail</option></Select></div> : null}
                   <div className="ai-referent-select-field"><span id="referent-reviewer-label">Согласующий</span><Select aria-labelledby="referent-reviewer-label" disabled={busy || reviewersLoading || Boolean(reviewersError)} value={form.reviewerUserId} onChange={(event) => setForm((current) => ({ ...current, reviewerUserId: event.target.value, finalReviewerUserId: "" }))}><option value="">{reviewersLoading ? "Загружаем согласующих…" : "Не назначен"}</option>{reviewers.map((person) => <option value={person.id} key={person.id}>{person.name}</option>)}</Select></div>
                 </div>
-                {form.workflowKind === "delivery" && requiredRoute ? <small>Канал определён адресом: {requiredRoute === "exat" ? "адреса @exat.uz принимаются через E-XAT." : "этот адрес принимает письма через Webmail."}</small> : null}
+                {form.workflowKind === "delivery" && !form.mailingRecipients && requiredRoute ? <small>Канал определён адресом: {requiredRoute === "exat" ? "адреса @exat.uz принимаются через E-XAT." : "этот адрес принимает письма через Webmail."}</small> : null}
                 {reviewersError || (!reviewersLoading && reviewers.length === 0) ? <WorkspaceNotice tone="warning" className="ai-referent-preflight" role="alert" actions={<><Button disabled={reviewersLoading} onClick={() => setReviewersAttempt((attempt) => attempt + 1)}>Обновить согласующих</Button></>}><span>{reviewersError || "Нет доступных согласующих. Попросите администратора проверить их настройки."}</span></WorkspaceNotice> : null}
                 {form.workflowKind === "delivery" && boburId && form.reviewerUserId === boburId ? <div className="ai-referent-select-field"><span id="referent-preliminary-label">Предварительный согласующий — до Бобура · обязательно</span><Select aria-labelledby="referent-preliminary-label" required value={form.finalReviewerUserId} onChange={(event) => setForm((current) => ({ ...current, finalReviewerUserId: event.target.value }))}><option value="" disabled>Выберите предварительного согласующего</option>{reviewers.filter((person) => person.id !== boburId).map((person) => <option value={person.id} key={person.id}>{person.name}</option>)}</Select></div> : null}
                 <label>Служебная заметка<Textarea resize="vertical" value={form.note} onChange={(_e, d) => setForm((current) => ({ ...current, note: d.value }))} /></label>
@@ -942,8 +985,8 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, pre
                   {authorityError ? `Режим только для просмотра: ${authorityError}` : authority?.detail || "Проверяем связь с роботом. Пока изменения недоступны."}
                 </WorkspaceNotice> : null}
                 <div className="ai-referent-detail-status">
-                  <span className={`ai-referent-status status-${selected.status}`}>{statusLabels[selected.status]}</span>
-                  <span>{selected.workflowKind === "sign_only" ? "Только подпись · без доставки" : selected.route === "exat" ? "E-XAT" : "Webmail"}</span>
+                  <span className={`ai-referent-status status-${selected.status}`}>{selected.mailingRecipients && selected.status === "failed" && selected.finalPdfFileId ? "Завершено с исключениями" : statusLabels[selected.status]}</span>
+                  <span>{selected.mailingRecipients ? "Рассылка" : selected.workflowKind === "sign_only" ? "Только подпись · без доставки" : selected.route === "exat" ? "E-XAT" : "Webmail"}</span>
                   <span>Источник: {selected.source === "telegram" ? "Telegram" : selected.source === "import" ? "Архив" : "Workspace"}</span>
                 </div>
                 {selected.documentCheck && selected.canEdit && !selected.submissionBlockReason && selected.documentCheck.status !== "passed" ? <WorkspaceNotice tone="warning" className="ai-referent-preflight" role="status">{selected.documentCheck.detail || "Робот проверяет DOCX. Согласование станет доступно после успешной проверки."}</WorkspaceNotice> : null}
@@ -954,7 +997,13 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, pre
                 </SlidingSegmented>
                 {detailTab === "overview" ? <>
                 {selected.finalPdfFileId ? <section className="ai-referent-detail-card"><h3>Письмо · подписанный PDF</h3><p>Это актуальная версия письма. Вложения доступны в пакете документов.</p><Button {...letterPreviewFocusTarget} disabled={busy} onClick={() => void showFinalPdf(selected, "preview")}>Открыть в Workspace</Button><Button disabled={busy} icon={<ArrowDownload20Regular />} onClick={() => void showFinalPdf(selected, "download")}>Скачать подписанное письмо</Button></section> : primaryDocument ? <section className="ai-referent-detail-card"><h3>Письмо · {primaryDocument.fileName}</h3><p>Пока письмо не подписано, доступен исходный документ. После подписи его заменит PDF.</p><Button {...letterPreviewFocusTarget} disabled={busy} onClick={() => setLetterPreview({ ownerId: selected.id, file: { id: primaryDocument.id, name: primaryDocument.fileName, byteSize: primaryDocument.byteSize, sha256: primaryDocument.sha256, createdAt: primaryDocument.createdAt, source: "attachment" } })}>Открыть в Workspace</Button><Button disabled={busy} icon={<ArrowDownload20Regular />} onClick={() => void download(primaryDocument.id, primaryDocument.fileName)}>Скачать письмо</Button></section> : null}
-                {selected.workflowKind === "delivery" ? <section className="ai-referent-detail-card ai-referent-recipient">
+                {selected.mailingRecipients ? <AIReferentMailingResults
+                  key={selected.id}
+                  recipients={selected.mailingRecipients}
+                  actions={readOnly ? [] : selected.availableActions}
+                  disabled={busy || readOnly}
+                  onAction={(action, recipientId, comment) => act(selected, action, recipientId, comment)}
+                /> : selected.workflowKind === "delivery" ? <section className="ai-referent-detail-card ai-referent-recipient">
                   <h3>Получатель</h3>
                   <strong>{selected.recipientOrganization}</strong>
                   <p>{selected.recipientAddress || "Адрес будет уточнён перед отправкой"}</p>
@@ -980,7 +1029,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, pre
                     { label: "Получатель", value: selected.recipientOrganization || "Не указан" },
                     { label: "Автор", value: selected.createdByName },
                     { label: "Согласующий", value: selected.reviewerName || "Не назначен" },
-                    { label: "Канал", value: selected.workflowKind === "sign_only" ? "Только подпись" : selected.route === "exat" ? "E-XAT" : "Webmail" },
+                    { label: "Канал", value: selected.workflowKind === "sign_only" ? "Только подпись" : selected.mailingRecipients ? "По списку адресатов" : selected.route === "exat" ? "E-XAT" : "Webmail" },
                     { label: "Статус", value: statusLabels[selected.status] },
                   ]} />
                 </section> : null}
@@ -992,7 +1041,9 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, pre
                       <div key={event.id}><i aria-hidden="true" /><span><EmployeeProfileLink
                         userId={event.actorUserId ?? undefined}
                         personName={event.actorName}
-                      ><strong>{event.actorName}</strong></EmployeeProfileLink><small>{dateTime(event.createdAt)}</small><p>{event.comment || statusLabels[event.toStatus ?? selected.status]}</p>{event.audio ? <AIReferentAudioPlayer key={event.audio.id} token={token} audio={event.audio} /> : null}</span></div>
+                      ><strong>{event.actorName}</strong></EmployeeProfileLink><small>{dateTime(event.createdAt)}</small>
+                        {event.recipientId ? <strong>{selected.mailingRecipients?.find((recipient) => recipient.id === event.recipientId)?.address}</strong> : null}
+                        <p>{event.comment || statusLabels[event.toStatus ?? selected.status]}</p>{event.audio ? <AIReferentAudioPlayer key={event.audio.id} token={token} audio={event.audio} /> : null}</span></div>
                     ))}
                   </div>
                 </section> : null}
@@ -1031,15 +1082,15 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, pre
                   {selected.canEdit && !readOnly ? <Button appearance="secondary" onClick={() => openEdit(selected)}>Редактировать</Button> : null}
                   {selected.canDelete && !readOnly ? <Button disabled={busy} onClick={() => setDeleteConfirmation(selected.id)}>Удалить письмо из базы</Button> : null}
                   {selected.canEdit && !readOnly && !selected.availableActions.includes("submit") ? <Button appearance="primary" disabled title={selected.submissionBlockReason || "Заполните письмо и дождитесь проверки DOCX."}>Отправить на согласование</Button> : null}
-                  {!readOnly ? selected.availableActions.map((action) => (
+                  {!readOnly ? selected.availableActions.filter((action) => !isMailingRecipientAction(action)).map((action) => (
                     <Button
                       key={action}
                       appearance={action === "approve" || action === "queue_delivery" || action === "submit" ? "primary" : "secondary"}
                       icon={action === "approve" ? <Checkmark20Regular /> : undefined}
                       disabled={busy || (action === "retry_failed_delivery" && decisionComment.trim().length < 12) || (["return_for_revision", "reject", "confirm_sent", "confirm_not_sent"].includes(action) && decisionComment.trim().length < 3 && !(action === "return_for_revision" && selectedAudio))}
-                      onClick={() => ["reject", "send", "cancel", "confirm_sent", "confirm_not_sent", "mark_sent", "replace_document", "prepare_replacement", "retry_failed_delivery"].includes(action) ? setConfirmAction(action) : void act(selected, action)}
+                      onClick={() => (selected.mailingRecipients && action === "release_delivery") || ["reject", "send", "cancel", "stop_mailing", "confirm_sent", "confirm_not_sent", "mark_sent", "replace_document", "prepare_replacement", "retry_failed_delivery"].includes(action) ? setConfirmAction(action) : void act(selected, action)}
                     >
-                      {selected.workflowKind === "sign_only" ? ({ submit: "Отправить на подпись", approve: "Одобрить подпись", retry_delivery: "Повторить подпись", cancel: "Отменить заявку" } as Partial<Record<AIReferentAction, string>>)[action] ?? actionLabels[action] : actionLabels[action]}
+                      {selected.workflowKind === "sign_only" ? ({ submit: "Отправить на подпись", approve: "Одобрить подпись", retry_delivery: "Повторить подпись", cancel: "Отменить заявку" } as Partial<Record<AIReferentAction, string>>)[action] ?? actionLabels[action] : selected.mailingRecipients && action === "release_delivery" ? "Подтвердить PDF рассылки" : actionLabels[action]}
                     </Button>
                   )) : null}
                 </DialogActions>
@@ -1053,7 +1104,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, pre
                 }}>Подтвердить удаление</Button><Button disabled={busy} onClick={() => setDeleteConfirmation("")}>Не удалять</Button></section> : null}
                 {!readOnly && confirmAction && selected.availableActions.includes(confirmAction) ? <div className="ai-referent-detail-card" role="group" aria-label="Подтверждение действия">
                   {confirmAction === "retry_failed_delivery" && error ? <WorkspaceNotice tone="error" role="alert">{error}</WorkspaceNotice> : null}
-                  <p>{confirmAction === "reject" ? "Отклонить письмо окончательно? Согласование завершится без отправки и возврата на доработку. Автор получит уведомление с указанной причиной." : confirmAction === "retry_failed_delivery" ? `Повторить подготовку отправки письма ${selected.displayNumber ?? ""} для ${selected.recipientOrganization} (${selected.recipientAddress}) без нового согласования? Проверка: ${decisionComment.trim().replace(/[.!?]+$/, "")}. Если подписанный PDF уже готов и на ПК референта включена отправка, робот может отправить письмо адресату. При неизвестном результате повтор будет запрещён.` : confirmAction === "send" ? "Робот отправит письмо внешнему получателю. Подтверждаете?" : confirmAction === "prepare_replacement" ? "Применить замену без повторного согласования? Номер сохранится. Готовый PDF используется как есть — проверьте подпись и содержимое." : confirmAction === "replace_document" ? "Робот закроет подготовленное окно. Затем вы сможете заменить документ без повторного согласования." : confirmAction === "mark_sent" ? "Подтверждаете, что письмо уже отправлено вручную? Робот запишет результат без повторной отправки." : "Подтвердите изменение состояния письма."}</p>
+                  <p>{confirmAction === "stop_mailing" ? "Остановить отправки, которые ещё стоят в очереди?" : confirmAction === "release_delivery" ? "Подтвердить итоговый PDF, приложения и список адресатов для отправки референтом?" : confirmAction === "send" && selected.mailingRecipients ? "Поставить в очередь отдельную отправку каждому адресату утверждённого списка?" : confirmAction === "reject" ? "Отклонить письмо окончательно? Согласование завершится без отправки и возврата на доработку. Автор получит уведомление с указанной причиной." : confirmAction === "retry_failed_delivery" ? `Повторить подготовку отправки письма ${selected.displayNumber ?? ""} для ${selected.recipientOrganization} (${selected.recipientAddress}) без нового согласования? Проверка: ${decisionComment.trim().replace(/[.!?]+$/, "")}. Если подписанный PDF уже готов и на ПК референта включена отправка, робот может отправить письмо адресату. При неизвестном результате повтор будет запрещён.` : confirmAction === "send" ? "Робот отправит письмо внешнему получателю. Подтверждаете?" : confirmAction === "prepare_replacement" ? "Применить замену без повторного согласования? Номер сохранится. Готовый PDF используется как есть — проверьте подпись и содержимое." : confirmAction === "replace_document" ? "Робот закроет подготовленное окно. Затем вы сможете заменить документ без повторного согласования." : confirmAction === "mark_sent" ? "Подтверждаете, что письмо уже отправлено вручную? Робот запишет результат без повторной отправки." : "Подтвердите изменение состояния письма."}</p>
                   <Button appearance="primary" disabled={busy || (confirmAction === "reject" && decisionComment.trim().length < 3) || (confirmAction === "retry_failed_delivery" && decisionComment.trim().length < 12)} onClick={() => void act(selected, confirmAction)}>Подтвердить</Button><Button disabled={busy} onClick={() => setConfirmAction(undefined)}>Отмена</Button>
                 </div> : null}
                 </div>

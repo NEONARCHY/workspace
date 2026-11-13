@@ -1386,6 +1386,7 @@ zoom_meeting_participants = sa.Table(
 ai_referent_letters = sa.Table(
     "ai_referent_letters",
     metadata,
+    sa.Column("is_mailing", sa.Boolean(), nullable=False, server_default=sa.false()),
     sa.Column("id", uuid_type, primary_key=True),
     sa.Column("outgoing_number", sa.Integer()),
     sa.Column("year_suffix", sa.String(2)),
@@ -1537,9 +1538,28 @@ ai_referent_events = sa.Table(
     sa.Column("created_at", sa.DateTime(timezone=True)),
 )
 
+ai_referent_mailing_recipients = sa.Table(
+    "ai_referent_mailing_recipients",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("letter_id", uuid_type),
+    sa.Column("position", sa.Integer()),
+    sa.Column("organization", sa.String(500)),
+    sa.Column("address", sa.String(500)),
+    sa.Column("address_key", sa.String(500)),
+    sa.Column("directory_id", sa.String(128)),
+    sa.Column("route", sa.String(16)),
+    sa.Column("status", sa.String(16)),
+    sa.Column("detail", sa.Text()),
+    sa.Column("attempts", sa.Integer()),
+)
+
 ai_referent_delivery_commands = sa.Table(
     "ai_referent_delivery_commands",
     metadata,
+    sa.Column("recipient_id", uuid_type),
+    sa.Column("requested_by", uuid_type),
+    sa.Column("approved_pdf_id", uuid_type),
     sa.Column("id", uuid_type, primary_key=True),
     sa.Column("letter_id", uuid_type),
     sa.Column("route", sa.String(16)),

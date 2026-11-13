@@ -9,13 +9,17 @@ from uuid import UUID, uuid4
 
 from fastapi import HTTPException
 from pydantic import BaseModel
-from sqlalchemy import insert, or_, select, update
+from sqlalchemy import insert, literal, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from .access_control import ensure_module_action, module_permissions_for_user
-from .ai_referent_visibility import OPERATOR_VISIBLE_STATUSES, may_view_letter
+from .ai_referent_visibility import (
+    MAILING_OPERATOR_STATUSES,
+    OPERATOR_VISIBLE_STATUSES,
+    may_view_letter,
+)
 from .auth import AuthenticatedUser
 from .tables import (
     ai_referent_configuration,
@@ -30,6 +34,15 @@ from .tables import (
 )
 
 
+def _operation_fingerprint(scope: str, payload: BaseModel) -> str:
+    # Preserve fingerprints for requests recorded before mailing fields existed.
+    exclude = {
+        name for name in ("mailing_recipients", "recipient_id", "mailing")
+        if getattr(payload, name, None) is None
+    }
+    return hashlib.sha256((scope + payload.model_dump_json(exclude=exclude)).encode()).hexdigest()
+
+
 async def operation_replay(
     connection: AsyncConnection,
     user: AuthenticatedUser,
@@ -39,7 +52,7 @@ async def operation_replay(
     operation_id = getattr(payload, "operation_id", None)
     if operation_id is None:
         return None
-    fingerprint = hashlib.sha256((scope + payload.model_dump_json()).encode()).hexdigest()
+    fingerprint = _operation_fingerprint(scope, payload)
     record = (
         (
             await connection.execute(
@@ -72,9 +85,7 @@ async def remember_operation(
                 operation_id=operation_id,
                 user_id=user.id,
                 letter_id=letter_id,
-                fingerprint=hashlib.sha256(
-                    (scope + payload.model_dump_json()).encode()
-                ).hexdigest(),
+                fingerprint=_operation_fingerprint(scope, payload),
                 created_at=datetime.now(UTC),
             )
         )
@@ -297,7 +308,9 @@ async def notify_letter(
         action_recipients.add(row["created_by_user_id"])
     elif row["status"] in {"pending_review", "approved", "failed"}:
         action_recipients.add(row["reviewer_user_id"])
-    if row["status"] in OPERATOR_VISIBLE_STATUSES:
+    if row["status"] in OPERATOR_VISIBLE_STATUSES or (
+        row.get("is_mailing") and row["status"] == "failed"
+    ):
         candidates = (
             (await connection.execute(select(users).where(users.c.status == "active")))
             .mappings()
@@ -316,7 +329,10 @@ async def notify_letter(
             rights = await module_permissions_for_user(connection, actor)
             if rights.get("ai_referent", {}).get("admin"):
                 recipients.add(actor.id)
-                action_recipients.add(actor.id)
+                if not row.get("is_mailing") or row["status"] in (
+                    MAILING_OPERATOR_STATUSES | {"referent_review_pending", "delivery_unknown"}
+                ):
+                    action_recipients.add(actor.id)
     # Resolve old action indicators; audit and read state remain intact.
     await connection.execute(
         update(workspace_notifications)
@@ -337,7 +353,8 @@ async def notify_letter(
         body = subject + (f"\n{comment}" if comment else "")
         if row.get("note"):
             body += f"\nСлужебная заметка: {row['note']}"  # noqa: RUF001
-        text = f"{title}\n{body}"
+        telegram_body = subject if row.get("is_mailing") else body
+        text = f"{title}\n{telegram_body}"
         await connection.execute(
             pg_insert(workspace_notifications)
             .values(
@@ -385,13 +402,20 @@ async def notify_letter(
         )
 
 
-async def claim_notifications(connection: AsyncConnection) -> list[dict[str, object]]:
+async def claim_notifications(
+    connection: AsyncConnection, *, mailing_supported: bool = False,
+) -> list[dict[str, object]]:
     now = datetime.now(UTC)
     rows = (
         (
             await connection.execute(
                 select(ai_referent_telegram_outbox)
+                .join(
+                    ai_referent_letters,
+                    ai_referent_letters.c.id == ai_referent_telegram_outbox.c.letter_id,
+                )
                 .where(
+                    or_(ai_referent_letters.c.is_mailing.is_(False), literal(mailing_supported)),
                     ai_referent_telegram_outbox.c.delivered_at.is_(None),
                     or_(
                         ai_referent_telegram_outbox.c.lease_until.is_(None),
@@ -447,8 +471,16 @@ async def claim_notifications(connection: AsyncConnection) -> list[dict[str, obj
             may_operate=permissions.get("ai_referent", {}).get("admin", False),
         ):
             continue
+        notice: dict[str, object] = {}
+        if letter["is_mailing"]:
+            notice_id = await connection.scalar(select(workspace_notifications.c.id).where(
+                workspace_notifications.c.user_id == row["user_id"],
+                workspace_notifications.c.event_key == row["event_key"],
+            ))
+            notice = {"mailing": True, "workspaceNoticeId": notice_id}
         result.append(
             {
+                **notice,
                 "id": str(row["id"]),
                 "leaseToken": str(lease),
                 "telegramId": telegram_id,

@@ -1194,6 +1194,10 @@ async def replay_offline_operation(
         return _receipt(existing)
     if authority["mode"] != "replay_required":
         raise HTTPException(409, "Воспроизведение доступно только после потери аренды.")
+    if await connection.scalar(select(ai_referent_letters.c.is_mailing).where(
+        ai_referent_letters.c.id == operation.letter_id,
+    )):
+        raise HTTPException(409, "Автономные операции с рассылкой запрещены.")
     last_epoch_sequence = await connection.scalar(
         select(func.max(ai_referent_offline_operation_receipts.c.sequence)).where(
             ai_referent_offline_operation_receipts.c.agent_id == agent_id,
@@ -1328,6 +1332,8 @@ async def replay_offline_operation(
             draft = UpdateAIReferentLetterRequest.model_validate(values)
     except ValidationError as error:
         raise HTTPException(422, "Поля автономного черновика недействительны.") from error
+    if draft.mailing_recipients is not None:
+        raise HTTPException(409, "Создайте рассылку в Workspace при связи с сервером.")
     if draft.workflow_kind == "sign_only" and (
         draft.final_reviewer_user_id is not None or draft.route != "exat"
     ):

@@ -11,6 +11,7 @@ import argparse
 import ast
 import hashlib
 import json
+import re
 import shutil
 from datetime import UTC, datetime
 from pathlib import Path
@@ -223,12 +224,19 @@ def patch_number_backing(source: str) -> str:
     marker = "# workspace-number-backing-v1"
     if marker in source:
         return source
+    geometries = [
+        (width, height) for width, height in ((245, 27), (300, 24))
+        if f"        shape = document.Shapes.AddTextbox(1, 82, 126, {width}, {height})" in source
+    ]
+    if len(geometries) != 1:
+        raise ValueError("Не удалось однозначно определить размеры подложки исходящего номера.")
+    width, height = geometries[0]
     source = replace_once(
         source,
-        "        shape = document.Shapes.AddTextbox(1, 82, 126, 245, 27)",
+        f"        shape = document.Shapes.AddTextbox(1, 82, 126, {width}, {height})",
         f"        {marker}\n"
         "        # Extend the mask 38pt left; retain the text at x=82pt.\n"
-        "        shape = document.Shapes.AddTextbox(1, 44, 126, 283, 27)",
+        f"        shape = document.Shapes.AddTextbox(1, 44, 126, {width + 38}, {height})",
     )
     source = replace_once(source, "            shape.TextFrame.MarginLeft = 0",
                           "            shape.TextFrame.MarginLeft = 38")
@@ -325,14 +333,26 @@ def patch_portable_spec(source: str) -> str:
     marker = "# workspace-external-assets-v1"
     if marker in source:
         return source
-    old = (
+    assets = (
         "    datas=[\n"
         "        ('config', 'config'),\n"
         "        ('organizations_unified.md', '.'),\n"
         "        ('actual list of organizations.md', '.'),\n"
         "        ('assets\\\\signatures', 'assets\\\\signatures'),\n"
-        "    ] + tzdata_files,\n"
+        "    ]"
     )
+    legacy = assets + ",\n"
+    if legacy in source:
+        source = replace_once(
+            source,
+            "from PyInstaller.utils.hooks import collect_submodules\n",
+            "from PyInstaller.utils.hooks import collect_data_files, collect_submodules\n"
+            "\n"
+            "tzdata_files = collect_data_files('tzdata')\n"
+            "if not tzdata_files:\n"
+            "    raise RuntimeError('Install tzdata before building the referent.')\n",
+        )
+    old = legacy if legacy in source else assets + " + tzdata_files,\n"
     patched = replace_once(source, old, f"    {marker}\n    datas=tzdata_files,\n")
     compile(patched, "YuksalishAIReferent.spec", "exec")
     return patched
@@ -434,6 +454,16 @@ def install(root: Path, *, apply: bool = False) -> dict[str, object]:
             planned[path] = patched.replace(
                 "\n", "\r\n" if b"\r\n" in original else "\n"
             ).encode("utf-8")
+    if present:
+        requirements = root / "requirements.txt"
+        if requirements.is_file():
+            if not requirements.resolve().is_relative_to(root):
+                raise ValueError("Путь зависимостей выходит за пределы Exat.")
+            original = requirements.read_bytes()
+            requirements_text = original.decode("utf-8-sig")
+            if not re.search(r"(?im)^[ \t]*tzdata(?=[ \t\[<>=!~;#]|$)", requirements_text):
+                newline = b"\r\n" if b"\r\n" in original else b"\n"
+                planned[requirements] = original.rstrip(b"\r\n") + newline + b"tzdata" + newline
     destination = root / "src/workspace_integration"
     if not destination.resolve().is_relative_to(root):
         raise ValueError("Каталог адаптера выходит за пределы Exat.")

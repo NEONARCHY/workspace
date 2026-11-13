@@ -44,5 +44,5 @@ class DeliveryAck(DeliveryLease):
 
 
 class WorkspaceNoticeTarget(ApiModel):
-    section: Literal["tasks", "payment_requests"]
+    section: Literal["tasks", "payment_requests", "ai_referent"]
     entity_id: str
