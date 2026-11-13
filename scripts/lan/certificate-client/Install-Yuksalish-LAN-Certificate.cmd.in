@@ -1,0 +1,29 @@
+@echo off
+setlocal EnableExtensions
+set "PACKAGE_DIR=%~dp0"
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%PACKAGE_DIR%trust-root-certificate.ps1" ^
+  -CertificateFile "%PACKAGE_DIR%Yuksalish-LAN-root.crt" ^
+  -ExpectedSha256 "__ROOT_SHA256__"
+if errorlevel 1 (
+  echo.
+  echo Certificate installation failed. The desktop shortcut was not changed.
+  pause
+  exit /b 1
+)
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%PACKAGE_DIR%create-workspace-shortcut.ps1" ^
+  -IconFile "%PACKAGE_DIR%Yuksalish-Workspace.ico" ^
+  -ExpectedIconSha256 "__ICON_SHA256__" ^
+  -WorkspaceUrl "__WORKSPACE_URL__"
+if errorlevel 1 (
+  echo.
+  echo Certificate installed, but the desktop shortcut could not be created.
+  pause
+  exit /b 1
+)
+
+echo.
+echo Yuksalish LAN certificate was installed for this Windows user.
+echo A Yuksalish Workspace shortcut was created on the desktop.
+pause
