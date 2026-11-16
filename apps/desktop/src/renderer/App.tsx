@@ -1,4 +1,5 @@
 import { TeamDecisionFrame } from "./TeamDecisionFrame";
+import { approvalRequestNeedsAction } from "./approval-board";
 import { MonthlyReportDashboard, MonthlyReportPrompts, MonthlyReportsView } from "./MonthlyReportsView";
 import { useMonthlyReports, useMonthlyReportWindow } from "./useMonthlyReports";
 import { TaskProposals } from "./TaskProposals";
@@ -2123,7 +2124,7 @@ export function App() {
   const badgeBySection: Partial<Record<NavigationKey, number>> = {
     messenger: workspace.chats.reduce((total, chat) => total + chat.unread, 0),
     tasks: workspace.tasks.filter((task) => !["completed", "cancelled"].includes(task.status)).length,
-    payment_requests: workspace.requests.filter((request) => request.status === "running").length,
+    payment_requests: workspace.requests.filter((request) => approvalRequestNeedsAction(request, workspace.currentUser.id)).length,
     notifications: workspace.notifications.filter((item) => !item.readAt).length,
   };
   const chairmanHome = chairmanHasTeamHome(workspace.currentUser, workspace.moduleAccess);
