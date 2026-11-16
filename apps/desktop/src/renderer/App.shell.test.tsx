@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import type { LeaveRequest, SurveyAnalysisDetail, TripRequest } from "@yuksalish/contracts";
+import type { ApprovalRequestSummary, LeaveRequest, SurveyAnalysisDetail, TripRequest } from "@yuksalish/contracts";
 import { App } from "./App";
 import { initialTasks, people, initialChats } from "./test-fixtures/demo-data";
 import { changeField } from "./test-fixtures/rich-editor";
@@ -61,6 +61,53 @@ function deputyApprovalServer() {
 }
 
 describe("corporate workspace authentication alpha", () => {
+  it.each(["aziza", "malika"])("counts personal payment actions in the sidebar for %s", async (username) => {
+    const server = mockServer({ chairmanLogin: true, withSubsidyRequest: true });
+    const original = server.getMockImplementation()!;
+    const sockets: EventTarget[] = [];
+    vi.stubGlobal("WebSocket", class extends EventTarget {
+      constructor() { super(); sockets.push(this); }
+      send() {}
+      close() {}
+    });
+    let hasPersonalActions = false;
+    server.mockImplementation(async (input, options) => {
+      if (!String(input).endsWith("/workspace/bootstrap")) return original(input, options);
+      const bootstrap: { requests: ApprovalRequestSummary[] } = await (await original(input, options)).json();
+      const template = bootstrap.requests[0]!;
+      const stage = { key: "manager", label: "Согласование", kind: "approval", canAct: false };
+      const requests: ApprovalRequestSummary[] = Array.from({ length: 14 }, (_, index) => ({
+        ...template, id: `payment-${index}`, activeStages: [stage],
+      }));
+      if (hasPersonalActions) requests.push(
+        { ...template, id: "personal-decision", activeStages: [
+          { ...stage, canAct: true }, { ...stage, key: "parallel", canAct: true },
+        ] },
+        { ...template, id: "personal-correction", status: "needs_revision", requesterId: username, activeStages: [stage] },
+        { ...template, id: "other-correction", status: "needs_revision", requesterId: "another-employee", activeStages: [stage] },
+        { ...template, id: "finished", status: "approved" },
+      );
+      return response({ ...bootstrap, requests });
+    });
+    render(<App />);
+    await loginToWorkspace(username, "home");
+    fireEvent.click(within(screen.getByRole("navigation")).getByRole("button", { name: "Заявки на оплату" }));
+    const filters = await screen.findByRole("group", { name: "Фильтр заявок" });
+    const badge = () => screen.getByRole("button", { name: "Заявки на оплату" }).querySelector(".rail-badge");
+    expect(badge()).toBeNull();
+    expect(within(filters).getByRole("button", { name: "В работе" })).toHaveTextContent("14");
+    expect(within(filters).getByRole("button", { name: "Нужно моё решение" })).toHaveTextContent("0");
+
+    hasPersonalActions = true;
+    act(() => sockets.at(-1)?.dispatchEvent(new MessageEvent("message", { data: JSON.stringify({ type: "approval.updated" }) })));
+    await waitFor(() => expect(badge()).toHaveTextContent("2"));
+    expect(within(screen.getByRole("group", { name: "Фильтр заявок" })).getByRole("button", { name: "Нужно моё решение" })).toHaveTextContent("2");
+
+    hasPersonalActions = false;
+    act(() => sockets.at(-1)?.dispatchEvent(new MessageEvent("message", { data: JSON.stringify({ type: "approval.updated" }) })));
+    await waitFor(() => expect(badge()).toBeNull());
+  });
+
   it("keeps a chairman-approved trip after a delayed pre-approval bootstrap arrives", async () => {
     const server = mockServer({ chairmanLogin: true });
     const original = server.getMockImplementation()!;
