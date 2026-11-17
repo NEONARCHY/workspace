@@ -331,6 +331,15 @@ describe("Employee list and retained access controls", () => {
     fireEvent.click(screen.getByRole("button", { name: "Закрыть справочник должностей" }));
     await waitFor(() => expect(document.querySelector(".employee-position")).toHaveTextContent("Yetakchi mutaxassis"));
   });
+  it("delegates reopening completed tasks to the selected position", async () => {
+    const position = data.positions[0]!;
+    vi.mocked(updatePosition).mockResolvedValue({ ...position, canReopenCompletedTasks: true });
+    mount(); await loadedTable(); fireEvent.click(screen.getByRole("button", { name: "Должности" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Возвращать завершённые задачи в работу" }));
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить должность" }));
+    await waitFor(() => expect(updatePosition).toHaveBeenCalledWith("test-token", position.id,
+      expect.objectContaining({ canReopenCompletedTasks: true })));
+  });
   it("retries a failed directory load without a permanently spinning screen", async () => {
     vi.mocked(loadDirectory).mockRejectedValueOnce(new Error("Сервер недоступен")).mockResolvedValueOnce(data);
     mount(); await screen.findByRole("alert");

@@ -35,6 +35,25 @@ it("loads on expansion and shows who approved, both deadlines, reason and incomp
   expect(screen.queryByRole("button", { name: "Обновить маршрут" })).not.toBeInTheDocument();
 });
 
+it("shows the reopening and its reason without losing the closure", async () => {
+  vi.mocked(loadTaskHistory).mockResolvedValue({
+    historyComplete: true,
+    events: [
+      { id: "reopen", kind: "task_reopened", occurredAt: "2026-11-17T08:30:00Z",
+        actorUserId: "admin", actorName: "Администратор", oldStatus: "completed",
+        status: "in_progress", reason: "Проверить обновлённые данные" },
+      { id: "close", kind: "task_completed", occurredAt: "2026-11-16T08:30:00Z" },
+    ],
+  });
+  render(<TaskHistory token="test" taskId="task" revision={revision} />);
+  fireEvent.click(screen.getByRole("button", { name: "Маршрут и история" }));
+  expect(await screen.findByText("Задача возвращена в работу")).toBeVisible();
+  expect(screen.getByText("Администратор")).toBeVisible();
+  expect(screen.getByText("Завершена → В работе")).toBeVisible();
+  expect(screen.getByText("Проверить обновлённые данные")).toBeVisible();
+  expect(screen.getByText("Задача закрыта")).toBeVisible();
+});
+
 it("shows a retryable error without inventing history", async () => {
   vi.mocked(loadTaskHistory).mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce(page);
   render(<TaskHistory token="test" taskId="task" revision={revision} />);

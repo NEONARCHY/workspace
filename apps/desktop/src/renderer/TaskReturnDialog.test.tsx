@@ -16,6 +16,26 @@ function renderReturn(onSubmit = vi.fn(async () => true)) {
 }
 
 describe("task return dialog", () => {
+  it("reopens a completed task only with permission and a reason", async () => {
+    const task = chairmanScenarioTask({ status: "completed" });
+    const onReopenTask = vi.fn(async () => ({ ...task, status: "in_progress" as const }));
+    const view = render(<FluentProvider theme={workspaceTheme}><TasksView {...chairmanScenarioProps(task)}
+      onReopenTask={onReopenTask} /></FluentProvider>);
+    expect(screen.queryByRole("button", { name: "Вернуть в работу" })).not.toBeInTheDocument();
+    view.rerender(<FluentProvider theme={workspaceTheme}><TasksView {...chairmanScenarioProps(task)}
+      canReopenCompletedTasks onReopenTask={onReopenTask} /></FluentProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Вернуть в работу" }));
+    const dialog = screen.getByRole("dialog", { name: "Вернуть задачу в работу" });
+    const confirm = within(dialog).getByRole("button", { name: "Подтвердить возврат" });
+    fireEvent.click(confirm);
+    expect(onReopenTask).not.toHaveBeenCalled();
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "Пояснение причины" }), {
+      target: { value: "  Проверить обновлённые данные  " },
+    });
+    fireEvent.click(confirm);
+    await waitFor(() => expect(onReopenTask).toHaveBeenCalledWith(task, "Проверить обновлённые данные"));
+  });
+
   it("opens above the task card and sends the reason through the existing action", async () => {
     const task = chairmanScenarioTask();
     const onReturnForRevision = vi.fn(async () => ({ ...task, status: "in_progress" as const }));

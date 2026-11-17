@@ -119,6 +119,14 @@ Older tasks explicitly disclose incomplete early history; only their actual crea
 timestamp/author are projected from the task row, never a guessed original deadline.
 No schema migration or rewriting of stored history is required.
 
+Administrators can reopen a completed task with a required explanation. In «Сотрудники →
+Должности» they can delegate the same action to an active position. The grant only applies
+to tasks the employee can already read; it does not allow approving results or editing
+other fields. The task moves back to «В работе» without changing its due date or erasing
+the prior result. Reopening a subtask requires its parent to be open. «Маршрут и история»
+keeps the previous closure and adds «Задача возвращена в работу» with actor, time,
+transition, and explanation. Deploy migration `0124_task_reopen_permission` before updating the API and clients.
+
 - Managers, administrators and superadministrators can read and edit all tasks,
   except a manager holding the exact executive chairman position: that position
   grants visibility, not blanket editing/management rights. The chairman retains

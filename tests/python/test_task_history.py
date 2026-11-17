@@ -37,6 +37,32 @@ def test_history_combines_decisions_and_returns_without_private_metadata() -> No
     assert "DO NOT EXPOSE" not in data.model_dump_json()
 
 
+def test_reopened_task_keeps_the_old_closure_in_its_route() -> None:
+    task_id, actor = uuid4(), uuid4()
+    closed = datetime(2026, 11, 16, tzinfo=UTC)
+    reopened = closed + timedelta(days=1)
+    page = task_history_page(
+        {"id": task_id, "created_at": closed, "author_user_id": actor},
+        [
+            {"id": uuid4(), "event_type": "task_completed", "occurred_at": closed},
+            {
+                "id": uuid4(), "event_type": "task_status_changed", "occurred_at": reopened,
+                "actor_user_id": actor, "old_value": {"status": "completed"},
+                "new_value": {"status": "in_progress"}, "reason_code": "completed_task_reopened",
+                "reason_text": "Verify new data",
+            },
+        ],
+        [], {actor: "Administrator"},
+    )
+    event = page.events[0]
+    assert event.kind == "task_reopened"
+    assert event.actor_name == "Administrator"
+    assert event.occurred_at == reopened
+    assert (event.old_status, event.status) == ("completed", "in_progress")
+    assert event.reason == "Verify new data" and event.reason_code is None
+    assert any(item.kind == "task_completed" for item in page.events)
+
+
 def test_history_pages_do_not_silently_truncate_older_events() -> None:
     actor, task_id = uuid4(), uuid4()
     created = datetime(2026, 10, 1, tzinfo=UTC)

@@ -92,6 +92,7 @@ from yuksalish_api.repository import (
     publish_workflow,
     remove_task_dependency,
     remove_task_participant,
+    reopen_completed_task,
     request_task_deadline_extension,
     respond_to_calendar_event,
     return_task_for_revision,
@@ -151,6 +152,7 @@ from yuksalish_api.workspace_schemas import (
     PinFeedPostRequest,
     ProfileAvatarResponse,
     ProjectResponse,
+    ReopenTaskRequest,
     RequestTaskDeadlineExtension,
     RespondCalendarEventRequest,
     ReturnTaskForRevisionRequest,
@@ -755,6 +757,22 @@ async def post_task_return_for_revision(
 ) -> TaskResponse:
     try:
         result = await return_task_for_revision(connection, current_user, task_id, payload)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await _event_bus(request).publish({"type": "task.updated", "entityId": result.id})
+    return result
+
+
+@router.post("/tasks/{task_id}/reopen", response_model=TaskResponse)
+async def post_task_reopen(
+    task_id: UUID,
+    payload: ReopenTaskRequest,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> TaskResponse:
+    try:
+        result = await reopen_completed_task(connection, current_user, task_id, payload)
     except WorkspaceRepositoryError as error:
         raise _translate(error) from error
     await _event_bus(request).publish({"type": "task.updated", "entityId": result.id})

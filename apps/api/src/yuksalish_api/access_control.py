@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from .catalog import MODULE_CATALOG
-from .tables import ai_referent_reviewers, departments, module_access_rules
+from .tables import ai_referent_reviewers, departments, module_access_rules, positions
 
 ModuleAction = Literal["view", "create", "edit", "approve", "admin"]
 MODULE_ACTIONS: tuple[ModuleAction, ...] = ("view", "create", "edit", "approve", "admin")
@@ -152,6 +152,17 @@ async def module_permissions_for_user(
     return result
 
 
+async def can_reopen_completed_tasks(connection: AsyncConnection, user: AccessUser) -> bool:
+    if user.role in {"admin", "superadmin"}:
+        return True
+    if user.position_id is None:
+        return False
+    return bool(await connection.scalar(select(positions.c.can_reopen_completed_tasks).where(
+        positions.c.id == user.position_id,
+        positions.c.is_active.is_(True),
+    )))
+
+
 def request_module_action(path: str, method: str) -> tuple[str, ModuleAction] | None:
     normalized = path.removeprefix("/api/v1")
     upper_method = method.upper()
@@ -274,6 +285,9 @@ def request_module_action(path: str, method: str) -> tuple[str, ModuleAction] | 
         ("/accept-result", "/return-for-revision")
     ):
         return module_key, "approve"
+    if module_key == "tasks" and normalized.endswith("/reopen"):
+        # Object visibility and the dedicated position permission are checked in the repository.
+        return module_key, "view"
     if module_key == "leave_approvals" and normalized.endswith(
         ("/hr-review", "/deputy-decision")
     ):

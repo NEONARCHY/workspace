@@ -230,6 +230,8 @@ interface TasksViewProps {
   readonly onSetCycle: (task: WorkspaceTask, payload: CyclePayload) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly renderTaskChat: (task: WorkspaceTask) => ReactNode;
   readonly onReturnForRevision: (task: WorkspaceTask, reasonCode: TaskReturnReason, reasonText: string) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
+  readonly canReopenCompletedTasks?: boolean;
+  readonly onReopenTask?: (task: WorkspaceTask, reason: string) => Promise<WorkspaceTask | undefined>;
   readonly onSubmitResult: (task: WorkspaceTask, resultText: string) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly onAcceptResult: (task: WorkspaceTask) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly onSetEfficiencyExclusion: (task: WorkspaceTask, excluded: boolean, reasonCode?: TaskEfficiencyExclusionReason, reasonText?: string) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
@@ -495,6 +497,7 @@ export function TasksView(props: TasksViewProps) {
     && (selectedTask.assigneeId === currentUserId || coAssignee)
     && ["new", "in_progress", "overdue"].includes(selectedTask.status);
   const canReviewResult = selectedTask !== undefined && canManageParticipants && selectedTask.status === "awaiting_review";
+  const canReopenTask = selectedTask?.status === "completed" && props.canReopenCompletedTasks === true;
   const canAcceptResult = selectedTask !== undefined && selectedTask.authorId === currentUserId
     && selectedTask.status === "awaiting_review";
   const canExtendDeadline = selectedTask !== undefined && canManageParticipants
@@ -690,9 +693,10 @@ export function TasksView(props: TasksViewProps) {
   };
 
   const returnForRevision = async (reason: TaskReturnReason, text: string) => {
-    if (!selectedTask || !canReviewResult || reviewBusy) return false;
+    if (!selectedTask || (!canReviewResult && !canReopenTask) || reviewBusy) return false;
     setReviewBusy(true);
     try {
+      if (canReopenTask) return Boolean(await props.onReopenTask?.(selectedTask, text));
       return Boolean(await onReturnForRevision(selectedTask, reason, text));
     } finally {
       setReviewBusy(false);
@@ -981,11 +985,13 @@ export function TasksView(props: TasksViewProps) {
         <div className="detail-footer">
           {canDelete ? <Button className="task-delete-button" appearance="secondary" icon={<Delete24Regular />} disabled={deleting || reviewBusy} onClick={() => void deleteSelectedTask()}>{deleting ? "Удаление…" : "Удалить задачу"}</Button> : null}
           {canReviewResult ? <Button {...returnFocusTarget} appearance="secondary" disabled={reviewBusy} onClick={() => setReturnDialogOpen(true)}>Вернуть на доработку</Button> : null}
+          {canReopenTask ? <Button {...returnFocusTarget} appearance="secondary" disabled={reviewBusy} onClick={() => setReturnDialogOpen(true)}>Вернуть в работу</Button> : null}
           {canAcceptResult ? <Button appearance="primary" disabled={reviewBusy} onClick={() => void acceptResult()}>{reviewBusy ? "Сохранение…" : "Утвердить результат"}</Button> : null}
           {canSubmitResult && !canReviewResult ? <Button appearance="primary" disabled={reviewBusy || resultUploading || !resultText.trim()} onClick={() => void submitResult()}>{reviewBusy ? "Отправка…" : "Завершить и отправить на проверку"}</Button> : null}
         </div>
       </aside>{renderTaskChat(selectedTask)}</div>
-        <TaskReturnDialog key={selectedTask.id} open={detailOpen && returnDialogOpen && canReviewResult}
+        <TaskReturnDialog key={`${selectedTask.id}:${selectedTask.status}`} open={detailOpen && returnDialogOpen && (canReviewResult || canReopenTask)}
+          reopen={canReopenTask}
           taskTitle={selectedTask.title} onClose={() => setReturnDialogOpen(false)}
           onSubmit={returnForRevision} />
       </DialogSurface>
