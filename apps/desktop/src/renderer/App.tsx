@@ -200,6 +200,7 @@ import {
   removeWorkspaceTaskParticipant,
   requestWorkspaceTaskDeadline,
   returnWorkspaceTaskForRevision,
+  reopenWorkspaceTask,
   publishWorkspaceWorkflow,
   saveWorkspaceWorkflow,
   sendWorkspaceMessage,
@@ -259,6 +260,7 @@ interface WorkspaceState {
   readonly moduleAccess: readonly EffectiveModuleAccess[];
   readonly canCreatePaymentRequests: boolean;
   readonly canInviteCalendarAudience?: boolean;
+  readonly canReopenCompletedTasks?: boolean;
   readonly people: readonly WorkspacePerson[];
   readonly departments: readonly WorkspaceDepartment[];
   readonly positions: readonly WorkflowPosition[];
@@ -2465,6 +2467,8 @@ export function App() {
                   ? renderEmbeddedChat(task.chatId, "задачи")
                   : <div className="embedded-chat-unavailable">Для этой задачи чат недоступен.</div>}
                 onReturnForRevision={handleReturnTaskForRevision}
+                canReopenCompletedTasks={workspace.canReopenCompletedTasks === true}
+                onReopenTask={(task, reason) => runTaskMutation((token) => reopenWorkspaceTask(token, task.id, reason))}
                 onSubmitResult={handleSubmitTaskResult}
                 onAcceptResult={handleAcceptTaskResult}
                 onExtendDeadline={handleExtendTaskDeadline}

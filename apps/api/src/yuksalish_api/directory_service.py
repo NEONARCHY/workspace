@@ -154,6 +154,7 @@ async def _position_response(
         sort_order=row["sort_order"],
         source=row["source"],
         assigned_users_count=row["assigned_users_count"],
+        can_reopen_completed_tasks=row["can_reopen_completed_tasks"],
     )
 
 
@@ -303,6 +304,7 @@ async def load_directory(
                 sort_order=row["sort_order"],
                 source=row["source"],
                 assigned_users_count=row["assigned_users_count"],
+                can_reopen_completed_tasks=row["can_reopen_completed_tasks"],
             )
             for row in position_rows
         ],
@@ -849,6 +851,8 @@ async def update_position(
         values["name"] = payload.name
     if payload.is_active is not None:
         values["is_active"] = payload.is_active
+    if payload.can_reopen_completed_tasks is not None:
+        values["can_reopen_completed_tasks"] = payload.can_reopen_completed_tasks
     if payload.sort_order is not None:
         values["sort_order"] = payload.sort_order
     await connection.execute(
@@ -871,11 +875,15 @@ async def update_position(
                 "name": existing["name"],
                 "isActive": existing["is_active"],
                 "sortOrder": existing["sort_order"],
+                "canReopenCompletedTasks": existing["can_reopen_completed_tasks"],
             },
             "after": {
                 "name": values.get("name", existing["name"]),
                 "isActive": values.get("is_active", existing["is_active"]),
                 "sortOrder": values.get("sort_order", existing["sort_order"]),
+                "canReopenCompletedTasks": values.get(
+                    "can_reopen_completed_tasks", existing["can_reopen_completed_tasks"],
+                ),
             },
         },
     )

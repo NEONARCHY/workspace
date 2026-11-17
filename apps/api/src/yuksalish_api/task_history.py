@@ -29,12 +29,18 @@ def task_history_page(
         if event["event_type"] == "deadline_changed" and str(metadata.get("requestId")) in decided:
             continue  # One visible approval includes the deadline change itself.
         old, new = event.get("old_value") or {}, event.get("new_value") or {}
+        kind = event["event_type"]
+        reopened = (
+            kind == "task_status_changed" and event.get("reason_code") == "completed_task_reopened"
+        )
         entry(
-            id=str(event["id"]), kind=event["event_type"], occurred_at=event["occurred_at"],
+            id=str(event["id"]), kind="task_reopened" if reopened else kind,
+            occurred_at=event["occurred_at"],
             actor_user_id=event.get("actor_user_id"),
             old_due_at=old.get("dueAt"), due_at=new.get("dueAt"),
             old_status=old.get("status"), status=new.get("status"),
-            reason_code=event.get("reason_code"), reason=event.get("reason_text"),
+            reason_code=None if reopened else event.get("reason_code"),
+            reason=event.get("reason_text"),
         )
     complete = any(event["event_type"] == "task_created" for event in events)
     if not complete:

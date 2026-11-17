@@ -669,6 +669,15 @@ class ReturnTaskForRevisionRequest(ApiModel):
         return self
 
 
+class ReopenTaskRequest(ApiModel):
+    reason: str = Field(min_length=1, max_length=2_000)
+
+    @field_validator("reason", mode="before")
+    @classmethod
+    def strip_reason(cls, value: object) -> object:
+        return value.strip() if isinstance(value, str) else value
+
+
 class TaskEfficiencyExclusionRequest(ApiModel):
     excluded: bool
     reason_code: TaskEfficiencyExclusionReason | None = None
@@ -1883,6 +1892,7 @@ class WorkspaceBootstrapResponse(ApiModel):
     module_access: list[EffectiveModuleAccessResponse]
     can_create_payment_requests: bool
     can_invite_calendar_audience: bool = False
+    can_reopen_completed_tasks: bool = False
     people: list[PersonResponse]
     departments: list["WorkspaceDepartmentResponse"]
     positions: list[WorkflowPositionResponse]

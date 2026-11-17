@@ -12,7 +12,12 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 
 from . import messenger_service
 from .absence_service import presence_summary, visible_absences
-from .access_control import ModuleAction, ensure_module_action, module_permissions_for_user
+from .access_control import (
+    ModuleAction,
+    can_reopen_completed_tasks,
+    ensure_module_action,
+    module_permissions_for_user,
+)
 from .ai_referent_incoming_access import named_responsible
 from .ai_referent_visibility import OPERATOR_VISIBLE_STATUSES, may_view_letter
 from .auth import AuthenticatedUser, load_authenticated_user
@@ -112,6 +117,7 @@ from .workspace_schemas import (
     PinFeedPostRequest,
     ProjectResponse,
     ProjectStageActionResponse,
+    ReopenTaskRequest,
     RequestTaskDeadlineExtension,
     RespondCalendarEventRequest,
     ReturnTaskForRevisionRequest,
@@ -3162,6 +3168,8 @@ async def load_workspace(
         people=people,
         can_invite_calendar_audience=can("calendar", "create")
         and can_invite_calendar_audience(current_user),
+        can_reopen_completed_tasks=can("tasks")
+        and await can_reopen_completed_tasks(connection, current_user),
         departments=[WorkspaceDepartmentResponse(
             id=str(row["id"]), code=row["code"], name=row["name"], scope=row["scope"],
             parent_id=str(row["parent_id"]) if row["parent_id"] else None,
@@ -5533,6 +5541,54 @@ async def return_task_for_revision(
             occurred_at=now,
         )
     return await _task_response(connection, task_id)
+
+
+async def reopen_completed_task(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    task_id: UUID,
+    payload: ReopenTaskRequest,
+) -> TaskResponse:
+    await ensure_module_action(connection, current_user, "tasks", "view")
+    if not await can_reopen_completed_tasks(connection, current_user):
+        raise WorkspaceRepositoryError(403, "Нет права возвращать закрытые задачи в работу")
+    visible = await _task_access_row(connection, current_user, task_id)
+    # Parent acceptance locks this same row before verifying all its subtasks are closed.
+    if visible["parent_task_id"] is not None:
+        parent_status = await connection.scalar(select(tasks.c.status).where(
+            tasks.c.id == visible["parent_task_id"],
+        ).with_for_update())
+        if parent_status in {"completed", "cancelled"}:
+            raise WorkspaceRepositoryError(409, "Сначала откройте родительскую задачу")
+    row = (await connection.execute(select(tasks).where(
+        tasks.c.id == task_id,
+    ).with_for_update())).mappings().first()
+    if row is None:
+        raise WorkspaceRepositoryError(404, "Task was not found")
+    if row["status"] != "completed":
+        raise WorkspaceRepositoryError(409, "Вернуть в работу можно только завершённую задачу")
+    now = datetime.now(UTC)
+    await connection.execute(update(tasks).where(tasks.c.id == task_id).values(
+        status="in_progress", updated_at=now,
+    ))
+    # Retain the previous result and completion history; this is not a review rejection.
+    event_id = await record_task_event(
+        connection, task_id=task_id, event_type="task_status_changed", occurred_at=now,
+        actor_user_id=current_user.id, assignee_user_id=row["primary_assignee_user_id"],
+        due_at=row["due_at"], old_value={"status": "completed"},
+        new_value={"status": "in_progress"}, reason_code="completed_task_reopened",
+        reason_text=payload.reason,
+    )
+    executors = await _task_executor_ids(connection, task_id, row["primary_assignee_user_id"])
+    for user_id in (executors | {row["author_user_id"]}) - {current_user.id}:
+        await _upsert_notification(
+            connection, user_id=user_id, event_key=f"task:reopened:{event_id}:{user_id}",
+            kind="task", priority="attention" if user_id in executors else "normal",
+            title="Задача возвращена в работу", body=f"{row['title']} · {payload.reason}",
+            section="tasks", entity_id=task_id, requires_action=user_id in executors,
+            occurred_at=now,
+        )
+    return await _task_response(connection, task_id, current_user)
 
 
 async def set_task_efficiency_exclusion(

@@ -1171,7 +1171,7 @@ export function createPosition(
 export function updatePosition(
   token: string,
   positionId: string,
-  payload: { readonly name?: string; readonly isActive?: boolean; readonly sortOrder?: number },
+  payload: { readonly name?: string; readonly isActive?: boolean; readonly sortOrder?: number; readonly canReopenCompletedTasks?: boolean },
 ): Promise<WorkspacePosition> {
   return apiRequest<WorkspacePosition>(
     `/directory/positions/${positionId}`,
@@ -1953,6 +1953,14 @@ export function returnWorkspaceTaskForRevision(
   return apiRequest<WorkspaceTask>(
     `/tasks/${taskId}/return-for-revision`,
     { method: "POST", body: JSON.stringify({ reasonCode, reasonText }) },
+    token,
+  );
+}
+
+export function reopenWorkspaceTask(token: string, taskId: string, reason: string): Promise<WorkspaceTask> {
+  return apiRequest<WorkspaceTask>(
+    `/tasks/${taskId}/reopen`,
+    { method: "POST", body: JSON.stringify({ reason }) },
     token,
   );
 }

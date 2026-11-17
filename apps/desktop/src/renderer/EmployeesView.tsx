@@ -120,6 +120,7 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
   const [managerScope, setManagerScope] = useState<EmployeeScope>("central");
   const [positionName, setPositionName] = useState("");
   const [positionActive, setPositionActive] = useState(true);
+  const [positionCanReopen, setPositionCanReopen] = useState(false);
   const [newPositionName, setNewPositionName] = useState("");
   const [feedback, setFeedback] = useState("");
   const [feedbackIsError, setFeedbackIsError] = useState(false);
@@ -191,6 +192,7 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
         setSelectedPositionId(firstPosition?.id ?? "");
         setPositionName(firstPosition?.name ?? "");
         setPositionActive(firstPosition?.isActive ?? true);
+        setPositionCanReopen(firstPosition?.canReopenCompletedTasks === true);
       })
       .catch((error: unknown) => {
         if (active) showFeedback(error instanceof Error ? error.message : "Не удалось загрузить сотрудников", true);
@@ -251,6 +253,7 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
     setSelectedPositionId(position.id);
     setPositionName(position.name);
     setPositionActive(position.isActive);
+    setPositionCanReopen(position.canReopenCompletedTasks === true);
   };
 
   const saveEmployee = async () => {
@@ -319,6 +322,7 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
       const saved = await updatePosition(token, selectedPosition.id, {
         name: positionName,
         isActive: positionActive,
+        canReopenCompletedTasks: positionCanReopen,
       });
       setDirectory(replacePosition(directory, saved));
       showFeedback("Должность обновлена. Назначенные сотрудники сохранили связь со справочником.");
@@ -367,6 +371,7 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
       setSelectedPositionId(next?.id ?? "");
       setPositionName(next?.name ?? "");
       setPositionActive(next?.isActive ?? true);
+      setPositionCanReopen(next?.canReopenCompletedTasks === true);
       setEmployeePositionId((current) => current === pendingPositionDelete.id ? "" : current);
       showFeedback(`Должность «${pendingPositionDelete.name}» удалена. Связь с сотрудниками снята.`);
       setPendingPositionDelete(undefined);
@@ -743,6 +748,13 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
                 label="Доступна для новых назначений"
                 onChange={(_, data) => setPositionActive(data.checked === true)}
               />
+              <Checkbox
+                checked={positionCanReopen}
+                disabled={busy}
+                label="Возвращать завершённые задачи в работу"
+                onChange={(_, data) => setPositionCanReopen(data.checked === true)}
+              />
+              <small>Только для активной должности и задач, доступных сотруднику.</small>
               <div className="position-editor-actions">
                 <Button disabled={busy || !positionName.trim()} onClick={() => void savePosition()}>
                   Сохранить должность

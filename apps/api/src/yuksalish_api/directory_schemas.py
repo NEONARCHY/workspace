@@ -24,6 +24,7 @@ class PositionResponse(ApiModel):
     sort_order: int
     source: str
     assigned_users_count: int
+    can_reopen_completed_tasks: bool = False
 
 
 class PositionCreateRequest(ApiModel):
@@ -39,6 +40,7 @@ class PositionCreateRequest(ApiModel):
 class PositionUpdateRequest(ApiModel):
     name: str | None = Field(default=None, min_length=1, max_length=160)
     is_active: bool | None = None
+    can_reopen_completed_tasks: bool | None = None
     sort_order: int | None = Field(default=None, ge=0, le=1_000_000)
 
     @field_validator("name")

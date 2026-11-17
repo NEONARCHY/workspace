@@ -12,11 +12,12 @@ import "./task-return-dialog.css";
 interface TaskReturnDialogProps {
   readonly open: boolean;
   readonly taskTitle: string;
+  readonly reopen?: boolean;
   readonly onClose: () => void;
   readonly onSubmit: (reason: TaskReturnReason, text: string) => Promise<boolean>;
 }
 
-export function TaskReturnDialog({ open, taskTitle, onClose, onSubmit }: TaskReturnDialogProps) {
+export function TaskReturnDialog({ open, taskTitle, reopen = false, onClose, onSubmit }: TaskReturnDialogProps) {
   const descriptionId = useId();
   const [reason, setReason] = useState<TaskReturnReason>("corrections_required");
   const [text, setText] = useState("");
@@ -34,8 +35,8 @@ export function TaskReturnDialog({ open, taskTitle, onClose, onSubmit }: TaskRet
 
   const submit = async () => {
     if (!open || locked.current) return;
-    if (reason === "other" && !text.trim()) {
-      setError("Для другой причины добавьте пояснение.");
+    if ((reopen || reason === "other") && !text.trim()) {
+      setError(reopen ? "Укажите причину возврата в работу." : "Для другой причины добавьте пояснение.");
       return;
     }
     locked.current = true;
@@ -47,10 +48,10 @@ export function TaskReturnDialog({ open, taskTitle, onClose, onSubmit }: TaskRet
         setReason("corrections_required");
         onClose();
       } else {
-        setError("Не удалось вернуть задачу на доработку. Пояснение сохранено — проверьте состояние задачи и повторите попытку.");
+        setError("Не удалось вернуть задачу. Пояснение сохранено — проверьте состояние задачи и повторите попытку.");
       }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Не удалось вернуть задачу на доработку.");
+      setError(cause instanceof Error ? cause.message : "Не удалось вернуть задачу.");
     } finally {
       locked.current = false;
       setBusy(false);
@@ -66,12 +67,14 @@ export function TaskReturnDialog({ open, taskTitle, onClose, onSubmit }: TaskRet
           <DialogTitle action={{ className: "task-return-close", children: <Button appearance="subtle" shape="circular"
             icon={<Dismiss24Regular />} aria-label="Закрыть окно возврата"
             disabled={!open || busy} onClick={onClose} /> }}>
-            <span className="task-return-heading"><span className="task-return-icon" aria-hidden="true"><ArrowUndo24Regular /></span>Вернуть на доработку</span>
+            <span className="task-return-heading"><span className="task-return-icon" aria-hidden="true"><ArrowUndo24Regular /></span>{reopen ? "Вернуть задачу в работу" : "Вернуть на доработку"}</span>
           </DialogTitle>
           <DialogContent>
             <div className="task-return-context"><span>Задача</span><strong>{taskTitle}</strong></div>
-            <p id={descriptionId} className="task-return-description">Укажите причину и поясните, что нужно исправить. Исполнители получат уведомление, а результат потребуется отправить на проверку заново.</p>
-            <Field label="Причина возврата">
+            <p id={descriptionId} className="task-return-description">{reopen
+              ? "Причина появится в маршруте задачи. Исполнители получат уведомление, а прежний результат и запись о закрытии сохранятся."
+              : "Укажите причину и поясните, что нужно исправить. Исполнители получат уведомление, а результат потребуется отправить на проверку заново."}</p>
+            {!reopen && <Field label="Причина возврата">
               <WorkspaceSelect aria-label="Причина возврата" value={reason} disabled={!open || busy}
                 onChange={(event) => { setReason(event.target.value as TaskReturnReason); setError(""); }}>
                 <option value="corrections_required">Нужны исправления</option>
@@ -79,10 +82,10 @@ export function TaskReturnDialog({ open, taskTitle, onClose, onSubmit }: TaskRet
                 <option value="requirements_not_met">Требования не выполнены</option>
                 <option value="other">Другая причина</option>
               </WorkspaceSelect>
-            </Field>
-            <Field label="Что нужно исправить" required={reason === "other"}>
+            </Field>}
+            <Field label={reopen ? "Причина возврата в работу" : "Что нужно исправить"} required={reopen || reason === "other"}>
               <Textarea textarea={{ ref: explanationRef }} aria-label="Пояснение причины" rows={6} value={text}
-                disabled={!open || busy} placeholder="Опишите замечания и ожидаемые исправления"
+                disabled={!open || busy} maxLength={2000} placeholder="Опишите замечания и ожидаемые исправления"
                 onChange={(_, data) => { setText(data.value); setError(""); }} />
             </Field>
             {error ? <WorkspaceNotice tone="error" role="alert">{error}</WorkspaceNotice> : null}
@@ -90,7 +93,7 @@ export function TaskReturnDialog({ open, taskTitle, onClose, onSubmit }: TaskRet
           <DialogActions>
             <Button appearance="secondary" disabled={!open || busy} onClick={onClose}>Отмена</Button>
             <Button appearance="primary" type="submit" icon={<ArrowUndo24Regular />} disabled={!open || busy}>
-              {busy ? "Возврат…" : "Вернуть исполнителям"}
+              {busy ? "Возврат…" : reopen ? "Подтвердить возврат" : "Вернуть исполнителям"}
             </Button>
           </DialogActions>
         </DialogBody>
