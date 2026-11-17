@@ -53,6 +53,7 @@
 .trip-map-pin-core { fill: var(--trip-pin-color); stroke: #fff; stroke-width: 2; vector-effect: non-scaling-stroke; }
 .trip-map-pin.status-current .trip-map-pin-halo { animation: trip-map-current-pulse 2.8s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
 @keyframes trip-map-current-pulse { 50% { opacity: .55; transform: scale(1.12); } }
+.trip-map-pin[data-place-kind="region"] .trip-map-pin-halo { stroke-dasharray: 3 2; }
 .trip-map-pin.active .trip-map-pin-halo { stroke-width: 2; }
 .trip-map-pin:focus-visible .trip-map-pin-halo { stroke: #293a55; stroke-width: 3; }
 .trip-map-pin text { fill: #fff; font-weight: 750; pointer-events: none; }
@@ -105,3 +106,5 @@ html[data-color-theme="dark"] .trip-map-legend-upcoming { --trip-pin-color: #7d9
 @media (prefers-reduced-motion: reduce) { .trip-map-pin.status-current .trip-map-pin-halo { animation: none; } }
 @media (forced-colors: active) { .trip-map-stage, .trip-map-sidebar, .trip-map-stats > span, .trip-map-trip, .trip-map-unresolved { border: 1px solid CanvasText; }.trip-map-ocean { fill: Canvas; }.trip-map-land { fill: Canvas; stroke: CanvasText; }.trip-map-pin-core { fill: Highlight; stroke: HighlightText; }.trip-map-pin-halo { fill: Canvas; stroke: CanvasText; }.trip-map-pin text { fill: HighlightText; }.trip-map-pin .trip-map-pin-label { fill: CanvasText; stroke: Canvas; }.trip-map-grid-line { stroke: GrayText; } }
 @media (forced-colors: active) { .trip-map-pin.status-current .trip-map-pin-halo { animation: none; }.trip-map-legend span::before { background: Highlight; border: 1px solid CanvasText; } }
+
+.trip-map-location-list button > span > small { display: block; margin-top: 2px; }

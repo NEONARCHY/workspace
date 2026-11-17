@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState,
 import { ArrowLeft20Regular, Dismiss20Regular, ZoomIn20Regular, ZoomOut20Regular } from "@fluentui/react-icons";
 import { Button } from "@fluentui/react-components";
 import type { TripRequest, WorkspacePerson } from "@yuksalish/contracts";
-import { loadTripGeoIndex, resolveTripDestination, type TripGeoIndex, type TripPlace } from "./trip-geo";
+import { loadTripGeoIndex, resolveTripDestinations, type TripGeoIndex, type TripPlace } from "./trip-geo";
 import { clampTripMapViewport, fitTripMapPoints, interpolateTripMapViewport,
   maxMapZoom, minMapZoom, tripMapViewBox, worldViewport, zoomTripMapAt,
   type TripMapViewport } from "./trip-map-viewport";
@@ -21,6 +21,7 @@ interface TripWorldMapProps {
 interface TripMapLocation {
   readonly place: TripPlace;
   readonly requests: readonly TripRequest[];
+  readonly sharesCityPoint: boolean;
 }
 
 const coordinate = (place: TripPlace) => ({
@@ -98,14 +99,20 @@ export function TripWorldMap({ requests, people, onOpenRequest, onClose }: TripW
     const unresolved: TripRequest[] = [];
     if (!index) return { locations: [] as TripMapLocation[], withoutPoint: unresolved };
     for (const request of filtered) {
-      const place = resolveTripDestination(index, request.destination);
-      if (!place) { unresolved.push(request); continue; }
-      const group = grouped.get(place.id) ?? { place, requests: [] };
-      group.requests.push(request);
-      grouped.set(place.id, group);
+      const resolved = resolveTripDestinations(index, request.destination);
+      if (resolved.incomplete) unresolved.push(request);
+      for (const place of resolved.places) {
+        const group = grouped.get(place.id) ?? { place, requests: [] };
+        group.requests.push(request);
+        grouped.set(place.id, group);
+      }
     }
+    const cityCoordinates = new Set([...grouped.values()].flatMap(({ place }) =>
+      place.kind === "city" ? [place.latitude + "," + place.longitude] : []));
     const locations = [...grouped.values()].map((group) => ({
-      ...group, requests: group.requests.sort((left, right) => right.startDate.localeCompare(left.startDate)),
+      ...group,
+      sharesCityPoint: group.place.kind === "region" && cityCoordinates.has(group.place.latitude + "," + group.place.longitude),
+      requests: group.requests.sort((left, right) => right.startDate.localeCompare(left.startDate)),
     })).sort((left, right) => right.requests.length - left.requests.length || left.place.name.localeCompare(right.place.name, "ru"));
     return { locations, withoutPoint: unresolved };
   }, [filtered, index]);
@@ -286,11 +293,15 @@ export function TripWorldMap({ requests, people, onOpenRequest, onClose }: TripW
           <path d={landPath} className="trip-map-land" />
           {locations.map((location) => {
             const { x, y } = coordinate(location.place);
+            const pinX = x + (location.sharesCityPoint ? 24 / viewport.zoom : 0);
             const highlighted = selectedId === location.place.id || hoveredId === location.place.id;
             const timing = tripMapLocationStatus(location.requests, today);
-            return <g key={location.place.id} data-trip-pin="true" role="button" tabIndex={0}
-              aria-label={`${location.place.name}: ${tripCount(location.requests.length)}. ${tripMapStatusLabels[timing]}. Показать участников и даты`}
-              className={`trip-map-pin status-${timing}${highlighted ? " active" : ""}`} transform={`translate(${x} ${y})`}
+            const label = [location.place.name + ": " + tripCount(location.requests.length),
+              tripMapStatusLabels[timing], location.place.kind === "region" ? location.place.context : "",
+              "Показать участников и даты"].filter(Boolean).join(". ");
+            return <g key={location.place.id} data-trip-pin="true" data-place-kind={location.place.kind} role="button" tabIndex={0}
+              aria-label={label}
+              className={`trip-map-pin status-${timing}${highlighted ? " active" : ""}`} transform={`translate(${pinX} ${y})`}
               onPointerEnter={() => setHoveredId(location.place.id)} onPointerLeave={() => setHoveredId("")}
               onFocus={() => setHoveredId(location.place.id)} onBlur={() => setHoveredId("")}
               onClick={() => focusLocation(location)}
@@ -314,7 +325,7 @@ export function TripWorldMap({ requests, people, onOpenRequest, onClose }: TripW
         {selected ? <>
           <div className="trip-map-selected-heading"><div><span>Выбранное место</span><h3>{selected.place.name}</h3><p>{selected.place.context}</p></div><Button className="trip-map-clear-selection" appearance="subtle" icon={<Dismiss20Regular />} aria-label="Сбросить выбор места" onClick={() => setSelectedId("")} /></div>
           <div className="trip-map-trip-list">{selected.requests.map((request) => <article key={request.id} className="trip-map-trip">
-            <span>{request.number} · {period(request)} · {tripMapStatusLabels[tripMapStatus(request, today)]}</span><strong>{request.purpose || request.destination}</strong>
+            <span>{request.number} · {period(request)} · {tripMapStatusLabels[tripMapStatus(request, today)]}</span><strong className="trip-list-title" title={request.destination}>{request.destination}</strong>
             <p>{request.employeeIds.map((id) => nameById.get(id) ?? "Сотрудник").join(", ")}</p>
             <Button size="small" onClick={() => onOpenRequest(request.id)}>Открыть карточку</Button>
           </article>)}</div>
@@ -322,10 +333,10 @@ export function TripWorldMap({ requests, people, onOpenRequest, onClose }: TripW
         <div className="trip-map-places-heading"><h3>Места поездок</h3><p>Выберите место или точку на карте.</p></div>
         <div className="trip-map-location-list">{locations.map((location) => <button type="button" key={location.place.id}
           aria-pressed={selectedId === location.place.id} onClick={() => focusLocation(location)}>
-          <span>{location.place.name}</span><small>{tripCount(location.requests.length)}</small>
+          <span>{location.place.name}{location.place.kind === "region" && <small>{location.place.context}</small>}</span><small>{tripCount(location.requests.length)}</small>
         </button>)}{!locations.length ? <p>{filtersActive ? "По выбранным фильтрам нет поездок с точной отметкой." : "Пока нет утверждённых поездок с определённым местом."}</p> : null}</div>
-        {withoutPoint.length ? <section className="trip-map-unresolved" aria-label="Поездки без точной отметки"><h3>Поездки без точной отметки</h3><p>Эти места были введены свободным текстом. Чтобы не показывать неверные точки, они остаются в списке.</p>
-      <div>{withoutPoint.map((request) => <button type="button" key={request.id} onClick={() => onOpenRequest(request.id)}>{request.destination}<small>{period(request)} · {tripMapStatusLabels[tripMapStatus(request, today)]} · {request.employeeIds.map((id) => nameById.get(id) ?? "Сотрудник").join(", ")}</small></button>)}</div>
+        {withoutPoint.length ? <section className="trip-map-unresolved" aria-label="Поездки без точной отметки"><h3>Поездки без точной отметки</h3><p>Для этих поездок в справочнике нашлись не все места. Заявки доступны в списке.</p>
+      <div>{withoutPoint.map((request) => <button type="button" key={request.id} onClick={() => onOpenRequest(request.id)}><span className="trip-list-title" title={request.destination}>{request.destination}</span><small>{period(request)} · {tripMapStatusLabels[tripMapStatus(request, today)]} · {request.employeeIds.map((id) => nameById.get(id) ?? "Сотрудник").join(", ")}</small></button>)}</div>
         </section> : null}
       </aside>
     </div>

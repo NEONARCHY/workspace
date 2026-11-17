@@ -146,6 +146,7 @@ export interface WorkspacePosition {
   readonly sortOrder: number;
   readonly source: string;
   readonly assignedUsersCount: number;
+  readonly canReopenCompletedTasks?: boolean;
 }
 
 export interface DirectoryEmployee {
@@ -2551,6 +2552,7 @@ export interface WorkspaceBootstrap {
   readonly canCreatePaymentRequests: boolean;
   /** Older APIs omit this capability, so bulk invitations remain hidden. */
   readonly canInviteCalendarAudience?: boolean;
+  readonly canReopenCompletedTasks?: boolean;
   readonly people: readonly WorkspacePerson[];
   readonly departments: readonly WorkspaceDepartment[];
   readonly positions: readonly WorkflowPosition[];

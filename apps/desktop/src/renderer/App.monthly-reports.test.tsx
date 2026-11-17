@@ -19,6 +19,7 @@ function serverWithMonthly(data = monthly) {
   const original = server.getMockImplementation()!;
   server.mockImplementation(async (input, options) => {
     if (String(input).endsWith("/monthly-reports")) return response(data);
+    if (String(input).endsWith("/monthly-reports/calendar/days")) return response([]);
     return original(input, options);
   });
   return server;
@@ -52,4 +53,20 @@ it("offers the monthly reports page inside the AI group and follows server capab
   expect(screen.getByRole("button", { name: "Прикрепить файлы отчёта" })).toBeInTheDocument();
   expect(screen.queryByText("Тестовая Азиза")).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Разрешить начисление заработной платы" })).not.toBeInTheDocument();
+});
+
+it("shows the closed collection state with template access and the administrator calendar", async () => {
+  serverWithMonthly({
+    ...monthly, activeMonth: null, dashboardVisible: false, canConfigure: true, cycles: [],
+  });
+  render(<App />);
+  await loginToWorkspace("malika", "home");
+  fireEvent.click(screen.getByRole("button", { name: "ИИ-модули" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Ойлик ҳисоботлар" }));
+  const page = await screen.findByRole("region", { name: "Ойлик ҳисоботлар" });
+  expect(within(page).getByRole("heading", { name: "Сбор отчётов ещё не открыт" })).toBeVisible();
+  expect(within(page).getByRole("button", { name: "Скачать шаблон отчёта" })).toBeEnabled();
+  expect(within(page).queryByRole("combobox", { name: "Отчётный месяц" })).not.toBeInTheDocument();
+  fireEvent.click(within(page).getByText("Рабочий календарь"));
+  expect(await within(page).findByText("Исключений пока нет.")).toBeVisible();
 });

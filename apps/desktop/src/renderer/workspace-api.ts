@@ -1175,7 +1175,7 @@ export function createPosition(
 export function updatePosition(
   token: string,
   positionId: string,
-  payload: { readonly name?: string; readonly isActive?: boolean; readonly sortOrder?: number },
+  payload: { readonly name?: string; readonly isActive?: boolean; readonly sortOrder?: number; readonly canReopenCompletedTasks?: boolean },
 ): Promise<WorkspacePosition> {
   return apiRequest<WorkspacePosition>(
     `/directory/positions/${positionId}`,
@@ -1961,6 +1961,14 @@ export function returnWorkspaceTaskForRevision(
   );
 }
 
+export function reopenWorkspaceTask(token: string, taskId: string, reason: string): Promise<WorkspaceTask> {
+  return apiRequest<WorkspaceTask>(
+    `/tasks/${taskId}/reopen`,
+    { method: "POST", body: JSON.stringify({ reason }) },
+    token,
+  );
+}
+
 export function setWorkspaceTaskEfficiencyExclusion(
   token: string,
   taskId: string,
@@ -2678,9 +2686,10 @@ export function downloadWorkspaceTripDocument(
   token: string, requestId: string,
   kind: "attachment" | "brief" | "brief-preview" | "order" | "order-preview",
   signal?: AbortSignal,
+  preview = false,
 ): Promise<Blob> {
   return boundedRequest(
-    `${getApiBaseUrl()}/api/v1/trip-requests/${encodeURIComponent(requestId)}/documents/${kind}`,
+    `${getApiBaseUrl()}/api/v1/trip-requests/${encodeURIComponent(requestId)}/documents/${kind}${preview ? "?preview=true" : ""}`,
     { headers: { Authorization: `Bearer ${token}` }, signal },
     (response) => response.blob(), 120_000,
   );

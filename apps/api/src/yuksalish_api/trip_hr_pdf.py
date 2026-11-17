@@ -44,6 +44,45 @@ def _text(value: str) -> str:
     return escape(uzbek_cyrillic(value))
 
 
+_PARTICIPANTS_LABEL = "Сафар иштирокчилари:"
+
+
+def _participants_line(employees: list[tuple[str, str]]) -> str:
+    return f"{_PARTICIPANTS_LABEL} " + "; ".join(uzbek_cyrillic(name) for name, _ in employees)
+
+
+def _join_pdfs(*documents: PdfReader) -> bytes:
+    writer = PdfWriter()
+    for document in documents:
+        for page in document.pages:
+            writer.add_page(page)
+    output = BytesIO()
+    writer.write(output)
+    return output.getvalue()
+
+
+def hr_brief_resolution_preview(content: bytes, facts: TripDocumentSnapshot) -> bytes:
+    """Show the archived participant list on a separate page of an older resolution."""
+    if not facts.employees:
+        return content
+    original = PdfReader(BytesIO(content))
+    participants = _participants_line(facts.employees)
+    extracted = " ".join((page.extract_text() or "") for page in original.pages)
+    if " ".join(participants.split()) in " ".join(extracted.split()):
+        return content
+
+    _fonts()
+    title = _style("hr-brief-supplement-title", size=16, leading=23, bold=True)
+    title.alignment = 1
+    body = _style("hr-brief-supplement-body", size=11, leading=17)
+    supplement = _build([
+        Paragraph("Билдиргига илова", title),
+        Spacer(1, 16),
+        Paragraph(escape(participants), body),
+    ], title="Yuksalish - Билдиргига илова")
+    return _join_pdfs(original, PdfReader(BytesIO(supplement)))
+
+
 def hr_brief_pdf(
     facts: TripDocumentSnapshot, signature: bytes | None = None,
     original_pdf: bytes | None = None,
@@ -82,23 +121,14 @@ def hr_brief_pdf(
         if facts.purpose:
             story.append(Paragraph(f"Хизмат сафарининг мақсади: {_text(facts.purpose)}", body))
     if facts.employees:
-        story.append(Paragraph(
-            "Сафар иштирокчилари: "
-            + "; ".join(_text(name) for name, _ in facts.employees), body,
-        ))
+        story.append(Paragraph(escape(_participants_line(facts.employees)), body))
     if facts.original_name:
         story.append(Paragraph(f"Илова: {escape(facts.original_name)}", body))
     # A signed source stays intact; its PDF/image pages follow the resolution cover.
     content = _build(story, title="Yuksalish - Билдирги")
     if original_pdf is None:
         return content
-    writer = PdfWriter()
-    for document in (content, original_pdf):
-        for page in PdfReader(BytesIO(document)).pages:
-            writer.add_page(page)
-    output = BytesIO()
-    writer.write(output)
-    return output.getvalue()
+    return _join_pdfs(PdfReader(BytesIO(content)), PdfReader(BytesIO(original_pdf)))
 
 
 def hr_order_pdf(

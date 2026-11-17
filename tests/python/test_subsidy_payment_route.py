@@ -1,4 +1,5 @@
 import os
+from dataclasses import replace
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, Mock
 from uuid import UUID, uuid4
@@ -20,7 +21,8 @@ from yuksalish_api.repository import (
     find_active_user_by_username,
 )
 from yuksalish_api.seed import seed_demo_data
-from yuksalish_api.tables import approval_nodes, users
+from yuksalish_api.tables import approval_nodes, approval_requests, users
+from yuksalish_api.telegram_notification_events import payment_actor
 from yuksalish_api.workspace_schemas import ApprovalActionRequest, CreateApprovalRequest
 
 
@@ -34,7 +36,7 @@ def _actor(user_id: UUID, username: str, position_id: UUID | None = None) -> Aut
 def test_subsidy_approver_does_not_change_other_stages_or_projects() -> None:
     askar_id, deputy_id = uuid4(), uuid4()
     askar = _actor(askar_id, "askar_mamatxanov")
-    deputy = _actor(deputy_id, "deputy", uuid4())
+    deputy = _actor(deputy_id, "umid_rajabov", uuid4())
     config = {"approverPositionId": str(deputy.position_id)}
     subsidy = {
         "payload": {
@@ -59,12 +61,31 @@ def test_subsidy_approver_does_not_change_other_stages_or_projects() -> None:
     )
 
 
+def test_payment_deputy_requires_rajabov_even_with_stale_route_or_delegation() -> None:
+    position_id = uuid4()
+    umid = _actor(uuid4(), "umid_rajabov", position_id)
+    davronbek = _actor(uuid4(), "davronbek_lyutfiddinov", position_id)
+    row = {"payload": {}, "actor_overrides": {"deputy_chair": str(davronbek.id)}}
+    stale_configs = (
+        {},
+        {"approverPositionId": str(position_id)},
+        {"approverUserId": str(davronbek.id)},
+        {"approverRole": "manager"},
+    )
+    for config in stale_configs:
+        assert _can_act_from_config(umid, row, "deputy_chair", config)
+        assert payment_actor(umid, row, "deputy_chair", config)
+        for actor in (davronbek, replace(davronbek, role="admin")):
+            assert not _can_act_from_config(actor, row, "deputy_chair", config)
+            assert not payment_actor(actor, row, "deputy_chair", config)
+
+
 @pytest.mark.anyio
 async def test_subsidy_stage_label_keeps_approvers_and_ordinary_stage_unchanged() -> None:
     connection = AsyncMock()
     template_id, askar_id, deputy_id = uuid4(), uuid4(), uuid4()
     askar = _actor(askar_id, "askar_mamatxanov")
-    deputy = _actor(deputy_id, "deputy", uuid4())
+    deputy = _actor(deputy_id, "umid_rajabov", uuid4())
     node = {
         "template_id": template_id,
         "node_key": "deputy_chair",
@@ -96,7 +117,8 @@ async def test_subsidy_stage_label_keeps_approvers_and_ordinary_stage_unchanged(
         },
     ]
 
-    for actor in (askar, deputy):
+    davronbek = _actor(uuid4(), "davronbek_lyutfiddinov", deputy.position_id)
+    for actor in (askar, deputy, davronbek):
         stages = await _active_stages_for_requests(connection, requests, actor)
         subsidy_stage = stages[subsidy_id][0]
         assert subsidy_stage.label == "Утверждение первым заместителем председателя"
@@ -157,10 +179,11 @@ async def test_subsidy_payment_uses_askar_and_other_projects_keep_deputy() -> No
                 manager = await load_authenticated_user(connection, manager_row["id"])
                 admin = await load_authenticated_user(connection, admin_row["id"])
                 assert manager and admin
-                askar_id, deputy_id = uuid4(), uuid4()
+                askar_id, deputy_id, davronbek_id = uuid4(), uuid4(), uuid4()
                 for user_id, username, name in (
                     (askar_id, "askar_mamatxanov", "Аскар Маматханов"),
-                    (deputy_id, f"deputy-{deputy_id.hex[:8]}", "Другой согласующий"),
+                    (deputy_id, "umid_rajabov", "Умид Ражабов"),
+                    (davronbek_id, "davronbek_lyutfiddinov", "Давронбек Лютфиддинов"),
                 ):
                     await connection.execute(insert(users).values(
                         id=user_id, username=username, full_name=name,
@@ -192,13 +215,12 @@ async def test_subsidy_payment_uses_askar_and_other_projects_keep_deputy() -> No
                     approval_nodes.c.node_key == "deputy_chair",
                 ))
                 assert deputy_config and deputy_config.get("approverPositionId")
-                await connection.execute(update(users).where(users.c.id == deputy_id).values(
-                    position_id=UUID(deputy_config["approverPositionId"]),
-                ))
-                deputy = _actor(
-                    deputy_id, f"deputy-{deputy_id.hex[:8]}",
-                    UUID(deputy_config["approverPositionId"]),
-                )
+                position_id = UUID(deputy_config["approverPositionId"])
+                await connection.execute(update(users).where(
+                    users.c.id.in_([deputy_id, davronbek_id]),
+                ).values(position_id=position_id))
+                deputy = _actor(deputy_id, "umid_rajabov", position_id)
+                davronbek = _actor(davronbek_id, "davronbek_lyutfiddinov", position_id)
                 subsidy = await act_on_request(
                     connection, admin, UUID(subsidy.id),
                     ApprovalActionRequest(action="move", node_key="deputy_chair"),
@@ -223,12 +245,33 @@ async def test_subsidy_payment_uses_askar_and_other_projects_keep_deputy() -> No
                     ApprovalActionRequest(action="move", node_key="deputy_chair"),
                 )
                 assert ordinary.stage_label == "Утверждение заместителя председателя"
-                with pytest.raises(WorkspaceRepositoryError) as forbidden:
+                assert not ordinary.active_stages[0].can_act
+                ordinary_id = UUID(ordinary.id)
+                await connection.execute(update(approval_requests).where(
+                    approval_requests.c.id == ordinary_id,
+                ).values(actor_overrides={"deputy_chair": str(davronbek.id)}))
+                for actor, status in ((askar, 404), (davronbek, 404), (admin, 403)):
+                    with pytest.raises(WorkspaceRepositoryError) as forbidden:
+                        await act_on_request(
+                            connection, actor, ordinary_id, ApprovalActionRequest(action="approve"),
+                        )
+                    assert forbidden.value.status_code == status
+                # A requester can read the card, but cannot approve this stage.
+                await connection.execute(update(approval_requests).where(
+                    approval_requests.c.id == ordinary_id,
+                ).values(requester_user_id=davronbek.id))
+                with pytest.raises(WorkspaceRepositoryError) as visible_but_forbidden:
                     await act_on_request(
-                        connection, askar, UUID(ordinary.id),
-                        ApprovalActionRequest(action="approve"),
+                        connection, davronbek, ordinary_id, ApprovalActionRequest(action="approve"),
                     )
-                assert forbidden.value.status_code == 404
+                assert visible_but_forbidden.value.status_code == 403
+                with pytest.raises(WorkspaceRepositoryError) as delegation:
+                    await act_on_request(
+                        connection, deputy, ordinary_id, ApprovalActionRequest(
+                            action="delegate", delegate_to_user_id=str(davronbek.id),
+                        ),
+                    )
+                assert delegation.value.status_code == 403
                 ordinary = await act_on_request(
                     connection, deputy, UUID(ordinary.id),
                     ApprovalActionRequest(action="approve"),

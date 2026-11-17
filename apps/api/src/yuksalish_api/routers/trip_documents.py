@@ -1,7 +1,7 @@
 """Private trip brief upload, signature confirmation, and immutable documents."""
 
 import asyncio
-from typing import Annotated, Literal, cast
+from typing import Annotated, cast
 from urllib.parse import quote
 from uuid import UUID
 from zipfile import BadZipFile
@@ -25,6 +25,7 @@ from yuksalish_api.repository import get_trip_request
 from yuksalish_api.trip_document_service import (
     MAX_ATTACHMENT_BYTES,
     MAX_SIGNATURE_BYTES,
+    DocumentKind,
     confirm_original_signature,
     put_attachment,
     put_employee_signature,
@@ -163,15 +164,16 @@ async def preview_brief_attachment(
 @router.get("/{request_id}/documents/{kind}")
 async def download_trip_document(
     request_id: UUID,
-    kind: Literal["attachment", "brief", "brief-preview", "order", "order-preview"],
+    kind: DocumentKind,
     request: Request,
     user: User,
     connection: Connection,
+    preview: bool = False,
 ) -> Response:
     await ensure_module_action(connection, user, "trip_approvals", "view")
     try:
         content, media_type, file_name = await read_document(
-            connection, user, _storage(request), request_id, kind,
+            connection, user, _storage(request), request_id, kind, preview=preview,
         )
     except (WorkspaceRepositoryError, ObjectStorageError) as error:
         raise _failure(error) from error

@@ -3,17 +3,20 @@ import { FluentProvider, webLightTheme } from "@fluentui/react-components";
 import type { TripRequest, WorkspacePerson } from "@yuksalish/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TripWorldMap } from "./TripWorldMap";
+import type * as TripGeo from "./trip-geo";
 
-vi.mock("./trip-geo", () => ({
-  loadTripGeoIndex: vi.fn(async () => ({})),
-  resolveTripDestination: vi.fn((_index, destination: string) => {
-    if (destination === "Ташкент, Узбекистан") return { id: "city:1", name: "Ташкент", context: "Узбекистан", destination,
-      latitude: 41.26465, longitude: 69.21627, kind: "city" };
-    if (destination === "Самарканд, Узбекистан") return { id: "city:2", name: "Самарканд", context: "Узбекистан", destination,
-      latitude: 39.6542, longitude: 66.9597, kind: "city" };
-    return undefined;
-  }),
-}));
+vi.mock("./trip-geo", async (importOriginal) => {
+  const actual = await importOriginal<typeof TripGeo>();
+  const index = actual.createTripGeoIndex({
+    countries: [["UZ", "Uzbekistan", [41.3, 69.2]]],
+    cities: [
+      [1512569, "Tashkent", "UZ", 41.26465, 69.21627, 1900000, "13", ["Ташкент"]],
+      [1216265, "Samarkand", "UZ", 39.6542, 66.9597, 300000, "10", ["Самарканд"]],
+      [601294, "Nukus", "UZ", 42.45861, 59.60576, 332500, "09", ["Нукус"]],
+    ],
+  });
+  return { ...actual, loadTripGeoIndex: vi.fn(async () => index) };
+});
 
 const people: WorkspacePerson[] = [
   { id: "worker-1", name: "Нигора Шокирова", initials: "НШ", color: "#456789", role: "employee", status: "active" },
@@ -59,6 +62,29 @@ describe("trip world map", () => {
     expect(within(locationList).getByRole("region", { name: "Поездки без точной отметки" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "К поездкам" }).previousElementSibling).toHaveTextContent("на карте");
     expect(screen.queryByText("TR-003")).not.toBeInTheDocument();
+  });
+
+  it("puts a single approved request at each recognized stop and labels regional pins", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({ path: "M0,0L5,0L5,5Z" }) })));
+    const onOpenRequest = vi.fn();
+    render(<FluentProvider theme={webLightTheme}><TripWorldMap
+      requests={[
+        { ...base, destination: "Ташкент, Самарканд, Ташкент; адрес партнёра" },
+        { ...base, id: "regional", destination: "Qoraqalpogʻiston Respublikasi" },
+        { ...base, id: "nukus", destination: "Нукус" },
+      ]} people={people} onOpenRequest={onOpenRequest} onClose={vi.fn()} />
+    </FluentProvider>);
+    const map = await screen.findByRole("group", { name: "Карта мира с отметками утверждённых поездок" });
+    const region = within(map).getByRole("button", { name: /Каракалпакстан.*Административный центр · Нукус/ });
+    expect(region).toHaveAttribute("data-place-kind", "region");
+    expect(region.getAttribute("transform")).not.toBe(within(map).getByRole("button", { name: /^Нукус/ }).getAttribute("transform"));
+    for (const city of ["Ташкент", "Самарканд"]) {
+      const pin = within(map).getByRole("button", { name: new RegExp(city + ": 1 поездка") });
+      fireEvent.keyDown(pin, { key: "Enter" });
+      fireEvent.click(screen.getByRole("button", { name: "Открыть карточку" }));
+    }
+    expect(onOpenRequest.mock.calls).toEqual([["trip-1"], ["trip-1"]]);
+    expect(screen.getByRole("region", { name: "Поездки без точной отметки" })).toHaveTextContent("адрес партнёра");
   });
 
   it("shows a recoverable error when the local map asset cannot be loaded", async () => {

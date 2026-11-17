@@ -1620,6 +1620,10 @@ async def _exercise_payment_position_policy(database_url: str) -> None:
             for username in ("aziza", "baxtiyor", "dilshod", "malika"):
                 row = await find_active_user_by_username(connection, username)
                 assert row is not None
+                if username == "dilshod":
+                    await connection.execute(update(users).where(
+                        users.c.id == row["id"],
+                    ).values(username="umid_rajabov"))
                 actor = await load_authenticated_user(connection, row["id"])
                 assert actor is not None
                 assert actor.position_id is not None

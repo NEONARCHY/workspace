@@ -210,8 +210,6 @@ button:focus-visible, select:focus-visible { outline: 2px solid var(--ws-theme-l
   .feed-view { grid-template-columns: minmax(0, 1fr); padding: 16px; }
   .feed-side { margin-bottom: 16px; }
   .approval-create-panel > header, .approval-detail-header { padding: 12px; }
-  .approval-detail-header { grid-template-columns: minmax(0, 1fr) auto; }
-  .approval-detail-header > :nth-child(2):not(button) { grid-row: 2; }
   .approval-create-scroll, .approval-detail-facts, .approval-detail-process { padding: 12px; }
   .payment-field-grid, .payment-trip-grid { grid-template-columns: minmax(0, 1fr); }
   .approval-create-panel > footer { display: flex; }

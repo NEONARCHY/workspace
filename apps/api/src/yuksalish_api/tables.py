@@ -220,6 +220,9 @@ positions = sa.Table(
     sa.Column("id", uuid_type, primary_key=True),
     sa.Column("name", sa.String(160)),
     sa.Column("is_active", sa.Boolean()),
+    sa.Column(
+        "can_reopen_completed_tasks", sa.Boolean(), nullable=False, server_default=sa.false(),
+    ),
     sa.Column("sort_order", sa.Integer()),
     sa.Column("source", sa.String(32)),
     sa.Column("aliases", postgresql.JSONB()),

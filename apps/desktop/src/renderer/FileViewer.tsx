@@ -20,6 +20,7 @@ interface Props<T extends FileViewerSource> {
   readonly onLoad: (attachment: T, signal?: AbortSignal) => Promise<Blob>;
   readonly onLoadOffice: (attachment: T, sheet: number, offset: number, signal?: AbortSignal) => Promise<OfficePreviewResult>;
   readonly onDownload: (attachment: T) => void | Promise<void>;
+  readonly downloadLabel?: string;
   readonly onEdit?: () => void;
   readonly editLabel?: string;
   readonly images?: readonly GalleryImage<T>[];
@@ -67,7 +68,7 @@ export function LocalFileViewer({ file, files, onClose, onLoadOffice }: {
     : <FileViewer attachment={source} onClose={onClose} onLoad={load} onLoadOffice={loadOffice} onDownload={download} />;
 }
 
-function FileViewer<T extends FileViewerSource>({ attachment, onClose, onLoad, onLoadOffice, onDownload, onEdit, editLabel }: Props<T>) {
+function FileViewer<T extends FileViewerSource>({ attachment, onClose, onLoad, onLoadOffice, onDownload, downloadLabel, onEdit, editLabel }: Props<T>) {
   const kind = fileViewerKind(attachment);
   const [url, setUrl] = useState("");
   const [mediaBlob, setMediaBlob] = useState<Blob>();
@@ -144,7 +145,7 @@ function FileViewer<T extends FileViewerSource>({ attachment, onClose, onLoad, o
       <header className="file-viewer-header"><div className="file-viewer-heading"><DialogTitle>
         <span className="file-viewer-title" title={attachment.fileName}>{attachment.fileName}</span>
       </DialogTitle><span className="file-viewer-file-meta">{kind === "unsupported" ? "Файл" : {word:"Word",excel:"Excel",pdf:"PDF",image:"Изображение",video:"Видео",audio:"Аудио"}[kind]}{size ? ` · ${size}` : ""}</span></div>
-        <div className="file-viewer-tools">{onEdit && <Button appearance="primary" onClick={onEdit}>{editLabel ?? "Редактировать"}</Button>}<Button appearance="subtle" icon={<ArrowDownload20Regular />} disabled={saving} onClick={() => void download()}>Скачать</Button><Button ref={closeButtonRef} className="file-viewer-close" appearance="subtle" icon={<Dismiss20Regular />} aria-label="Закрыть просмотрщик" onClick={onClose} /></div></header>
+        <div className="file-viewer-tools">{onEdit && <Button appearance="primary" onClick={onEdit}>{editLabel ?? "Редактировать"}</Button>}<Button appearance="subtle" icon={<ArrowDownload20Regular />} disabled={saving} onClick={() => void download()}>{downloadLabel ?? "Скачать"}</Button><Button ref={closeButtonRef} className="file-viewer-close" appearance="subtle" icon={<Dismiss20Regular />} aria-label="Закрыть просмотрщик" onClick={onClose} /></div></header>
       {office?.kind === "word" && !busy && <div className="file-viewer-toolbar" aria-label="Масштаб текстового просмотра Word">
         <span>Текстовый просмотр</span><div className="file-viewer-tools">
             <Button appearance="subtle" icon={<Subtract20Regular />} aria-label="Уменьшить" disabled={zoom <= .5} onClick={() => setZoom(value => Math.max(.5, value - .25))} />

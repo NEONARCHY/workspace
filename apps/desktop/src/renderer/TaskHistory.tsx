@@ -14,6 +14,7 @@ const labels: Readonly<Record<string, string>> = {
   deadline_rejected: "Перенос срока отклонён", deadline_superseded: "Запрос переноса утратил актуальность",
   result_submitted_for_review: "Результат передан на проверку", result_accepted: "Результат принят",
   result_returned_for_revision: "Возвращено на доработку", task_completed: "Задача закрыта",
+  task_reopened: "Задача возвращена в работу",
   task_cancelled: "Задача отменена", efficiency_excluded: "Исключена из эффективности",
   efficiency_exclusion_changed: "Правило учёта эффективности изменено",
 };

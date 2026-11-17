@@ -12,7 +12,12 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 
 from . import messenger_service
 from .absence_service import presence_summary, visible_absences
-from .access_control import ModuleAction, ensure_module_action, module_permissions_for_user
+from .access_control import (
+    ModuleAction,
+    can_reopen_completed_tasks,
+    ensure_module_action,
+    module_permissions_for_user,
+)
 from .ai_referent_incoming_access import named_responsible
 from .ai_referent_visibility import OPERATOR_VISIBLE_STATUSES, may_view_letter
 from .auth import AuthenticatedUser, load_authenticated_user
@@ -112,6 +117,7 @@ from .workspace_schemas import (
     PinFeedPostRequest,
     ProjectResponse,
     ProjectStageActionResponse,
+    ReopenTaskRequest,
     RequestTaskDeadlineExtension,
     RespondCalendarEventRequest,
     ReturnTaskForRevisionRequest,
@@ -155,7 +161,8 @@ from .workspace_schemas import (
 
 PERSON_COLORS = ("#0f6cbd", "#6b5b95", "#0e7a0d", "#9b3a4d", "#8a4f12")
 SUBSIDY_ROUTE_VARIANT: Literal["subsidy"] = "subsidy"
-SUBSIDY_APPROVAL_NODE = "deputy_chair"
+PAYMENT_DEPUTY_APPROVAL_NODE = "deputy_chair"
+PAYMENT_DEPUTY_USERNAME = "umid_rajabov"
 SUBSIDY_APPROVAL_LABEL = "Утверждение первым заместителем председателя"
 STATUS_LABELS = {
     "draft": "Черновик",
@@ -598,19 +605,27 @@ def _approval_deadline_control(
     )
 
 
+def _is_ordinary_payment_deputy_stage(request_row: Record, node_key: str) -> bool:
+    return node_key == PAYMENT_DEPUTY_APPROVAL_NODE and (
+        (request_row.get("payload") or {}).get("payment_route_variant") != SUBSIDY_ROUTE_VARIANT
+    )
+
+
 def _can_act_from_config(
     current_user: AuthenticatedUser,
     request_row: Record,
     node_key: str,
     config: Mapping[str, Any],
 ) -> bool:
+    if _is_ordinary_payment_deputy_stage(request_row, node_key):
+        return current_user.username.casefold() == PAYMENT_DEPUTY_USERNAME
     if current_user.role in {"admin", "superadmin"}:
         return True
     override = (request_row.get("actor_overrides") or {}).get(node_key)
     if override is not None:
         return str(current_user.id) == str(override)
     request_payload = request_row.get("payload") or {}
-    if (node_key == SUBSIDY_APPROVAL_NODE
+    if (node_key == PAYMENT_DEPUTY_APPROVAL_NODE
             and request_payload.get("payment_route_variant") == SUBSIDY_ROUTE_VARIANT):
         approver_id = request_payload.get("subsidy_approver_user_id")
         return bool(approver_id) and str(current_user.id) == str(approver_id)
@@ -1168,7 +1183,7 @@ async def _active_stages_for_requests(
                     key=node["node_key"],
                     label=(
                         SUBSIDY_APPROVAL_LABEL
-                        if key == SUBSIDY_APPROVAL_NODE
+                        if key == PAYMENT_DEPUTY_APPROVAL_NODE
                         and (request_row.get("payload") or {}).get("payment_route_variant")
                         == SUBSIDY_ROUTE_VARIANT
                         else node["title"]
@@ -3153,6 +3168,8 @@ async def load_workspace(
         people=people,
         can_invite_calendar_audience=can("calendar", "create")
         and can_invite_calendar_audience(current_user),
+        can_reopen_completed_tasks=can("tasks")
+        and await can_reopen_completed_tasks(connection, current_user),
         departments=[WorkspaceDepartmentResponse(
             id=str(row["id"]), code=row["code"], name=row["name"], scope=row["scope"],
             parent_id=str(row["parent_id"]) if row["parent_id"] else None,
@@ -5526,6 +5543,54 @@ async def return_task_for_revision(
     return await _task_response(connection, task_id)
 
 
+async def reopen_completed_task(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    task_id: UUID,
+    payload: ReopenTaskRequest,
+) -> TaskResponse:
+    await ensure_module_action(connection, current_user, "tasks", "view")
+    if not await can_reopen_completed_tasks(connection, current_user):
+        raise WorkspaceRepositoryError(403, "Нет права возвращать закрытые задачи в работу")
+    visible = await _task_access_row(connection, current_user, task_id)
+    # Parent acceptance locks this same row before verifying all its subtasks are closed.
+    if visible["parent_task_id"] is not None:
+        parent_status = await connection.scalar(select(tasks.c.status).where(
+            tasks.c.id == visible["parent_task_id"],
+        ).with_for_update())
+        if parent_status in {"completed", "cancelled"}:
+            raise WorkspaceRepositoryError(409, "Сначала откройте родительскую задачу")
+    row = (await connection.execute(select(tasks).where(
+        tasks.c.id == task_id,
+    ).with_for_update())).mappings().first()
+    if row is None:
+        raise WorkspaceRepositoryError(404, "Task was not found")
+    if row["status"] != "completed":
+        raise WorkspaceRepositoryError(409, "Вернуть в работу можно только завершённую задачу")
+    now = datetime.now(UTC)
+    await connection.execute(update(tasks).where(tasks.c.id == task_id).values(
+        status="in_progress", updated_at=now,
+    ))
+    # Retain the previous result and completion history; this is not a review rejection.
+    event_id = await record_task_event(
+        connection, task_id=task_id, event_type="task_status_changed", occurred_at=now,
+        actor_user_id=current_user.id, assignee_user_id=row["primary_assignee_user_id"],
+        due_at=row["due_at"], old_value={"status": "completed"},
+        new_value={"status": "in_progress"}, reason_code="completed_task_reopened",
+        reason_text=payload.reason,
+    )
+    executors = await _task_executor_ids(connection, task_id, row["primary_assignee_user_id"])
+    for user_id in (executors | {row["author_user_id"]}) - {current_user.id}:
+        await _upsert_notification(
+            connection, user_id=user_id, event_key=f"task:reopened:{event_id}:{user_id}",
+            kind="task", priority="attention" if user_id in executors else "normal",
+            title="Задача возвращена в работу", body=f"{row['title']} · {payload.reason}",
+            section="tasks", entity_id=task_id, requires_action=user_id in executors,
+            occurred_at=now,
+        )
+    return await _task_response(connection, task_id, current_user)
+
+
 async def set_task_efficiency_exclusion(
     connection: AsyncConnection,
     current_user: AuthenticatedUser,
@@ -6518,7 +6583,7 @@ async def _payment_route_variant_payload(
     subsidy_node = await connection.scalar(
         select(approval_nodes.c.node_key).where(
             approval_nodes.c.template_id == template_id,
-            approval_nodes.c.node_key == SUBSIDY_APPROVAL_NODE,
+            approval_nodes.c.node_key == PAYMENT_DEPUTY_APPROVAL_NODE,
             approval_nodes.c.kind == "approval",
         )
     )
@@ -7030,33 +7095,22 @@ async def validate_attachment_owner(
             permissions = messenger_service.member_permissions(member)
             if not permissions.send_messages or not permissions.upload_files:
                 raise WorkspaceRepositoryError(403, "Нет права отправлять файлы в этой группе")
-        row = (
-            (
-                await connection.execute(
-                    select(messages.c.author_user_id, chat_members.c.user_id)
-                    .select_from(
-                        messages.join(chat_members, chat_members.c.chat_id == messages.c.chat_id)
-                    )
-                    .where(
-                        messages.c.id == owner_id,
-                        messages.c.deleted_at.is_(None),
-                        messages.c.system_kind.is_(None),
-                        chat_members.c.user_id == current_user.id,
-                        or_(
-                            chat_members.c.history_visible_from.is_(None),
-                            messages.c.created_at >= chat_members.c.history_visible_from,
-                        ),
-                        or_(
-                            messages.c.system_target_user_id.is_(None),
-                            messages.c.system_target_user_id == current_user.id,
-                        ),
-                    )
-                )
-            )
-            .mappings()
-            .first()
+        # Leadership can read managed chats without a physical membership row.
+        statement = select(messages.c.id).where(
+            messages.c.id == owner_id,
+            messages.c.chat_id == chat_id,
+            messages.c.deleted_at.is_(None),
+            messages.c.system_kind.is_(None),
+            messenger_service.message_access_filter(member, current_user.id),
         )
-        if row is None or (write and row["author_user_id"] != current_user.id):
+        if write:
+            statement = statement.join(
+                chat_members, chat_members.c.chat_id == messages.c.chat_id,
+            ).where(
+                chat_members.c.user_id == current_user.id,
+                messages.c.author_user_id == current_user.id,
+            )
+        if await connection.scalar(statement) is None:
             raise WorkspaceRepositoryError(404, "Message was not found")
         return
 
@@ -8518,6 +8572,10 @@ async def act_on_request(
         raise WorkspaceRepositoryError(403, "This user cannot decide on the selected stage")
     delegated_to_user_id = None
     if payload.action == "delegate":
+        if _is_ordinary_payment_deputy_stage(row, active_node):
+            raise WorkspaceRepositoryError(
+                403, "Решение заместителя принимает Умид Ражабов."
+            )
         if not payload.delegate_to_user_id:
             raise WorkspaceRepositoryError(422, "A delegation target is required")
         delegated_to_user_id = await _active_user_id(connection, payload.delegate_to_user_id)

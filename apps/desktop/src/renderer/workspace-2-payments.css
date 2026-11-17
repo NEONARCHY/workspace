@@ -381,10 +381,9 @@
 .approvals-view .approval-detail-overlay { position: fixed; z-index: var(--ws-layer-overlay); inset: 0; display: grid; place-items: center; padding: 14px; overflow: hidden; background: rgb(29 49 62 / 16%); backdrop-filter: blur(2px); animation: ws2-detail-backdrop var(--ws-motion-micro) var(--ws-ease) both; }
 .approvals-view .approval-detail-panel { width: min(1000px, 100%); height: calc(100dvh - 28px); max-height: calc(100dvh - 28px); margin: 0; grid-template-rows: auto auto minmax(0, 1fr); border: 1px solid rgb(var(--ws-theme-line-rgb, 255 255 255) / 0.92); border-radius: 25px; background: var(--ws-theme-surface, #f4f8f7); box-shadow: 0 24px 70px -27px rgb(29 48 62 / 40%); }
 .approvals-view .approval-detail-header { min-height: 88px; padding: 16px 24px; border-bottom: 1px solid var(--ws-theme-line, #e4eceb); background: var(--ws-theme-surface, #fbfdfc); }
-.approvals-view .approval-detail-header > div > span { color: var(--ws-theme-ink-teal, #487681); font-size: 11px; letter-spacing: .025em; }
+.approvals-view .approval-detail-header > div:first-child > span { color: var(--ws-theme-ink-teal, #487681); font-size: 11px; letter-spacing: .025em; }
 .approvals-view .approval-detail-header h2 { color: var(--ws-text); font-size: 23px; font-weight: 600; line-height: 1.2; }
 .approvals-view .approval-detail-header > button { width: 36px; height: 36px; border-radius: 12px; background: var(--ws-theme-surface-soft, #ecf2f1); }
-.approvals-view .approval-detail-header > .approval-delete-button { width: auto; height: 36px; padding: 0 12px; border-radius: 12px; }
 .approvals-view .approval-stage-ribbon { gap: 5px; min-height: 58px; padding: 10px 18px; border-color: var(--ws-theme-line, #e3eae9); background: var(--ws-theme-surface, #f8fbfa); scrollbar-width: thin; }
 .approvals-view .approval-stage-ribbon > span { flex: none; min-width: 0; max-width: 210px; margin: 0; padding: 8px 11px; border: 1px solid transparent; border-radius: 10px; color: var(--ws-theme-muted, #506a77); background: var(--ws-theme-surface-soft, #eaf0ef); font-size: 11px; font-weight: 600; line-height: 1.2; text-overflow: ellipsis; clip-path: none; }
 .approvals-view .approval-stage-ribbon > span:first-child { clip-path: none; }
@@ -450,8 +449,9 @@
   position: relative;
   z-index: 2;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto auto auto;
-  align-items: center;
+  grid-template-columns: minmax(0, 1fr) auto;
+  flex: none;
+  align-items: start;
   gap: 8px;
   min-height: 0;
   padding: 18px 20px 13px;
@@ -459,12 +459,12 @@
   background: rgb(var(--ws-theme-surface-rgb, 251 253 252) / 0.96);
 }
 .approvals-view .approval-detail-header > div:first-child { min-width: 0; }
-.approvals-view .approval-detail-header > div > span { display: block; margin-bottom: 3px; color: var(--ws-theme-ink-teal, #52717c); font-size: 10px; font-weight: 600; letter-spacing: .045em; text-transform: uppercase; }
-.approvals-view .approval-detail-header h2 { overflow: hidden; margin: 0; font-size: clamp(19px, 1.45vw, 24px); line-height: 1.16; letter-spacing: -.018em; text-overflow: ellipsis; white-space: nowrap; }
-.approvals-view .approval-detail-header .fui-Badge { justify-self: end; }
-.approvals-view .approval-detail-header > button:last-child { grid-column: -2 / -1; grid-row: 1; width: 34px; height: 34px; }
-.approvals-view .approval-detail-header > :is(.approval-edit-button, .approval-delete-button) { width: auto; height: 34px; padding-inline: 10px; color: var(--ws-theme-muted, #4d6874); background: var(--ws-theme-surface-soft, #edf3f2); }
-.approvals-view .approval-detail-header > .approval-delete-button { color: var(--ws-theme-ink-danger, #86555a); background: var(--ws-theme-surface, #faf1f0); }
+.approvals-view .approval-detail-header > div:first-child > span { display: block; margin-bottom: 3px; color: var(--ws-theme-ink-teal, #52717c); font-size: 10px; font-weight: 600; letter-spacing: .045em; text-transform: uppercase; overflow-wrap: anywhere; }
+.approvals-view .approval-detail-header h2 { margin: 0; font-size: clamp(19px, 1.45vw, 24px); line-height: 1.16; letter-spacing: -.018em; overflow-wrap: anywhere; }
+.approvals-view .approval-detail-header > .approval-detail-close { width: 34px; height: 34px; }
+.approvals-view .approval-detail-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.approvals-view .approval-detail-actions > .fui-Button { min-height: 34px; padding-inline: 10px; border-radius: 12px; color: var(--ws-theme-muted, #4d6874); background: var(--ws-theme-surface-soft, #edf3f2); }
+.approvals-view .approval-detail-actions > .approval-delete-button { color: var(--ws-theme-ink-danger, #86555a); background: var(--ws-theme-surface, #faf1f0); }
 .approvals-view .approval-detail-tabs {
   position: relative;
   z-index: 2;
@@ -556,6 +556,10 @@
   .approvals-view .approval-detail-panel { width: min(720px, calc(100% - 48px)); min-width: 0; }
   .approvals-view .approval-detail-content { display: flex; overflow-y: auto; }
   .approvals-view .approval-detail-facts, .approvals-view .approval-detail-process { display: contents; overflow: visible; }
+}
+@media (max-width: 700px), (max-height: 520px) {
+  .approvals-view .approval-detail-panel { overflow-y: auto; scrollbar-width: thin; }
+  .approvals-view .approval-detail-content { flex: 1 0 auto; overflow: visible; }
 }
 @keyframes ws2-detail-enter { from { opacity: .82; transform: translateX(14px); } to { opacity: 1; transform: translateX(0); } }
 @keyframes ws2-detail-backdrop { from { opacity: 0; } to { opacity: 1; } }

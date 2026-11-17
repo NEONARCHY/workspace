@@ -8,13 +8,15 @@ import { people } from "./test-fixtures/demo-data";
 import type { FileViewerSource } from "./FileViewer";
 
 vi.mock("./FileViewer", () => ({
-  ExternalFileViewer: ({ attachment, onLoad, onClose, onEdit }: {
+  ExternalFileViewer: ({ attachment, onLoad, onClose, onEdit, downloadLabel }: {
     attachment: FileViewerSource;
     onLoad: (file: FileViewerSource, signal?: AbortSignal) => Promise<Blob>;
     onClose: () => void;
     onEdit?: () => void;
+    downloadLabel?: string;
   }) => <div role="dialog" aria-label="Просмотр билдирги"><span>{attachment.fileName}</span>
     {onEdit && <button type="button" onClick={onEdit}>Редактировать билдирги</button>}
+    {downloadLabel && <button type="button">{downloadLabel}</button>}
     <button type="button" onClick={() => void onLoad(attachment, new AbortController().signal).then(onClose)}>Показать файл</button>
   </div>,
 }));
@@ -42,14 +44,58 @@ const card = () => document.querySelector(".trip-board-card")!;
 async function drop(target: string) { await dropSpatialCard(card(), column(target)); }
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 describe("Trip approvals interaction", async () => {
+  it("uses the route as a short list title and keeps the full purpose in search and details", () => {
+    const purpose = request.purpose.repeat(7);
+    setup({ ...request, purpose });
+    expect(card()).toHaveTextContent(request.destination);
+    expect(card()).not.toHaveTextContent(purpose);
+    fireEvent.click(screen.getByRole("button", { name: "Список" }));
+    const list = screen.getByLabelText("Список поездок");
+    expect(list).toHaveTextContent(request.destination);
+    expect(list).not.toHaveTextContent(purpose);
+    fireEvent.change(screen.getByRole("textbox", { name: "Поиск поездок" }), { target: { value: "региональной командой" } });
+    fireEvent.click(within(list).getByRole("button", { name: /Самарканд/ }));
+    expect(screen.getByRole("dialog")).toHaveTextContent(purpose);
+  });
+  it("shows a compact participant roster on the board and in the list", () => {
+    const participants = people.slice(0, 4);
+    const participantIds = [...participants.map(({ id }) => id), "unavailable-employee"];
+    const participantNames = [...participants.map(({ name }) => name), "Сотрудник"];
+    const rosterName = `Участники (5): ${participantNames.join(", ")}`;
+    setup({ ...request, employeeIds: participantIds });
+
+    const openTrip = within(card() as HTMLElement).getByRole("button", { name: /Открыть поездку/ });
+    expect(openTrip).toHaveAccessibleDescription(rosterName);
+    const boardRoster = within(openTrip).getByRole("img", { name: rosterName });
+    expect(boardRoster.querySelectorAll(".trip-participant-avatar")).toHaveLength(4);
+    expect(within(boardRoster).getByText("+1")).toHaveAttribute("title", "Сотрудник");
+
+    fireEvent.click(screen.getByRole("button", { name: "Список" }));
+    const list = screen.getByLabelText("Список поездок");
+    const listRoster = within(list).getByRole("img", { name: rosterName });
+    expect(listRoster.querySelectorAll(".trip-participant-avatar")).toHaveLength(4);
+    expect(within(listRoster).getByText("+1")).toBeInTheDocument();
+    fireEvent.click(within(list).getByRole("button", { name: /Самарканд/ }));
+    expect(screen.getByRole("dialog")).toHaveTextContent(participants[3]!.name);
+  });
   it("opens a chairman resolution as PDF even when the source was a signed DOCX", async () => {
     const trip = { ...request, workflowVersion: 3, hrProcessingRequired: true, hasResolution: true,
       stage: "hr" as const, originalSignatureConfirmed: true, hasSignedBrief: true,
       briefAttachmentName: "signed-original.docx", briefAttachmentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" };
-    setup(trip);
+    installSpatialGeometry();
+    const onDownloadDocument = vi.fn(async () => new Blob([], { type: "application/pdf" }));
+    render(<FluentProvider theme={webLightTheme}><TripApprovalsView
+      requests={[trip]} people={people} currentUser={people[0]!}
+      onCreate={vi.fn()} onUpdate={vi.fn()} onAction={vi.fn()} onDownloadDocument={onDownloadDocument}
+    /></FluentProvider>);
     fireEvent.click(card().querySelector(".approval-card-open")!);
     fireEvent.click(screen.getByRole("button", { name: "Билдирги с резолюцией председателя" }));
     expect(await screen.findByText("bildirgi.pdf")).toBeInTheDocument();
+    expect(screen.getByText("Скачать оригинал")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Показать файл"));
+    await waitFor(() => expect(onDownloadDocument).toHaveBeenCalledExactlyOnceWith(
+      trip.id, "brief", expect.any(AbortSignal), true,
+    ));
   });
   it("keeps the chair handoff in progress and presents the new HR route", async () => {
     const trip = { ...request, workflowVersion: 3, hrProcessingRequired: true };

@@ -2005,28 +2005,39 @@ export function ApprovalsView({
                     <span>{selectedRequest.details.projectCode ? `${selectedRequest.details.projectCode} · ` : ""}Заявка №{selectedRequest.number} · v{selectedRequest.revision}</span>
                     <h2 id="approval-detail-title">{selectedRequest.title}</h2>
                   </div>
-                  <Badge
-                    appearance="tint"
-                    color={selectedRequest.status === "approved" ? "success" : selectedRequest.status === "rejected" ? "danger" : selectedRequest.status === "needs_revision" ? "warning" : "brand"}
-                  >
-                    {selectedRequest.statusLabel}
-                  </Badge>
-                  {canEditRequest(selectedRequest) && editingRequestId !== selectedRequest.id ? (
-                    <Button className="approval-edit-button" appearance="subtle" icon={<CircleEdit24Regular />} disabled={actionBusy} onClick={() => startRevision(selectedRequest)}>Исправить заявку</Button>
-                  ) : null}
-                  {canManage ? (
-                    <Button
-                      className="approval-delete-button"
-                      appearance="subtle"
-                      icon={<Delete24Regular />}
-                      aria-label="Удалить заявку"
-                      disabled={actionBusy}
-                      onClick={() => void removeRequest(selectedRequest)}
+                  <button className="approval-detail-close" type="button" aria-label="Закрыть карточку заявки" onClick={closeDetail}>×</button>
+                  <div className="approval-detail-actions">
+                    <Badge
+                      appearance="tint"
+                      color={selectedRequest.status === "approved" ? "success" : selectedRequest.status === "rejected" ? "danger" : selectedRequest.status === "needs_revision" ? "warning" : "brand"}
                     >
-                      Удалить
-                    </Button>
-                  ) : null}
-                  <button type="button" aria-label="Закрыть карточку заявки" onClick={closeDetail}>×</button>
+                      {selectedRequest.statusLabel}
+                    </Badge>
+                    {canEditRequest(selectedRequest) && editingRequestId !== selectedRequest.id ? (
+                      <Button
+                        size="small"
+                        appearance="subtle"
+                        icon={<CircleEdit24Regular />}
+                        disabled={actionBusy}
+                        onClick={() => startRevision(selectedRequest)}
+                      >
+                        Исправить заявку
+                      </Button>
+                    ) : null}
+                    {canManage ? (
+                      <Button
+                        className="approval-delete-button"
+                        size="small"
+                        appearance="subtle"
+                        icon={<Delete24Regular />}
+                        aria-label="Удалить заявку"
+                        disabled={actionBusy}
+                        onClick={() => void removeRequest(selectedRequest)}
+                      >
+                        Удалить
+                      </Button>
+                    ) : null}
+                  </div>
                 </header>
 
                 <SlidingSegmented as="nav" className="approval-detail-tabs" aria-label="Разделы заявки">
@@ -2159,7 +2170,9 @@ export function ApprovalsView({
                               <Button className="approval-decision-action action-return" appearance="subtle" disabled={actionBusy} onClick={() => { setReturnRequestId(selectedRequest.id); setReturnNodeKey(stage.key); }}>Вернуть</Button>
                               <Button className="approval-decision-action action-reject" appearance="subtle" disabled={actionBusy} onClick={() => setDecision({ requestId: selectedRequest.id, nodeKey: stage.key, action: "reject" })}>Отклонить</Button>
                               <Button className="approval-decision-action action-clarify" appearance="subtle" disabled={actionBusy} onClick={() => setDecision({ requestId: selectedRequest.id, nodeKey: stage.key, action: "clarify" })}>Уточнить</Button>
-                              <Button className="approval-decision-action action-delegate" appearance="subtle" disabled={actionBusy} onClick={() => setDecision({ requestId: selectedRequest.id, nodeKey: stage.key, action: "delegate" })}>Делегировать</Button>
+                              {stage.key !== "deputy_chair" || selectedRequest.routeVariant === "subsidy" ? (
+                                <Button className="approval-decision-action action-delegate" appearance="subtle" disabled={actionBusy} onClick={() => setDecision({ requestId: selectedRequest.id, nodeKey: stage.key, action: "delegate" })}>Делегировать</Button>
+                              ) : null}
                             </div>
                           </div>
                         ))}
@@ -2380,36 +2393,40 @@ export function ApprovalsView({
                 />
                 {selectedNode.data.kind === "approval" ? (
                   <>
-                    <label>
-                      Должность согласующего
-                      <WorkspaceSelect
-                        aria-label="Должность согласующего"
-                        value={String(selectedNode.data.approverPositionId ?? "")}
-                        onChange={(event) => updateSelected({
-                          approverPositionId: event.target.value || undefined,
-                          approverUserId: undefined,
-                        })}
-                      >
-                        <option value="">Определяется ролью</option>
-                        {positions.map((position) => (
-                          <option key={position.id} value={position.id}>{position.name}</option>
-                        ))}
-                      </WorkspaceSelect>
-                    </label>
-                    <label>
-                      Роль согласующего, если должность не выбрана
-                      <WorkspaceSelect
-                        aria-label="Роль согласующего"
-                        value={String(selectedNode.data.approverRole ?? "manager")}
-                        onChange={(event) => updateSelected({ approverRole: event.target.value })}
-                      >
-                        <option value="manager">Руководитель</option>
-                        <option value="admin">Администратор</option>
-                        <option value="superadmin">Суперадминистратор</option>
-                        <option value="employee">Сотрудник</option>
-                      </WorkspaceSelect>
-                    </label>
-                    <div className="scoped-person-field"><span>Конкретный сотрудник</span><PersonPicker label="Конкретный согласующий" people={people} departments={departments} value={String(selectedNode.data.approverUserId ?? "")} onChange={(id) => updateSelected({ approverUserId: id || undefined, approverPositionId: undefined })} emptyLabel="Определяется ролью" /></div>
+                    {selectedNode.id === "deputy_chair" ? (
+                      <p>Обычные заявки согласует Умид Ражабов. По проекту «Субсидия» решение принимает первый заместитель председателя.</p>
+                    ) : <>
+                      <label>
+                        Должность согласующего
+                        <WorkspaceSelect
+                          aria-label="Должность согласующего"
+                          value={String(selectedNode.data.approverPositionId ?? "")}
+                          onChange={(event) => updateSelected({
+                            approverPositionId: event.target.value || undefined,
+                            approverUserId: undefined,
+                          })}
+                        >
+                          <option value="">Определяется ролью</option>
+                          {positions.map((position) => (
+                            <option key={position.id} value={position.id}>{position.name}</option>
+                          ))}
+                        </WorkspaceSelect>
+                      </label>
+                      <label>
+                        Роль согласующего, если должность не выбрана
+                        <WorkspaceSelect
+                          aria-label="Роль согласующего"
+                          value={String(selectedNode.data.approverRole ?? "manager")}
+                          onChange={(event) => updateSelected({ approverRole: event.target.value })}
+                        >
+                          <option value="manager">Руководитель</option>
+                          <option value="admin">Администратор</option>
+                          <option value="superadmin">Суперадминистратор</option>
+                          <option value="employee">Сотрудник</option>
+                        </WorkspaceSelect>
+                      </label>
+                      <div className="scoped-person-field"><span>Конкретный сотрудник</span><PersonPicker label="Конкретный согласующий" people={people} departments={departments} value={String(selectedNode.data.approverUserId ?? "")} onChange={(id) => updateSelected({ approverUserId: id || undefined, approverPositionId: undefined })} emptyLabel="Определяется ролью" /></div>
+                    </>}
                     <fieldset className="workflow-deadline-settings">
                       <legend>Сроки и эскалация</legend>
                       <div>

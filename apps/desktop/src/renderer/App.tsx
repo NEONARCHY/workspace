@@ -1,4 +1,5 @@
 import { TeamDecisionFrame } from "./TeamDecisionFrame";
+import { approvalRequestNeedsAction } from "./approval-board";
 import { MonthlyReportDashboard, MonthlyReportPrompts, MonthlyReportsView } from "./MonthlyReportsView";
 import { useMonthlyReports, useMonthlyReportWindow } from "./useMonthlyReports";
 import { TaskProposals } from "./TaskProposals";
@@ -199,6 +200,7 @@ import {
   removeWorkspaceTaskParticipant,
   requestWorkspaceTaskDeadline,
   returnWorkspaceTaskForRevision,
+  reopenWorkspaceTask,
   publishWorkspaceWorkflow,
   saveWorkspaceWorkflow,
   sendWorkspaceMessage,
@@ -258,6 +260,7 @@ interface WorkspaceState {
   readonly moduleAccess: readonly EffectiveModuleAccess[];
   readonly canCreatePaymentRequests: boolean;
   readonly canInviteCalendarAudience?: boolean;
+  readonly canReopenCompletedTasks?: boolean;
   readonly people: readonly WorkspacePerson[];
   readonly departments: readonly WorkspaceDepartment[];
   readonly positions: readonly WorkflowPosition[];
@@ -1731,11 +1734,11 @@ export function App() {
   };
   const handleTripDocument = async (
     requestId: string, kind: "attachment" | "brief" | "brief-preview" | "order" | "order-preview",
-    signal?: AbortSignal,
+    signal?: AbortSignal, preview?: boolean,
   ): Promise<Blob | undefined> => {
     if (session === undefined) return undefined;
     try {
-      return await downloadWorkspaceTripDocument(session.accessToken, requestId, kind, signal);
+      return await downloadWorkspaceTripDocument(session.accessToken, requestId, kind, signal, preview);
     } catch (error) {
       if (!signal?.aborted) reportError(error);
       return undefined;
@@ -2123,7 +2126,7 @@ export function App() {
   const badgeBySection: Partial<Record<NavigationKey, number>> = {
     messenger: workspace.chats.reduce((total, chat) => total + chat.unread, 0),
     tasks: workspace.tasks.filter((task) => !["completed", "cancelled"].includes(task.status)).length,
-    payment_requests: workspace.requests.filter((request) => request.status === "running").length,
+    payment_requests: workspace.requests.filter((request) => approvalRequestNeedsAction(request, workspace.currentUser.id)).length,
     notifications: workspace.notifications.filter((item) => !item.readAt).length,
   };
   const chairmanHome = chairmanHasTeamHome(workspace.currentUser, workspace.moduleAccess);
@@ -2464,6 +2467,8 @@ export function App() {
                   ? renderEmbeddedChat(task.chatId, "задачи")
                   : <div className="embedded-chat-unavailable">Для этой задачи чат недоступен.</div>}
                 onReturnForRevision={handleReturnTaskForRevision}
+                canReopenCompletedTasks={workspace.canReopenCompletedTasks === true}
+                onReopenTask={(task, reason) => runTaskMutation((token) => reopenWorkspaceTask(token, task.id, reason))}
                 onSubmitResult={handleSubmitTaskResult}
                 onAcceptResult={handleAcceptTaskResult}
                 onExtendDeadline={handleExtendTaskDeadline}

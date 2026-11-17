@@ -1,7 +1,7 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { LoadingSkeleton } from "./LoadingSkeleton";
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { SpatialBoard, SpatialCard, SpatialLane } from "./SpatialBoard";
 import { useMiddleMousePan } from "./useMiddleMousePan";
 import { ProcessWorkflowDesigner } from "./ProcessWorkflowDesigner";
@@ -48,6 +48,7 @@ const moveLabels: Readonly<Record<TripAction, string>> = {
   complete: "Оформить приказ",
 };
 const dateLabel = (value: string) => new Date(`${value}T00:00:00`).toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
+const tripParticipantAvatarLimit = 4;
 const isFinished = (request: TripRequest) => ["approved", "rejected", "annulled"].includes(request.status);
 const needsBriefForSubmission = (request: TripRequest) => {
   if ((request.workflowVersion ?? 1) < 2) return false;
@@ -71,7 +72,7 @@ interface TripApprovalsViewProps {
   readonly onDelete?: (request: TripRequest) => Promise<void>;
   readonly onAction: (request: TripRequest, action: TripAction, comment?: string, targetStage?: TripStage, order?: TripOrderInput) => Promise<TripRequest | undefined>;
   readonly onLoadBriefOffice?: (requestId: string, sheet: number, offset: number, signal?: AbortSignal) => Promise<OfficePreviewResult>;
-  readonly onDownloadDocument?: (requestId: string, kind: "attachment" | "brief" | "brief-preview" | "order" | "order-preview", signal?: AbortSignal) => Promise<Blob | undefined>;
+  readonly onDownloadDocument?: (requestId: string, kind: "attachment" | "brief" | "brief-preview" | "order" | "order-preview", signal?: AbortSignal, preview?: boolean) => Promise<Blob | undefined>;
   readonly onOpenChat?: (chatId: string) => void;
   readonly renderTripChat?: (request: TripRequest) => ReactNode;
   readonly workflow?: WorkflowDefinition;
@@ -104,6 +105,8 @@ const exampleTripFacts = {
 
 export function TripApprovalsView({ token, focusRequestId, requests, people, departments, currentUser, onCreate, onUpdate, onDelete, onAction, onLoadBriefOffice, onDownloadDocument, onOpenChat, renderTripChat, workflow, positions = [], canManageWorkflow = false, onSaveWorkflow, onPublishWorkflow, assistantDraft, dialogOnly = false, onDialogClose }: TripApprovalsViewProps) {
   const boardPan = useMiddleMousePan<HTMLDivElement>();
+  const participantSummaryPrefix = useId();
+  const peopleById = useMemo(() => new Map(people.map((person) => [person.id, person])), [people]);
   const restoreFocusTarget = useRestoreFocusTarget();
   const detailSurfaceRef = useRef<HTMLDivElement>(null);
   const detailCloseRef = useRef<HTMLButtonElement>(null);
@@ -149,6 +152,7 @@ export function TripApprovalsView({ token, focusRequestId, requests, people, dep
   const busyRef = useRef(false);
   const [documentPreview, setDocumentPreview] = useState<FileViewerSource & {
     updatedAt: string; kind: "attachment" | "brief" | "brief-preview" | "order" | "order-preview";
+    isResolution: boolean;
   }>();
   const [briefEditorRequest, setBriefEditorRequest] = useState<TripRequest>();
   const [error, setError] = useState("");
@@ -169,8 +173,28 @@ export function TripApprovalsView({ token, focusRequestId, requests, people, dep
       }))
     : tripColumns;
   const displayTripColumns = tripBoardColumns(allTripColumns);
-  const personName = (id: string) => people.find((person) => person.id === id)?.name ?? "Сотрудник";
+  const personName = (id: string) => peopleById.get(id)?.name ?? "Сотрудник";
   const personLink = (id: string, children: ReactNode, className?: string) => <EmployeeProfileLink userId={people.some((person) => person.id === id) ? id : undefined} personName={personName(id)} className={className}>{children}</EmployeeProfileLink>;
+  const participantSummaryId = (request: TripRequest) => request.employeeIds.length
+    ? `${participantSummaryPrefix}-participants-${request.id}`
+    : undefined;
+  const participantSummary = (request: TripRequest) => {
+    const { employeeIds } = request;
+    if (employeeIds.length === 0) return null;
+    const names = employeeIds.map(personName);
+    const label = `Участники (${employeeIds.length}): ${names.join(", ")}`;
+    const overflow = employeeIds.length - tripParticipantAvatarLimit;
+    return <span className="trip-participant-summary" role="img" aria-label={label} title={names.join(", ")}>
+      <span id={participantSummaryId(request)} hidden>{label}</span>
+      <span className="trip-participant-label">Участники</span>
+      <span className="trip-participant-avatars">
+        {employeeIds.slice(0, tripParticipantAvatarLimit).map((id) => <span className="trip-participant-avatar" key={id} title={personName(id)}>
+          <PersonAvatar person={peopleById.get(id)} size={24} token={token} />
+        </span>)}
+        {overflow > 0 ? <span className="trip-participant-overflow" title={names.slice(tripParticipantAvatarLimit).join(", ")}>+{overflow}</span> : null}
+      </span>
+    </span>;
+  };
   const runningCount = requests.filter((request) => !isFinished(request)).length;
   const finishedCount = requests.length - runningCount;
   const actionableCount = requests.filter((request) => request.allowedActions.some(
@@ -227,7 +251,9 @@ export function TripApprovalsView({ token, focusRequestId, requests, people, dep
   };
 
   const loadDocumentPreview = useCallback(async (file: FileViewerSource, signal?: AbortSignal) => {
-    const content = await onDownloadDocument?.(file.id, documentPreview?.kind ?? "attachment", signal);
+    const content = documentPreview?.isResolution
+      ? await onDownloadDocument?.(file.id, "brief", signal, true)
+      : await onDownloadDocument?.(file.id, documentPreview?.kind ?? "attachment", signal);
     if (!content) throw new Error("Не удалось открыть документ поездки");
     return content;
   }, [onDownloadDocument, documentPreview]);
@@ -240,6 +266,7 @@ export function TripApprovalsView({ token, focusRequestId, requests, people, dep
     const original = kind === "attachment" || (kind === "brief" && request.originalSignatureConfirmed && !request.hasResolution);
     setDocumentPreview({
       id: request.id, kind, updatedAt: request.updatedAt,
+      isResolution: kind === "brief" && request.hasResolution === true,
       fileName: original ? request.briefAttachmentName ?? "bildirgi" : kind === "brief" ? "bildirgi.pdf" : kind === "brief-preview" ? "bildirgi-preview.pdf"
         : kind === "order" ? `prikaz-${request.orderNumber ?? request.number}.pdf` : "prikaz-preview.pdf",
       contentType: original ? request.briefAttachmentType ?? "" : "application/pdf",
@@ -341,14 +368,14 @@ export function TripApprovalsView({ token, focusRequestId, requests, people, dep
                 {items.map((request) => {
                   const forward = request.allowedActions.find((action) => action === "submit" || action === "resubmit" || action === "approve" || action === "complete");
                   const movable = !busy && displayTripColumns.some((target) => { const action = tripDropAction(request, target.key, isAdministrator); return action && !((action === "submit" || action === "resubmit") && needsBriefForSubmission(request)); });
-                  return <SpatialCard id={request.id} lane={column.key} label={request.purpose || request.destination} disabled={!movable} key={request.id} data-trip-id={request.id} className={`approval-board-card trip-board-card ${movable ? "movable" : ""}`}>
-                    <button type="button" className="approval-card-open" aria-label={`Открыть поездку ${request.number}: ${request.purpose || request.destination}`} onClick={() => openRequest(request.id)}>
+                  return <SpatialCard id={request.id} lane={column.key} label={request.destination} disabled={!movable} key={request.id} data-trip-id={request.id} className={`approval-board-card trip-board-card ${movable ? "movable" : ""}`}>
+                    <button type="button" className="approval-card-open" aria-label={`Открыть поездку ${request.number}: ${request.destination}`} aria-describedby={participantSummaryId(request)} onClick={() => openRequest(request.id)}>
                       <span className="approval-card-topline"><span>{request.number}</span>{request.status === "needs_revision" ? <em>Доработка</em> : null}</span>
-                      <strong>{request.purpose || request.destination}</strong>
-                      {request.purpose ? <span className="trip-card-destination">{request.destination}</span> : null}
+                      <strong className="trip-list-title" title={request.destination}>{request.destination}</strong>
                       <span className="approval-card-project">{dateLabel(request.startDate)} — {dateLabel(request.endDate)}</span>
                       {personLink(request.requesterUserId, <><PersonAvatar size={24} person={people.find((person) => person.id === request.requesterUserId)} token={token} /><span>{personName(request.requesterUserId)}</span></>, "approval-card-owner")}
-                      <span className="approval-card-meta"><span>{request.stageLabel}</span><span>{request.employeeIds.length} участн.</span></span>
+                      {participantSummary(request)}
+                      <span className="approval-card-meta"><span>{request.stageLabel}</span></span>
                     </button>
                     <footer><span>{movable ? "Можно перенести" : request.statusLabel}</span>{request.chatId && onOpenChat ? <Button size="small" className="context-chat-button" appearance="subtle" icon={<Chat24Regular />} aria-label={`Открыть чат поездки ${request.number}`} onClick={() => onOpenChat(request.chatId!)} /> : null}{forward ? <Button size="small" appearance="subtle" disabled={busy || ((forward === "submit" || forward === "resubmit") && needsBriefForSubmission(request))} aria-label={`${forward === "submit" && request.workflowVersion === 3 ? "Отправить первому заместителю" : actionLabels[forward]}: ${request.number}`} onClick={() => void act(request, forward)}>{moveLabels[forward]}</Button> : null}</footer>
                   </SpatialCard>;
@@ -361,7 +388,8 @@ export function TripApprovalsView({ token, focusRequestId, requests, people, dep
         </SpatialBoard>
       ) : (
         <div className="trip-list" aria-label="Список поездок">{visibleRequests.map((request) => <button className="trip-list-item" key={request.id} onClick={() => openRequest(request.id)} type="button">
-          <span><strong>{request.number}</strong><Badge appearance="tint">{request.stageLabel}</Badge></span><b>{request.destination}</b>{request.purpose ? <p>{request.purpose}</p> : null}<small>{request.startDate} — {request.endDate} · {request.employeeIds.length} сотруд. · {request.statusLabel}</small>
+          <span><strong>{request.number}</strong><Badge appearance="tint">{request.stageLabel}</Badge></span><b className="trip-list-title" title={request.destination}>{request.destination}</b><small>{request.startDate} — {request.endDate} · {request.statusLabel}</small>
+          {participantSummary(request)}
         </button>)}</div>
       )}
       </>}
@@ -477,7 +505,7 @@ export function TripApprovalsView({ token, focusRequestId, requests, people, dep
           </form>) : null}
         </DialogSurface>
       </Dialog>
-      {documentPreview ? <Suspense fallback={<span role="status">Открываем документ…</span>}><ExternalFileViewer key={`${documentPreview.id}:${documentPreview.kind}:${documentPreview.updatedAt}`} attachment={documentPreview} onClose={() => setDocumentPreview(undefined)} onLoad={loadDocumentPreview} onLoadOffice={loadBriefOffice} onDownload={() => { const request = requests.find(item => item.id === documentPreview.id); if (request) return downloadDocument(request, documentPreview.kind); }} onEdit={documentPreview.kind === "brief-preview" && selected?.id === documentPreview.id && selected.canEdit ? () => { setDocumentPreview(undefined); setBriefEditorRequest(selected); } : undefined} editLabel="Редактировать билдирги" /></Suspense> : null}
+      {documentPreview ? <Suspense fallback={<span role="status">Открываем документ…</span>}><ExternalFileViewer key={`${documentPreview.id}:${documentPreview.kind}:${documentPreview.updatedAt}`} attachment={documentPreview} onClose={() => setDocumentPreview(undefined)} onLoad={loadDocumentPreview} onLoadOffice={loadBriefOffice} onDownload={() => { const request = requests.find(item => item.id === documentPreview.id); if (request) return downloadDocument(request, documentPreview.kind); }} downloadLabel={documentPreview.isResolution ? "Скачать оригинал" : undefined} onEdit={documentPreview.kind === "brief-preview" && selected?.id === documentPreview.id && selected.canEdit ? () => { setDocumentPreview(undefined); setBriefEditorRequest(selected); } : undefined} editLabel="Редактировать билдирги" /></Suspense> : null}
       {briefEditorRequest && <TripBriefEditor key={briefEditorRequest.id} request={briefEditorRequest} onClose={() => setBriefEditorRequest(undefined)} onSave={onUpdate} onSaved={saved => { setBriefEditorRequest(undefined); setSelectedId(saved.id); openDocument(saved, "brief-preview"); }} />}
     </section>
   );
