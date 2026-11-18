@@ -48,6 +48,7 @@ class Settings(BaseSettings):
     members_cache_seconds: int = 300
     ai_referent_agent_token: SecretStr = SecretStr("")
     ai_referent_offline_authority_enabled: bool = False
+    ai_referent_mailing_enabled: bool = False
     gemini_api_key: SecretStr = SecretStr("")
     hr_identity_ocr_executable: Path = Path("/usr/bin/tesseract")
     office_preview_socket: str = ""

@@ -7,6 +7,7 @@ from .auth import AuthenticatedUser
 OPERATOR_VISIBLE_STATUSES = frozenset(
     {"referent_review_pending", "operator_revision", "delivery_unknown"}
 )
+MAILING_OPERATOR_STATUSES = frozenset({"queued", "sending", "failed", "cancelled"})
 PROGRESS_ONLY_STATUSES = frozenset(
     {
         "pending_review",
@@ -40,5 +41,8 @@ def may_view_letter(
         or row.get("reviewer_user_id") == user.id
         or row.get("final_reviewer_user_id") == user.id
         or row.get("initial_reviewer_user_id") == user.id
-        or (may_operate and row["status"] in OPERATOR_VISIBLE_STATUSES)
+        or (may_operate and (
+            row["status"] in OPERATOR_VISIBLE_STATUSES
+            or (row.get("is_mailing") and row["status"] in MAILING_OPERATOR_STATUSES)
+        ))
     )

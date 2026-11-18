@@ -501,3 +501,114 @@ def test_notifications_attach_only_current_version_after_admin_replacement(modul
         "new",
         "extra",
     ]
+
+
+@pytest.mark.parametrize("failure", [None, "before_click", "after_click", "changed_pdf"])
+def test_mailing_worker_uses_exact_recipient_and_same_signed_file(
+    modules, tmp_path, monkeypatch, failure,
+):
+    from contextlib import contextmanager
+
+    signed = tmp_path / "common.pdf"
+    signed.write_bytes(b"%PDF-1.4 signed")
+    extra = tmp_path / "appendix.pdf"
+    extra.write_bytes(b"%PDF-1.4 appendix")
+    letter_id, job_id = str(uuid4()), str(uuid4())
+    row = {
+        "id": 1, "status": "exat_sent", "destination_address": "previous@exat.uz",
+        "destination_route": "exat", "signed_file_path": str(signed),
+    }
+    client = Mock(agent_id="test")
+    service = MagicMock(archive_root=str(tmp_path))
+    service.database.get_outgoing_letter.side_effect = lambda _: row.copy()
+
+    def update_target(sql, values):
+        assert "UPDATE outgoing_letters" in sql
+        organization, address, route, attachments, local_id = values
+        assert local_id == 1
+        row.update(destination_organization=organization, destination_address=address,
+                   destination_route=route, attachment_paths_json=attachments, status="approved")
+
+    service.database.connect.return_value.__enter__.return_value.execute.side_effect = update_target
+    worker = modules.worker.DeliveryWorker(service, client, modules.state.State(tmp_path / "db"))
+    worker.state.put("letter:" + letter_id, 1)
+    monkeypatch.setattr(worker, "download", Mock(return_value=extra))
+    clicks = []
+
+    def prepare(_, local_id):
+        assert local_id == 1
+        assert row["destination_address"] == "chosen@example.test"
+        assert row["destination_route"] == "webmail"
+        assert row["attachment_paths_json"] == json.dumps([str(extra)])
+        if failure == "before_click":
+            raise modules.client.WorkspaceError("Webmail session expired before opening")
+        row["status"] = "webmail_dry_run_prepared"
+
+    @contextmanager
+    def guard(_, prepared, _handle, fence, *, single_attempt):
+        assert single_attempt
+        assert prepared["destination_address"] == "chosen@example.test"
+
+        def click(_):
+            if failure == "changed_pdf":
+                signed.write_bytes(b"%PDF-1.4 different document")
+            fence()
+            clicks.append(prepared["destination_address"])
+            if failure == "after_click":
+                raise modules.client.WorkspaceError("Disconnected after send")
+            row["status"] = "webmail_sent"
+
+        service.confirm_manual_send.side_effect = click
+        yield
+
+    monkeypatch.setattr(modules.worker, "prepare_compose", prepare)
+    monkeypatch.setattr(modules.worker, "prepared_open", Mock(return_value=False))
+    monkeypatch.setattr(modules.worker, "guarded_send", guard)
+    monkeypatch.setattr(modules.worker, "compose_identity", Mock(return_value=None))
+    job = {
+        "id": job_id, "leaseToken": str(uuid4()), "letterId": letter_id,
+        "recipientId": str(uuid4()), "recipientAddress": "chosen@example.test",
+        "recipientOrganization": "Chosen office", "route": "webmail",
+        "signedFile": {
+            "id": str(uuid4()), "sha256": hashlib.sha256(signed.read_bytes()).hexdigest(),
+        },
+        "files": [{"role": "additional", "sha256": hashlib.sha256(extra.read_bytes()).hexdigest()}],
+    }
+    result = worker.send_recipient(job, threading.Event())
+    assert result["outcome"] == {
+        None: "sent", "before_click": "failed", "after_click": "unknown", "changed_pdf": "failed",
+    }[failure]
+    assert clicks == (["chosen@example.test"] if failure in {None, "after_click"} else [])
+    if clicks:
+        assert client.request.call_args.args[0] == f"/ai-referent/agent/jobs/{job_id}/heartbeat"
+
+@pytest.mark.parametrize("address", ["intended@example.test", "wrong@example.test"])
+def test_mailing_webmail_adapter_never_clicks_twice(modules, monkeypatch, address):
+    delivery = importlib.import_module("workspace_integration.delivery")
+    page = Mock()
+    fields = Mock()
+    fields.all.return_value = [Mock(input_value=Mock(return_value=address))]
+    button = Mock()
+    controls = Mock()
+    controls.all.return_value = [button]
+    page.locator.side_effect = [fields, controls, fields, controls]
+    page.get_by_role.return_value.all.return_value = []
+    adapter = SimpleNamespace(_click_send=Mock())
+
+    def legacy_attempt(_local_id):
+        if adapter._click_send(page):
+            adapter._click_send(page)
+
+    adapter.click_prepared_send = legacy_attempt
+    service = SimpleNamespace(webmail_sender=adapter)
+    row = {"id": 1, "destination_route": "webmail", "destination_address": "intended@example.test"}
+    monkeypatch.setattr(delivery, "prepared_open", Mock(return_value=True))
+    fence = Mock()
+    with (
+        delivery.guarded_send(service, row, None, fence, single_attempt=True),
+        pytest.raises(modules.client.WorkspaceError),
+    ):
+        adapter.click_prepared_send(1)
+    expected = 1 if address.startswith("intended") else 0
+    assert button.click.call_count == fence.call_count == expected
+    assert adapter.click_prepared_send is legacy_attempt

@@ -130,11 +130,14 @@ async def put_incoming_access(
 
 @router.get("/authority", response_model=OfflineAuthorityStatus)
 async def get_authority_status(
+    request: Request,
     current_user: Annotated[AuthenticatedUser, Depends(require_user)],
     connection: Annotated[AsyncConnection, Depends(get_connection)],
 ) -> OfflineAuthorityStatus:
     await ensure_module_action(connection, current_user, "ai_referent", "view")
-    return await read_authority_status(connection)
+    result = await read_authority_status(connection)
+    result.mailing_enabled = request.app.state.settings.ai_referent_mailing_enabled
+    return result
 
 
 def _translate(error: AIReferentServiceError) -> HTTPException:
@@ -397,6 +400,9 @@ async def post_letter(
     current_user: Annotated[AuthenticatedUser, Depends(require_user)],
     connection: Annotated[AsyncConnection, Depends(get_connection)],
 ) -> AIReferentLetterResponse:
+    if (payload.mailing_recipients is not None
+            and not request.app.state.settings.ai_referent_mailing_enabled):
+        raise HTTPException(409, "Рассылки пока отключены на сервере.")
     try:
         result = await create_letter(connection, current_user, payload)
     except AIReferentServiceError as error:

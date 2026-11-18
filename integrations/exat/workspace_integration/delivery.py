@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from contextlib import contextmanager
+from email.utils import getaddresses
 from typing import Any
 
 from .client import WorkspaceError
@@ -74,19 +76,105 @@ def prepared_open(service: Any, row: Any, handle: int | None) -> bool:
     return handle is not None and compose_identity(service, row) == handle
 
 
-@contextmanager
-def guarded_send(service: Any, row: Any, handle: int | None, fence: Callable[[], None]):
-    """The service calls this adapter inside gui_lock: recheck there, not before waiting."""
-    adapter = (
-        service.webmail_sender if row["destination_route"] == "webmail" else service.exat_compose
+def _webmail_click_once(page: Any, row: Any, fence: Callable[[], None]) -> bool:
+    fields = page.locator(
+        "textarea#_to, input#_to, textarea#compose_to, input#compose_to, "
+        "textarea[name='_to'], input[name='_to'], input[name='to']"
     )
+    address = str(row["destination_address"]).casefold()
+    values = [field.input_value().strip().casefold() for field in fields.all()]
+    recipients = [
+        [mailbox for _, mailbox in getaddresses([value])] for value in values if value
+    ]
+    if not recipients or any(field != [address] for field in recipients):
+        raise WorkspaceError("Поле получателя Webmail отличается от утверждённого адреса.")
+    controls = page.locator("[data-command='send'], #compose-send, #rcmbtn-send").all()
+    controls += page.get_by_role("button", name=re.compile(r"^(Отправить|Send)$", re.I)).all()
+    button = next((control for control in controls if control.is_visible()), None)
+    if button is None:
+        return False
+    fence()
+    button.click(timeout=10000)
+    return True
+
+
+def _exat_click_once(
+    desktop: Any, window: Any, warnings: list[str], handle: int | None,
+    fence: Callable[[], None], timeout: object,
+) -> tuple[bool, str | None, int, bool]:
+    from src.outgoing.exat_compose import (
+        _click_control_body,
+        _click_window_ok,
+        _find_send_button,
+        _positive_float,
+        _wait_for_exat_send_outcome,
+    )
+
+    if handle is None or int(window.handle) != handle:
+        raise WorkspaceError("Окно E-XAT изменилось перед отправкой.")
+    button = _find_send_button(window)
+    if button is None:
+        return False, None, 0, False
+    rectangle = str(button.rectangle())
+    fence()
+    _click_control_body(button)
+    outcome, error = _wait_for_exat_send_outcome(
+        desktop, handle, timeout_seconds=_positive_float(timeout, 3.0)
+    )
+    if outcome == "server_error" and error is not None:
+        _click_window_ok(error)
+    if outcome != "closed":
+        warnings.append("E-XAT did not confirm the single send attempt.")
+    return outcome == "closed", rectangle, 1, outcome == "server_error"
+
+
+@contextmanager
+def guarded_send(
+    service: Any, row: Any, handle: int | None, fence: Callable[[], None],
+    *, single_attempt: bool = False,
+):
+    """Run the final check inside the adapter's GUI lock, immediately before sending."""
+    webmail = row["destination_route"] == "webmail"
+    adapter = service.webmail_sender if webmail else service.exat_compose
     original = adapter.click_prepared_send
 
     def click(local_id: int, **kwargs: Any):
         if local_id != row["id"] or not prepared_open(service, row, handle):
             raise WorkspaceError("Подготовленное окно изменилось. Отправка остановлена.")
-        fence()
-        return original(local_id, **kwargs)
+        if not single_attempt:
+            fence()
+            return original(local_id, **kwargs)
+
+        def before_click() -> None:
+            if not prepared_open(service, row, handle):
+                raise WorkspaceError("Подготовленное окно изменилось. Отправка остановлена.")
+            fence()
+
+        invoked = False
+
+        def once() -> None:
+            nonlocal invoked
+            if invoked:
+                raise WorkspaceError("Повторное нажатие заблокировано. Сверьте журнал.")
+            before_click()
+            invoked = True
+
+        if webmail:
+            original_click = adapter._click_send
+            adapter._click_send = lambda page: _webmail_click_once(page, row, once)
+            try:
+                return original(local_id, **kwargs)
+            finally:
+                adapter._click_send = original_click
+        original_click = adapter._click_send_with_result_guard
+        adapter._click_send_with_result_guard = lambda desktop, window, warnings: _exat_click_once(
+            desktop, window, warnings, handle, once,
+            adapter.exat_send.get("send_result_wait_seconds"),
+        )
+        try:
+            return original(local_id, **kwargs)
+        finally:
+            adapter._click_send_with_result_guard = original_click
 
     adapter.click_prepared_send = click
     try:

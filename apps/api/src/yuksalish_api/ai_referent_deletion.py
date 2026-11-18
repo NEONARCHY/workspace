@@ -84,6 +84,8 @@ async def request_deletion(
     administrator = user.role in {"admin", "superadmin"}
     if row["created_by_user_id"] != user.id and not administrator:
         raise HTTPException(403, "Удалить письмо может только автор.")
+    if row.get("is_mailing"):
+        raise HTTPException(409, "Отмените рассылку через карточку письма.")
     if row["revision"] != revision:
         raise HTTPException(409, "Письмо изменилось. Проверьте актуальное состояние.")
     if not administrator and row["status"] in {

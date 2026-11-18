@@ -4,6 +4,7 @@
 import asyncio
 import hashlib
 from collections.abc import Callable, Coroutine
+from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 from io import BytesIO
 from pathlib import PurePath
@@ -108,6 +109,7 @@ from ..ai_referent_shared_service import (
 )
 from ..auth import AuthenticatedUser, require_user
 from ..database import get_connection
+from ..errors import WorkspaceRepositoryError
 from ..file_preview import OfficePreview, preview_office
 from ..object_storage import ObjectStorageError
 from ..office_pdf_preview import render_word_pdf
@@ -134,6 +136,7 @@ from ..tables import (
 from ..tables import (
     ai_referent_document_checks as checks,
 )
+from ..telegram_notification_service import notice_url
 from ..workspace_schemas import ApiModel, AttachmentResponse
 from .ai_referent import _storage, require_agent_token
 from .workspace import put_attachment
@@ -282,6 +285,7 @@ async def put_agent_comment_audio(
     expected_revision: Annotated[int, Query(alias="expectedRevision", ge=1)],
     duration_ms: Annotated[int, Query(alias="durationMs", ge=1, le=300000)],
 ) -> AIReferentCommentAudio:
+    await _require_single_telegram_letter(connection, letter_id)
     return await upload_comment_audio(
         letter_id, request, connection, actor, expected_revision, duration_ms
     )
@@ -629,7 +633,7 @@ async def get_agent_letters(
 ) -> AIReferentRegistryResponse:
     return await load_letters(
         connection, actor, offset=offset, limit=limit,
-        active_only=active_only, history_only=sent_only,
+        active_only=active_only, history_only=sent_only, include_mailings=False,
     )
 
 
@@ -650,10 +654,18 @@ async def get_agent_letter_progress(
     return await load_letter_progress(connection, actor, letter_id)
 
 
+async def _require_single_telegram_letter(connection: AsyncConnection, letter_id: UUID) -> None:
+    if await connection.scalar(select(ai_referent_letters.c.is_mailing).where(
+        ai_referent_letters.c.id == letter_id,
+    )):
+        raise HTTPException(403, "Откройте рассылку в Workspace.")
+
+
 @router.get("/agent/letters/{letter_id}", response_model=AIReferentLetterResponse)
 async def get_agent_letter(
     letter_id: UUID, connection: Connection, actor: Actor
 ) -> AIReferentLetterResponse:
+    await _require_single_telegram_letter(connection, letter_id)
     return await load_letter(connection, actor, letter_id)
 
 
@@ -664,7 +676,7 @@ async def get_agent_letter(
 async def create_agent_letter(
     payload: CreateAIReferentLetterRequest, request: Request, connection: Connection, actor: Actor
 ) -> AIReferentLetterResponse:
-    result = await create_letter(connection, actor, payload)
+    result = await create_letter(connection, actor, payload, workspace=False)
     if result.source == "workspace":
         await connection.execute(
             update(ai_referent_letters)
@@ -689,7 +701,7 @@ async def patch_agent_letter(
     connection: Connection,
     actor: Actor,
 ) -> AIReferentLetterResponse:
-    result = await update_letter(connection, actor, letter_id, payload)
+    result = await update_letter(connection, actor, letter_id, payload, workspace=False)
     await request.app.state.event_bus.publish(
         {"type": "ai_referent.updated", "entityId": result.id}
     )
@@ -707,7 +719,7 @@ async def agent_letter_action(
     connection: Connection,
     actor: Actor,
 ) -> AIReferentLetterResponse:
-    result = await act_on_letter(connection, actor, letter_id, payload)
+    result = await act_on_letter(connection, actor, letter_id, payload, workspace=False)
     await request.app.state.event_bus.publish(
         {"type": "ai_referent.updated", "entityId": result.id}
     )
@@ -727,6 +739,7 @@ async def agent_attachment(
     role: Literal["primary", "additional"] = "primary",
     expected_revision: Annotated[int | None, Query(alias="expectedRevision", ge=1)] = None,
 ) -> AttachmentResponse:
+    await _require_single_telegram_letter(connection, letter_id)
     # Exact-content retry does not create a second attachment. Stream bounds and
     # owner/permission checks are shared with the regular upload endpoint.
     return await put_attachment(
@@ -758,6 +771,8 @@ async def agent_packet(
 ) -> dict[str, object]:
     if kind == "archive":
         raise HTTPException(403, "Архив доступен только в Workspace.")
+    if kind == "outgoing":
+        await _require_single_telegram_letter(connection, owner_id)
     return await get_packet(kind, owner_id, connection, actor)
 
 
@@ -838,6 +853,8 @@ async def agent_download_file(
 ) -> Response:
     if kind == "archive":
         raise HTTPException(403, "Архив доступен только в Workspace.")
+    if kind == "outgoing":
+        await _require_single_telegram_letter(connection, owner_id)
     return await download_packet_file(kind, owner_id, file_id, request, connection, actor, source)
 
 
@@ -897,6 +914,8 @@ async def upload_packet_file(
         job_owner = job["letter_id"] if job else None
         if job_owner != owner_id:
             raise HTTPException(403, "Файл не относится к заданию.")
+        if job is not None and job["recipient_id"] is not None:
+            raise HTTPException(403, "Утверждённый пакет рассылки уже зафиксирован.")
         if job is not None and job["kind"] == "sign_only":
             prefix = f"signed/{job_id}/"
             suffix = name[len(prefix):] if name.startswith(prefix) else ""
@@ -933,10 +952,17 @@ async def upload_packet_file(
     dependencies=[Depends(require_agent_token), Depends(require_workspace_write)],
 )
 async def post_claim(
+    request: Request,
     connection: Connection,
     agent_id: Annotated[str, Query(alias="agentId", pattern=r"^[A-Za-z0-9_.-]{1,128}$")],
+    mailing_version: Annotated[int, Query(alias="mailingVersion", ge=0)] = 0,
 ) -> dict[str, object]:
-    return {"job": await claim_job(connection, agent_id)}
+    return {"job": await claim_job(
+        connection, agent_id,
+        mailing_supported=(
+            mailing_version == 1 and request.app.state.settings.ai_referent_mailing_enabled
+        ),
+    )}
 
 
 @router.post(
@@ -1178,8 +1204,19 @@ async def job_file(
     "/agent/notifications/claim",
     dependencies=[Depends(require_agent_token), Depends(require_workspace_write)],
 )
-async def notification_claim(connection: Connection) -> dict[str, object]:
-    return {"notifications": await claim_notifications(connection)}
+async def notification_claim(
+    request: Request,
+    connection: Connection,
+    mailing_version: Annotated[int, Query(alias="mailingVersion", ge=0)] = 0,
+) -> dict[str, object]:
+    notifications = await claim_notifications(connection, mailing_supported=mailing_version == 1)
+    for item in notifications:
+        notice_id = item.pop("workspaceNoticeId", None)
+        if isinstance(notice_id, UUID):
+            # An installation without a public HTTPS origin can still notify.
+            with suppress(WorkspaceRepositoryError):
+                item["workspaceUrl"] = notice_url(request.app.state.settings, notice_id)
+    return {"notifications": notifications}
 
 
 @router.post(

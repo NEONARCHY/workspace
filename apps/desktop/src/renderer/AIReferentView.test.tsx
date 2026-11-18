@@ -166,6 +166,64 @@ describe("AIReferentView", () => {
     vi.mocked(addAIReferentManualRecipient).mockResolvedValue({ id: "manual-new", name: "Новый адресат", addresses: ["office@example.org"], route: "webmail", categoryKey: "other", addressBookOrganization: "Новый адресат" });
   });
 
+  it("keeps the mixed mailing list after validation and save errors", async () => {
+    vi.mocked(loadAIReferentAuthority).mockResolvedValue({
+      writable: true, mode: "legacy", leaseUntil: null, detail: "", mailingEnabled: true,
+    });
+    vi.mocked(createAIReferentLetter).mockRejectedValueOnce(new Error("Сервер временно недоступен"));
+    render(<FluentProvider theme={workspaceTheme}>
+      <AIReferentView token="token" people={[]} canCreate preferOutgoing />
+    </FluentProvider>);
+    await openComposer();
+    fireEvent.change(screen.getByRole("combobox", { name: "Режим адресатов" }), {
+      target: { value: "mailing" },
+    });
+    const bulk = screen.getByRole("textbox", { name: "Вставить список email" });
+    fireEvent.change(bulk, { target: { value: "team@exat.uz TEAM@EXAT.UZ" } });
+    fireEvent.click(screen.getByRole("button", { name: "Добавить список" }));
+    expect(await screen.findByText("Адрес TEAM@EXAT.UZ уже есть в списке.")).toBeVisible();
+    fireEvent.change(bulk, { target: { value: "team@exat.uz; office@example.test" } });
+    fireEvent.click(screen.getByRole("button", { name: "Добавить список" }));
+    expect(screen.getByText("Получатели · 2")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить черновик" }));
+    await waitFor(() => expect(createAIReferentLetter).toHaveBeenCalledWith("token", expect.objectContaining({
+      mailingRecipients: [
+        { address: "team@exat.uz", organization: "team@exat.uz" },
+        { address: "office@example.test", organization: "office@example.test" },
+      ],
+    })));
+    expect(await screen.findAllByText("Сервер временно недоступен")).not.toHaveLength(0);
+    expect(screen.getByText("team@exat.uz")).toBeVisible();
+    expect(screen.getByText("office@example.test")).toBeVisible();
+  });
+
+  it("submits a reconciliation for the selected recipient only", async () => {
+    const letter: AIReferentLetter = {
+      ...registry.letters[0]!, status: "delivery_unknown",
+      availableActions: ["confirm_recipient_sent", "confirm_recipient_not_sent"],
+      mailingRecipients: [
+        { id: "a", organization: "Первый адресат", address: "a@example.test", route: "webmail", status: "sent", detail: "Принято сервером", attempts: 1 },
+        { id: "b", organization: "Второй адресат", address: "b@exat.uz", route: "exat", status: "unknown", detail: "Связь потеряна", attempts: 1 },
+      ],
+    };
+    vi.mocked(loadAIReferentLetter).mockResolvedValue(letter);
+    vi.mocked(actOnAIReferentLetter).mockResolvedValueOnce(letter);
+    render(<FluentProvider theme={workspaceTheme}>
+      <AIReferentView token="token" people={[]} canCreate={false} canAdmin focusRequestId="letter-1" />
+    </FluentProvider>);
+    expect(await screen.findByText("Принято почтовым сервисом")).toBeVisible();
+    expect(screen.getByText("Результат неизвестен")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Письмо не отправлено · b@exat.uz" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Результат сверки с внешним журналом" }), {
+      target: { value: "Проверен журнал отправленных писем" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Подтвердить" }));
+    await waitFor(() => expect(actOnAIReferentLetter).toHaveBeenCalledWith(
+      "token", letter, "confirm_recipient_not_sent", "Проверен журнал отправленных писем",
+      expect.any(String), undefined, "b",
+    ));
+  });
+
   it("opens personal outgoing first for reviewers and puts incoming before Telegram", async () => {
     render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate preferOutgoing /></FluentProvider>);
     await waitFor(() => expect(screen.getByRole("tab", { name: "Входящие" })).toBeInTheDocument());

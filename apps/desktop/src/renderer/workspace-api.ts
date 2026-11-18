@@ -496,17 +496,21 @@ export function updateAIReferentLetter(
 
 export function actOnAIReferentLetter(
   token: string,
-  letter: Pick<AIReferentLetter, "id" | "revision">,
+  letter: Pick<AIReferentLetter, "id" | "revision" | "mailingRecipients">,
   action: AIReferentAction,
   comment = "",
   operationId?: string,
   commentAudioId?: string,
+  recipientId?: string,
 ): Promise<AIReferentLetter> {
   return apiRequest<AIReferentLetter>(
     `/ai-referent/letters/${letter.id}/actions`,
     {
       method: "POST",
-      body: JSON.stringify({ action, comment, expectedRevision: letter.revision, operationId, commentAudioId }),
+      body: JSON.stringify({
+        action, comment, expectedRevision: letter.revision, operationId, commentAudioId,
+        recipientId, mailing: letter.mailingRecipients ? true : undefined,
+      }),
     },
     token,
   );

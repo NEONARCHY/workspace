@@ -822,9 +822,12 @@ class SharedBot:
     def notifications(self) -> None:
         self.wizard.poll_checks()
         self.clean_obsolete_controls()
-        for item in self.api.request("/ai-referent/agent/notifications/claim", method="POST").get(
-            "notifications", []
-        ):
+        for item in self.api.request(
+            "/ai-referent/agent/notifications/claim?mailingVersion=1", method="POST"
+        ).get("notifications", []):
+            if item.get("mailing"):
+                self.mailing_notification(item)
+                continue
             delivered, error = False, ""
             try:
                 letter = self.api.request(
@@ -933,15 +936,32 @@ class SharedBot:
                 error = type(
                     exc
                 ).__name__  # Never put Telegram's token-containing URL in server logs.
-            self.api.request(
-                f"/ai-referent/agent/notifications/{item['id']}/ack",
-                {
-                    "leaseToken": item["leaseToken"],
-                    "delivered": delivered,
-                    "error": error,
-                },
-                method="POST",
-            )
+            self.acknowledge_notification(item, delivered, error)
+
+    def acknowledge_notification(self, item: dict[str, Any], delivered: bool, error: str) -> None:
+        self.api.request(
+            f"/ai-referent/agent/notifications/{item['id']}/ack",
+            {"leaseToken": item["leaseToken"], "delivered": delivered, "error": error},
+            method="POST",
+        )
+
+    def mailing_notification(self, item: dict[str, Any]) -> None:
+        receipt = f"notice-text:{item['id']}"
+        if not self.state.get(receipt):
+            url = item.get("workspaceUrl")
+            rows = [[{"text": "Открыть в Workspace", "url": url}]] if url else None
+            try:
+                response = self.telegram.send_message(
+                    item["telegramId"], item["text"] + "\nОткройте «Исходящие» в Workspace.",
+                    reply_markup={"inline_keyboard": rows} if rows else None,
+                )
+                if response.get("ok") is False:
+                    raise WorkspaceError("Telegram не принял уведомление о рассылке.")
+            except Exception as exc:
+                self.acknowledge_notification(item, False, type(exc).__name__)
+                return
+            self.state.put(receipt, True)
+        self.acknowledge_notification(item, True, "")
 
     def files(self, actor: str, kind: str, owner: str, offset: int = 0) -> None:
         packet = self.request(actor, f"/packets/{kind}/{UUID(owner)}")

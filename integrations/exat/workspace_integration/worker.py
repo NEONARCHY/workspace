@@ -14,7 +14,13 @@ from uuid import UUID
 
 from .authority import executing_server_job
 from .client import WorkspaceClient, WorkspaceError
-from .delivery import close_prepared, guarded_send, prepare_compose, prepared_open
+from .delivery import (
+    close_prepared,
+    compose_identity,
+    guarded_send,
+    prepare_compose,
+    prepared_open,
+)
 from .state import State
 from .sync import ArchiveSync
 
@@ -73,7 +79,9 @@ class DeliveryWorker:
         self.client.acknowledge(configuration["revision"])
         self.flush_results()
         job = self.client.request(
-            "/ai-referent/agent/jobs/claim?" + urlencode({"agentId": self.client.agent_id}),
+            "/ai-referent/agent/jobs/claim?" + urlencode({
+                "agentId": self.client.agent_id, "mailingVersion": 1,
+            }),
             method="POST",
         ).get("job")
         if not job:
@@ -119,7 +127,10 @@ class DeliveryWorker:
             elif job["kind"] == "sign_only":
                 result = self.sign_only(job)
             elif job["kind"] == "send":
-                result = self.send(job, lost)
+                if job.get("recipientId"):
+                    result = self.send_recipient(job, lost)
+                else:
+                    result = self.send(job, lost)
             elif job["kind"] == "dispatch":
                 result = self.dispatch(job)
             elif job["kind"] in {"cancel", "replace", "record_sent", "delete"}:
@@ -149,11 +160,21 @@ class DeliveryWorker:
         self.flush_results()
         self.sync.journals()
 
-    def download(self, job: dict[str, Any], item: dict[str, Any], folder: Path) -> Path:
+    def download(
+        self, job: dict[str, Any], item: dict[str, Any], folder: Path, *, reuse: bool = False,
+    ) -> Path:
         file_id = str(UUID(item["id"]))
         name = Path(item["name"]).name
         if name != item["name"] or name in {"", ".", ".."} or ":" in name or "\\" in name:
             raise WorkspaceError("Небезопасное имя файла задания.")
+        target = folder / file_id / name
+        if reuse and target.is_file():
+            cached = target.read_bytes()
+            if (
+                len(cached) == item["byteSize"]
+                and hashlib.sha256(cached).hexdigest() == item["sha256"]
+            ):
+                return target
         query = urlencode({"leaseToken": job["leaseToken"], "agentId": self.client.agent_id})
         content = self.client.transfer(
             f"/ai-referent/agent/jobs/{job['id']}/files/{file_id}?{query}"
@@ -163,7 +184,6 @@ class DeliveryWorker:
             or hashlib.sha256(content).hexdigest() != item["sha256"]
         ):
             raise WorkspaceError("Контрольная сумма файла задания не совпала.")
-        target = folder / file_id / name
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(content)
         return target
@@ -186,14 +206,17 @@ class DeliveryWorker:
         extra = [
             str(load(job, item, folder)) for item in files if item["role"] == "additional"
         ]
-        entry = self.service._resolve_destination_entry(
-            job["recipientAddress"] or job["recipientOrganization"]
+        organization, address, route = (
+            job["recipientOrganization"], job["recipientAddress"], job["route"]
         )
-        if entry.route != job["route"]:
-            raise WorkspaceError(
-                "Канал получателя в адресной книге отличается от согласованного. "
-                "Верните письмо на доработку."
-            )
+        if not job.get("mailing"):
+            entry = self.service._resolve_destination_entry(address or organization)
+            if entry.route != route:
+                raise WorkspaceError(
+                    "Канал получателя в адресной книге отличается от согласованного. "
+                    "Верните письмо на доработку."
+                )
+            organization, address = entry.organization, entry.primary_address
         # A crash between insertion and local receipt can be recovered by the embedded ID.
         existing = None
         for raw in self.service.database.list_outgoing_letters():
@@ -223,9 +246,9 @@ class DeliveryWorker:
             "sender_name": job["senderName"],
             "reviewer_telegram_id": job["reviewerTelegramId"] or "",
             "reviewer_name": job["reviewerName"],
-            "destination_organization": entry.organization,
-            "destination_address": entry.primary_address,
-            "destination_route": entry.route,
+            "destination_organization": organization,
+            "destination_address": address,
+            "destination_route": route,
             "draft_file_path": str(draft),
             "attachment_paths_json": json.dumps(extra),
             "status": "waiting_review",
@@ -270,14 +293,14 @@ class DeliveryWorker:
             )
         else:
             record_signed(signed)
-        if not job.get("requiresFinalCheck"):
+        if not job.get("requiresFinalCheck") and not job.get("mailing"):
             self.prepared_handles[local_id] = prepare_compose(self.service, local_id)
         receipt = self.receipt(
             job,
             "prepared",
             "Подписанный PDF подготовлен. Отправка не выполнялась.",
         )
-        receipt["autoSend"] = job["kind"] == "prepare" and bool(
+        receipt["autoSend"] = not job.get("mailing") and job["kind"] == "prepare" and bool(
             (self.service.outgoing_settings.get("exat_send", {}) or {}).get(
                 "allow_real_send", False
             )
@@ -343,9 +366,84 @@ class DeliveryWorker:
             "signedPages": len(pages),
         }
 
+    def send_recipient(self, job: dict[str, Any], lost: threading.Event) -> dict[str, Any]:
+        """Use one local package and an explicit, independently fenced destination."""
+        local_id = self.state.get("letter:" + job["letterId"])
+        row = self.service.database.get_outgoing_letter(local_id) if local_id is not None else None
+        if row is None or not job.get("signedFile"):
+            return self.receipt(job, "failed", "Подтверждённый локальный пакет не найден.")
+        evidence_key = f"mailing-sent:{job['letterId']}:"
+        if row["status"] in {"exat_sent", "webmail_sent", "edo_sent"}:
+            # Keep the evidence when the shared local row moves to the next recipient.
+            self.state.put(evidence_key + str(row["destination_address"]).casefold(), True)
+        recipient_evidence = evidence_key + job["recipientAddress"].casefold()
+        if self.state.get(recipient_evidence):
+            raise DeliveryEvidenceConflict("Журнал показывает отправку этому адресату.")
+        folder = self.root / str(UUID(job["letterId"])) / str(UUID(job["signedFile"]["id"]))
+        files: list[tuple[Path, str]] = []
+        click_started = False
+
+        def verify_packet() -> None:
+            nonlocal click_started
+            current = self.service.database.get_outgoing_letter(local_id)
+            if (
+                not current
+                or current["destination_address"] != job["recipientAddress"]
+                or current["destination_route"] != job["route"]
+            ):
+                raise WorkspaceError("Адрес или канал изменился перед отправкой.")
+            if any(
+                hashlib.sha256(path.read_bytes()).hexdigest() != digest for path, digest in files
+            ):
+                raise WorkspaceError("Приложение изменилось. Отправка остановлена.")
+            click_started = True
+
+        try:
+            files = [
+                (self.download(job, item, folder, reuse=True), item["sha256"])
+                for item in job["files"] if item["role"] == "additional"
+            ]
+            if row["destination_route"] == "webmail":
+                if prepared_open(self.service, row, None):
+                    close_prepared(self.service, row, None)
+            elif row["status"] != "approved":
+                handle = compose_identity(self.service, row)
+                if handle is not None or row["status"] == "exat_compose_prepared":
+                    close_prepared(self.service, row, handle)
+            self.prepared_handles.pop(local_id, None)
+            # The legacy update helper intentionally excludes destination columns.
+            with self.service.database.connect() as connection:
+                connection.execute(
+                    """
+                    UPDATE outgoing_letters
+                    SET destination_organization = ?, destination_address = ?,
+                        destination_route = ?, attachment_paths_json = ?,
+                        status = 'approved', sent_at = NULL
+                    WHERE id = ?
+                    """,
+                    (
+                        job["recipientOrganization"], job["recipientAddress"], job["route"],
+                        json.dumps([str(path) for path, _ in files]), local_id,
+                    ),
+                )
+            result = self.send(job, lost, before_click=verify_packet)
+            if not click_started:
+                raise DeliveryEvidenceConflict("Журнал изменился без подтверждённого задания.")
+            self.state.put(recipient_evidence, True)
+            return result
+        except DeliveryEvidenceConflict:
+            raise
+        except Exception as error:
+            detail = (
+                str(error) if isinstance(error, WorkspaceError)
+                else f"{type(error).__name__}: ошибка отправки на ПК референта."
+            )
+            return self.receipt(job, "unknown" if click_started else "failed", detail)
+
     def send(
         self, job: dict[str, Any], lost: threading.Event, *,
         offline_fence: Callable[[], None] | None = None,
+        before_click: Callable[[], None] | None = None,
     ) -> dict[str, Any]:
         local_id = self.state.get("letter:" + job["letterId"])
         if local_id is None:
@@ -390,7 +488,9 @@ class DeliveryWorker:
                 },
                 method="POST",
             )
-        if not prepared_open(self.service, row, self.prepared_handles.get(local_id)):
+        if before_click is not None or not prepared_open(
+            self.service, row, self.prepared_handles.get(local_id)
+        ):
             self.prepared_handles[local_id] = prepare_compose(self.service, local_id)
         current = self.service.database.get_outgoing_letter(local_id)
         if current["status"] in {"exat_compose_prepared", "webmail_dry_run_prepared"}:
@@ -421,8 +521,13 @@ class DeliveryWorker:
                     )
                 else:
                     offline_fence()
+                if before_click is not None:
+                    before_click()
 
-            with guarded_send(self.service, row, self.prepared_handles.get(local_id), fence):
+            send_options = {"single_attempt": True} if before_click is not None else {}
+            with guarded_send(
+                self.service, row, self.prepared_handles.get(local_id), fence, **send_options
+            ):
                 self.service.confirm_manual_send(local_id)
         current = self.service.database.get_outgoing_letter(local_id)
         if current["status"] not in {"exat_sent", "webmail_sent"}:

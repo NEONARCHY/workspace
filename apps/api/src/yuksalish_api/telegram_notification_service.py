@@ -13,6 +13,7 @@ from .access_control import ensure_module_action
 from .auth import AuthenticatedUser, load_authenticated_user
 from .errors import WorkspaceRepositoryError as Error
 from .settings import Settings
+from .tables import ai_referent_letters, workspace_notifications
 from .telegram_notification_events import current_payment_stage, task_access
 from .telegram_notification_schemas import (
     DeliveryAck,
@@ -221,7 +222,27 @@ async def open_notice(
         .first()
     )
     if row is None:
-        raise Error(404, "Уведомление недоступно этому аккаунту")
+        from .ai_referent_service import AIReferentServiceError, load_letter
+
+        mailing_id = await c.scalar(
+            select(workspace_notifications.c.entity_id)
+            .join(
+                ai_referent_letters, ai_referent_letters.c.id == workspace_notifications.c.entity_id
+            )
+            .where(
+                workspace_notifications.c.id == identifier,
+                workspace_notifications.c.user_id == user.id,
+                workspace_notifications.c.section == "ai_referent",
+                ai_referent_letters.c.is_mailing.is_(True),
+            )
+        )
+        if mailing_id is None:
+            raise Error(404, "Уведомление недоступно этому аккаунту")
+        try:
+            await load_letter(c, user, mailing_id)
+        except AIReferentServiceError as error:
+            raise Error(error.status_code, error.detail) from error
+        return WorkspaceNoticeTarget(section="ai_referent", entity_id=str(mailing_id))
     if row["kind"] == "task_assigned":
         from .repository import _task_access_row
 
