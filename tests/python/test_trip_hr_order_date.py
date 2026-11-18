@@ -43,6 +43,7 @@ def setup_order(monkeypatch):
     monkeypatch.setattr(service, "hr_order_pdf", renderer)
     archive = AsyncMock(return_value=("order.pdf", "digest"))
     monkeypatch.setattr(service, "_archive", archive)
+    monkeypatch.setattr(service, "reserve_order_number", AsyncMock())
     connection = AsyncMock()
     connection.scalar.return_value = None
     return user, row, connection, renderer, archive

@@ -80,6 +80,7 @@ from yuksalish_api.repository import (
     dismiss_notification,
     extend_task_deadline,
     get_attachment,
+    get_trip_request,
     list_task_project_options,
     load_feed_post,
     load_task_history,
@@ -119,6 +120,8 @@ from yuksalish_api.repository import (
 from yuksalish_api.tables import ai_referent_letters, trip_requests, users
 from yuksalish_api.trip_document_service import issue_order, prepare_signed_brief
 from yuksalish_api.trip_hr_service import apply_resolution, complete_order
+from yuksalish_api.trip_order_revision_permissions import REVISION_ACTIONS
+from yuksalish_api.trip_order_revision_service import act_on_order_revision
 from yuksalish_api.web_security import is_allowed_web_origin
 from yuksalish_api.workspace_schemas import (
     AbsenceActionRequest,
@@ -1325,41 +1328,51 @@ async def post_trip_action(
     connection: Annotated[AsyncConnection, Depends(get_connection)],
 ) -> TripRequestResponse:
     permission_action: ModuleAction = (
-        "edit" if payload.action in {"submit", "resubmit", "withdraw", "annul"} else "approve"
+        "edit" if payload.action in {
+            "submit", "resubmit", "withdraw", "annul", "revise_order", "cancel_revision",
+        } else "approve"
     )
     await ensure_module_action(connection, current_user, "trip_approvals", permission_action)
     try:
-        if payload.action in {"submit", "resubmit", "approve", "complete"}:
-            route = (await connection.execute(select(
-                trip_requests.c.workflow_version, trip_requests.c.hr_processing_required,
-                trip_requests.c.stage,
-            ).where(trip_requests.c.id == request_id))).mappings().first()
-            if route and route["hr_processing_required"] and payload.action == "complete":
-                await complete_order(
-                    connection, current_user, _object_storage(request), request_id, payload,
-                )
-            elif route and route["hr_processing_required"] and payload.action == "approve" \
-                    and route["stage"] in {"manager_approval", "hr"}:
-                await apply_resolution(
-                    connection, current_user, _object_storage(request), request_id,
-                )
-            elif route and route["workflow_version"] >= 2 and payload.action != "complete":
-                if payload.action in {"submit", "resubmit"}:
-                    await prepare_signed_brief(
+        if payload.action in REVISION_ACTIONS:
+            await act_on_order_revision(
+                connection, current_user, _object_storage(request), request_id, payload,
+            )
+            result = await get_trip_request(connection, current_user, request_id)
+        else:
+            if payload.action in {"submit", "resubmit", "approve", "complete"}:
+                route = (await connection.execute(select(
+                    trip_requests.c.workflow_version, trip_requests.c.hr_processing_required,
+                    trip_requests.c.stage,
+                ).where(trip_requests.c.id == request_id))).mappings().first()
+                if route and route["hr_processing_required"] and payload.action == "complete":
+                    await complete_order(
+                        connection, current_user, _object_storage(request), request_id, payload,
+                    )
+                elif route and route["hr_processing_required"] and payload.action == "approve" \
+                        and route["stage"] in {"manager_approval", "hr"}:
+                    await apply_resolution(
                         connection, current_user, _object_storage(request), request_id,
                     )
-                else:
-                    if route["stage"] == "manager_approval":
-                        await issue_order(
+                elif route and route["workflow_version"] >= 2 and payload.action != "complete":
+                    if payload.action in {"submit", "resubmit"}:
+                        await prepare_signed_brief(
                             connection, current_user, _object_storage(request), request_id,
                         )
-        result = await act_on_trip_request(connection, current_user, request_id, payload)
+                    else:
+                        if route["stage"] == "manager_approval":
+                            await issue_order(
+                                connection, current_user, _object_storage(request), request_id,
+                            )
+            result = await act_on_trip_request(connection, current_user, request_id, payload)
     except WorkspaceRepositoryError as error:
         raise _translate(error) from error
     except ObjectStorageError as error:
         raise HTTPException(503, "Хранилище приказов недоступно") from error
     except IntegrityError as error:
-        if "uq_trip_hr_order_number" not in str(error.orig):
+        if not any(name in str(error.orig) for name in (
+            "uq_trip_hr_order_number", "uq_trip_order_registration",
+        )):
             raise
         raise HTTPException(
             409, "Номер и серия приказа уже зарегистрированы в этом году",

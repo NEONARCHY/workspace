@@ -342,8 +342,8 @@ def test_requester_and_superadmin_can_withdraw_or_annul_but_others_cannot() -> N
     assert _trip_allowed_actions(row, superadmin) == ["withdraw"]
     assert _trip_allowed_actions(row, stranger) == []
     approved = row | {"stage": "approved", "status": "approved"}
-    assert _trip_allowed_actions(approved, requester) == ["annul"]
-    assert _trip_allowed_actions(approved, superadmin) == ["annul"]
+    assert _trip_allowed_actions(approved, requester) == ["annul", "revise_order"]
+    assert _trip_allowed_actions(approved, superadmin) == ["annul", "revise_order"]
     assert _trip_allowed_actions(approved, stranger) == []
     assert _trip_allowed_actions(approved | {"status": "annulled"}, superadmin) == []
     assert _trip_allowed_actions(row | {"order_pdf_key": "orders/signed.pdf"}, requester) == []

@@ -19,6 +19,7 @@ from .repository import _trip_allowed_actions
 from .tables import hr_settings, trip_document_revisions, trip_request_actions, trip_requests, users
 from .trip_document_service import _people, _row, _verified
 from .trip_hr_pdf import TripDocumentSnapshot, hr_brief_pdf, hr_order_pdf
+from .trip_order_registration import reserve_order_number
 from .workspace_schemas import TripActionRequest
 
 _LOCAL = ZoneInfo("Asia/Tashkent")
@@ -147,7 +148,7 @@ async def complete_order(
         if payload.order_date is not None else datetime.now(_LOCAL)
     )
     duplicate = await connection.scalar(select(trip_requests.c.id).where(
-        trip_requests.c.hr_processing_required.is_(True),
+        trip_requests.c.order_manually_registered.is_(True),
         trip_requests.c.order_year == issued.year,
         trip_requests.c.order_pdf_key.is_not(None),
         trip_requests.c.id != request_id,
@@ -157,6 +158,10 @@ async def complete_order(
     ))
     if duplicate is not None:
         raise Error(409, "Номер и серия приказа уже зарегистрированы в этом году")
+    await reserve_order_number(
+        connection, request_id, year=issued.year, number=payload.order_number,
+        series=payload.order_series,
+    )
     content = await run_in_threadpool(
         hr_order_pdf, facts, number=payload.order_number, series=payload.order_series,
         purpose=payload.order_purpose or facts.purpose, issued=issued.date(), signature=image,
@@ -170,6 +175,7 @@ async def complete_order(
     await connection.execute(update(trip_requests).where(trip_requests.c.id == request_id).values(
         order_pdf_key=key, order_pdf_sha256=digest,
         order_number=payload.order_number, order_series=payload.order_series,
+        order_manually_registered=True,
         order_purpose=payload.order_purpose, order_year=issued.year,
         order_issued_at=issued.astimezone(UTC),
         order_signer_user_id=row["resolution_actor_user_id"],

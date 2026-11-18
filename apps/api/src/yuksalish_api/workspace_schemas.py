@@ -1162,6 +1162,10 @@ TripAction = Literal[
     "withdraw",
     "annul",
     "complete",
+    "revise_order",
+    "approve_revision",
+    "complete_revision",
+    "cancel_revision",
 ]
 
 AbsenceKind = Literal["vacation", "personal_time", "late_arrival", "sick_leave", "business_event"]
@@ -1370,20 +1374,17 @@ class TripActionHistoryResponse(ApiModel):
     actor_user_id: str
     from_stage: TripStage | None
     to_stage: TripStage
-    action: Literal[
-        "created",
-        "deleted",
-        "submit",
-        "approve",
-        "return",
-        "reject",
-        "resubmit",
-        "move",
-        "withdraw",
-        "annul",
-        "complete",
-    ]
+    action: Literal["created", "deleted"] | TripAction
     comment: str | None
+    created_at: datetime
+
+
+class TripDocumentVersionResponse(ApiModel):
+    id: str
+    kind: Literal["order", "resolution", "brief"]
+    number: str = ""
+    series: str = ""
+    issued: str = ""
     created_at: datetime
 
 
@@ -1398,6 +1399,10 @@ class TripRequestResponse(ApiModel):
     resolution_at: datetime | None = None
     order_series: str = ""
     order_purpose: str = ""
+    order_manually_registered: bool = False
+    order_revision_stage: Literal["chair", "hr"] | None = None
+    order_revision_hr_user_id: str | None = None
+    document_versions: list[TripDocumentVersionResponse] = Field(default_factory=list)
     purpose: str
     destination: str
     start_date: date
@@ -1487,12 +1492,16 @@ class TripActionRequest(ApiModel):
         self.order_number = self.order_number.strip()
         self.order_series = self.order_series.strip()
         self.order_purpose = self.order_purpose.strip()
-        if self.action == "complete" and (not self.order_number or not self.order_series):
+        if self.action in {"complete", "complete_revision"} and (
+            not self.order_number or not self.order_series
+        ):
             raise ValueError("Укажите номер и серию приказа")
-        if self.action != "complete" and (
+        if self.action not in {"complete", "complete_revision"} and (
             self.order_number or self.order_series or self.order_purpose or self.order_date
         ):
             raise ValueError("Реквизиты приказа доступны только при кадровом оформлении")
+        if self.action in {"revise_order", "cancel_revision"} and not self.comment.strip():
+            raise ValueError("Укажите причину переоформления или отмены")
         return self
 
 

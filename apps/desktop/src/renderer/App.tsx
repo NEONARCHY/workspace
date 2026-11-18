@@ -48,6 +48,7 @@ import type {
   TaskReturnReason,
   TripAction,
   TripOrderInput,
+  TripDocumentKind,
   TripStage,
   TripRequest,
   TripRequestInput,
@@ -1733,12 +1734,12 @@ export function App() {
     return loadWorkspaceTripBriefOfficePreview(session.accessToken, requestId, sheet, offset, signal);
   };
   const handleTripDocument = async (
-    requestId: string, kind: "attachment" | "brief" | "brief-preview" | "order" | "order-preview",
-    signal?: AbortSignal, preview?: boolean,
+    requestId: string, kind: TripDocumentKind,
+    signal?: AbortSignal, preview?: boolean, revisionId?: string,
   ): Promise<Blob | undefined> => {
     if (session === undefined) return undefined;
     try {
-      return await downloadWorkspaceTripDocument(session.accessToken, requestId, kind, signal, preview);
+      return await downloadWorkspaceTripDocument(session.accessToken, requestId, kind, signal, preview, revisionId);
     } catch (error) {
       if (!signal?.aborted) reportError(error);
       return undefined;

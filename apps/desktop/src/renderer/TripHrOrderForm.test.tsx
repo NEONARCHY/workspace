@@ -51,4 +51,11 @@ describe("HR order date", () => {
     expect(screen.getByRole("button", { name: "Оформляем…" })).toBeDisabled();
     expect(onComplete).not.toHaveBeenCalled();
   });
+
+  it("retains a real manual number when revising a trip with a historical route", () => {
+    render(<FluentProvider theme={webLightTheme}><TripHrOrderForm revision
+      request={{ ...request, hrProcessingRequired: false, orderManuallyRegistered: true }}
+      busy={false} onComplete={vi.fn()} /></FluentProvider>);
+    expect(screen.getByLabelText("Номер приказа *")).toHaveValue("29");
+  });
 });

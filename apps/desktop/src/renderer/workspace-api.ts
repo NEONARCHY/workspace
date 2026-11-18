@@ -142,6 +142,7 @@ import type {
   TaskPlanImportPreview,
   TripAction,
   TripOrderInput,
+  TripDocumentKind,
   TripStage,
   TripRequest,
   TripRequestInput,
@@ -2680,12 +2681,16 @@ export function loadWorkspaceTripBriefOfficePreview(
 
 export function downloadWorkspaceTripDocument(
   token: string, requestId: string,
-  kind: "attachment" | "brief" | "brief-preview" | "order" | "order-preview",
+  kind: TripDocumentKind,
   signal?: AbortSignal,
   preview = false,
+  revisionId?: string,
 ): Promise<Blob> {
+  const query = new URLSearchParams();
+  if (preview) query.set("preview", "true");
+  if (revisionId) query.set("revision_id", revisionId);
   return boundedRequest(
-    `${getApiBaseUrl()}/api/v1/trip-requests/${encodeURIComponent(requestId)}/documents/${kind}${preview ? "?preview=true" : ""}`,
+    `${getApiBaseUrl()}/api/v1/trip-requests/${encodeURIComponent(requestId)}/documents/${kind}${query.size ? `?${query}` : ""}`,
     { headers: { Authorization: `Bearer ${token}` }, signal },
     (response) => response.blob(), 120_000,
   );
