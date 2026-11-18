@@ -199,6 +199,31 @@ export class ApiHttpError extends Error {
   }
 }
 
+function loginValidationMessage(detail: unknown): string {
+  if (Array.isArray(detail)) {
+    for (const issue of detail as readonly unknown[]) {
+      if (typeof issue !== "object" || issue === null || !("loc" in issue) || !Array.isArray(issue.loc)) continue;
+      const field: unknown = issue.loc.at(-1);
+      if (field === "username") {
+        return "Проверьте логин: от 3 до 64 латинских букв, цифр, точек, дефисов или подчёркиваний.";
+      }
+      if (field === "password") {
+        const context = "ctx" in issue ? issue.ctx : undefined;
+        if (typeof context === "object" && context !== null && "min_length" in context
+          && typeof context.min_length === "number" && Number.isInteger(context.min_length)
+          && context.min_length > 1 && context.min_length <= 128) {
+          return `Пароль должен содержать не менее ${context.min_length} символов.`;
+        }
+        return "Введите пароль длиной от 1 до 128 символов.";
+      }
+      if (field === "totpCode" || field === "totp_code") {
+        return "Введите шестизначный код приложения-аутентификатора.";
+      }
+    }
+  }
+  return "Проверьте логин, пароль и код приложения-аутентификатора.";
+}
+
 export async function switchWorkspaceOrigin(): Promise<string> {
   if (hasPendingMutation()) {
     throw new Error("Дождитесь завершения текущей операции перед сменой соединения.");
@@ -893,7 +918,11 @@ async function boundedRequest<T>(url: string, options: RequestInit, read: (respo
         });
         if (!response.ok) {
           const payload = await response.json().catch(() => null) as { detail?: unknown } | null;
-          throw new ApiHttpError(response.status, typeof payload?.detail === "string" ? payload.detail : `Сервер вернул ошибку ${response.status}`);
+          const isLogin = /\/auth\/(?:web\/)?login$/.test(new URL(requestUrl).pathname);
+          const message = typeof payload?.detail === "string" ? payload.detail
+            : response.status === 422 && isLogin ? loginValidationMessage(payload?.detail)
+              : `Сервер вернул ошибку ${response.status}`;
+          throw new ApiHttpError(response.status, message);
         }
         // Keep cancellation and timeout alive until the response body is read.
         return await read(response);

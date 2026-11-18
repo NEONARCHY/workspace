@@ -18,7 +18,8 @@ def _normalize_username(value: str) -> str:
 
 class LoginRequest(ApiModel):
     username: str = Field(min_length=3, max_length=64)
-    password: str = Field(min_length=12, max_length=128)
+    # Authenticate existing credentials; enforce new-password policy when setting them.
+    password: str = Field(min_length=1, max_length=128)
     totp_code: str | None = Field(default=None, pattern=r"^\d{6}$")
     device_label: str = Field(default="Yuksalish Desktop", min_length=1, max_length=160)
 
