@@ -44,6 +44,14 @@ resolves to this scoped fork, so an unpatched upstream copy cannot silently
 re-enter the graph. `scripts/build-dependencies-smoke.cjs` and the complete
 desktop checks validate consumers and packaging.
 
+The unchanged upstream 4.0.7 suite was also run against the fork: 1,936 of 1,983
+tests pass. The 47 differences expect complex repeated wildcard/nested extglob
+matching or disabling its protection, which this patch deliberately literalizes.
+This is not a claim that the unmodified upstream suite passes completely.
+The repository's compatibility tests exercise the actual installed consumers.
+`.gitattributes` preserves LF for this directory so upstream hashes stay valid
+on Windows as well as Linux.
+
 Run `node --test scripts/picomatch-security.test.cjs`. CI runs it from the
 existing build-dependency compatibility check, without relaxing audit.
 Replace the fork with an official fixed release when one exists, after running

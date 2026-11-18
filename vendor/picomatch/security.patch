@@ -1,6 +1,6 @@
 --- a/lib/parse.js
 +++ b/lib/parse.js
-@@ -284,7 +284,53 @@
+@@ -284,7 +284,54 @@
    return depth;
  };
  
@@ -10,6 +10,7 @@
 +  let escaped = false;
 +  let bracket = false;
 +  let quoted = false;
++  const lastClosingBracket = branch.lastIndexOf(']');
 +
 +  for (let index = 0; index < branch.length; index++) {
 +    const ch = branch[index];
@@ -29,7 +30,7 @@
 +    // Character classes do not nest in the parser. Treat questionable syntax
 +    // conservatively, and honor nobracket: otherwise a hidden wildcard could
 +    // bypass this guard while still being parsed as a wildcard below.
-+    if (ch === '[' && !bracket && options.nobracket !== true && branch.includes(']', index + 1)) {
++    if (ch === '[' && !bracket && options.nobracket !== true && index < lastClosingBracket) {
 +      bracket = true;
 +    }
 +    if (ch === ']' && bracket) bracket = false;
@@ -54,7 +55,7 @@
    if (options.maxExtglobRecursion === false) {
      return { risky: false };
    }
-@@ -293,8 +339,6 @@
+@@ -293,8 +340,6 @@
      typeof options.maxExtglobRecursion === 'number'
        ? options.maxExtglobRecursion
        : constants.DEFAULT_MAX_EXTGLOB_RECURSION;

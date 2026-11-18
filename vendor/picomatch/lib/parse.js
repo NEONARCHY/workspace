@@ -290,6 +290,7 @@ const hasUnboundedRepeat = (branch, options) => {
   let escaped = false;
   let bracket = false;
   let quoted = false;
+  const lastClosingBracket = branch.lastIndexOf(']');
 
   for (let index = 0; index < branch.length; index++) {
     const ch = branch[index];
@@ -309,7 +310,7 @@ const hasUnboundedRepeat = (branch, options) => {
     // Character classes do not nest in the parser. Treat questionable syntax
     // conservatively, and honor nobracket: otherwise a hidden wildcard could
     // bypass this guard while still being parsed as a wildcard below.
-    if (ch === '[' && !bracket && options.nobracket !== true && branch.includes(']', index + 1)) {
+    if (ch === '[' && !bracket && options.nobracket !== true && index < lastClosingBracket) {
       bracket = true;
     }
     if (ch === ']' && bracket) bracket = false;
