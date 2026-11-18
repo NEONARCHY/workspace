@@ -27,6 +27,7 @@ from .object_storage import ObjectStorage
 from .repository import _trip_deputy_user_id, _trip_directory_deputy_id
 from .tables import (
     hr_settings,
+    trip_document_revisions,
     trip_order_counters,
     trip_request_employees,
     trip_requests,
@@ -38,7 +39,9 @@ MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
 MAX_SIGNATURE_BYTES = 1024 * 1024
 _LOCAL = ZoneInfo("Asia/Tashkent")
 _EDITABLE = {"draft", "needs_revision"}
-DocumentKind = Literal["attachment", "brief", "brief-preview", "order", "order-preview"]
+DocumentKind = Literal[
+    "attachment", "brief", "brief-preview", "order", "order-preview", "revision-brief", "archived",
+]
 
 
 def _hash(content: bytes) -> str:
@@ -387,6 +390,7 @@ async def issue_order(
 async def read_document(
     connection: AsyncConnection, user: AuthenticatedUser, storage: ObjectStorage,
     request_id: UUID, kind: DocumentKind, *, preview: bool = False,
+    revision_id: UUID | None = None,
 ) -> tuple[bytes, str, str]:
     row = await _row(connection, request_id)
     chair_id = await connection.scalar(select(hr_settings.c.chair_user_id).where(
@@ -398,17 +402,46 @@ async def read_document(
     participants = (await connection.execute(select(trip_request_employees.c.user_id).where(
         trip_request_employees.c.request_id == request_id,
     ))).scalars().all()
+    hr_id = await connection.scalar(select(hr_settings.c.hr_user_id).where(
+        hr_settings.c.id == 1,
+    )) if row["status"] == "approved" else None
+    revision_snapshot = row.get("order_revision_snapshot") or {}
     if (
         user.role != "superadmin"
         and user.id != row["requester_user_id"]
         and user.id != row.get("hr_processor_user_id")
+        and not (row["status"] == "approved" and (
+            user.id == hr_id or str(user.id) == revision_snapshot.get("hrUserId")
+        ))
         and not (user.id == chair_id and row["stage"] != "launch")
         and not (row.get("workflow_version") == 3 and user.id == deputy_id
                  and row["stage"] != "launch")
         and not (row["status"] in {"approved", "annulled"} and user.id in participants)
     ):
         raise Error(404, "Документ поездки не найден")
-    if row.get("hr_processing_required") and kind in {"brief", "brief-preview"}:
+    if kind == "revision-brief":
+        if row.get("order_revision_stage") != "hr":
+            raise Error(409, "Новая резолюция ещё не оформлена")
+        content = await _verified(
+            storage, revision_snapshot.get("resolutionKey"),
+            revision_snapshot.get("resolutionSha256"),
+        )
+        return content, "application/pdf", "bildirgi-revision.pdf"
+    if kind == "archived":
+        if revision_id is None:
+            raise Error(422, "Укажите версию документа")
+        version = (await connection.execute(select(trip_document_revisions).where(
+            trip_document_revisions.c.id == revision_id,
+            trip_document_revisions.c.request_id == request_id,
+            trip_document_revisions.c.kind.in_(["order", "resolution", "brief"]),
+        ))).mappings().first()
+        if version is None:
+            raise Error(404, "Версия документа не найдена")
+        content = await _verified(storage, version["storage_key"], version["sha256"])
+        prefix = "prikaz" if version["kind"] == "order" else "bildirgi"
+        return content, "application/pdf", f"{prefix}-{revision_id}.pdf"
+    if (row.get("hr_processing_required") or row.get("resolved_brief_key")) \
+            and kind in {"brief", "brief-preview"}:
         if kind == "brief" and row.get("resolved_brief_key"):
             content = await _verified(
                 storage, row["resolved_brief_key"], row["resolved_brief_sha256"],

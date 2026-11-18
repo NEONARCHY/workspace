@@ -169,11 +169,13 @@ async def download_trip_document(
     user: User,
     connection: Connection,
     preview: bool = False,
+    revision_id: UUID | None = None,
 ) -> Response:
     await ensure_module_action(connection, user, "trip_approvals", "view")
     try:
         content, media_type, file_name = await read_document(
             connection, user, _storage(request), request_id, kind, preview=preview,
+            **({"revision_id": revision_id} if revision_id else {}),
         )
     except (WorkspaceRepositoryError, ObjectStorageError) as error:
         raise _failure(error) from error

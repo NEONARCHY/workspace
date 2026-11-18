@@ -142,6 +142,7 @@ from .workspace_schemas import (
     TripAction,
     TripActionHistoryResponse,
     TripActionRequest,
+    TripDocumentVersionResponse,
     TripRequestResponse,
     TripStatus,
     TripWriteRequest,
@@ -790,13 +791,19 @@ def _can_delete_trip(row: Record, current_user: AuthenticatedUser) -> bool:
 def _trip_allowed_actions(
     row: Record, current_user: AuthenticatedUser, chair_user_id: UUID | None = None,
     deputy_user_id: UUID | None = None,
+    hr_user_id: UUID | None = None,
 ) -> list[TripAction]:
     stage = row["stage"]
     status = row["status"]
     if status == "annulled":
         return []
     if status == "approved":
-        return ["annul"] if _can_manage_trip(row, current_user) else []
+        from .trip_order_revision_permissions import order_revision_actions
+
+        actions = order_revision_actions(row, current_user, chair_user_id, hr_user_id)
+        if not row.get("order_revision_stage") and _can_manage_trip(row, current_user):
+            return ["annul", *actions]
+        return actions
     management_actions: list[TripAction] = (
         ["withdraw"] if status == "running" and not row.get("order_pdf_key")
         and (row["workflow_version"] >= 2 or row.get("hr_processing_required")
@@ -831,6 +838,28 @@ def _trip_allowed_actions(
     return management_actions
 
 
+async def _trip_document_versions(
+    connection: AsyncConnection, request_ids: Sequence[UUID],
+) -> dict[UUID, list[TripDocumentVersionResponse]]:
+    from .tables import trip_document_revisions
+
+    versions: dict[UUID, list[TripDocumentVersionResponse]] = {}
+    if not request_ids:
+        return versions
+    rows = (await connection.execute(select(trip_document_revisions).where(
+        trip_document_revisions.c.request_id.in_(request_ids),
+        trip_document_revisions.c.kind.in_(["order", "resolution", "brief"]),
+    ).order_by(trip_document_revisions.c.created_at.desc()))).mappings().all()
+    for row in rows:
+        facts = row["facts"] or {}
+        versions.setdefault(row["request_id"], []).append(TripDocumentVersionResponse(
+            id=str(row["id"]), kind=row["kind"], number=str(facts.get("number") or ""),
+            series=str(facts.get("series") or ""), issued=str(facts.get("issued") or ""),
+            created_at=row["created_at"],
+        ))
+    return versions
+
+
 def _trip_request(
     row: Record,
     current_user: AuthenticatedUser,
@@ -839,6 +868,8 @@ def _trip_request(
     chat_id: UUID | None = None,
     chair_user_id: UUID | None = None,
     deputy_user_id: UUID | None = None,
+    hr_user_id: UUID | None = None,
+    document_versions: Sequence[TripDocumentVersionResponse] = (),
 ) -> TripRequestResponse:
     return TripRequestResponse(
         id=str(row["id"]),
@@ -852,6 +883,10 @@ def _trip_request(
         resolution_at=row.get("resolution_at"),
         order_series=row.get("order_series") or "",
         order_purpose=row.get("order_purpose") or "",
+        order_manually_registered=bool(row.get("order_manually_registered")),
+        order_revision_stage=row.get("order_revision_stage"),
+        order_revision_hr_user_id=(row.get("order_revision_snapshot") or {}).get("hrUserId"),
+        document_versions=list(document_versions),
         purpose=row["purpose"],
         destination=row["destination"],
         start_date=row["start_date"],
@@ -884,7 +919,9 @@ def _trip_request(
         can_edit=_can_manage_trip(row, current_user) and row["stage"] == "launch"
         and row["status"] in {"draft", "needs_revision"},
         can_delete=_can_delete_trip(row, current_user),
-        allowed_actions=_trip_allowed_actions(row, current_user, chair_user_id, deputy_user_id),
+        allowed_actions=_trip_allowed_actions(
+            row, current_user, chair_user_id, deputy_user_id, hr_user_id,
+        ),
         chat_id=str(chat_id) if chat_id else None,
         actions=list(actions),
         created_at=row["created_at"],
@@ -2128,7 +2165,8 @@ async def _sync_notifications_for_user(
             trip_row, current_user, trip_chair_user_id,
             _trip_row_deputy_id(trip_row, trip_deputy_user_id, legacy_trip_deputy_id),
         )
-        if not any(action not in {"withdraw", "annul"} for action in allowed_actions):
+        if not any(action not in {"withdraw", "annul", "revise_order", "cancel_revision"}
+                   for action in allowed_actions):
             continue
         event_key = (
             f"trip:{trip_row['id']}:{trip_row['stage']}:{trip_row['updated_at'].isoformat()}"
@@ -2140,7 +2178,8 @@ async def _sync_notifications_for_user(
             event_key=event_key,
             kind="trip",
             priority="attention",
-            title="Командировка требует действия",
+            title="Приказ требует переоформления" if trip_row.get("order_revision_stage")
+            else "Командировка требует действия",
             body=f"{trip_row['destination']} · {TRIP_STAGE_LABELS[trip_row['stage']]}",
             section="trip_approvals",
             entity_id=trip_row["id"],
@@ -2897,6 +2936,9 @@ async def load_workspace(
     trip_chair_user_id = await connection.scalar(
         select(hr_settings.c.chair_user_id).where(hr_settings.c.id == 1)
     )
+    trip_hr_user_id = await connection.scalar(
+        select(hr_settings.c.hr_user_id).where(hr_settings.c.id == 1)
+    )
     trip_deputy_user_id = await _trip_deputy_user_id(connection)
     legacy_trip_deputy_id = await _trip_directory_deputy_id(connection)
     trip_statement = select(trip_requests).where(
@@ -2910,10 +2952,15 @@ async def load_workspace(
             (trip_requests.c.requester_user_id == current_user.id)
             | trip_requests.c.id.in_(participating_trip_ids)
             | (trip_requests.c.hr_processor_user_id == current_user.id)
+            | ((trip_requests.c.status == "approved") & (
+                (trip_requests.c.order_revision_snapshot["hrUserId"].astext == str(current_user.id))
+                | (trip_hr_user_id == current_user.id)
+            ))
         )
         if current_user.id == trip_chair_user_id:
             visible_trips = visible_trips | (
-                ((trip_requests.c.workflow_version >= 2) | trip_requests.c.hr_processing_required)
+                ((trip_requests.c.workflow_version >= 2) | trip_requests.c.hr_processing_required
+                 | trip_requests.c.order_revision_stage.is_not(None))
                 & (trip_requests.c.stage != "launch")
             )
         if current_user.id == legacy_trip_deputy_id:
@@ -2928,6 +2975,7 @@ async def load_workspace(
         )
         trip_statement = trip_statement.where(visible_trips)
     trip_rows = (await connection.execute(trip_statement)).mappings().all()
+    trip_versions = await _trip_document_versions(connection, [row["id"] for row in trip_rows])
     trip_employee_ids, trip_actions = await _trip_detail_maps(
         connection,
         [row["id"] for row in trip_rows],
@@ -3232,6 +3280,7 @@ async def load_workspace(
                 trip_chat_ids.get(row["id"]),
                 trip_chair_user_id,
                 _trip_row_deputy_id(row, trip_deputy_user_id, legacy_trip_deputy_id),
+                trip_hr_user_id, trip_versions.get(row["id"], []),
             )
             for row in trip_rows
         ]
@@ -7660,6 +7709,9 @@ async def _trip_response(
     chair_user_id = await connection.scalar(select(hr_settings.c.chair_user_id).where(
         hr_settings.c.id == 1,
     ))
+    hr_user_id = await connection.scalar(select(hr_settings.c.hr_user_id).where(
+        hr_settings.c.id == 1,
+    ))
     deputy_user_id = await _trip_deputy_user_id(connection)
     legacy_deputy_id = (
         await _trip_directory_deputy_id(connection)
@@ -7673,8 +7725,13 @@ async def _trip_response(
         and row["requester_user_id"] != current_user.id
         and current_user.id not in employees.get(request_id, [])
         and current_user.id != row.get("hr_processor_user_id")
+        and not (row["status"] == "approved" and (
+            current_user.id == hr_user_id or str(current_user.id)
+            == (row.get("order_revision_snapshot") or {}).get("hrUserId")
+        ))
         and not (
-            (row["workflow_version"] >= 2 or row.get("hr_processing_required"))
+            (row["workflow_version"] >= 2 or row.get("hr_processing_required")
+             or row.get("order_revision_stage"))
             and row["stage"] != "launch"
             and current_user.id == chair_user_id
         )
@@ -7696,7 +7753,8 @@ async def _trip_response(
             chats.c.deleted_at.is_(None),
         )),
         chair_user_id,
-        effective_deputy_id,
+        effective_deputy_id, hr_user_id,
+        (await _trip_document_versions(connection, [request_id])).get(request_id, []),
     )
 
 

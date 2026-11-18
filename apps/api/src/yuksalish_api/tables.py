@@ -954,6 +954,9 @@ trip_requests = sa.Table(
     sa.Column("resolved_brief_sha256", sa.String(64)),
     sa.Column("order_series", sa.String(24)),
     sa.Column("order_purpose", sa.Text()),
+    sa.Column("order_manually_registered", sa.Boolean()),
+    sa.Column("order_revision_stage", sa.String(16)),
+    sa.Column("order_revision_snapshot", postgresql.JSONB()),
     sa.Column("deputy_approver_user_id", uuid_type),
     sa.Column("deleted_at", sa.DateTime(timezone=True)),
     sa.Column("purpose", sa.Text()),
@@ -994,6 +997,16 @@ trip_order_counters = sa.Table(
     metadata,
     sa.Column("year", sa.Integer(), primary_key=True),
     sa.Column("last_sequence", sa.Integer()),
+)
+
+trip_order_registrations = sa.Table(
+    "trip_order_registrations", metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("request_id", uuid_type),
+    sa.Column("order_year", sa.Integer()),
+    sa.Column("order_number", sa.String(40)),
+    sa.Column("order_series", sa.String(24)),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
 )
 
 trip_document_revisions = sa.Table(

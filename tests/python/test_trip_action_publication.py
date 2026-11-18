@@ -13,6 +13,47 @@ from yuksalish_api.workspace_schemas import TripActionRequest
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize("action", [
+    "revise_order", "approve_revision", "complete_revision", "cancel_revision",
+])
+@pytest.mark.parametrize("fails", [False, True])
+async def test_document_revision_does_not_replay_trip_approval(monkeypatch, action, fails):
+    user = AuthenticatedUser(uuid4(), "actor", "Actor", None, None, "employee")
+    request_id = uuid4()
+    connection = AsyncMock()
+    result = SimpleNamespace(id=str(request_id))
+    service = AsyncMock(side_effect=WorkspaceRepositoryError(403, "Denied") if fails else None)
+    transition = AsyncMock()
+    response = AsyncMock(return_value=result)
+    bus = SimpleNamespace(publish=AsyncMock())
+    monkeypatch.setattr(workspace, "ensure_module_action", AsyncMock())
+    monkeypatch.setattr(workspace, "act_on_order_revision", service)
+    monkeypatch.setattr(workspace, "act_on_trip_request", transition)
+    monkeypatch.setattr(workspace, "get_trip_request", response)
+    monkeypatch.setattr(workspace, "_object_storage", lambda _: object())
+    monkeypatch.setattr(workspace, "_event_bus", lambda _: bus)
+    payload = TripActionRequest(action=action, comment="Причина", **(
+        {"order_number": "29", "order_series": "a/f"} if action == "complete_revision" else {}
+    ))
+    if fails:
+        with pytest.raises(HTTPException):
+            await workspace.post_trip_action(
+                request_id, payload, Request({"type": "http"}), user, connection,
+            )
+        response.assert_not_awaited()
+        connection.commit.assert_not_awaited()
+        bus.publish.assert_not_awaited()
+    else:
+        assert await workspace.post_trip_action(
+            request_id, payload, Request({"type": "http"}), user, connection,
+        ) == result
+        service.assert_awaited_once()
+        connection.commit.assert_awaited_once()
+        bus.publish.assert_awaited_once()
+    transition.assert_not_awaited()
+
+
+@pytest.mark.anyio
 @pytest.mark.parametrize("fails", [False, True])
 async def test_trip_decision_is_committed_before_clients_can_refresh(
     monkeypatch: pytest.MonkeyPatch, fails: bool,

@@ -5,14 +5,17 @@ import { Input } from "./WorkspaceInput";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
 
-export function TripHrOrderForm({ request, busy, onComplete }: {
+export function TripHrOrderForm({ request, busy, onComplete, revision = false }: {
   readonly request: TripRequest;
   readonly busy: boolean;
+  readonly revision?: boolean;
   readonly onComplete: (fields: TripOrderInput) => Promise<boolean>;
 }) {
   const id = useId();
   const [fields, setFields] = useState<TripOrderInput>(() => ({
-    orderNumber: request.orderNumber ?? "", orderSeries: request.orderSeries || "а/ф",
+    orderNumber: revision && !(request.orderManuallyRegistered ?? request.hrProcessingRequired)
+      ? "" : request.orderNumber ?? "",
+    orderSeries: request.orderSeries || "а/ф",
     orderPurpose: request.orderPurpose || request.purpose,
   }));
   const [orderDate, setOrderDate] = useState("");
@@ -26,9 +29,9 @@ export function TripHrOrderForm({ request, busy, onComplete }: {
     await onComplete({ orderNumber: fields.orderNumber.trim(), orderSeries: fields.orderSeries.trim(),
       orderPurpose: fields.orderPurpose.trim(), ...(orderDate ? { orderDate } : {}) });
   };
-  return <form className="trip-hr-order-form" aria-label="Кадровое оформление приказа" aria-busy={busy}
+  return <form className="trip-hr-order-form" aria-label={revision ? "Новая версия приказа" : "Кадровое оформление приказа"} aria-busy={busy}
     noValidate onSubmit={event => { event.preventDefault(); void submit(); }}>
-    <h3>Оформление приказа</h3>
+    <h3>{revision ? "Новая версия приказа" : "Оформление приказа"}</h3>
     <p>Укажите реквизиты бумажного приказа. Цель можно уточнить для приказа; текст билдирги сохранится.</p>
     <div className="trip-hr-order-numbers">
       <label htmlFor={`${id}-number`}>Номер приказа *<Input id={`${id}-number`} maxLength={40} required
@@ -43,6 +46,6 @@ export function TripHrOrderForm({ request, busy, onComplete }: {
       value={fields.orderPurpose} disabled={busy} resize="vertical" rows={4}
       onChange={(_, data) => setFields(current => ({ ...current, orderPurpose: data.value }))} /></label>
     {error && <WorkspaceNotice tone="error" role="alert">{error}</WorkspaceNotice>}
-    <Button type="submit" appearance="primary" disabled={busy}>{busy ? "Оформляем…" : "Оформлено"}</Button>
+    <Button type="submit" appearance="primary" disabled={busy}>{busy ? "Оформляем…" : revision ? "Сохранить новую версию" : "Оформлено"}</Button>
   </form>;
 }

@@ -44,6 +44,72 @@ const card = () => document.querySelector(".trip-board-card")!;
 async function drop(target: string) { await dropSpatialCard(card(), column(target)); }
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 describe("Trip approvals interaction", async () => {
+  it("requests a separate correction of a legacy approved order with a required reason", async () => {
+    const trip: TripRequest = { ...request, stage: "approved", status: "approved", stageLabel: "Утверждено",
+      statusLabel: "Утверждено", hasOrderPdf: true, orderNumber: "010-WS", allowedActions: ["revise_order"] };
+    const { onAction } = setup(trip);
+    fireEvent.click(screen.getByRole("button", { name: /Все/ }));
+    fireEvent.click(card().querySelector(".approval-card-open")!);
+    expect(screen.getByRole("region", { name: "Переоформление приказа" })).toHaveTextContent("Статус поездки и календарь сохраняются");
+    fireEvent.click(screen.getByRole("button", { name: "Запросить переоформление приказа" }));
+    expect(onAction).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Подтвердить решение" })).toBeDisabled();
+    fireEvent.change(screen.getByRole("textbox", { name: "Причина решения" }), { target: { value: "Исправить приказ" } });
+    fireEvent.click(screen.getByRole("button", { name: "Подтвердить решение" }));
+    await waitFor(() => expect(onAction).toHaveBeenCalledWith(trip, "revise_order", "Исправить приказ"));
+  });
+
+  it("shows pending HR corrections in work and keeps fields after server refusal", async () => {
+    const trip: TripRequest = { ...request, stage: "approved", status: "approved", stageLabel: "Утверждено",
+      statusLabel: "Утверждено", hasOrderPdf: true, orderNumber: "010-WS", orderRevisionStage: "hr",
+      allowedActions: ["complete_revision", "cancel_revision"] };
+    const { onAction } = setup(trip);
+    fireEvent.click(card().querySelector(".approval-card-open")!);
+    expect(screen.getByRole("button", { name: "Открыть новую резолюцию председателя" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Номер приказа *")).toHaveValue("");
+    fireEvent.change(screen.getByLabelText("Номер приказа *"), { target: { value: "77" } });
+    fireEvent.change(screen.getByLabelText("Цель поездки в приказе"), { target: { value: "Новая цель" } });
+    fireEvent.change(screen.getByLabelText("Дата приказа (необязательно)"), { target: { value: "2026-11-09" } });
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить новую версию" }));
+    await waitFor(() => expect(onAction).toHaveBeenCalledWith(trip, "complete_revision", undefined, undefined, {
+      orderNumber: "77", orderSeries: "а/ф", orderPurpose: "Новая цель", orderDate: "2026-11-09",
+    }));
+    expect(screen.getByLabelText("Номер приказа *")).toHaveValue("77");
+    expect(screen.getByLabelText("Цель поездки в приказе")).toHaveValue("Новая цель");
+    expect(screen.getByRole("button", { name: "Сохранить новую версию" })).toBeEnabled();
+  });
+
+  it("lets the appointed chair issue a new resolution without showing an HR form", async () => {
+    const trip: TripRequest = { ...request, stage: "approved", status: "approved", stageLabel: "Утверждено",
+      statusLabel: "Утверждено", orderRevisionStage: "chair", allowedActions: ["approve_revision"] };
+    const { onAction } = setup(trip);
+    fireEvent.click(card().querySelector(".approval-card-open")!);
+    expect(screen.queryByRole("form", { name: "Новая версия приказа" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Поставить новую резолюцию и передать кадровику" }));
+    await waitFor(() => expect(onAction).toHaveBeenCalledWith(trip, "approve_revision", undefined));
+  });
+
+  it("downloads an archived order by its own revision ID", async () => {
+    const trip: TripRequest = { ...request, stage: "approved", status: "approved", stageLabel: "Утверждено",
+      statusLabel: "Утверждено", allowedActions: [], documentVersions: [{ id: "previous-order", kind: "order",
+        number: "010-WS", series: "", issued: "2026-11-09", createdAt: "2026-11-18T10:00:00Z" }] };
+    const onDownloadDocument = vi.fn(async () => new Blob([], { type: "application/pdf" }));
+    installSpatialGeometry();
+    render(<FluentProvider theme={webLightTheme}><TripApprovalsView requests={[trip]} people={people}
+      currentUser={people[0]!} onCreate={vi.fn()} onUpdate={vi.fn()} onAction={vi.fn()}
+      onDownloadDocument={onDownloadDocument} /></FluentProvider>);
+    fireEvent.click(screen.getByRole("button", { name: /Все/ }));
+    fireEvent.click(card().querySelector(".approval-card-open")!);
+    fireEvent.click(screen.getByText("История документов (1)"));
+    vi.stubGlobal("URL", { createObjectURL: vi.fn(() => "blob:archive"), revokeObjectURL: vi.fn() });
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    fireEvent.click(screen.getByRole("button", { name: /Приказ № 010-WS/ }));
+    await waitFor(() => expect(onDownloadDocument).toHaveBeenCalledExactlyOnceWith(
+      trip.id, "archived", undefined, undefined, "previous-order",
+    ));
+    await waitFor(() => expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:archive"), { timeout: 1500 });
+  });
+
   it("uses the route as a short list title and keeps the full purpose in search and details", () => {
     const purpose = request.purpose.repeat(7);
     setup({ ...request, purpose });
