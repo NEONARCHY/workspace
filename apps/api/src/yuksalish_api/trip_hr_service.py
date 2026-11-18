@@ -1,7 +1,7 @@
 """Protected chair resolution and manual HR registration, with immutable document revisions."""
 
 import hashlib
-from datetime import UTC, datetime
+from datetime import UTC, datetime, time
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
@@ -131,7 +131,9 @@ async def complete_order(
     if row["status"] == "approved" and row["order_pdf_key"]:
         if (row["order_number"], row["order_series"], row["order_purpose"]) != (
             payload.order_number, payload.order_series, payload.order_purpose,
-        ):
+        ) or (payload.order_date is not None and (
+            row["order_issued_at"].astimezone(_LOCAL).date() != payload.order_date
+        )):
             raise Error(409, "Приказ уже оформлен; реквизиты отличаются")
         return
     if "complete" not in _trip_allowed_actions(row, user):
@@ -140,7 +142,10 @@ async def complete_order(
     await _verified(storage, row["resolved_brief_key"], row["resolved_brief_sha256"])
     facts = TripDocumentSnapshot.model_validate(row["resolution_snapshot"])
     image = await _verified(storage, facts.signature_key, facts.signature_sha256)
-    issued = datetime.now(_LOCAL)
+    issued = (
+        datetime.combine(payload.order_date, time.min, tzinfo=_LOCAL)
+        if payload.order_date is not None else datetime.now(_LOCAL)
+    )
     duplicate = await connection.scalar(select(trip_requests.c.id).where(
         trip_requests.c.hr_processing_required.is_(True),
         trip_requests.c.order_year == issued.year,
@@ -159,7 +164,8 @@ async def complete_order(
     key, digest = await _archive(
         connection, storage, request_id=request_id, user_id=user.id, kind="order", content=content,
         facts={"number": payload.order_number, "series": payload.order_series,
-               "purpose": payload.order_purpose, "resolutionKey": row["resolved_brief_key"]},
+               "purpose": payload.order_purpose, "issued": issued.date().isoformat(),
+               "resolutionKey": row["resolved_brief_key"]},
     )
     await connection.execute(update(trip_requests).where(trip_requests.c.id == request_id).values(
         order_pdf_key=key, order_pdf_sha256=digest,

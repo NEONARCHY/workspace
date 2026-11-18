@@ -115,3 +115,58 @@ def test_cyrillic_brief_and_order_keep_the_employee_and_hr_purposes_separate():
     order_text = " ".join(page.extract_text() for page in PdfReader(BytesIO(order)).pages)
     assert "29-сон \u0430/ф" in order_text and "Уточнение кадровика" in order_text
     assert "БУЙРУҚ" in order_text and "2030 йил" in order_text
+    assert order_text.index("тўғрисида") < order_text.index("Уточнение кадровика")
+    assert order_text.index("Уточнение кадровика") < order_text.index("БУЮРАМАН:")
+    assert "1. Ҳаракатнинг Бош мутахассис Тестовый Инициатор" in order_text
+    assert "2. Сафар харажатлари" in order_text
+    assert "\u0410\u0441\u043e\u0441: Тестовый Инициаторнинг билдиргиси." in order_text
+    assert "раис резолюцияси" not in order_text
+
+
+@pytest.mark.parametrize("count", [2, 6, 35])
+def test_order_groups_participants_under_one_clause(count):
+    image = Image.new("RGBA", (20, 20), "blue")
+    data = BytesIO()
+    image.save(data, "PNG")
+    facts = TripDocumentSnapshot(
+        requester="Инициатор", requester_title="Мутахассис", chair="Раис",
+        brief_text="Билдирги", purpose="Сафар мақсади", destination="Самарқанд",
+        start=date(2030, 5, 1), end=date(2030, 5, 2),
+        employees=[(f"Ходим {index}", "Мутахассис" if index else "") for index in range(count)],
+        expense_source="Лойиҳа маблағлари",
+    )
+    content = hr_order_pdf(facts, number="29", series="\u0430/ф", purpose=facts.purpose,
+                           issued=date(2029, 12, 31), signature=data.getvalue())
+    pages = PdfReader(BytesIO(content)).pages
+    text = " ".join(page.extract_text() for page in pages)
+    assert text.count("хизмат сафарига юборилсин") == 1
+    assert "1. Ҳаракатнинг қуйидаги ходимлари" in text
+    assert "Ходим 0;" in text
+    assert f"Ходим {count - 1} - Мутахассис." in text
+    assert "2. Сафар харажатлари" in text
+    assert "3." not in text
+    assert "2029 йил «31» декабрь" in text
+    assert "раис резолюцияси" not in text
+    if count == 6:
+        assert len(pages) == 1
+
+
+@pytest.mark.parametrize("value", ["2030-04-28", None])
+def test_order_date_is_optional_and_accepted_in_the_camel_case_contract(value):
+    payload = TripActionRequest.model_validate({
+        "action": "complete", "orderNumber": "29", "orderSeries": "\u0430/ф", "orderDate": value,
+    })
+    assert payload.order_date == (date(2030, 4, 28) if value else None)
+
+
+@pytest.mark.parametrize("value", ["2030-02-30", "invalid", ""])
+def test_invalid_order_dates_are_rejected(value):
+    with pytest.raises(ValidationError):
+        TripActionRequest(
+            action="complete", order_number="29", order_series="\u0430/ф", order_date=value,
+        )
+
+
+def test_other_actions_cannot_set_an_order_date():
+    with pytest.raises(ValidationError):
+        TripActionRequest(action="approve", order_date=date(2030, 4, 28))

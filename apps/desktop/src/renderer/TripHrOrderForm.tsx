@@ -3,6 +3,7 @@ import { Button, Textarea } from "@fluentui/react-components";
 import type { TripOrderInput, TripRequest } from "@yuksalish/contracts";
 import { Input } from "./WorkspaceInput";
 import { WorkspaceNotice } from "./WorkspaceNotice";
+import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
 
 export function TripHrOrderForm({ request, busy, onComplete }: {
   readonly request: TripRequest;
@@ -14,6 +15,7 @@ export function TripHrOrderForm({ request, busy, onComplete }: {
     orderNumber: request.orderNumber ?? "", orderSeries: request.orderSeries || "а/ф",
     orderPurpose: request.orderPurpose || request.purpose,
   }));
+  const [orderDate, setOrderDate] = useState("");
   const [error, setError] = useState("");
   const submit = async () => {
     if (busy) return;
@@ -22,7 +24,7 @@ export function TripHrOrderForm({ request, busy, onComplete }: {
     }
     setError("");
     await onComplete({ orderNumber: fields.orderNumber.trim(), orderSeries: fields.orderSeries.trim(),
-      orderPurpose: fields.orderPurpose.trim() });
+      orderPurpose: fields.orderPurpose.trim(), ...(orderDate ? { orderDate } : {}) });
   };
   return <form className="trip-hr-order-form" aria-label="Кадровое оформление приказа" aria-busy={busy}
     noValidate onSubmit={event => { event.preventDefault(); void submit(); }}>
@@ -34,6 +36,9 @@ export function TripHrOrderForm({ request, busy, onComplete }: {
       <label htmlFor={`${id}-series`}>Серия приказа *<Input id={`${id}-series`} maxLength={24} required
         value={fields.orderSeries} disabled={busy} onChange={(_, data) => setFields(current => ({ ...current, orderSeries: data.value }))} /></label>
     </div>
+    <label>Дата приказа (необязательно)<WorkspaceDateTimePicker mode="date"
+      ariaLabel="Дата приказа (необязательно)" value={orderDate} disabled={busy} onChange={setOrderDate} /></label>
+    <p>Если дата не указана, будет использована текущая дата.</p>
     <label htmlFor={`${id}-purpose`}>Цель поездки в приказе<Textarea id={`${id}-purpose`} maxLength={4000}
       value={fields.orderPurpose} disabled={busy} resize="vertical" rows={4}
       onChange={(_, data) => setFields(current => ({ ...current, orderPurpose: data.value }))} /></label>
