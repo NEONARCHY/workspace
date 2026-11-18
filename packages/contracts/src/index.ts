@@ -2290,6 +2290,7 @@ export interface TripOrderInput {
   readonly orderNumber: string;
   readonly orderSeries: string;
   readonly orderPurpose: string;
+  readonly orderDate?: string;
 }
 
 export interface TripActionHistory {

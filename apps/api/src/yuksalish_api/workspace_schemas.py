@@ -1480,6 +1480,7 @@ class TripActionRequest(ApiModel):
     order_number: str = Field(default="", max_length=40)
     order_series: str = Field(default="", max_length=24)
     order_purpose: str = Field(default="", max_length=4000)
+    order_date: date | None = None
 
     @model_validator(mode="after")
     def validate_order_fields(self) -> "TripActionRequest":
@@ -1489,7 +1490,7 @@ class TripActionRequest(ApiModel):
         if self.action == "complete" and (not self.order_number or not self.order_series):
             raise ValueError("Укажите номер и серию приказа")
         if self.action != "complete" and (
-            self.order_number or self.order_series or self.order_purpose
+            self.order_number or self.order_series or self.order_purpose or self.order_date
         ):
             raise ValueError("Реквизиты приказа доступны только при кадровом оформлении")
         return self

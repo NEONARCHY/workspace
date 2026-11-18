@@ -1,0 +1,66 @@
+--- a/lib/parse.js
++++ b/lib/parse.js
+@@ -284,7 +284,54 @@
+   return depth;
+ };
+ 
++// CVE-2026-112366: a wildcard or nested repeat inside an outer repeat can
++// produce nested unbounded quantifiers, even with only one alternative.
++const hasUnboundedRepeat = (branch, options) => {
++  let escaped = false;
++  let bracket = false;
++  let quoted = false;
++  const lastClosingBracket = branch.lastIndexOf(']');
++
++  for (let index = 0; index < branch.length; index++) {
++    const ch = branch[index];
++    if (escaped) {
++      escaped = false;
++      continue;
++    }
++    if (ch === '\\') {
++      escaped = true;
++      continue;
++    }
++    if (ch === '"' && !bracket) {
++      quoted = !quoted;
++      continue;
++    }
++    if (quoted) continue;
++    // Character classes do not nest in the parser. Treat questionable syntax
++    // conservatively, and honor nobracket: otherwise a hidden wildcard could
++    // bypass this guard while still being parsed as a wildcard below.
++    if (ch === '[' && !bracket && options.nobracket !== true && index < lastClosingBracket) {
++      bracket = true;
++    }
++    if (ch === ']' && bracket) bracket = false;
++    if (!bracket && (ch === '*' || ch === '+' || (ch === '?' && branch[index + 1] === '('))) {
++      return true;
++    }
++  }
++  return false;
++};
++
+ const analyzeRepeatedExtglob = (body, options) => {
++  const branches = splitTopLevel(body).map(branch => branch.trim());
++  // Keep upstream's proven flattening of *(a)*(b) sequences to a character
++  // class. Other risky branches are literalized by extglobClose, not compiled
++  // as a nested repetition. This protection cannot be opted out of.
++  if (branches.some(branch => hasUnboundedRepeat(branch, options) && (
++    options.maxExtglobRecursion === false || !getStarExtglobSequenceChars(branch)
++  ))) {
++    return { risky: true };
++  }
++
+   if (options.maxExtglobRecursion === false) {
+     return { risky: false };
+   }
+@@ -293,8 +340,6 @@
+     typeof options.maxExtglobRecursion === 'number'
+       ? options.maxExtglobRecursion
+       : constants.DEFAULT_MAX_EXTGLOB_RECURSION;
+-
+-  const branches = splitTopLevel(body).map(branch => branch.trim());
+ 
+   if (branches.length > 1) {
+     if (

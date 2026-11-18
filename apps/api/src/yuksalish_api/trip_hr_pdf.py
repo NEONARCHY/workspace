@@ -151,19 +151,35 @@ def hr_order_pdf(
         Paragraph(f"{escape(number)}-сон {escape(series)}", centered), Spacer(1, 12),
         Paragraph(f'{issued.year} йил «{issued.day}» {months[issued.month - 1]}', body),
         Paragraph("«Хизмат сафарига юбориш тўғрисида»", bold), Spacer(1, 8),
-        Paragraph("БУЮРАМАН:", centered),
     ]
-    for index, (name, position) in enumerate(facts.employees, 1):
+    if purpose.strip():
+        story.append(Paragraph(_text(purpose), body))
+    story.extend([Paragraph("БУЮРАМАН:", centered), Spacer(1, 6)])
+    period = f"{facts.start:%d.%m.%Y} - {facts.end:%d.%m.%Y} кунлари"
+    destination = _text(trip_destination_phrase(facts.destination))
+    if len(facts.employees) == 1:
+        name, position = facts.employees[0]
+        person = f"{_text(position)} {_text(name)}" if position.strip() else _text(name)
         story.append(Paragraph(
-            f"{index}. {_text(position)} {_text(name)} {facts.start:%d.%m.%Y} - "
-            f"{facts.end:%d.%m.%Y} кунлари {_text(trip_destination_phrase(facts.destination))} "
+            f"1. Ҳаракатнинг {person} {period} {destination} "
             "хизмат сафарига юборилсин.", body,
         ))
-    if purpose.strip():
-        story.append(Paragraph(f"Хизмат сафарининг мақсади: {_text(purpose)}", body))
-    if facts.expense_source:
+    else:
         story.append(Paragraph(
-            f"Хизмат сафари харажатлари {_text(facts.expense_source)} ҳисобидан қоплансин.", body,
+            f"1. Ҳаракатнинг қуйидаги ходимлари {period} {destination} "
+            "хизмат сафарига юборилсин:", body,
+        ))
+        participant_style = _style("hr-order-participant", leading=18)
+        participant_style.leftIndent = 14
+        participant_style.spaceAfter = 0
+        for index, (name, position) in enumerate(facts.employees):
+            suffix = f" - {_text(position)}" if position.strip() else ""
+            punctuation = "." if index == len(facts.employees) - 1 else ";"
+            story.append(Paragraph(f"{_text(name)}{suffix}{punctuation}", participant_style))
+        story.append(Spacer(1, 12))
+    if facts.expense_source.strip():
+        story.append(Paragraph(
+            f"2. Сафар харажатлари {_text(facts.expense_source)} ҳисобидан қоплансин.", body,
         ))
     signature_row = Table([[
         Paragraph("Раис", bold), _signature_image(signature), Paragraph(_text(facts.chair), right),
@@ -174,8 +190,7 @@ def hr_order_pdf(
     ]))
     story.append(KeepTogether([
         Paragraph(
-            f"\u0410\u0441\u043e\u0441: {_text(facts.requester)}нинг билдиргиси "
-            "ва раис резолюцияси.",
+            f"\u0410\u0441\u043e\u0441: {_text(facts.requester)}нинг билдиргиси.",
             body,
         ),
         Spacer(1, 22), signature_row,

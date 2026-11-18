@@ -7,6 +7,13 @@ const { createRequire } = require('node:module');
 const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
+const { execFileSync } = require('node:child_process');
+
+// Keep the vendored parser's ReDoS and installed-consumer checks in the existing
+// mandatory compatibility gate. The registry audit remains a separate check.
+execFileSync(process.execPath, ['--test', path.join(__dirname, 'picomatch-security.test.cjs')], {
+  stdio: 'inherit',
+});
 
 const rootRequire = createRequire(path.resolve(__dirname, '../package.json'));
 const desktopRequire = createRequire(path.resolve(__dirname, '../apps/desktop/package.json'));

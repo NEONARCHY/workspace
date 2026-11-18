@@ -9,6 +9,7 @@ COPY packages/contracts/package.json packages/contracts/package.json
 COPY packages/i18n/package.json packages/i18n/package.json
 COPY apps/desktop/package.json apps/desktop/package.json
 COPY patches ./patches
+COPY vendor/picomatch ./vendor/picomatch
 RUN pnpm install --frozen-lockfile --ignore-scripts
 
 COPY packages/contracts packages/contracts

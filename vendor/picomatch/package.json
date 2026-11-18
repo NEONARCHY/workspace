@@ -1,0 +1,22 @@
+{
+  "name": "@yuksalish/picomatch",
+  "version": "4.0.7-yuksalish.1",
+  "description": "Locally maintained picomatch 4.0.7 security fork for CVE-2026-112366",
+  "private": true,
+  "main": "index.js",
+  "license": "MIT",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=12"
+  },
+  "files": [
+    "index.js",
+    "posix.js",
+    "lib",
+    "LICENSE",
+    "README.md",
+    "SECURITY-PATCH.md",
+    "UPSTREAM.json",
+    "security.patch"
+  ]
+}
