@@ -675,12 +675,43 @@ describe("AIReferentView", () => {
     // JSDOM has no layout for Tabster's initial focus search; model the user's focus.
     comment.focus();
     const action = await screen.findByRole("button", { name: "Вернуть на доработку" });
-    expect(action).toBeDisabled();
-    fireEvent.change(comment, { target: { value: "Уточните адрес" } });
+    expect(action).toBeEnabled();
     fireEvent.click(action);
+    const reason = screen.getByRole("textbox", { name: "Причина возврата на доработку" });
+    expect(reason).toHaveFocus();
+    const confirm = screen.getByRole("button", { name: "Подтвердить возврат" });
+    expect(confirm).toBeDisabled();
+    expect(actOnAIReferentLetter).not.toHaveBeenCalled();
+    fireEvent.change(reason, { target: { value: "  " } });
+    expect(confirm).toBeDisabled();
+    fireEvent.change(reason, { target: { value: "Уточните адрес" } });
+    fireEvent.click(confirm);
     await waitFor(() => expect(actOnAIReferentLetter).toHaveBeenCalledWith("token", expect.objectContaining({ id: "letter-1", revision: 2 }), "return_for_revision", "Уточните адрес", expect.any(String), undefined));
     expect(await screen.findAllByText("Письмо уже изменилось")).not.toHaveLength(0);
     expect(comment).toHaveValue("Уточните адрес");
+    expect(reason).toHaveValue("Уточните адрес");
+    expect(reason).toBeEnabled();
+  });
+
+  it("lets the chairman's preliminary reviewer return a letter from the team dialog", async () => {
+    const letter: AIReferentLetter = { ...registry.letters[0]!, reviewerUserId: "askar", reviewerName: "Аскар", initialReviewerUserId: "askar", finalReviewerUserId: "bobur", finalReviewerName: "Бобур" };
+    vi.mocked(loadAIReferentLetter).mockResolvedValue(letter);
+    vi.mocked(actOnAIReferentLetter).mockResolvedValue({ ...letter, status: "needs_revision", revision: 3, availableActions: [] });
+    render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate={false} dialogOnly focusRequestId="letter-1" /></FluentProvider>);
+    const action = await screen.findByRole("button", { name: "Вернуть на доработку" });
+    await waitFor(() => expect(screen.getByText(/Аскар → Бобур → отправитель/)).toBeInTheDocument());
+    fireEvent.click(action);
+    const reason = screen.getByRole("textbox", { name: "Причина возврата на доработку" });
+    fireEvent.change(reason, { target: { value: "Уточните содержание письма" } });
+    fireEvent.click(screen.getByRole("button", { name: "Отмена" }));
+    expect(actOnAIReferentLetter).not.toHaveBeenCalled();
+    expect(action).toHaveFocus();
+    fireEvent.click(action);
+    expect(screen.getByRole("textbox", { name: "Причина возврата на доработку" })).toHaveValue("Уточните содержание письма");
+    fireEvent.click(screen.getByRole("button", { name: "Подтвердить возврат" }));
+    await waitFor(() => expect(actOnAIReferentLetter).toHaveBeenCalledExactlyOnceWith("token", letter, "return_for_revision", "Уточните содержание письма", expect.any(String), undefined));
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Подтвердить возврат" })).not.toBeInTheDocument());
+    expect(screen.getByText("На доработке", { selector: ".ai-referent-status" })).toBeInTheDocument();
   });
 
   it("requires a written reason and explicit confirmation for final rejection", async () => {

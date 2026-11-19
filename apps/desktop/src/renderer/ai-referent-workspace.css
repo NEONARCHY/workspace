@@ -457,6 +457,7 @@ html[data-color-theme="dark"] .ai-referent-register-actions .ai-referent-registe
 .ai-referent-detail-dialog:not(.ai-referent-packet-dialog) .ai-referent-detail-actions { grid-column: 1 / -1; justify-self: stretch; display: flex; flex-wrap: wrap; align-items: center; padding-top: 10px; border-top: 1px solid var(--ws-line); }
 .ai-referent-detail-confirmations { grid-column: 1 / -1; max-height: 30dvh; overflow-y: auto; }
 .ai-referent-detail-confirmations:empty { display: none; }
+.ai-referent-return-actions { position: sticky; bottom: 0; display: flex; flex-wrap: wrap; gap: 8px; padding-top: 8px; background: var(--ws-theme-surface, white); }
 .ai-referent-detail-dialog:not(.ai-referent-packet-dialog) .ai-referent-detail-content { min-height: 0; align-content: start; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
 .ai-referent-packet-content { min-height: 180px; max-height: min(66vh, 620px); overflow-y: auto; }
 .ai-referent-packet-context { margin: 0; font-weight: 700; font-size: 15px; overflow-wrap: anywhere; }
