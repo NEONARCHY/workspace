@@ -18,12 +18,47 @@ it("does not request queues without module access and hides another actor's inbo
   expect(result.current.visible).toBe(false);
 });
 
+it.each(["trips", "leaves"] as const)("does not flash the %s card before eligibility is known", async kind => {
+  let resolve!: (value: { enabled: boolean; items: typeof item[] }) => void;
+  vi.mocked(loadTeamApprovalInbox).mockReturnValue(new Promise(done => { resolve = done; }));
+  const { result } = renderHook(() => useTeamApprovalInbox("token", "employee", kind, true));
+  expect(result.current.loading).toBe(true);
+  expect(result.current.visible).toBe(false);
+  await act(async () => resolve({ enabled: false, items: [] }));
+  expect(result.current.visible).toBe(false);
+});
+
+it("shows an eligible empty inbox, but never reuses eligibility for another actor", async () => {
+  vi.mocked(loadTeamApprovalInbox).mockResolvedValueOnce({ enabled: true, items: [] })
+    .mockReturnValue(new Promise(() => undefined));
+  const { result, rerender } = renderHook(({ user }) => useTeamApprovalInbox("token", user, "trips", true),
+    { initialProps: { user: "chairman" } });
+  expect(result.current.visible).toBe(false);
+  await waitFor(() => expect(result.current.visible).toBe(true));
+  rerender({ user: "other" });
+  expect(result.current.visible).toBe(false);
+});
+
+it("keeps confirmed eligibility during a same-actor refresh", async () => {
+  let resolve!: (value: { enabled: boolean; items: typeof item[] }) => void;
+  vi.mocked(loadTeamApprovalInbox).mockResolvedValueOnce({ enabled: true, items: [] })
+    .mockReturnValueOnce(new Promise(done => { resolve = done; }));
+  const { result } = renderHook(() => useTeamApprovalInbox("token", "deputy", "trips", true));
+  await waitFor(() => expect(result.current.visible).toBe(true));
+  act(() => result.current.refresh());
+  expect(result.current.loading).toBe(true);
+  expect(result.current.visible).toBe(true);
+  await act(async () => resolve({ enabled: false, items: [] }));
+  expect(result.current.visible).toBe(false);
+});
+
 it("keeps errors unknown, retries and refreshes on focus", async () => {
   vi.mocked(loadTeamApprovalInbox).mockRejectedValueOnce(new Error("Нет связи"))
     .mockResolvedValueOnce({ enabled: true, items: [item] })
     .mockResolvedValue({ enabled: true, items: [] });
   const { result } = renderHook(() => useTeamApprovalInbox("token", "deputy", "trips", true));
   await waitFor(() => expect(result.current.error).toBe("Нет связи"));
+  expect(result.current.visible).toBe(true); // Keep an actionable retry, not a silent empty queue.
   expect(result.current.items).toBeUndefined();
   act(() => result.current.refresh());
   await waitFor(() => expect(result.current.items).toEqual([item]));

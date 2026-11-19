@@ -12,7 +12,7 @@ import { workspacePlatform } from "./platform-adapter";
 import { defaultNotificationVolume, workspaceSounds } from "./workspace-sounds";
 import "./notification-sound-settings.css";
 import { SlidingSegmented } from "./SlidingSegmented";
-import { useContextMotion } from "./useContextMotion";
+import { ProgressiveNotificationList } from "./ProgressiveNotificationList";
 import { SwipeRow } from "./SwipeRow";
 import { UndoActionsToast, useUndoActions } from "./UndoActions";
 import { Button, Switch } from "@fluentui/react-components";
@@ -79,13 +79,15 @@ function NotificationIcon({ kind }: { readonly kind: NotificationKind }) {
   return <CalendarLtr24Regular />;
 }
 
+const timeFormat = new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit" });
+const dateFormat = new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "short" });
 function timeLabel(value: string): string {
   const date = new Date(value);
   const today = new Date();
   if (date.toDateString() === today.toDateString()) {
-    return date.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+    return timeFormat.format(date);
   }
-  return date.toLocaleDateString("ru-RU", { day: "2-digit", month: "short" });
+  return dateFormat.format(date);
 }
 
 export function NotificationCenter({
@@ -107,7 +109,6 @@ export function NotificationCenter({
   const [filter, setFilter] = useState<NotificationFilter>(focusNotification ? "all" : "unread");
   const [kindFilter, setKindFilter] = useState<NotificationKindFilter>("all");
   const [query, setQuery] = useState("");
-  const streamMotion = useContextMotion(`${filter}:${kindFilter}`);
   const [savingPreferences, setSavingPreferences] = useState(false);
   const [volumeDraft, setVolumeDraft] = useState<{ base: number; value: number }>();
   const savedVolume = preferences.soundVolume ?? defaultNotificationVolume;
@@ -266,14 +267,14 @@ export function NotificationCenter({
               ))}
             </SlidingSegmented>
           </div>
-          <div className="notification-stream" aria-live="polite" ref={streamMotion}>
           {visible.length === 0 ? (
-            <div className="notification-empty">
+            <div className="notification-stream" aria-live="polite"><div className="notification-empty">
               <CheckmarkCircle24Regular />
               <strong>{filter === "attention" ? "Сейчас ничего не требует решения" : "Уведомлений нет"}</strong>
               <span>Новые события появятся здесь автоматически.</span>
-            </div>
-          ) : visible.map((notification) => (
+            </div></div>
+          ) : <ProgressiveNotificationList key={JSON.stringify([filter, kindFilter, query])} items={visible}>
+          {notification => (
             <SwipeRow key={notification.id} className="notification-swipe" label={`Удалить: ${notification.title}`} disabled={!onDelete}
               onAction={() => { if (onDelete) undo.enqueue({ id: notification.id, scope: "notification", label: "Уведомление удалено", commit: () => onDelete(notification) }); }}>
             <article
@@ -322,8 +323,8 @@ export function NotificationCenter({
               </div>
             </article>
             </SwipeRow>
-          ))}
-          </div>
+          )}
+          </ProgressiveNotificationList>}
         </div>
 
         <aside className="notification-settings" aria-label="Настройки уведомлений">

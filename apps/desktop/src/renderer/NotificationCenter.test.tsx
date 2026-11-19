@@ -13,7 +13,63 @@ const notifications = (unread = 0): WorkspaceNotification[] => Array.from({ leng
 }));
 const props = { preferences, onOpen: vi.fn(), onMarkRead: vi.fn(), onMarkAllRead: vi.fn(), onUpdatePreferences: vi.fn() };
 const center = (items: readonly WorkspaceNotification[]) => <FluentProvider theme={workspaceTheme}><NotificationCenter {...props} notifications={items} /></FluentProvider>;
-afterEach(() => { cleanup(); vi.clearAllMocks(); vi.useRealTimers(); });
+afterEach(() => { cleanup(); vi.clearAllMocks(); vi.useRealTimers(); vi.unstubAllGlobals(); });
+
+it("mounts 15 cards, adds batches on demand and resets on filter/search changes", () => {
+  render(center(notifications(300)));
+  const rows = () => document.querySelectorAll(".notification-row").length;
+  expect(rows()).toBe(15);
+  expect(screen.getByText("Показано 15 из 300")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Показать ещё 15" }));
+  expect(rows()).toBe(30);
+  expect(document.activeElement?.closest("article")).toHaveTextContent("Событие 15");
+  fireEvent.change(screen.getByRole("textbox", { name: "Поиск уведомлений" }), { target: { value: "Событие 2" } });
+  expect(rows()).toBe(15);
+  expect(screen.getByText("Показано 15 из 111")).toBeInTheDocument();
+  fireEvent.change(screen.getByRole("textbox", { name: "Поиск уведомлений" }), { target: { value: "" } });
+  expect(rows()).toBe(15);
+  fireEvent.click(screen.getByRole("button", { name: /Нужно решить/ }));
+  expect(rows()).toBe(7);
+  fireEvent.click(screen.getByRole("button", { name: /Вся история/ }));
+  expect(rows()).toBe(15);
+});
+
+it("loads exactly one batch per intersection, disconnects and releases cards on exit", () => {
+  const observers: { callback: (entries: { isIntersecting: boolean }[]) => void; disconnect: ReturnType<typeof vi.fn> }[] = [];
+  vi.stubGlobal("IntersectionObserver", class {
+    disconnect = vi.fn();
+    observe = vi.fn();
+    constructor(callback: (entries: { isIntersecting: boolean }[]) => void) {
+      observers.push({ callback, disconnect: this.disconnect });
+    }
+  });
+  const items = notifications(300);
+  const view = render(center(items));
+  expect(document.querySelectorAll(".notification-row")).toHaveLength(15);
+  act(() => {
+    observers[0]!.callback([{ isIntersecting: false }]);
+    observers[0]!.callback([{ isIntersecting: true }]);
+    observers[0]!.callback([{ isIntersecting: true }]);
+  });
+  expect(document.querySelectorAll(".notification-row")).toHaveLength(30);
+  expect(observers[0]!.disconnect).toHaveBeenCalled();
+  view.rerender(center([...items]));
+  expect(document.querySelectorAll(".notification-row")).toHaveLength(30);
+  const last = observers.at(-1)!;
+  view.unmount();
+  expect(last.disconnect).toHaveBeenCalled();
+  act(() => last.callback([{ isIntersecting: true }]));
+  expect(document.querySelectorAll(".notification-row")).toHaveLength(0);
+  render(center(items));
+  expect(document.querySelectorAll(".notification-row")).toHaveLength(15);
+});
+
+it("opens a deep-linked context without mounting every preceding card", () => {
+  render(<FluentProvider theme={workspaceTheme}><NotificationCenter {...props} notifications={notifications()}
+    focusNotification={{ id: "notification-299", revision: 1 }} /></FluentProvider>);
+  expect(document.querySelectorAll(".notification-row")).toHaveLength(15);
+  expect(within(screen.getByLabelText("Контекст уведомления")).getByText("Событие 299")).toBeVisible();
+});
 
 it("exposes the selected metric and shares a decorative task-style hover layer", () => {
   render(center(notifications(7).slice(0, 2)));
