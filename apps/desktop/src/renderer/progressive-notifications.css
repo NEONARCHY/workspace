@@ -1,0 +1,36 @@
+/* Keep off-screen paint/layout skipped as later batches accumulate. The browser
+   remembers each measured height, preserving the scroll position on return. */
+.notifications-view .notification-stream > .notification-swipe {
+  content-visibility: auto;
+  contain-intrinsic-block-size: auto 132px;
+}
+.notifications-view .notification-stream > .notification-swipe:focus-within {
+  content-visibility: visible;
+}
+/* Hover used to animate max-height and move every later row during scrolling.
+   Keep the hint's geometry stable; only its opacity can change. */
+.notifications-view .notification-stream .notification-open-label {
+  max-height: none;
+  height: 14px;
+  transform: none;
+  transition: opacity 160ms ease;
+}
+.notifications-view .notification-stream .notification-row:hover .notification-open-label,
+.notifications-view .notification-stream .notification-open:focus-visible .notification-open-label {
+  max-height: none;
+  transform: none;
+}
+.notification-load-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 16px 8px;
+  color: var(--ws-muted);
+  font-size: 12px;
+}
+.notification-load-more > button { min-height: 44px; }
+@media (prefers-reduced-motion: reduce) {
+  .notifications-view .notification-stream .notification-open-label { transition: none; }
+}

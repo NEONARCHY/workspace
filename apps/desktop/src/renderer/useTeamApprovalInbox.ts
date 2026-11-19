@@ -6,9 +6,11 @@ export function useTeamApprovalInbox(token: string, userId: string, kind: TeamAp
   const [revision, setRevision] = useState(0);
   const [resource, setResource] = useState<{
     key: string;
+    actorKey: string;
     inbox?: TeamApprovalInbox;
     error?: string;
   }>();
+  const actorKey = JSON.stringify([token, userId, kind]);
   const key = JSON.stringify([token, userId, kind, revision, refreshRevision]);
   useEffect(() => {
     if (!enabled) return;
@@ -19,9 +21,9 @@ export function useTeamApprovalInbox(token: string, userId: string, kind: TeamAp
       busy = true;
       try {
         const inbox = await loadTeamApprovalInbox(token, kind, controller.signal);
-        if (!controller.signal.aborted) setResource({ key, inbox });
+        if (!controller.signal.aborted) setResource({ key, actorKey, inbox });
       } catch (error: unknown) {
-        if (!controller.signal.aborted) setResource({ key, error: error instanceof Error ? error.message : "Не удалось загрузить согласования." });
+        if (!controller.signal.aborted) setResource({ key, actorKey, error: error instanceof Error ? error.message : "Не удалось загрузить согласования." });
       } finally { busy = false; }
     };
     const refreshVisible = () => { if (document.visibilityState !== "hidden") void refresh(); };
@@ -35,10 +37,13 @@ export function useTeamApprovalInbox(token: string, userId: string, kind: TeamAp
       window.removeEventListener("focus", refreshVisible);
       document.removeEventListener("visibilitychange", refreshVisible);
     };
-  }, [key, token, kind, enabled]);
+  }, [key, actorKey, token, kind, enabled]);
   const current = enabled && resource?.key === key ? resource : undefined;
   return {
-    visible: enabled && current?.inbox?.enabled !== false,
+    // Module access alone does not imply a personal approval role.
+    // Unknown eligibility must not flash a card that the response will hide.
+    visible: enabled && ((resource?.actorKey === actorKey && resource.inbox?.enabled === true)
+      || Boolean(current?.error)),
     items: current?.inbox?.items,
     loading: enabled && !current,
     error: current?.error,
