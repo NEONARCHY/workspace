@@ -147,9 +147,14 @@ transition, and explanation. Deploy migration `0124_task_reopen_permission` befo
   while an audit event records who deleted the root task.
 - Chat membership consists of the author, current assignee, co-assignees and
   observers. Managerial task visibility alone does not reveal the conversation.
-  Workspace administrators and superadministrators have permanent read access to
-  every managed task chat without being added to its participant list; ordinary
-  managers still need task participation.
+  Workspace administrators, superadministrators, the chairman and all central
+  deputies (including the first deputy / executive director) can see every managed
+  task chat without being added to its participant list. Deputies who do not
+  participate have read-only access to messages and their attachments; participants
+  retain their existing permissions. Ordinary managers still need participation.
+  This title-based exception grants no access to private/group conversations or
+  other managed contexts, and does not change task editing/approval rights.
+  Update the API to enable this rule; no migration or desktop rebuild is required.
 
 Task creation and each generated recurrence create exactly one `kind=task` chat in
 the same transaction. The partial unique index on `(context_type, context_id)` makes

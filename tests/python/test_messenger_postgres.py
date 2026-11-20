@@ -270,6 +270,48 @@ async def exercise_permissions(url: str) -> None:
                 with pytest.raises(WorkspaceRepositoryError) as task_file_denied:
                     await get_attachment(connection, ordinary_employee, UUID(task_file.id))
                 assert task_file_denied.value.status_code == 404
+                for title in (
+                    "Rais o'rinbosari",
+                    "Raisning birinchi o\u2018rinbosari",
+                    "Rais birinchi o'rinbosari \u2013 ijrochi direktor",
+                ):
+                    deputy = replace(ordinary_employee, job_title=title)
+                    deputy_workspace = await load_workspace(connection, deputy)
+                    deputy_chat = next(
+                        item for item in deputy_workspace.chats if item.id == task.chat_id
+                    )
+                    assert task_message.id in {item.id for item in deputy_workspace.messages}
+                    assert task_file.id in {item.id for item in deputy_workspace.attachments}
+                    assert not deputy_chat.permissions.send_messages
+                    assert not deputy_chat.permissions.upload_files
+                    assert not deputy_chat.permissions.manage_messages
+                    assert str(deputy.id) not in {item.user_id for item in deputy_chat.members}
+                    metadata, _ = await get_attachment(connection, deputy, UUID(task_file.id))
+                    assert metadata.id == task_file.id
+                    with pytest.raises(WorkspaceRepositoryError) as send_denied:
+                        await service.send_chat_message(
+                            connection, deputy, task_chat_id, SendMessageRequest(body="Denied"),
+                        )
+                    assert send_denied.value.status_code == 403
+                    with pytest.raises(WorkspaceRepositoryError) as deputy_upload_denied:
+                        await validate_attachment_owner(
+                            connection, deputy, "message", UUID(task_message.id), write=True,
+                        )
+                    assert deputy_upload_denied.value.status_code == 403
+                    with pytest.raises(WorkspaceRepositoryError):
+                        await service.chat_access(connection, deputy, group_id)
+                    assert group.id not in {item.id for item in deputy_workspace.chats}
+                    participant = replace(peer, job_title=title)
+                    assert (await service.chat_summary(
+                        connection, participant, task_chat_id,
+                    )).permissions.send_messages
+                for role in ("employee", "manager"):
+                    outsider = replace(ordinary_employee, role=role)
+                    assert task.chat_id not in {
+                        item.id for item in (await load_workspace(connection, outsider)).chats
+                    }
+                    with pytest.raises(WorkspaceRepositoryError):
+                        await service.chat_access(connection, outsider, task_chat_id)
                 chairman_message = await service.send_chat_message(
                     connection, chairman, task_chat_id, SendMessageRequest(body="Review comment")
                 )

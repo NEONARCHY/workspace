@@ -21,6 +21,17 @@ def is_executive_leader(job_title: str | None) -> bool:
     return (job_title or "").strip().casefold() == EXECUTIVE_LEADER_POSITION_NAME.casefold()
 
 
+def is_task_chat_leader(job_title: str | None) -> bool:
+    """Task-chat visibility for the chairman and central deputies only."""
+    apostrophes = str.maketrans({"‘": "'", "’": "'", "ʻ": "'", "ʼ": "'", "`": "'"})
+    normalized = " ".join((job_title or "").translate(apostrophes).casefold().split())
+    chairman = EXECUTIVE_LEADER_POSITION_NAME.translate(apostrophes).casefold()
+    return normalized == chairman or bool(re.fullmatch(
+        r"rais(?:ning)? (?:birinchi )?o'rinbosari(?:\s*[\u2013\u2014-]\s*ijrochi direktor)?",
+        normalized,
+    ))
+
+
 def is_human_resources_position(job_title: str | None) -> bool:
     """Return whether the title belongs to the personnel/HR function."""
     normalized = (job_title or "").strip().casefold()
