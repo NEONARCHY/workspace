@@ -50,7 +50,8 @@ describe("task return dialog", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Вернуть исполнителям" }));
     await waitFor(() => expect(onReturnForRevision).toHaveBeenCalledWith(task, "corrections_required", "Добавьте номер договора"));
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Вернуть на доработку" })).not.toBeInTheDocument());
-    expect(screen.getByRole("button", { name: "Закрыть задачу" })).toBeInTheDocument();
+    // Fluent removes the child dialog before Tabster restores the parent's accessibility.
+    expect(await screen.findByRole("button", { name: "Закрыть задачу" })).toBeVisible();
   });
 
   it("requires an explanation for other reasons and keeps the dialog open", async () => {
