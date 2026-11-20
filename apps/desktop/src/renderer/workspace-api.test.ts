@@ -3,6 +3,52 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 describe("web API addresses and session restore", () => {
   const defaultBridge = window.yuksalish;
   const cookieDescriptor = Object.getOwnPropertyDescriptor(Document.prototype, "cookie");
+  it.each([
+    ["username", {}, "Проверьте логин: от 3 до 64 латинских букв, цифр, точек, дефисов или подчёркиваний."],
+    ["password", { min_length: 12 }, "Пароль должен содержать не менее 12 символов."],
+    ["password", { max_length: 128 }, "Введите пароль длиной от 1 до 128 символов."],
+    ["totpCode", {}, "Введите шестизначный код приложения-аутентификатора."],
+    ["totp_code", {}, "Введите шестизначный код приложения-аутентификатора."],
+  ])("explains login validation for %s without exposing the rejected input", async (field, ctx, message) => {
+    window.yuksalish = undefined;
+    const fetchMock = vi.fn().mockResolvedValue(Response.json({ detail: [{
+      loc: ["body", field], ctx, input: "private-credential", msg: "private-credential",
+    }] }, { status: 422 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const api = await import("./workspace-api");
+    await expect(api.login("sample-user", "private-credential")).rejects.toMatchObject({
+      status: 422, message,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves authentication failures and sends a short password unchanged", async () => {
+    window.yuksalish = undefined;
+    const fetchMock = vi.fn().mockResolvedValueOnce(Response.json({ accessToken: "test-token" }))
+      .mockResolvedValueOnce(Response.json({ detail: "Invalid username or password" }, { status: 401 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const api = await import("./workspace-api");
+    await expect(api.login("sample-user", " short ")).resolves.toEqual({ accessToken: "test-token" });
+    const [url, request] = fetchMock.mock.calls[0]! as [string, RequestInit];
+    expect(url).toContain("/auth/web/login");
+    expect(JSON.parse(String(request.body))).toEqual({
+      username: "sample-user", password: " short ", deviceLabel: "Yuksalish Web",
+    });
+    await expect(api.login("sample-user", "wrong")).rejects.toMatchObject({
+      status: 401, message: "Invalid username or password",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([null, [null, 1, {}, { loc: "password" }]])("handles malformed login validation safely", async (detail) => {
+    window.yuksalish = undefined;
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ detail }, { status: 422 })));
+    const api = await import("./workspace-api");
+    await expect(api.login("sample-user", "private-credential")).rejects.toMatchObject({
+      status: 422, message: "Проверьте логин, пароль и код приложения-аутентификатора.",
+    });
+  });
+
   it("rejects a successful but malformed monthly response instead of rendering missing fields", async () => {
     window.yuksalish = undefined;
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({})));
