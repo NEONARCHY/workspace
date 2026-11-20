@@ -12,7 +12,7 @@ from sqlalchemy.sql.elements import ColumnElement
 from .access_control import module_permissions_for_user
 from .auth import AuthenticatedUser
 from .errors import WorkspaceRepositoryError
-from .position_policy import is_executive_leader
+from .position_policy import is_executive_leader, is_task_chat_leader
 from .tables import (
     audit_events,
     chat_dismissals,
@@ -88,6 +88,7 @@ CONTEXT_LEADERSHIP_PERMISSIONS = ChatPermissions(
     upload_files=True,
     manage_messages=True,
 )
+TASK_CHAT_READER_PERMISSIONS = ChatPermissions(send_messages=False, upload_files=False)
 REACTION_EMOJIS = (
     "👍", "😄", "❤️", "🤝", "👏", "💔", "😔", "🔥", "👎", "🥳", "🤔", "🤯", "😱", "😡",
     "🎉", "🤩", "🤢", "💩", "🙏", "👌", "🐇", "🤡", "😭", "😌", "✅", "💯", "❗", "😂",
@@ -121,6 +122,13 @@ def can_edit_chat_avatar(chat: Record, member: Record, user_id: UUID) -> bool:
     )
 
 
+def leadership_chat_contexts(user: AuthenticatedUser) -> tuple[str, ...]:
+    """Keep bootstrap visibility aligned with direct chat and attachment access."""
+    if user.role in {"admin", "superadmin"} or is_executive_leader(user.job_title):
+        return ("project", "project_hub", "trip", "task")
+    return ("task",) if is_task_chat_leader(user.job_title) else ()
+
+
 async def chat_access(
     connection: AsyncConnection,
     user: AuthenticatedUser,
@@ -147,16 +155,18 @@ async def chat_access(
     if (
         chat is not None
         and member is None
-        and (
-            (user.role in {"admin", "superadmin"} or is_executive_leader(user.job_title))
-            and chat["context_type"] in {"project", "project_hub", "trip", "task"}
-        )
+        and chat["context_type"] in leadership_chat_contexts(user)
     ):
+        permissions = (
+            CONTEXT_LEADERSHIP_PERMISSIONS
+            if user.role in {"admin", "superadmin"} or is_executive_leader(user.job_title)
+            else TASK_CHAT_READER_PERMISSIONS
+        )
         member = cast(Record, {
             "chat_id": chat_id,
             "user_id": user.id,
             "member_role": "member",
-            "permissions": CONTEXT_LEADERSHIP_PERMISSIONS.model_dump(),
+            "permissions": permissions.model_dump(),
         })
     # Workspace-level admins are not implicitly members of a private conversation.
     left_context = (chat is not None and chat["context_type"] is not None

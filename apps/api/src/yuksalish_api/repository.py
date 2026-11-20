@@ -3079,10 +3079,8 @@ async def load_workspace(
         chat_members.c.user_id == current_user.id
     )
     accessible_chat_ids = member_chat_ids
-    if current_user.role in {"admin", "superadmin"} or is_executive_leader(
-        current_user.job_title
-    ):
-        leadership_contexts = ["project", "project_hub", "trip", "task"]
+    leadership_contexts = messenger_service.leadership_chat_contexts(current_user)
+    if leadership_contexts:
         accessible_chat_ids = select(chats.c.id).where(
             chats.c.id.in_(member_chat_ids)
             | chats.c.context_type.in_(leadership_contexts)
