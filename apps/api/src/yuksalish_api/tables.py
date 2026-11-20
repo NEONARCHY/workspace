@@ -371,6 +371,7 @@ auth_sessions = sa.Table(
     sa.Column("user_id", uuid_type),
     sa.Column("refresh_token_hash", sa.String(64)),
     sa.Column("client_kind", sa.String(16), nullable=False, server_default="desktop"),
+    sa.Column("admin_mode_enabled", sa.Boolean(), nullable=False, server_default=sa.true()),
     sa.Column("csrf_token_hash", sa.String(64), nullable=True),
     sa.Column("device_label", sa.String(160)),
     sa.Column("created_at", sa.DateTime(timezone=True)),

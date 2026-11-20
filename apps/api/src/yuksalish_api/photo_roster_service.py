@@ -33,7 +33,9 @@ class RosterSource:
 async def _selected(
     connection: AsyncConnection, actor: AuthenticatedUser, identities: list[UUID],
 ) -> list[PhotoCard]:
-    current = await load_authenticated_user(connection, actor.id)
+    current = await load_authenticated_user(
+        connection, actor.id, admin_mode_enabled=actor.admin_mode_enabled is not False,
+    )
     if current is None:
         raise WorkspaceRepositoryError(403, "Доступ к фотокарточкам изменился")
     allowed = await dossier_service.photos(connection, current, audit=False)

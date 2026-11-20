@@ -43,6 +43,8 @@ class AuthenticatedUser:
     session_id: UUID | None = None
     client_kind: str = "desktop"
     csrf_token_hash: str | None = None
+    account_role: str | None = None
+    admin_mode_enabled: bool | None = None
 
 
 class InvalidTokenError(ValueError):
@@ -133,6 +135,7 @@ async def load_authenticated_user(
     session_id: UUID | None = None,
     client_kind: str = "desktop",
     csrf_token_hash: str | None = None,
+    admin_mode_enabled: bool = True,
 ) -> AuthenticatedUser | None:
     statement = select(
         users.c.id,
@@ -146,17 +149,20 @@ async def load_authenticated_user(
     row = (await connection.execute(statement)).mappings().first()
     if row is None:
         return None
+    administrative = row["role"] in {"admin", "superadmin"}
     return AuthenticatedUser(
         id=row["id"],
         username=row["username"],
         full_name=row["full_name"],
         position_id=row["position_id"],
         job_title=row["job_title"],
-        role=row["role"],
+        role="employee" if administrative and not admin_mode_enabled else row["role"],
         department_id=row["department_id"],
         session_id=session_id,
         client_kind=client_kind,
         csrf_token_hash=csrf_token_hash,
+        account_role=row["role"],
+        admin_mode_enabled=admin_mode_enabled if administrative else None,
     )
 
 
@@ -168,6 +174,7 @@ async def authenticate_access_token(
     claims = read_access_token(token, settings.auth_signing_key)
     client_kind = "desktop"
     csrf_token_hash: str | None = None
+    admin_mode_enabled = True
     if claims.session_id is None:
         if settings.environment not in {"development", "test"}:
             raise InvalidTokenError("Server session required")
@@ -179,6 +186,7 @@ async def authenticate_access_token(
                     auth_sessions.c.id,
                     auth_sessions.c.client_kind,
                     auth_sessions.c.csrf_token_hash,
+                    auth_sessions.c.admin_mode_enabled,
                 ).where(
                     auth_sessions.c.id == claims.session_id,
                     auth_sessions.c.user_id == claims.user_id,
@@ -191,12 +199,14 @@ async def authenticate_access_token(
             raise InvalidTokenError("Session is no longer active")
         client_kind = session_record["client_kind"]
         csrf_token_hash = session_record["csrf_token_hash"]
+        admin_mode_enabled = session_record["admin_mode_enabled"]
     user = await load_authenticated_user(
         connection,
         claims.user_id,
         session_id=claims.session_id,
         client_kind=client_kind,
         csrf_token_hash=csrf_token_hash,
+        admin_mode_enabled=admin_mode_enabled,
     )
     if user is None:
         raise InvalidTokenError("User is not active")

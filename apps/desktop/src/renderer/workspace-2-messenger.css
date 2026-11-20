@@ -719,7 +719,7 @@ html body .app-provider .messenger-view .composer-textarea:focus-visible { outli
 /* A dropped pinned row can still be under the pointer; don't lift it a second time. */
 .messenger-view .chat-list-item.pinned .chat-row:hover { transform: none; }
 
-.messenger-view .chat-list-item.pinned:not(.is-lifted) .chat-row { cursor: grab; }
+.messenger-view .chat-list-item.pinned:not(.is-lifted) .chat-row { cursor: pointer; }
 .messenger-view .chat-list-item.pinned.is-lifted .chat-row { cursor: grabbing; }
 .messenger-view .chat-row-meta { display: inline-flex; align-items: center; justify-content: flex-end; gap: 5px; flex: none; margin-left: auto; }
 .messenger-view .chat-row-meta time { font-variant-numeric: tabular-nums; }

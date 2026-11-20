@@ -5,7 +5,7 @@ from typing import Any, Literal, cast
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import and_, delete, func, insert, or_, select, update
+from sqlalchemy import and_, delete, func, insert, or_, select, true, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncConnection
@@ -214,12 +214,14 @@ def _initials(full_name: str) -> str:
 
 
 def person_from_record(row: Record, color_index: int = 0) -> PersonResponse:
+    mode = row.get("admin_mode_enabled") if row["role"] in {"admin", "superadmin"} else None
     return PersonResponse(
         id=str(row["id"]),
         username=row["username"],
         name=row["full_name"],
         initials=_initials(row["full_name"]),
-        role=row["role"],
+        role="employee" if mode is False else row["role"],
+        admin_mode_enabled=mode,
         department_id=(str(row["department_id"]) if row.get("department_id") else None),
         position_id=(str(row["position_id"]) if row.get("position_id") else None),
         job_title=row["job_title"],
@@ -2190,7 +2192,10 @@ async def _sync_notifications_for_user(
     unresolved_rows = (
         (
             await connection.execute(
-                select(workspace_notifications.c.id, workspace_notifications.c.event_key).where(
+                select(
+                    workspace_notifications.c.id, workspace_notifications.c.event_key,
+                    workspace_notifications.c.section, workspace_notifications.c.entity_id,
+                ).where(
                     workspace_notifications.c.user_id == current_user.id,
                     workspace_notifications.c.requires_action.is_(True),
                     workspace_notifications.c.resolved_at.is_(None),
@@ -2200,10 +2205,20 @@ async def _sync_notifications_for_user(
         .mappings()
         .all()
     )
+    visible_process_ids = {
+        "tasks": {row["id"] for row in task_rows},
+        "payment_requests": {row["id"] for row in request_rows},
+        "trip_approvals": {row["id"] for row in trip_rows},
+    }
     stale_ids = [
         item["id"]
         for item in unresolved_rows
         if item["event_key"] not in active_attention_keys
+        # Suspending privileges hides administrative work; it does not resolve
+        # that work or change another device's administrator notification queue.
+        and (current_user.admin_mode_enabled is not False
+             or item["section"] not in visible_process_ids
+             or item["entity_id"] in visible_process_ids[item["section"]])
         and not item["event_key"].startswith("hr:")
         and not item["event_key"].startswith("ai-letter:")
         and not item["event_key"].startswith("hisobot:")
@@ -2247,6 +2262,14 @@ async def _sync_notifications_for_user(
     from .hisobot_service import collapse_hisobot_notification_backlog
 
     await collapse_hisobot_notification_backlog(connection, now, user_id=current_user.id)
+    from .support_service import _is_support_operator
+
+    visible_absence_ids = select(absence_requests.c.id)
+    if current_user.role not in {"admin", "superadmin"}:
+        visible_absence_ids = visible_absence_ids.where(or_(
+            absence_requests.c.requester_user_id == current_user.id,
+            absence_requests.c.direct_manager_user_id == current_user.id,
+        ))
     rows = (
         (
             await connection.execute(
@@ -2254,6 +2277,8 @@ async def _sync_notifications_for_user(
                 .where(
                     workspace_notifications.c.user_id == current_user.id,
                     workspace_notifications.c.dismissed_at.is_(None),
+                    true() if _is_support_operator(current_user)
+                    else ~workspace_notifications.c.event_key.like("support:created:%"),
                     or_(
                         and_(
                             workspace_notifications.c.section == "messenger",
@@ -2293,7 +2318,8 @@ async def _sync_notifications_for_user(
                             ),
                         ),
                         workspace_notifications.c.section == "calendar",
-                        workspace_notifications.c.section == "absences",
+                        and_(workspace_notifications.c.section == "absences",
+                             workspace_notifications.c.entity_id.in_(visible_absence_ids)),
                         workspace_notifications.c.section == "hr",
                         workspace_notifications.c.section == "project_hub",
                         workspace_notifications.c.section == "project_funding",
@@ -2858,6 +2884,10 @@ async def load_workspace(
     )
     people = [person_from_record(row, index) for index, row in enumerate(people_rows)]
     current = next(person for person in people if person.id == str(current_user.id))
+    current = current.model_copy(update={
+        "role": current_user.role, "admin_mode_enabled": current_user.admin_mode_enabled,
+    })
+    people = [current if person.id == current.id else person for person in people]
     position_rows = (
         (
             await connection.execute(
