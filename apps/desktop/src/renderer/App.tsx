@@ -1,4 +1,5 @@
 import { TeamDecisionFrame } from "./TeamDecisionFrame";
+import { AdminModeToggle } from "./AdminModeToggle";
 import { approvalRequestNeedsAction } from "./approval-board";
 import { MonthlyReportDashboard, MonthlyReportPrompts, MonthlyReportsView } from "./MonthlyReportsView";
 import { useMonthlyReports, useMonthlyReportWindow } from "./useMonthlyReports";
@@ -545,6 +546,10 @@ export function App() {
   // Factory stores the reader; it is invoked only after an asynchronous response.
   // eslint-disable-next-line react-hooks/refs
   const [refreshWorkspace] = useState(() => createRefreshQueue(loadWorkspace, (loaded) => {
+    // Another tab can share this server session and change its effective mode.
+    setSession(current => current && current.user.id === loaded.currentUser.id
+      && loaded.currentUser.adminModeEnabled != null && current.user.role !== loaded.currentUser.role
+      ? { ...current, user: loaded.currentUser } : current);
     setWorkspace((current) => ({ ...loaded, moduleAccess: loaded.moduleAccess ?? fallbackModuleAccess(loaded.currentUser), personalPreferences: current.currentUser.id === loaded.currentUser.id
       ? latestPreferences(current.personalPreferences, loaded.personalPreferences ?? defaultPersonalPreferences)
       : loaded.personalPreferences ?? defaultPersonalPreferences }));
@@ -2327,6 +2332,8 @@ export function App() {
               <NotificationBell unreadCount={badgeBySection.notifications ?? 0} active={activeSection === "notifications"}
                 onOpen={() => { setPreparedAction(undefined); setFocusNotification(undefined); setFocusTarget(undefined); setActiveSection("notifications"); }} />
               <ColorThemeToggle userId={session.user.id} />
+              {workspace.currentUser.adminModeEnabled != null && <AdminModeToggle
+                token={session.accessToken} enabled={workspace.currentUser.adminModeEnabled} />}
               {canUseAssistant && <YuksalishAssistant key={session.user.id} token={session.accessToken}
                 onOpenReference={openAssistantReference} onPrepareAction={prepareAssistantAction} />}
               <div className="workspace-workday-person">

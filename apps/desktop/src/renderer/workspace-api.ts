@@ -1112,6 +1112,12 @@ export function refreshAuthentication(refreshToken?: string): Promise<Authentica
   });
 }
 
+export function setAdministratorMode(token: string, enabled: boolean): Promise<AuthenticationSession["user"]> {
+  return apiRequest<AuthenticationSession["user"]>("/auth/admin-mode", {
+    method: "PUT", body: JSON.stringify({ enabled }),
+  }, token);
+}
+
 export function logout(token: string): Promise<void> {
   return apiRequest<void>(
     workspacePlatform.kind === "web" ? "/auth/web/logout" : "/auth/logout",

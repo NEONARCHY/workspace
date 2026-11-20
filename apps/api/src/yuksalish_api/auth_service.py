@@ -330,6 +330,7 @@ async def refresh_session(
             auth_sessions.c.revoked_at,
             auth_sessions.c.client_kind,
             auth_sessions.c.csrf_token_hash,
+            auth_sessions.c.admin_mode_enabled,
             users.c.id,
             users.c.username,
             users.c.full_name,

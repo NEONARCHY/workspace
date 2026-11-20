@@ -27,6 +27,7 @@ class PersonResponse(ApiModel):
     color: str
     status: Literal["pending", "active", "blocked", "archived"]
     avatar_version: str | None = None
+    admin_mode_enabled: bool | None = None
 
 
 class ProfileAvatarResponse(ApiModel):

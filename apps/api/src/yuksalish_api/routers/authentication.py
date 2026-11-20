@@ -5,8 +5,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+from yuksalish_api.admin_mode import set_admin_mode
 from yuksalish_api.auth import AuthenticatedUser, issue_access_token, require_user
 from yuksalish_api.auth_schemas import (
+    AdminModeRequest,
     AuthenticationResponse,
     DirectPasswordChangeRequest,
     InvitationAcceptRequest,
@@ -248,7 +250,21 @@ async def me(
             "job_title": current_user.job_title,
             "role": current_user.role,
         }
-    )
+    ).model_copy(update={"admin_mode_enabled": current_user.admin_mode_enabled})
+
+
+@router.put("/admin-mode", response_model=PersonResponse)
+async def change_admin_mode(
+    payload: AdminModeRequest,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> PersonResponse:
+    try:
+        updated = await set_admin_mode(connection, current_user, payload.enabled)
+    except AuthServiceError as error:
+        raise _translate(error) from error
+    await connection.commit()
+    return await me(updated)
 
 
 @router.post("/invitations", response_model=InvitationResponse, status_code=201)

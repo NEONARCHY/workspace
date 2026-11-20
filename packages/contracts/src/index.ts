@@ -282,6 +282,8 @@ export interface WorkspacePerson {
   readonly name: string;
   readonly initials: string;
   readonly role: string;
+  /** Present only for the current administrator's effective session. */
+  readonly adminModeEnabled?: boolean | null;
   readonly departmentId?: string | null;
   readonly positionId?: string | null;
   readonly jobTitle?: string | null;

@@ -28,6 +28,10 @@ class LoginRequest(ApiModel):
         return _normalize_username(value)
 
 
+class AdminModeRequest(ApiModel):
+    enabled: bool = Field(strict=True)
+
+
 class RefreshRequest(ApiModel):
     refresh_token: str = Field(min_length=32, max_length=256)
 
