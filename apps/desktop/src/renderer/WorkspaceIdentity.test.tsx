@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { FluentProvider } from "@fluentui/react-components";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -81,9 +81,17 @@ describe("WorkspaceIdentity", () => {
     fireEvent.click(screen.getByRole("button", { name: "Ранние обновления" }));
     expect(screen.getByRole("dialog", { name: "Ранние обновления" })).toBeInTheDocument();
     const latestUpdate = __YUKSALISH_UPDATE_ENTRIES__[0]!;
-    expect(screen.getByRole("heading", { name: `Обновление ${latestUpdate.version}` })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Обновление 1.0.0" })).toBeInTheDocument();
     const history = screen.getByLabelText("Полная история изменений");
+    // Resolve each title by text before checking its accessible heading. This
+    // avoids computing accessible names for hundreds of unrelated releases.
+    for (const name of [`Обновление ${latestUpdate.version}`, "Обновление 1.0.0"]) {
+      const heading = within(history).getByText(name, {
+        selector: "h1,h2,h3,h4,h5,h6,[role=heading]",
+      });
+      const container = heading.parentElement;
+      if (!container) throw new Error("Release heading must have a container");
+      expect(within(container).getByRole("heading", { name })).toBe(heading);
+    }
     expect(history).toHaveAttribute("tabindex", "0");
     expect([...history.querySelectorAll(".release-timeline-body li")].map(item => item.textContent)).toEqual(
       bundledReleaseEntries().flatMap(entry => entry.items),

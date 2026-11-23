@@ -1,4 +1,5 @@
 import type { MonthlyOverview, MonthlyCycle, MonthlyCalendarDay, MonthlyReport } from "@yuksalish/contracts";
+import type { IncomingDocumentAssign, IncomingDocumentDetail, IncomingDocumentFilter, IncomingDocumentPage } from "@yuksalish/contracts";
 import type { OfficePreviewResult } from "./file-viewer-kind";
 import type { WorkspaceNoticeTarget } from "@yuksalish/contracts";
 import type { TaskProposalImportContext, TaskProposalImportPreview, TaskProposalImportResult, TaskProposalImportWrite } from "@yuksalish/contracts";
@@ -294,6 +295,31 @@ export function downloadEdoIncomingAttachment(
   return boundedRequest(`${getApiBaseUrl()}/api/v1/incoming-letters/${id}/attachments/${encodeURIComponent(attachmentId)}`, {
     headers: { Authorization: `Bearer ${token}` }, cache: "no-store", signal,
   }, (response) => response.blob(), 120_000);
+}
+
+export function loadIncomingDocuments(token: string, query: string, category: IncomingDocumentFilter, offset: number, signal?: AbortSignal) {
+  const params = new URLSearchParams({ q: query, category, offset: String(offset), limit: "30" });
+  return apiRequest<IncomingDocumentPage>(`/incoming-documents?${params}`, { signal, cache: "no-store" }, token);
+}
+
+export function loadIncomingDocument(token: string, id: string, signal?: AbortSignal) {
+  return apiRequest<IncomingDocumentDetail>(`/incoming-documents/${encodeURIComponent(id)}`, { signal, cache: "no-store" }, token);
+}
+
+export function assignIncomingDocument(token: string, id: string, payload: IncomingDocumentAssign) {
+  return apiRequest<IncomingDocumentDetail>(`/incoming-documents/${encodeURIComponent(id)}/execution`, {
+    method: "POST", body: JSON.stringify(payload),
+  }, token, 60_000);
+}
+
+export function downloadIncomingDocumentFile(token: string, id: string, fileId: string, signal?: AbortSignal) {
+  return apiRequest<Blob>(`/incoming-documents/${encodeURIComponent(id)}/files/${encodeURIComponent(fileId)}`,
+    { signal, cache: "no-store" }, token, 120_000, response => response.blob());
+}
+
+export function previewIncomingDocumentFile(token: string, id: string, fileId: string, sheet = 0, offset = 0, signal?: AbortSignal) {
+  return apiRequest<OfficePreviewResult>(`/incoming-documents/${encodeURIComponent(id)}/files/${encodeURIComponent(fileId)}/preview?sheet=${sheet}&offset=${offset}`,
+    { signal, cache: "no-store" }, token, 60_000, readOfficePreview);
 }
 
 async function readOfficePreview(response: Response): Promise<OfficePreviewResult> {

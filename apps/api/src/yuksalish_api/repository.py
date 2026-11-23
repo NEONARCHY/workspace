@@ -5267,6 +5267,15 @@ async def delete_task(
         frontier = descendants - task_ids
         task_ids.update(frontier)
 
+    from .incoming_document_tables import incoming_document_executions
+
+    if await connection.scalar(select(incoming_document_executions.c.source_id).where(
+        incoming_document_executions.c.task_id.in_(task_ids),
+    ).limit(1)):
+        raise WorkspaceRepositoryError(
+            409, "Это поручение входящего письма. Вместо удаления отмените задачу."
+        )
+
     task_chat_ids = set(
         (
             await connection.execute(

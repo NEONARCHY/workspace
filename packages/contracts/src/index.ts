@@ -1396,6 +1396,60 @@ export interface AIReferentJournalFile {
 
 export type AIReferentIncomingSource = "exat" | "webmail" | "import";
 
+export type IncomingDocumentFilter = "all" | "unassigned" | "active" | "review" | "completed" | "overdue";
+
+export interface IncomingDocumentExecution {
+  readonly taskId: string;
+  readonly status: TaskStatus;
+  readonly dueAt: string | null;
+  readonly assigneeId: string;
+  readonly assigneeName: string;
+  readonly authorId: string;
+}
+
+export interface IncomingDocument {
+  readonly id: string;
+  readonly revision: number;
+  readonly number: string;
+  readonly subject: string;
+  readonly sender: string;
+  readonly receivedAt: string | null;
+  readonly source: string;
+  readonly filesExpected: boolean;
+  readonly execution: IncomingDocumentExecution | null;
+  readonly canAssign: boolean;
+  readonly canOpenTask: boolean;
+}
+
+export interface IncomingDocumentFile {
+  readonly id: string;
+  readonly name: string;
+  readonly byteSize: number;
+  readonly sha256: string;
+}
+
+export interface IncomingDocumentDetail {
+  readonly document: IncomingDocument;
+  readonly files: readonly IncomingDocumentFile[];
+}
+
+export interface IncomingDocumentPage {
+  readonly documents: readonly IncomingDocument[];
+  readonly total: number;
+  readonly offset: number;
+  readonly limit: number;
+}
+
+export interface IncomingDocumentAssign {
+  readonly operationId: string;
+  readonly expectedRevision: number;
+  readonly instruction: string;
+  readonly assigneeId: string;
+  readonly coAssigneeIds: readonly string[];
+  readonly fileIds: readonly string[];
+  readonly dueAt: string;
+}
+
 export type EdoIncomingStatus = null | 1 | 2 | 3;
 export type EdoIncomingFilter = "unread" | "in_progress" | "completed" | "confirmed";
 

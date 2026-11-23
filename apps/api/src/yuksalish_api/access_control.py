@@ -247,6 +247,7 @@ def request_module_action(path: str, method: str) -> tuple[str, ModuleAction] | 
         (("/approval-requests",), "payment_requests"),
         (("/ai-referent",), "ai_referent"),
         (("/incoming-letters",), "incoming_letters"),
+        (("/incoming-documents",), "incoming_letters"),
         (("/projects",), "projects"),
         (("/reference",), "reference"),
         (("/trip-requests",), "trip_approvals"),

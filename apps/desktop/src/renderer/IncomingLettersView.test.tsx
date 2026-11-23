@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FluentProvider } from "@fluentui/react-components";
 import { workspaceTheme } from "./workspace-theme";
 import type { EdoIncomingLetter, WorkspacePerson } from "@yuksalish/contracts";
-import { IncomingLettersView } from "./IncomingLettersView";
+import { LegacyIncomingLettersView as IncomingLettersView } from "./IncomingLettersView";
 import {
   addEdoIncomingAssignment, completeEdoIncomingLetter, loadEdoIncomingLetter,
   loadEdoIncomingLetters, downloadEdoIncomingAttachment, loadEdoIncomingOfficePreview,
