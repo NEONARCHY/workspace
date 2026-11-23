@@ -15,6 +15,10 @@ def upgrade() -> None:
         "ck_workspace_telegram_kind", "workspace_telegram_deliveries",
         "kind IN ('task_assigned','payment_action','workspace_notice')",
     )
+    op.create_index(
+        "ix_workspace_telegram_entity_dedupe", "workspace_telegram_deliveries",
+        ["user_id", "entity_id", "kind", "created_at"],
+    )
     op.execute("""
         CREATE FUNCTION queue_workspace_telegram_notice() RETURNS trigger AS $$
         BEGIN
@@ -73,6 +77,7 @@ def downgrade() -> None:
     ))
     if count:
         raise RuntimeError("Preserve Workspace notification delivery receipts")
+    op.drop_index("ix_workspace_telegram_entity_dedupe", table_name="workspace_telegram_deliveries")
     op.drop_constraint("ck_workspace_telegram_kind", "workspace_telegram_deliveries", type_="check")
     op.create_check_constraint(
         "ck_workspace_telegram_kind", "workspace_telegram_deliveries",
