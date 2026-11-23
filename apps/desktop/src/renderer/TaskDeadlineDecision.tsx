@@ -15,7 +15,7 @@ export function TaskDeadlineDecision({ task, request, people, canDecide, onDecid
   const [error, setError] = useState("");
   const locked = useRef(false);
   const decide = async (approved: boolean) => {
-    if (!onDecide || locked.current) return;
+    if (!canDecide || !onDecide || locked.current) return;
     locked.current = true; setBusy(true); setError("");
     try {
       const updated = await onDecide(task, request.id, approved);

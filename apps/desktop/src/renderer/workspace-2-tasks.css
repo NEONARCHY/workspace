@@ -356,6 +356,16 @@
 .task-record-dialog .task-deadline-control { display: grid; justify-items: start; gap: 8px; padding: 0 20px 12px; }
 .task-record-dialog .task-deadline-editor { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; width: 100%; }
 .task-record-dialog .task-deadline-editor label { display: grid; gap: 5px; min-width: min(100%, 230px); color: var(--ws-muted); font-size: 12px; }
+.fui-DialogSurface.task-deadline-request-dialog { width: min(580px, calc(100vw - 32px)); max-width: none; max-height: calc(100dvh - 32px); display: flex; flex-direction: column; overflow: hidden; padding: 24px; }
+.task-deadline-request-dialog .fui-DialogBody { min-height: 0; width: 100%; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; grid-template-areas: "title" "content" "actions"; gap: 16px; }
+.task-deadline-request-dialog .fui-DialogTitle { grid-area: title; padding-right: 36px; }
+.task-deadline-request-close { grid-area: title; justify-self: end; align-self: start; }
+.task-deadline-request-dialog .fui-DialogContent { grid-area: content; min-height: 0; overflow-y: auto; }
+.task-deadline-request-dialog .fui-DialogActions { grid-area: actions; justify-self: stretch; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.task-deadline-request-fields { min-width: 0; display: grid; gap: 12px; }
+.task-deadline-request-fields > strong { overflow-wrap: anywhere; }
+.task-deadline-request-fields p { margin: 0; }
+.task-deadline-request-fields .fui-Textarea { width: 100%; }
 .task-detail-heading-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
 .task-delete-button { color: var(--ws-theme-ink-danger, #a23b45); }
 .task-delete-button:hover { color: var(--ws-theme-ink-danger, #8f2833); background: var(--ws-theme-surface, #fff0f1); }

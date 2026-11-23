@@ -4902,7 +4902,7 @@ async def update_task(
         await _task_access_row(connection, current_user, task_id, manage=True)
         selected_plans = await validate_task_plan_ids(connection, current_user, payload.plan_ids)
     if task_row["due_at"] != payload.due_at:
-        await _task_access_row(connection, current_user, task_id, manage=True)
+        _require_task_deadline_author(task_row, current_user)
     assignee_id = await _active_user_id(connection, payload.assignee_id)
     selected_project_id = task_row["project_hub_project_id"]
     project_label = payload.project.strip() or "Без проекта"
@@ -4991,6 +4991,13 @@ async def update_task(
     return await _task_response(connection, task_id, current_user)
 
 
+def _require_task_deadline_author(row: Record, user: AuthenticatedUser) -> None:
+    if row["author_user_id"] != user.id:
+        raise WorkspaceRepositoryError(
+            403, "Изменить срок или согласовать перенос может только постановщик задачи.",
+        )
+
+
 def _forward_deadline(current_due_at: datetime | None, proposed_due_at: datetime) -> None:
     if proposed_due_at.utcoffset() is None:
         raise WorkspaceRepositoryError(422, "Specify a timezone for the deadline")
@@ -5057,11 +5064,12 @@ async def extend_task_deadline(
     task_id: UUID,
     payload: ExtendTaskDeadline,
 ) -> TaskResponse:
-    await _task_access_row(connection, current_user, task_id, manage=True)
+    await _task_access_row(connection, current_user, task_id)
     row = (
         (await connection.execute(select(tasks).where(tasks.c.id == task_id).with_for_update()))
         .mappings().one()
     )
+    _require_task_deadline_author(row, current_user)
     if row["status"] in {"completed", "cancelled"}:
         raise WorkspaceRepositoryError(409, "A closed task cannot be extended")
     _forward_deadline(row["due_at"], payload.proposed_due_at)
@@ -5162,11 +5170,12 @@ async def decide_task_deadline_extension(
     request_id: UUID,
     payload: DecideTaskDeadlineExtension,
 ) -> TaskResponse:
-    await _task_access_row(connection, current_user, task_id, manage=True)
+    await _task_access_row(connection, current_user, task_id)
     row = (
         (await connection.execute(select(tasks).where(tasks.c.id == task_id).with_for_update()))
         .mappings().one()
     )
+    _require_task_deadline_author(row, current_user)
     request_row = (await connection.execute(select(task_deadline_requests).where(
         task_deadline_requests.c.id == request_id,
         task_deadline_requests.c.task_id == task_id,
