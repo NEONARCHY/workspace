@@ -185,12 +185,13 @@ async def _exercise_live_workspace(database_url: str) -> None:
                 ),
             )
             manager_workspace = await load_workspace(connection, aziza)
-            assert admin_only_task.id in {task.id for task in manager_workspace.tasks}
+            assert admin_only_task.id not in {task.id for task in manager_workspace.tasks}
             admin_workspace = await load_workspace(connection, admin)
             assert admin_only_task.id in {task.id for task in admin_workspace.tasks}
             employee_workspace = await load_workspace(connection, employee)
-            assert admin_only_task.id not in {task.id for task in employee_workspace.tasks}
-            with pytest.raises(WorkspaceRepositoryError, match="Task was not found"):
+            # The seeded employee is a central deputy: global read, no blanket editing.
+            assert admin_only_task.id in {task.id for task in employee_workspace.tasks}
+            with pytest.raises(WorkspaceRepositoryError, match="Task cannot be changed"):
                 await change_task_status(
                     connection,
                     employee,

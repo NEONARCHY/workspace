@@ -75,6 +75,7 @@ from .tables import (
     workspace_notifications,
     workspace_projects,
 )
+from .task_visibility import task_visibility_condition
 from .trip_brief_generator import generate_trip_brief, validate_edited_trip_brief
 from .workday_service import working_user_ids
 from .workspace_schemas import (
@@ -347,7 +348,10 @@ def _task(
         source_message_id=(str(row["source_message_id"]) if row["source_message_id"] else None),
         calendar_event_id=(str(row["calendar_event_id"]) if row.get("calendar_event_id") else None),
         result_text=row["result_text"],
-        parent_task_id=(str(row["parent_task_id"]) if row.get("parent_task_id") else None),
+        parent_task_id=(
+            str(row["parent_task_id"])
+            if row.get("parent_task_id") and parent_task_title is not None else None
+        ),
         parent_task_title=parent_task_title,
         chat_id=str(chat_id) if chat_id else None,
         latest_return=latest_return,
@@ -1600,7 +1604,7 @@ async def _published_payment_template(connection: AsyncConnection) -> RowMapping
 async def _task_detail_maps(
     connection: AsyncConnection,
     task_rows: Sequence[Record],
-    current_user: AuthenticatedUser | None = None,
+    current_user: AuthenticatedUser,
 ) -> tuple[
     dict[UUID, list[TaskParticipantResponse]],
     dict[UUID, list[TaskChecklistItemResponse]],
@@ -1703,7 +1707,10 @@ async def _task_detail_maps(
     )
     dependency_ids = list({row["depends_on_task_id"] for row in dependency_rows})
     dependency_task_rows = (
-        (await connection.execute(select(tasks).where(tasks.c.id.in_(dependency_ids))))
+        (await connection.execute(select(tasks).where(
+            tasks.c.id.in_(dependency_ids),
+            task_visibility_condition(current_user),
+        )))
         .mappings()
         .all()
         if dependency_ids
@@ -1729,7 +1736,10 @@ async def _task_detail_maps(
     parent_rows = (
         (
             await connection.execute(
-                select(tasks.c.id, tasks.c.title).where(tasks.c.id.in_(parent_ids))
+                select(tasks.c.id, tasks.c.title).where(
+                    tasks.c.id.in_(parent_ids),
+                    task_visibility_condition(current_user),
+                )
             )
         )
         .mappings()
@@ -1835,8 +1845,11 @@ async def _task_detail_maps(
 async def _task_response(
     connection: AsyncConnection,
     task_id: UUID,
-    current_user: AuthenticatedUser | None = None,
+    current_user: AuthenticatedUser,
 ) -> TaskResponse:
+    # Callers authorize the action before building its response. A permitted
+    # reassignment can remove the actor's future access; related titles must
+    # still use the actor's current scope in that final response.
     row = (await connection.execute(select(tasks).where(tasks.c.id == task_id))).mappings().first()
     if row is None:
         raise WorkspaceRepositoryError(404, "Task was not found")
@@ -2410,6 +2423,12 @@ async def _load_visible_notification_row(
     )
     if row is None:
         raise WorkspaceRepositoryError(404, "Notification was not found")
+    if (
+        row["section"] == "tasks" and row["entity_id"] is not None
+        and not row["event_key"].startswith("task-proposal:")
+    ):
+        await ensure_module_action(connection, current_user, "tasks", "view")
+        await _task_access_row(connection, current_user, row["entity_id"])
     if row["section"] == "payment_requests":
         await ensure_module_action(connection, current_user, "payment_requests", "view")
         await validate_attachment_owner(
@@ -2907,16 +2926,9 @@ async def load_workspace(
     )
     published_payment_template = await _published_payment_template(connection)
 
-    task_statement = select(tasks).order_by(tasks.c.updated_at.desc())
-    if current_user.role == "employee":
-        participant_task_ids = select(task_participants.c.task_id).where(
-            task_participants.c.user_id == current_user.id
-        )
-        task_statement = task_statement.where(
-            (tasks.c.author_user_id == current_user.id)
-            | (tasks.c.primary_assignee_user_id == current_user.id)
-            | tasks.c.id.in_(participant_task_ids)
-        )
+    task_statement = select(tasks).where(
+        task_visibility_condition(current_user),
+    ).order_by(tasks.c.updated_at.desc())
     task_rows = (await connection.execute(task_statement)).mappings().all()
     (
         task_participants_by_task,
@@ -4304,7 +4316,9 @@ async def _task_access_row(
     edit: bool = False,
     manage: bool = False,
 ) -> Record:
-    row = (await connection.execute(select(tasks).where(tasks.c.id == task_id))).mappings().first()
+    row = (await connection.execute(select(tasks).where(
+        tasks.c.id == task_id, task_visibility_condition(current_user),
+    ))).mappings().first()
     if row is None:
         raise WorkspaceRepositoryError(404, "Task was not found")
     participant_roles = (
@@ -4323,14 +4337,10 @@ async def _task_access_row(
     privileged = current_user.role in {"admin", "superadmin"} or (
         current_user.role == "manager" and not is_executive
     )
-    privileged_reader = privileged or is_executive
     is_author = row["author_user_id"] == current_user.id
     is_assignee = row["primary_assignee_user_id"] == current_user.id
-    can_read = privileged_reader or is_author or is_assignee or bool(participant_roles)
     can_edit = privileged or is_author or is_assignee or "co_assignee" in participant_roles
     can_manage = privileged or is_author
-    if not can_read:
-        raise WorkspaceRepositoryError(404, "Task was not found")
     if manage and not can_manage:
         raise WorkspaceRepositoryError(403, "Task participants cannot be managed by this user")
     if edit and not can_edit:
@@ -4823,7 +4833,7 @@ async def create_task(
     await queue_task(connection, task_id)
     if selected_plans:
         await _replace_task_plan_links(connection, current_user, task_id, selected_plans)
-    return await _task_response(connection, task_id)
+    return await _task_response(connection, task_id, current_user)
 
 
 async def _create_task_cycle(
@@ -4978,7 +4988,7 @@ async def update_task(
     )
     if selected_plans is not None:
         await _replace_task_plan_links(connection, current_user, task_id, selected_plans)
-    return await _task_response(connection, task_id)
+    return await _task_response(connection, task_id, current_user)
 
 
 def _forward_deadline(current_due_at: datetime | None, proposed_due_at: datetime) -> None:
@@ -5073,7 +5083,7 @@ async def extend_task_deadline(
     await _resume_overdue_task_after_extension(
         connection, row, task_id, current_user, payload.proposed_due_at, now,
     )
-    return await _task_response(connection, task_id)
+    return await _task_response(connection, task_id, current_user)
 
 
 async def _notify_task_deadline_request(
@@ -5142,7 +5152,7 @@ async def request_task_deadline_extension(
         connection, row, request_id, current_user.full_name,
         payload.proposed_due_at, payload.reason, now,
     )
-    return await _task_response(connection, task_id)
+    return await _task_response(connection, task_id, current_user)
 
 
 async def decide_task_deadline_extension(
@@ -5165,7 +5175,7 @@ async def decide_task_deadline_extension(
         raise WorkspaceRepositoryError(404, "Extension request was not found")
     desired = "approved" if payload.approved else "rejected"
     if request_row["status"] == desired:
-        return await _task_response(connection, task_id)
+        return await _task_response(connection, task_id, current_user)
     if request_row["status"] != "pending":
         raise WorkspaceRepositoryError(409, "This request has already been resolved")
     if row["status"] in {"completed", "cancelled"} or row["due_at"] != request_row["old_due_at"]:
@@ -5205,7 +5215,7 @@ async def decide_task_deadline_extension(
             body=row["title"], section="tasks", entity_id=task_id,
             requires_action=False, occurred_at=now,
         )
-    return await _task_response(connection, task_id)
+    return await _task_response(connection, task_id, current_user)
 
 
 async def delete_task(
@@ -5327,7 +5337,7 @@ async def change_task_status(
             "Use result submission or result acceptance for this status",
         )
     if payload.status == task_row["status"]:
-        return await _task_response(connection, task_id)
+        return await _task_response(connection, task_id, current_user)
     allowed_transitions = {
         "new": {"in_progress", "cancelled"},
         "in_progress": {"new", "cancelled"},
@@ -5369,7 +5379,7 @@ async def change_task_status(
             )
         else:
             await record_task_event(event_type="task_status_changed", **base_event)
-    return await _task_response(connection, task_id)
+    return await _task_response(connection, task_id, current_user)
 
 
 async def _ensure_task_can_be_submitted(
@@ -5515,7 +5525,7 @@ async def submit_task_result(
             requires_action=False,
             occurred_at=now,
         )
-    return await _task_response(connection, task_id)
+    return await _task_response(connection, task_id, current_user)
 
 
 async def accept_task_result(
@@ -5571,7 +5581,7 @@ async def accept_task_result(
             requires_action=False,
             occurred_at=now,
         )
-    return await _task_response(connection, task_id)
+    return await _task_response(connection, task_id, current_user)
 
 
 async def return_task_for_revision(
@@ -5623,7 +5633,7 @@ async def return_task_for_revision(
             requires_action=user_id in executor_ids,
             occurred_at=now,
         )
-    return await _task_response(connection, task_id)
+    return await _task_response(connection, task_id, current_user)
 
 
 async def reopen_completed_task(
@@ -5707,7 +5717,7 @@ async def set_task_efficiency_exclusion(
             and (latest["reason_text"] or "") == payload.reason_text.strip()
         )
     ):
-        return await _task_response(connection, task_id)
+        return await _task_response(connection, task_id, current_user)
     now = datetime.now(UTC)
     await record_task_event(
         connection,
@@ -5722,7 +5732,7 @@ async def set_task_efficiency_exclusion(
         reason_code=payload.reason_code if payload.excluded else None,
         reason_text=payload.reason_text.strip() or None,
     )
-    return await _task_response(connection, task_id)
+    return await _task_response(connection, task_id, current_user)
 
 
 async def set_task_participant(
@@ -5773,7 +5783,7 @@ async def set_task_participant(
         author_user_id=task_row["author_user_id"],
         assignee_user_id=task_row["primary_assignee_user_id"],
     )
-    return await _task_response(connection, task_id)
+    return await _task_response(connection, task_id, current_user)
 
 
 async def remove_task_participant(
@@ -5814,7 +5824,7 @@ async def remove_task_participant(
         author_user_id=task_row["author_user_id"],
         assignee_user_id=task_row["primary_assignee_user_id"],
     )
-    return await _task_response(connection, task_id)
+    return await _task_response(connection, task_id, current_user)
 
 
 async def add_task_checklist_item(
@@ -5844,7 +5854,7 @@ async def add_task_checklist_item(
             updated_at=now,
         )
     )
-    return await _task_response(connection, task_id)
+    return await _task_response(connection, task_id, current_user)
 
 
 async def update_task_checklist_item(
@@ -5866,7 +5876,7 @@ async def update_task_checklist_item(
         raise WorkspaceRepositoryError(404, "Checklist item was not found")
     if completed == payload.is_completed:
         # A retried check must not move yesterday's work into today's report.
-        return await _task_response(connection, task_id)
+        return await _task_response(connection, task_id, current_user)
     now = datetime.now(UTC)
     await connection.execute(
         update(task_checklist_items)
@@ -5878,7 +5888,7 @@ async def update_task_checklist_item(
             updated_at=now,
         )
     )
-    return await _task_response(connection, task_id)
+    return await _task_response(connection, task_id, current_user)
 
 
 async def delete_task_checklist_item(
@@ -5894,7 +5904,7 @@ async def delete_task_checklist_item(
             task_checklist_items.c.task_id == task_id,
         )
     )
-    return await _task_response(connection, task_id)
+    return await _task_response(connection, task_id, current_user)
 
 
 async def add_task_comment(
@@ -6012,7 +6022,7 @@ async def set_task_dependency(
             created_at=datetime.now(UTC),
         )
     )
-    return await _task_response(connection, task_id)
+    return await _task_response(connection, task_id, current_user)
 
 
 async def remove_task_dependency(
@@ -6028,7 +6038,7 @@ async def remove_task_dependency(
             task_dependencies.c.depends_on_task_id == depends_on_task_id,
         )
     )
-    return await _task_response(connection, task_id)
+    return await _task_response(connection, task_id, current_user)
 
 
 def _next_calendar_occurrence(
@@ -6132,7 +6142,7 @@ async def set_task_cycle(
         await connection.execute(
             update(task_cycles).where(task_cycles.c.id == cycle_id).values(**values)
         )
-    return await _task_response(connection, task_id)
+    return await _task_response(connection, task_id, current_user)
 
 
 async def materialize_due_task_cycles(

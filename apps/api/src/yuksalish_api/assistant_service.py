@@ -44,6 +44,7 @@ from .tables import (
     workspace_notifications,
     workspace_projects,
 )
+from .task_visibility import task_visibility_condition
 
 AssistantModel = Literal["pro", "flash", "flash-lite"]
 
@@ -594,13 +595,7 @@ async def _visible_notification_rows(
 ) -> list[NotificationSnapshot]:
     """Recheck linked-object visibility before returning notification content."""
     permissions = await module_permissions_for_user(connection, user)
-    task_ids = select(tasks.c.id).where(or_(
-        tasks.c.author_user_id == user.id,
-        tasks.c.primary_assignee_user_id == user.id,
-        tasks.c.id.in_(select(task_participants.c.task_id).where(
-            task_participants.c.user_id == user.id
-        )),
-    ))
+    task_ids = select(tasks.c.id).where(task_visibility_condition(user))
     request_ids = [row["id"] for row in await _visible_approval_requests(connection, user)] \
         if permissions.get("payment_requests", {}).get("view", False) else []
     trip_ids = select(trip_requests.c.id).where(

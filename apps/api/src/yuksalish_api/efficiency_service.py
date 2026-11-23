@@ -10,7 +10,7 @@ from typing import Any
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import insert, or_, select
+from sqlalchemy import insert, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncConnection
@@ -27,6 +27,7 @@ from .tables import (
     users,
     workspace_notifications,
 )
+from .task_visibility import task_visibility_condition
 
 METHODOLOGY_VERSION = "EFF-2.0"
 EFFICIENCY_TIMEZONE = "Asia/Tashkent"
@@ -653,18 +654,9 @@ async def load_personal_efficiency(
         return result
     # These are the same reader constraints as the workspace/task card. A former
     # executor can retain a ledger credit without retaining access to its title.
-    participant_ids = select(task_participants.c.task_id).where(
-        task_participants.c.user_id == current_user.id
+    statement = select(tasks).where(task_visibility_condition(current_user)).order_by(
+        tasks.c.updated_at.desc(), tasks.c.id,
     )
-    statement = select(tasks).order_by(tasks.c.updated_at.desc(), tasks.c.id)
-    if current_user.role == "employee":
-        statement = statement.where(
-            or_(
-                tasks.c.author_user_id == current_user.id,
-                tasks.c.primary_assignee_user_id == current_user.id,
-                tasks.c.id.in_(participant_ids),
-            )
-        )
     rows = (await connection.execute(statement)).mappings().all()
     co_assignee_ids = set(
         (

@@ -127,14 +127,30 @@ the prior result. Reopening a subtask requires its parent to be open. «Марш
 keeps the previous closure and adds «Задача возвращена в работу» with actor, time,
 transition, and explanation. Deploy migration `0124_task_reopen_permission` before updating the API and clients.
 
-- Managers, administrators and superadministrators can read and edit all tasks,
-  except a manager holding the exact executive chairman position: that position
-  grants visibility, not blanket editing/management rights. The chairman retains
+- Only administrators, superadministrators, the chairman, central deputies
+  (including the first deputy / executive director), and HR can read all tasks.
+  HR is recognised by the personnel position or the explicit HR appointment in
+  the HR settings. The manager role alone never grants a global task list.
+- Other managers see their own participation and tasks involving their direct
+  and indirect reports within the same department. A department head can read
+  tasks involving department employees. Reporting chains cannot cross the
+  department boundary; without a department only personal participation applies.
+  The department's Hisobot reporting contact alone does not grant supervision.
+  Organisation-wide leaders, HR and administrators do not become subordinates
+  of a department head merely by sharing a department.
+- The same server-side predicate protects the workspace list, direct task cards,
+  plans' task links, history, files, linked parent/dependency titles, efficiency
+  detail and stale notifications. An ordinary employee sees only authored,
+  assigned, co-assigned or observed tasks. Changes to reporting or department
+  membership take effect on the next request; no stored task history is rewritten.
+- Existing edit and management rights apply only after the task read check.
+  The executive chairman position grants visibility, not blanket editing or
+  management rights. The chairman retains
   author, assignee and co-assignee rights on tasks where he has those roles.
   The desktop mirrors this existing API rule for editing, uploads, checklist,
   Kanban dragging, participants, deadlines, return and efficiency controls.
   The personal review inbox and result acceptance remain author-only for everyone.
-- An employee sees a task only when they are its author, primary assignee,
+- An ordinary employee sees a task only when they are its author, primary assignee,
   co-assignee or observer. This rule is enforced by the workspace query and every
   task endpoint, not only by the desktop filters.
 - The author and primary assignee can read and edit their task.

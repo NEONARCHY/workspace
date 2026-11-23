@@ -11,18 +11,17 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from .access_control import ensure_module_action
 from .auth import AuthenticatedUser
 from .efficiency_service import record_task_event
-from .position_policy import is_executive_leader
 from .repository import WorkspaceRepositoryError, _task_access_row, create_task
 from .tables import (
     audit_events,
     task_checklist_items,
-    task_participants,
     task_plan_links,
     task_plans,
     tasks,
     users,
 )
 from .task_plan_schemas import PlanStatus, TaskPlanImportConfirm, TaskPlanResponse, TaskPlanWrite
+from .task_visibility import has_global_task_title_access, task_visibility_condition
 from .workspace_schemas import (
     CreateTaskRequest,
     TaskCreateChecklistItemRequest,
@@ -89,19 +88,8 @@ async def list_plans(
     rows = (await connection.execute(select(task_plans).order_by(
         task_plans.c.updated_at.desc(), task_plans.c.id,
     ))).mappings().all()
-    privileged = user.role in {"manager", "admin", "superadmin"} or is_executive_leader(
-        user.job_title
-    )
-    visible_tasks = select(tasks.c.id)
-    if not privileged:
-        participant_ids = select(task_participants.c.task_id).where(
-            task_participants.c.user_id == user.id,
-        )
-        visible_tasks = visible_tasks.where(
-            (tasks.c.author_user_id == user.id)
-            | (tasks.c.primary_assignee_user_id == user.id)
-            | tasks.c.id.in_(participant_ids)
-        )
+    privileged = has_global_task_title_access(user)
+    visible_tasks = select(tasks.c.id).where(task_visibility_condition(user))
     links = (await connection.execute(select(
         task_plan_links.c.plan_id, task_plan_links.c.task_id,
     ).where(task_plan_links.c.task_id.in_(visible_tasks)))).all()

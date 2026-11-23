@@ -311,6 +311,13 @@ async def test_authentication_http_vertical_slice() -> None:
         )
         assert finance_login.status_code == 200
         finance_headers = {"Authorization": f"Bearer {finance_login.json()['accessToken']}"}
+        # A finance manager must be involved in the source task; the role no
+        # longer opens unrelated tasks created by the chairman/administrator.
+        finance_participant = await client.put(
+            f"/api/v1/tasks/{task_id}/participants", headers=admin_headers,
+            json={"userId": finance_login.json()["user"]["id"], "role": "observer"},
+        )
+        assert finance_participant.status_code == 200
         approval = await client.post(
             "/api/v1/approval-requests",
             headers=finance_headers,
