@@ -164,6 +164,7 @@ PERSON_COLORS = ("#0f6cbd", "#6b5b95", "#0e7a0d", "#9b3a4d", "#8a4f12")
 SUBSIDY_ROUTE_VARIANT: Literal["subsidy"] = "subsidy"
 PAYMENT_DEPUTY_APPROVAL_NODE = "deputy_chair"
 PAYMENT_DEPUTY_USERNAME = "umid_rajabov"
+PAYMENT_QUEUE_VIEWER_USERNAMES = frozenset({"davronbek_lyutfiddinov"})
 SUBSIDY_APPROVAL_LABEL = "Утверждение первым заместителем председателя"
 STATUS_LABELS = {
     "draft": "Черновик",
@@ -1249,7 +1250,12 @@ async def _visible_approval_requests(
         request_rows = (await connection.execute(
             select(approval_requests).order_by(approval_requests.c.updated_at.desc()),
         )).mappings().all()
-    if not request_rows or current_user.role in {"admin", "superadmin"}:
+    # Named read access is independent of workflow decision assignments.
+    if (
+        not request_rows
+        or current_user.role in {"admin", "superadmin"}
+        or current_user.username.casefold() in PAYMENT_QUEUE_VIEWER_USERNAMES
+    ):
         return list(request_rows)
     template_ids = {row["template_id"] for row in request_rows}
     nodes = (
