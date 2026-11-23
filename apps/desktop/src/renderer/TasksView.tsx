@@ -6,6 +6,7 @@ import { LoadingSkeleton } from "./LoadingSkeleton";
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { SlidingSegmented } from "./SlidingSegmented";
+import { IncomingDocumentsView } from "./IncomingDocumentsView";
 
 import type {
   AssistantActionDraft,
@@ -25,6 +26,8 @@ import type {
 } from "@yuksalish/contracts";
 import {
   Badge,
+  Tab,
+  TabList,
   Button,
   Checkbox,
   ProgressBar,
@@ -203,6 +206,8 @@ interface CyclePayload {
 }
 
 interface TasksViewProps {
+  readonly canViewIncomingLetters?: boolean;
+  readonly separateLetterTasks?: boolean;
   readonly dialogOnly?: boolean;
   readonly onDialogClose?: () => void;
   readonly assistantDraft?: AssistantActionDraft;
@@ -257,6 +262,39 @@ function localDateTime(value?: string | null): string {
 }
 
 export function TasksView(props: TasksViewProps) {
+  const [section, setSection] = useState<"tasks" | "letters">("tasks");
+  const [lettersVisited, setLettersVisited] = useState(false);
+  const [openedLetterTask, setOpenedLetterTask] = useState<string>();
+  const personalLetters = useMemo(() => props.tasks.filter(task => isPersonalIncomingTask(task, props.currentUserId)), [props.tasks, props.currentUserId]);
+  const refreshKey = useMemo(() => personalLetters.map(task => JSON.stringify([task.id, task.status, task.dueAt, task.assigneeId,
+    task.participants, task.resultText, task.description, task.latestReturn])).join("|")
+    + props.attachments.map(file => file.id).join("|"), [personalLetters, props.attachments]);
+  if (props.dialogOnly || !props.token || props.canViewIncomingLetters === false) {
+    return <TaskWorkspaceView {...props} />;
+  }
+  return <div className="task-domain-workspace">
+    <TabList className="task-domain-tabs" aria-label="Разделы задач" selectedValue={section}
+      onTabSelect={(_, data) => { setSection(data.value === "letters" ? "letters" : "tasks");
+        if (data.value === "letters") setLettersVisited(true); }}>
+      <Tab value="tasks">Задачи</Tab>
+      <Tab value="letters">Мои письма <span className="task-domain-count">{personalLetters.length}</span></Tab>
+    </TabList>
+    <div className="task-domain-panel" hidden={section !== "tasks"}><TaskWorkspaceView {...props} separateLetterTasks /></div>
+    {lettersVisited ? <div className="task-domain-panel" hidden={section !== "letters"}>
+      <IncomingDocumentsView token={props.token} people={props.people} personal refreshKey={refreshKey}
+        onOpenTask={async id => { await props.onRefreshTasks?.(); setOpenedLetterTask(id); }} />
+    </div> : null}
+    {openedLetterTask ? <TaskWorkspaceView {...props} key={openedLetterTask} dialogOnly focusTaskId={openedLetterTask}
+      onDialogClose={() => setOpenedLetterTask(undefined)} /> : null}
+  </div>;
+}
+
+function isPersonalIncomingTask(task: WorkspaceTask, userId: string): boolean {
+  return Boolean(task.incomingDocumentId && (task.authorId === userId || task.assigneeId === userId
+    || task.participants.some(person => person.userId === userId)));
+}
+
+function TaskWorkspaceView(props: TasksViewProps) {
   const {
     tasks, attachments, people, departments, currentUserId, focusTaskId, onCreateTask, onCreateSubtask, onChangeStatus, onUpdateTask, onDeleteTask,
     onSetParticipant, onRemoveParticipant, onAddChecklistItem, onToggleChecklistItem,
@@ -450,7 +488,10 @@ export function TasksView(props: TasksViewProps) {
   }
 
   const deadlineNow = useTaskDeadlineClock(tasks);
-  const planTasks = useMemo(() => tasksForPlan(tasks, plans, planFilter), [tasks, plans, planFilter]);
+  const planTasks = useMemo(() => tasksForPlan(
+    props.separateLetterTasks && !planFilter ? tasks.filter(task => !isPersonalIncomingTask(task, currentUserId)) : tasks,
+    plans, planFilter,
+  ), [tasks, plans, planFilter, props.separateLetterTasks, currentUserId]);
   const visibleTasks = useMemo(() => {
     const search = query.trim().toLocaleLowerCase("ru");
     const names = new Map(people.map((person) => [person.id, person.name]));

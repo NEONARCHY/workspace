@@ -22,6 +22,7 @@ from yuksalish_api.incoming_document_tables import incoming_document_executions 
 from yuksalish_api.main import create_app
 from yuksalish_api.object_storage import InMemoryObjectStorage, ObjectStorageError
 from yuksalish_api.repository import delete_task
+from yuksalish_api.seed import seed_demo_data
 from yuksalish_api.settings import Settings
 from yuksalish_api.tables import (
     ai_referent_agents,
@@ -60,6 +61,7 @@ async def scenario():
         pytest.skip("YUKSALISH_TEST_DATABASE_URL is not configured")
     settings = Settings(environment="test", database_url=database_url, seed_demo_data=False)
     engine = create_async_engine(database_url)
+    await seed_demo_data(engine)
     app = create_app(settings)
     app.state.database_engine = engine
     app.state.event_bus = WorkspaceEventBus()
@@ -137,7 +139,7 @@ async def scenario():
 
 
 async def test_document_assignment_and_full_review_cycle(scenario):
-    client, engine, storage, _ids, source, file, headers, payload, agent = scenario
+    client, engine, storage, ids, source, file, headers, payload, agent = scenario
     path = f"/api/v1/incoming-documents/{source}"
     for name in ("assignee", "co", "stranger"):
         assert (await client.get(path, headers=headers(name))).status_code == 404
@@ -185,6 +187,11 @@ async def test_document_assignment_and_full_review_cycle(scenario):
         detail = await client.get(path, headers=headers(name))
         assert detail.status_code == 200
         assert detail.json()["document"]["execution"]["taskId"] == task_id
+        execution = detail.json()["executionDetail"]
+        assert execution["canSubmit"] is True
+        assert execution["canAccept"] is False
+        assert execution["coAssigneeIds"] == [str(ids["co"])]
+        assert execution["files"] == []  # Originals remain in the source packet.
         assert (await client.get(path + f"/files/{file['id']}",
                                  headers=headers(name))).content == b"%PDF-synthetic-original"
     assert (await client.get(path, headers=headers("stranger"))).status_code == 404
@@ -204,6 +211,16 @@ async def test_document_assignment_and_full_review_cycle(scenario):
     assert (await client.get(report_path, headers=headers("stranger"))).status_code == 404
     assert (await client.post(task_path + "/submit-result", headers=headers("co"),
                               json={"resultText": "Synthetic report"})).status_code == 200
+    review = (await client.get(path, headers=headers("author"))).json()["executionDetail"]
+    assert review["resultText"] == "Synthetic report"
+    assert review["canAccept"] is True and review["canReturn"] is True
+    assert review["canSubmit"] is False
+    assert [item["fileName"] for item in review["files"]] == ["report.pdf"]
+    assert "storageKey" not in review["files"][0]
+    bootstrap = await client.get("/api/v1/workspace/bootstrap", headers=headers("co"))
+    assert bootstrap.status_code == 200, bootstrap.text
+    native_task = next(item for item in bootstrap.json()["tasks"] if item["id"] == task_id)
+    assert native_task["incomingDocumentId"] == str(source)
     assert (await client.get(path, headers=headers("author"))).json()["document"][
         "execution"]["status"] == "awaiting_review"
     assert (await client.post(task_path + "/accept-result",
@@ -212,12 +229,18 @@ async def test_document_assignment_and_full_review_cycle(scenario):
                                  json={"reasonCode": "incomplete_result"})
     assert returned.status_code == 200
     assert returned.json()["status"] == "in_progress"
+    rework = (await client.get(path, headers=headers("co"))).json()["executionDetail"]
+    assert rework["canSubmit"] is True
+    assert rework["latestReturn"]["reasonCode"] == "incomplete_result"
     assert (await client.post(task_path + "/submit-result", headers=headers("assignee"),
                               json={"resultText": "Corrected report"})).status_code == 200
     assert (await client.post(task_path + "/accept-result",
                               headers=headers("author"))).status_code == 200
     assert (await client.get(path, headers=headers("co"))).json()["document"][
         "execution"]["status"] == "completed"
+    completed = (await client.get(path, headers=headers("co"))).json()["executionDetail"]
+    assert completed["resultText"] == "Corrected report"
+    assert not any(completed[key] for key in ("canSubmit", "canAccept", "canReturn"))
     assert (await client.delete(task_path, headers=headers("author"))).status_code == 409
 
 
@@ -258,9 +281,23 @@ async def test_document_pagination_filters_and_module_denial(scenario):
     page = await client.get(base, headers=headers("author"), params={"q": "QA-1", "limit": 1})
     assert page.status_code == 200 and page.json()["limit"] == 1
     assert any(item["id"] == str(source) for item in page.json()["documents"])
+    # Even an administrator's personal list excludes the visible unassigned registry.
+    personal = await client.get(base, headers=headers("author"), params={"personal": True})
+    assert personal.json()["total"] == 0
     assigned = await client.post(f"{base}/{source}/execution", headers=headers("author"),
                                  json=payload)
     task_id = UUID(assigned.json()["document"]["execution"]["taskId"])
+    for name in ("author", "assignee", "co"):
+        personal = await client.get(base, headers=headers(name), params={"personal": True})
+        assert personal.json()["total"] == 1
+        assert [item["id"] for item in personal.json()["documents"]] == [str(source)]
+        paged = await client.get(
+            base, headers=headers(name), params={"personal": True, "offset": 1},
+        )
+        assert paged.json()["total"] == 1
+        assert paged.json()["documents"] == []
+    stranger = await client.get(base, headers=headers("stranger"), params={"personal": True})
+    assert stranger.json()["total"] == 0
     async with engine.begin() as connection:
         await connection.execute(update(tasks).where(tasks.c.id == task_id).values(
             due_at=datetime.now(UTC) - timedelta(hours=1),
@@ -269,6 +306,17 @@ async def test_document_pagination_filters_and_module_denial(scenario):
     assert overdue.json()["total"] == 1
     assert (await client.get(base, headers=headers("co"),
                              params={"category": "unassigned"})).json()["total"] == 0
+    async with engine.begin() as connection:
+        await connection.execute(insert(module_access_rules).values(
+            id=uuid4(), subject_type="user", subject_key=str(ids["co"]),
+            module_key="tasks", permissions={"view": False},
+            created_by_user_id=ids["author"], created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+        ))
+    without_task_access = await client.get(f"{base}/{source}", headers=headers("co"))
+    assert without_task_access.status_code == 200
+    assert without_task_access.json()["executionDetail"] is None
+    assert without_task_access.json()["document"]["canOpenTask"] is False
     async with engine.begin() as connection:
         await connection.execute(insert(module_access_rules).values(
             id=uuid4(), subject_type="user", subject_key=str(ids["co"]),

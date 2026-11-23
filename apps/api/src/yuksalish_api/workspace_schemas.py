@@ -486,6 +486,7 @@ class TaskResponse(ApiModel):
     checklist_done: int = 0
     checklist_total: int = 0
     source_message_id: str | None = None
+    incoming_document_id: str | None = None
     calendar_event_id: str | None = None
     result_text: str | None = None
     parent_task_id: str | None = None

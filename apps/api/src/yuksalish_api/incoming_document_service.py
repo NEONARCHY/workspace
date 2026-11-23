@@ -28,12 +28,19 @@ from .incoming_document_schemas import (
     IncomingDocumentFile,
     IncomingDocumentPage,
     IncomingExecution,
+    IncomingExecutionDetail,
 )
 from .incoming_document_tables import incoming_document_executions as executions
 from .object_storage import ObjectStorage, ObjectStorageError
-from .repository import create_attachment, create_task
+from .repository import (
+    _attachment,
+    _task_access_row,
+    _task_response,
+    create_attachment,
+    create_task,
+)
 from .tables import ai_referent_incoming_letters as incoming
-from .tables import audit_events, task_participants, tasks, users
+from .tables import attachments, audit_events, task_participants, tasks, users
 from .task_visibility import task_visibility_condition
 from .workspace_schemas import CreateTaskRequest, TaskCreateParticipantRequest
 
@@ -122,8 +129,11 @@ def _document(row: RowMapping) -> IncomingDocument:
 async def list_documents(
     connection: AsyncConnection, user: AuthenticatedUser, *, query: str = "",
     category: DocumentFilter = "all", offset: int = 0, limit: int = 30,
+    personal: bool = False,
 ) -> IncomingDocumentPage:
     statement = await _query(connection, user)
+    if personal:
+        statement = statement.where(_participation(user))
     if query.strip():
         # Search is literal; '%' and '_' in a registration number are not wildcards.
         pattern = "%" + query.strip().replace("\\", "\\\\").replace("%", "\\%").replace(
@@ -160,6 +170,7 @@ async def list_documents(
 
 async def get_document(
     connection: AsyncConnection, user: AuthenticatedUser, source_id: UUID,
+    *, include_execution: bool = True,
 ) -> IncomingDocumentDetail:
     statement = (await _query(connection, user)).where(incoming.c.id == source_id)
     row = (await connection.execute(statement)).mappings().one_or_none()
@@ -167,7 +178,52 @@ async def get_document(
         raise HTTPException(404, "Письмо не найдено или доступ закрыт.")
     files = [IncomingDocumentFile.model_validate(item) for item in
              await packet_entries(connection, "incoming", source_id)]
-    return IncomingDocumentDetail(document=_document(row), files=files)
+    document = _document(row)
+    execution_detail = None
+    if include_execution and document.execution and document.can_open_task:
+        execution_detail = await _execution_detail(connection, user, document.execution.task_id)
+        if execution_detail is None:
+            document.can_open_task = False
+    return IncomingDocumentDetail(
+        document=document, files=files, execution_detail=execution_detail,
+    )
+
+
+async def _execution_detail(
+    connection: AsyncConnection, user: AuthenticatedUser, task_id: UUID,
+) -> IncomingExecutionDetail | None:
+    await ensure_module_action(connection, user, "tasks", "view")
+    try:
+        await _task_access_row(connection, user, task_id)
+    except WorkspaceRepositoryError as error:
+        if error.status_code not in {403, 404}:
+            raise
+        return None
+    task = await _task_response(connection, task_id, user)
+    permissions = (await module_permissions_for_user(connection, user)).get("tasks", {})
+    can_manage = False
+    if permissions.get("approve") and task.status == "awaiting_review":
+        try:
+            await _task_access_row(connection, user, task_id, manage=True)
+            can_manage = True
+        except WorkspaceRepositoryError as error:
+            if error.status_code not in {403, 404}:
+                raise
+    co_ids = [item.user_id for item in task.participants if item.role == "co_assignee"]
+    executor = str(user.id) == task.assignee_id or str(user.id) in co_ids
+    file_rows = (await connection.execute(select(attachments).where(
+        attachments.c.owner_type == "task", attachments.c.owner_id == task_id,
+        ~attachments.c.storage_key.startswith("incoming-execution/"),
+    ).order_by(attachments.c.created_at))).mappings().all()
+    return IncomingExecutionDetail(
+        description=task.description, result_text=task.result_text, co_assignee_ids=co_ids,
+        latest_return=task.latest_return, files=[_attachment(file) for file in file_rows],
+        can_submit=bool(permissions.get("edit")) and executor
+        and task.status in {"new", "in_progress", "overdue"},
+        can_accept=bool(permissions.get("approve")) and str(user.id) == task.author_id
+        and task.status == "awaiting_review",
+        can_return=can_manage,
+    )
 
 
 async def read_document_file(
@@ -175,7 +231,7 @@ async def read_document_file(
     source_id: UUID, file_id: UUID,
     *, max_bytes: int | None = None,
 ) -> tuple[RowMapping, bytes]:
-    await get_document(connection, user, source_id)
+    await get_document(connection, user, source_id, include_execution=False)
     row = await file_metadata(connection, "incoming", source_id, file_id, "packet")
     if max_bytes is not None and row["byte_size"] > max_bytes:
         raise HTTPException(413, "Документ больше 25 МБ. Скачайте оригинал.")

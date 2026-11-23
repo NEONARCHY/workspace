@@ -2,6 +2,8 @@ import { createRoot } from "react-dom/client";
 import { FluentProvider } from "@fluentui/react-components";
 import type { WorkspacePerson } from "@yuksalish/contracts";
 import { IncomingLettersView } from "../src/renderer/IncomingLettersView";
+import { TasksView } from "../src/renderer/TasksView";
+import { chairmanScenarioProps, chairmanScenarioTask } from "../src/renderer/test-fixtures/task-chairman-scenarios";
 import { useQaTheme } from "./color-theme";
 import "../src/renderer/styles.css";
 import "../src/renderer/design-system.css";
@@ -21,9 +23,13 @@ const people: readonly WorkspacePerson[] = [
 
 function Fixture() {
   const theme = useQaTheme();
+  const task = chairmanScenarioTask({ id: "execution-task", title: "Письмо QA-184", incomingDocumentId: "source",
+    authorId: "author", assigneeId: "executor", status: "completed", participants: [{ userId: "co", role: "co_assignee" }] });
+  const tasksMode = new URLSearchParams(location.search).get("domain") === "tasks";
   return <FluentProvider theme={theme} className="app-provider" style={{ height: "100dvh", overflow: "hidden", background: "var(--ws-canvas)" }}>
-    <IncomingLettersView token="synthetic-qa-only" people={people} currentUserId="author" canEdit
-      onOpenTask={async id => { document.documentElement.dataset.openedTask = id; }} />
+    {tasksMode ? <TasksView {...chairmanScenarioProps(task)} focusTaskId={undefined} token="synthetic-qa-only"
+      people={people} currentUserId="author" canViewIncomingLetters /> : <IncomingLettersView token="synthetic-qa-only" people={people} currentUserId="author" canEdit
+      onOpenTask={async id => { document.documentElement.dataset.openedTask = id; }} />}
   </FluentProvider>;
 }
 

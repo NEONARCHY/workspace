@@ -297,8 +297,9 @@ export function downloadEdoIncomingAttachment(
   }, (response) => response.blob(), 120_000);
 }
 
-export function loadIncomingDocuments(token: string, query: string, category: IncomingDocumentFilter, offset: number, signal?: AbortSignal) {
+export function loadIncomingDocuments(token: string, query: string, category: IncomingDocumentFilter, offset: number, signal?: AbortSignal, personal = false) {
   const params = new URLSearchParams({ q: query, category, offset: String(offset), limit: "30" });
+  if (personal) params.set("personal", "true");
   return apiRequest<IncomingDocumentPage>(`/incoming-documents?${params}`, { signal, cache: "no-store" }, token);
 }
 

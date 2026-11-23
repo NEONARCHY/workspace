@@ -25,6 +25,7 @@ from .calendar_audience import calendar_audience_ids, can_invite_calendar_audien
 from .efficiency_service import METHODOLOGY_VERSION, record_task_event
 from .employee_availability import ensure_trip_available
 from .errors import WorkspaceRepositoryError as WorkspaceRepositoryError
+from .incoming_document_tables import incoming_document_executions
 from .personal_preferences import get_preferences as get_personal_preferences
 from .position_policy import is_executive_leader
 from .tables import (
@@ -346,6 +347,9 @@ def _task(
         checklist_done=checklist_done,
         checklist_total=len(checklist),
         source_message_id=(str(row["source_message_id"]) if row["source_message_id"] else None),
+        incoming_document_id=(
+            str(row["incoming_document_id"]) if row.get("incoming_document_id") else None
+        ),
         calendar_event_id=(str(row["calendar_event_id"]) if row.get("calendar_event_id") else None),
         result_text=row["result_text"],
         parent_task_id=(
@@ -1850,7 +1854,11 @@ async def _task_response(
     # Callers authorize the action before building its response. A permitted
     # reassignment can remove the actor's future access; related titles must
     # still use the actor's current scope in that final response.
-    row = (await connection.execute(select(tasks).where(tasks.c.id == task_id))).mappings().first()
+    row = (await connection.execute(select(
+        tasks, incoming_document_executions.c.source_id.label("incoming_document_id"),
+    ).outerjoin(
+        incoming_document_executions, incoming_document_executions.c.task_id == tasks.c.id,
+    ).where(tasks.c.id == task_id))).mappings().first()
     if row is None:
         raise WorkspaceRepositoryError(404, "Task was not found")
     (
@@ -2926,7 +2934,11 @@ async def load_workspace(
     )
     published_payment_template = await _published_payment_template(connection)
 
-    task_statement = select(tasks).where(
+    task_statement = select(
+        tasks, incoming_document_executions.c.source_id.label("incoming_document_id"),
+    ).outerjoin(
+        incoming_document_executions, incoming_document_executions.c.task_id == tasks.c.id,
+    ).where(
         task_visibility_condition(current_user),
     ).order_by(tasks.c.updated_at.desc())
     task_rows = (await connection.execute(task_statement)).mappings().all()
@@ -5266,8 +5278,6 @@ async def delete_task(
         )
         frontier = descendants - task_ids
         task_ids.update(frontier)
-
-    from .incoming_document_tables import incoming_document_executions
 
     if await connection.scalar(select(incoming_document_executions.c.source_id).where(
         incoming_document_executions.c.task_id.in_(task_ids),

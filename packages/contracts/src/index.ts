@@ -1431,6 +1431,18 @@ export interface IncomingDocumentFile {
 export interface IncomingDocumentDetail {
   readonly document: IncomingDocument;
   readonly files: readonly IncomingDocumentFile[];
+  readonly executionDetail?: IncomingExecutionDetail | null;
+}
+
+export interface IncomingExecutionDetail {
+  readonly description: string;
+  readonly resultText: string | null;
+  readonly coAssigneeIds: readonly string[];
+  readonly latestReturn: NonNullable<WorkspaceTask["latestReturn"]> | null;
+  readonly files: readonly WorkspaceAttachment[];
+  readonly canSubmit: boolean;
+  readonly canAccept: boolean;
+  readonly canReturn: boolean;
 }
 
 export interface IncomingDocumentPage {
@@ -1856,6 +1868,7 @@ export interface TaskReturn {
 export interface WorkspaceTask {
   readonly id: string;
   readonly title: string;
+  readonly incomingDocumentId?: string | null;
   readonly description?: string;
   readonly project: string;
   readonly projectId?: string | null;

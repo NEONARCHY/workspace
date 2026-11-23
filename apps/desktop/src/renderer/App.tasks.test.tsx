@@ -12,7 +12,7 @@ describe("corporate workspace authentication alpha", () => {
   it("creates a task after authentication", async () => {
     const fetchMock = mockServer();
     render(<App />);
-    await loginToWorkspace();
+    await loginToWorkspace("aziza", "home");
 
     // Flush the real lazy module's asynchronous transition on a cold file.
     await act(async () => {
@@ -20,32 +20,33 @@ describe("corporate workspace authentication alpha", () => {
       await import("./TasksView");
     });
     fireEvent.click(await screen.findByRole("button", { name: "Новая задача" }));
-    changeField(screen.getByRole("textbox", { name: "Название задачи" }), {
+    const composer = within(await screen.findByRole("dialog"));
+    changeField(composer.getByRole("textbox", { name: "Название задачи" }), {
       target: { value: "Проверить новый маршрут оплаты" },
     });
-    changeField(screen.getByRole("textbox", { name: "Описание новой задачи" }), {
+    changeField(composer.getByRole("textbox", { name: "Описание новой задачи" }), {
       target: { value: "Сверить роли и вернуть проверяемый результат" },
     });
-    const projectSelect = await screen.findByRole("combobox", { name: "Проект новой задачи" });
+    const projectSelect = await composer.findByRole("combobox", { name: "Проект новой задачи" });
     await waitFor(() => expect(fetchMock.mock.calls.some(([url]) =>
       String(url).includes("/tasks/project-options"))).toBe(true));
     await waitFor(() => expect(projectSelect).not.toBeDisabled());
     fireEvent.click(projectSelect);
     fireEvent.click(await screen.findByRole("option", { name: "MR · Маршруты" }));
-    changeField(screen.getByRole("combobox", { name: "Приоритет новой задачи" }), {
+    changeField(composer.getByRole("combobox", { name: "Приоритет новой задачи" }), {
       target: { value: "high" },
     });
-    const plan = screen.getByText("План выполнения").closest("details")!;
+    const plan = composer.getByText("План выполнения").closest("details")!;
     expect(plan).not.toHaveAttribute("open");
     fireEvent.click(plan.querySelector("summary")!);
     expect(plan).toHaveAttribute("open");
-    changeField(screen.getByRole("textbox", { name: "Новый пункт чек-листа при создании" }), {
+    changeField(composer.getByRole("textbox", { name: "Новый пункт чек-листа при создании" }), {
       target: { value: "Проверить роли" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Добавить пункт" }));
+    fireEvent.click(composer.getByRole("button", { name: "Добавить пункт" }));
     fireEvent.click(plan.querySelector("summary")!);
     expect(plan).not.toHaveAttribute("open");
-    fireEvent.click(screen.getByRole("button", { name: "Добавить задачу" }));
+    fireEvent.click(composer.getByRole("button", { name: "Добавить задачу" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/tasks"),
       expect.objectContaining({

@@ -14,10 +14,13 @@ const path = require("node:path");
       const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
       page.on("pageerror", error => errors.push(error.message));
       let assigned = false;
+      let personalMode = false;
       const document = { id: "source", revision: 1, number: "QA-184", subject: "Подготовить ответ по обращению организации",
         sender: "Тестовая организация", receivedAt: "2026-11-23T05:00:00Z", source: "exat", filesExpected: true,
         canAssign: true, canOpenTask: false, execution: null };
-      const files = [{ id: "original", name: "Обращение.pdf", byteSize: 153600, sha256: "a".repeat(64) }];
+      const originalText = "Тестовое обращение организации.\n<script>Текст письма, а не исполняемая разметка</script>";
+      const files = [{ id: "original", name: "Обращение.txt", byteSize: Buffer.byteLength(originalText), sha256: "a".repeat(64) }];
+      let executionDetail = null;
       await page.route("**/api/v1/**", async route => {
         const url = new URL(route.request().url());
         if (url.pathname.endsWith("/execution")) {
@@ -30,16 +33,33 @@ const path = require("node:path");
           document.canAssign = false; document.canOpenTask = true;
           document.execution = { taskId: "execution-task", status: "new", dueAt: payload.dueAt,
             assigneeId: "executor", assigneeName: "Исполнитель QA", authorId: "author" };
-          return route.fulfill({ json: { document, files } });
+          executionDetail = { description: payload.instruction, resultText: null, coAssigneeIds: ["co"], latestReturn: null,
+            files: [], canSubmit: false, canAccept: false, canReturn: false };
+          return route.fulfill({ json: { document, files, executionDetail } });
         }
         assert.equal(route.request().method(), "GET");
-        if (url.pathname.endsWith("/incoming-documents/source")) return route.fulfill({ json: { document, files } });
-        if (url.pathname.endsWith("/incoming-documents")) return route.fulfill({ json: { documents: [document], total: 1, offset: 0, limit: 30 } });
+        if (url.pathname.endsWith("/files/original")) return route.fulfill({ contentType: "text/plain; charset=utf-8", body: originalText });
+        if (url.pathname.endsWith("/incoming-documents/source")) return route.fulfill({ json: { document, files, executionDetail } });
+        if (url.pathname.endsWith("/incoming-documents")) {
+          assert.equal(url.searchParams.get("personal"), personalMode ? "true" : null);
+          return route.fulfill({ json: { documents: [document], total: 1, offset: 0, limit: 30 } });
+        }
         return route.fulfill({ status: 404, json: { detail: "No synthetic fixture for this route" } });
       });
       const base = process.env.INCOMING_QA_BASE || "http://127.0.0.1:5189";
       await page.goto(`${base}/qa/incoming-documents.html?theme=${theme}`);
       await page.getByRole("button", { name: /№ QA-184/ }).click();
+      await page.getByRole("button", { name: "Открыть Обращение.txt" }).click();
+      await page.getByRole("dialog").getByText(originalText, { exact: true }).waitFor();
+      await page.waitForFunction(() => {
+        const dialog = document.querySelector('[role="dialog"]');
+        return dialog && getComputedStyle(dialog).opacity === "1"
+          && !dialog.getAnimations({ subtree: true }).some(animation => animation.playState === "running");
+      });
+      await page.screenshot({ path: path.join(output, `${theme}-original-text.png`), fullPage: true });
+      await page.keyboard.press("Escape");
+      await page.getByRole("dialog").waitFor({ state: "hidden" });
+      await page.waitForFunction(() => document.activeElement?.getAttribute("aria-label") === "Открыть Обращение.txt");
       await page.getByRole("button", { name: "Назначить исполнение" }).click();
       await page.getByLabel("Что нужно сделать").fill("Подготовить проект официального ответа и приложить подтверждающие документы.");
       await page.getByRole("button", { name: "Основной исполнитель" }).click();
@@ -77,6 +97,40 @@ const path = require("node:path");
       await openTask.click();
       await page.waitForFunction(() => document.documentElement.dataset.openedTask === "execution-task");
       await page.screenshot({ path: path.join(output, `${theme}-assigned.png`), fullPage: true });
+      document.execution.status = "completed";
+      executionDetail.resultText = "Проект ответа согласован. Письмо направлено адресату, подтверждение приложено.";
+      executionDetail.files = [{ id: "result-file", ownerType: "task", ownerId: "execution-task", fileName: "Официальный ответ.pdf",
+        byteSize: 245760, contentType: "application/pdf", sha256: "b".repeat(64), uploadedByUserId: "executor", createdAt: "2026-11-23T12:00:00Z" }];
+      personalMode = true;
+      await page.goto(`${base}/qa/incoming-documents.html?theme=${theme}&domain=tasks`);
+      await page.getByRole("tab", { name: "Мои письма 1" }).click();
+      await page.getByRole("button", { name: /№ QA-184/ }).click();
+      await page.getByText(executionDetail.resultText).waitFor();
+      await page.getByText("Официальный ответ.pdf", { exact: true }).waitFor();
+      await page.evaluate(require("axe-core").source);
+      const accessibility = await page.evaluate(async () => window.axe.run(".incoming-documents", {
+        runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"] },
+      }));
+      assert.deepEqual(accessibility.violations.map(issue => ({ id: issue.id, nodes: issue.nodes.map(node => node.target) })), [], `${theme} accessibility`);
+      for (const [width, height] of [[1440, 900], [1024, 768], [512, 384]]) {
+        await page.setViewportSize({ width, height });
+        await page.getByText(executionDetail.resultText).scrollIntoViewIfNeeded();
+        const dimensions = await page.evaluate(() => ({ width: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth }));
+        assert(dimensions.scroll <= dimensions.width + 1, JSON.stringify({ theme, width, dimensions }));
+        await page.screenshot({ path: path.join(output, `${theme}-result-${width}.png`), fullPage: true });
+        results.push({ theme, width, height, personalLettersTab: true, inlineResult: true, noHorizontalOverflow: true });
+      }
+      await page.setViewportSize({ width: 1440, height: 900 });
+      document.execution.status = "awaiting_review";
+      executionDetail.canAccept = true; executionDetail.canReturn = true;
+      await page.getByRole("button", { name: "Обновить", exact: true }).click();
+      await page.getByRole("button", { name: "Принять результат", exact: true }).waitFor();
+      await page.getByRole("button", { name: "Принять результат", exact: true }).scrollIntoViewIfNeeded();
+      const reviewAccessibility = await page.evaluate(async () => window.axe.run(".incoming-documents", {
+        runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"] },
+      }));
+      assert.deepEqual(reviewAccessibility.violations.map(issue => ({ id: issue.id, nodes: issue.nodes.map(node => node.target) })), [], `${theme} review accessibility`);
+      await page.screenshot({ path: path.join(output, `${theme}-review.png`), fullPage: true });
       await page.close();
     }
     assert.deepEqual(errors, []);

@@ -5,7 +5,7 @@ from uuid import UUID
 
 from pydantic import Field, field_validator, model_validator
 
-from .workspace_schemas import ApiModel, TaskStatus
+from .workspace_schemas import ApiModel, AttachmentResponse, TaskReturnResponse, TaskStatus
 
 
 class IncomingExecution(ApiModel):
@@ -38,9 +38,21 @@ class IncomingDocumentFile(ApiModel):
     sha256: str
 
 
+class IncomingExecutionDetail(ApiModel):
+    description: str
+    result_text: str | None
+    co_assignee_ids: list[str]
+    latest_return: TaskReturnResponse | None
+    files: list[AttachmentResponse]
+    can_submit: bool
+    can_accept: bool
+    can_return: bool
+
+
 class IncomingDocumentDetail(ApiModel):
     document: IncomingDocument
     files: list[IncomingDocumentFile]
+    execution_detail: IncomingExecutionDetail | None = None
 
 
 class IncomingDocumentPage(ApiModel):
