@@ -63,6 +63,10 @@ async def workspace_notice(
     section = notice["section"]
     if section in MODULE_KEYS:
         await ensure_module_action(c, user, section, "view")
+    # Reuse the same object-level visibility checks as Workspace's notification UI.
+    from .repository import _load_visible_notification_row
+
+    await _load_visible_notification_row(c, user, identifier)
     if section == "messenger":
         if notice["entity_id"] is None:
             return None
@@ -72,10 +76,6 @@ async def workspace_notice(
         if (str(notice["event_key"]).startswith(("message:", "mention:"))
                 and await original_message(c, notice) is None):
             return None
-    if section == "tasks" and notice["entity_id"] is not None:
-        from .repository import _task_access_row
-
-        await _task_access_row(c, user, notice["entity_id"])
     return notice
 
 
