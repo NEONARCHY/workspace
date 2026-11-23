@@ -1,4 +1,4 @@
-"""Additional bot grant never overrides current central-office membership."""
+"""A verified Telegram identity and explicit grant gate Workspace delivery."""
 
 import re
 from uuid import UUID
@@ -6,61 +6,16 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from .tables import departments, telegram_bot_grants, telegram_identities, users
+from .tables import telegram_bot_grants, telegram_identities, users
 
 GRANT = "workspace_notifications"
 
 
-async def central_office(c: AsyncConnection, user_id: UUID) -> bool:
-    account = (
-        (
-            await c.execute(
-                select(users.c.department_id, users.c.status).where(
-                    users.c.id == user_id,
-                )
-            )
-        )
-        .mappings()
-        .first()
-    )
-    if account is None or account["status"] != "active":
-        return False
-    identifier = account["department_id"]
-    if identifier is None:
-        # Only an explicitly recorded central contour can classify an unassigned leader.
-        return bool(
-            await c.scalar(
-                select(telegram_bot_grants.c.user_id).where(
-                    telegram_bot_grants.c.user_id == user_id,
-                    telegram_bot_grants.c.bot_key == "hisobot",
-                    telegram_bot_grants.c.report_scope == "central",
-                )
-            )
-        )
-    seen: set[UUID] = set()
-    while identifier is not None:
-        if identifier in seen:
-            return False
-        seen.add(identifier)
-        dept = (
-            (
-                await c.execute(
-                    select(departments).where(
-                        departments.c.id == identifier,
-                    )
-                )
-            )
-            .mappings()
-            .first()
-        )
-        if dept is None or dept["scope"] != "central":
-            return False
-        identifier = dept["parent_id"]
-    return True
-
-
 async def recipient(c: AsyncConnection, user_id: UUID) -> tuple[str, int] | None:
-    if not await central_office(c, user_id):
+    active = await c.scalar(select(users.c.id).where(
+        users.c.id == user_id, users.c.status == "active",
+    ))
+    if active is None:
         return None
     row = (
         (

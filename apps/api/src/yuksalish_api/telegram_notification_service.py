@@ -9,10 +9,11 @@ from sqlalchemy import or_, select, update
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from .access_control import ensure_module_action
+from .access_control import MODULE_KEYS, ensure_module_action
 from .auth import AuthenticatedUser, load_authenticated_user
 from .errors import WorkspaceRepositoryError as Error
 from .settings import Settings
+from .tables import messages, users, workspace_notifications
 from .telegram_notification_events import current_payment_stage, task_access
 from .telegram_notification_schemas import (
     DeliveryAck,
@@ -24,11 +25,67 @@ from .telegram_notification_scope import recipient
 from .telegram_notification_tables import deliveries as d
 
 
+async def original_message(c: AsyncConnection, notice: RowMapping) -> str | None:
+    """Use the source message, not the 4,000-character preview in the feed."""
+    key = str(notice["event_key"]).split(":")
+    if notice["section"] != "messenger" or len(key) < 2 or key[0] not in {"message", "mention"}:
+        return None
+    try:
+        identifier = UUID(key[1])
+    except ValueError:
+        return None
+    row = (await c.execute(
+        select(messages.c.body, messages.c.zoom_meeting_id, users.c.full_name)
+        .join(users, users.c.id == messages.c.author_user_id)
+        .where(messages.c.id == identifier, messages.c.chat_id == notice["entity_id"],
+               messages.c.deleted_at.is_(None))
+    )).mappings().first()
+    if row is None:
+        return None
+    return (
+        f"{row['full_name']}: Приглашение на Zoom" if row["zoom_meeting_id"]
+        else f"{row['full_name']}: {row['body']}"
+    )
+
+
+async def workspace_notice(
+    c: AsyncConnection, user: AuthenticatedUser, identifier: UUID
+) -> RowMapping | None:
+    notice = (
+        (await c.execute(select(workspace_notifications).where(
+            workspace_notifications.c.id == identifier,
+            workspace_notifications.c.user_id == user.id,
+            workspace_notifications.c.dismissed_at.is_(None),
+        ))).mappings().first()
+    )
+    if notice is None:
+        return None
+    section = notice["section"]
+    if section in MODULE_KEYS:
+        await ensure_module_action(c, user, section, "view")
+    # Reuse the same object-level visibility checks as Workspace's notification UI.
+    from .repository import _load_visible_notification_row
+
+    await _load_visible_notification_row(c, user, identifier)
+    if section == "messenger":
+        if notice["entity_id"] is None:
+            return None
+        from .messenger_service import chat_access
+
+        await chat_access(c, user, notice["entity_id"])
+        if (str(notice["event_key"]).startswith(("message:", "mention:"))
+                and await original_message(c, notice) is None):
+            return None
+    return notice
+
+
 async def valid(c: AsyncConnection, row: RowMapping) -> bool:
     user = await load_authenticated_user(c, row["user_id"])
     if user is None:
         return False
     try:
+        if row["kind"] == "workspace_notice":
+            return await workspace_notice(c, user, row["entity_id"]) is not None
         if row["kind"] == "task_assigned":
             return await task_access(c, user, row["entity_id"])
         return await current_payment_stage(
@@ -149,10 +206,16 @@ async def prepare(
             lease_until=expires,
         )
     )
+    notice_text = f"{row['title']}\n\n{row['body']}"[:3500]
+    if row["kind"] == "workspace_notice" and row["stage_key"] == "messenger":
+        notice = (await c.execute(select(workspace_notifications).where(
+            workspace_notifications.c.id == row["entity_id"],
+        ))).mappings().one()
+        notice_text = await original_message(c, notice) or row["body"]
     return PreparedDelivery(
         id=identifier,
         telegram_id=row["telegram_id"],
-        text=f"{row['title']}\n\n{row['body']}"[:3500],
+        text=notice_text or row["title"],
         button_text="Открыть в Workspace",
         url=url,
         send_allowed=settings.telegram_notifications_mode == "live",
@@ -228,6 +291,14 @@ async def open_notice(
         await ensure_module_action(c, user, "tasks", "view")
         await _task_access_row(c, user, row["entity_id"])
         return WorkspaceNoticeTarget(section="tasks", entity_id=str(row["entity_id"]))
+    if row["kind"] == "workspace_notice":
+        notice = await workspace_notice(c, user, row["entity_id"])
+        if notice is None:
+            raise Error(404, "Уведомление больше недоступно")
+        return WorkspaceNoticeTarget(
+            section=notice["section"] if notice["section"] != "notifications" else "home",
+            entity_id=str(notice["entity_id"] or notice["id"]),
+        )
     from .repository import validate_attachment_owner
 
     await ensure_module_action(c, user, "payment_requests", "view")
