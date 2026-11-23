@@ -4,7 +4,7 @@ from uuid import UUID
 
 from pydantic import ConfigDict, Field, model_validator
 
-from .workspace_schemas import ApiModel
+from .workspace_schemas import ApiModel, NotificationSection
 
 
 class DeliveryLease(ApiModel):
@@ -44,5 +44,5 @@ class DeliveryAck(DeliveryLease):
 
 
 class WorkspaceNoticeTarget(ApiModel):
-    section: Literal["tasks", "payment_requests"]
+    section: NotificationSection
     entity_id: str
