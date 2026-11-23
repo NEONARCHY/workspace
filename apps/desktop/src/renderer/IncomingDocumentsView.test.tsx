@@ -1,16 +1,18 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FluentProvider } from "@fluentui/react-components";
 import type { IncomingDocumentDetail, WorkspacePerson } from "@yuksalish/contracts";
 import { workspaceTheme } from "./workspace-theme";
 import { IncomingLettersView } from "./IncomingLettersView";
-import { assignIncomingDocument, loadEdoIncomingLetters, loadIncomingDocument, loadIncomingDocuments } from "./workspace-api";
+import { acceptWorkspaceTaskResult, assignIncomingDocument, downloadIncomingDocumentFile, loadEdoIncomingLetters, loadIncomingDocument, loadIncomingDocuments, submitWorkspaceTaskResult } from "./workspace-api";
 
 vi.mock("./workspace-api", () => ({
   loadIncomingDocuments: vi.fn(), loadIncomingDocument: vi.fn(), assignIncomingDocument: vi.fn(),
   downloadIncomingDocumentFile: vi.fn(), previewIncomingDocumentFile: vi.fn(),
   loadEdoIncomingLetters: vi.fn(), loadEdoIncomingLetter: vi.fn(), addEdoIncomingAssignment: vi.fn(),
   completeEdoIncomingLetter: vi.fn(), downloadEdoIncomingAttachment: vi.fn(), loadEdoIncomingOfficePreview: vi.fn(),
+  submitWorkspaceTaskResult: vi.fn(), acceptWorkspaceTaskResult: vi.fn(), returnWorkspaceTaskForRevision: vi.fn(),
+  uploadWorkspaceAttachment: vi.fn(), downloadWorkspaceAttachment: vi.fn(), loadOfficeFilePreview: vi.fn(),
 }));
 vi.mock("./AIReferentFiles", () => ({ saveReferentBlob: vi.fn() }));
 vi.mock("./WorkspaceDateTimePicker", () => ({
@@ -132,5 +134,86 @@ describe("Workspace incoming document workflow", () => {
     await screen.findByText("Исполнение пока не назначено");
     expect(screen.queryByRole("button", { name: "Назначить исполнение" })).not.toBeInTheDocument();
     expect(assignIncomingDocument).not.toHaveBeenCalled();
+  });
+
+  it("shows the accepted report and material files directly without opening the task", async () => {
+    const completed: IncomingDocumentDetail = { ...assigned,
+      document: { ...assigned.document, execution: { ...assigned.document.execution!, status: "completed" } },
+      executionDetail: { description: "Подготовить ответ", resultText: "Ответ согласован и направлен адресату.",
+        coAssigneeIds: ["co"], latestReturn: null, canSubmit: false, canAccept: false, canReturn: false,
+        files: [{ id: "report", ownerType: "task", ownerId: "task", fileName: "Ответ.pdf", contentType: "application/pdf",
+          byteSize: 1200, documentRole: "general", sha256: "b".repeat(64), uploadedByUserId: "executor", createdAt: "2026-11-23T12:00:00Z" }] },
+    };
+    vi.mocked(loadIncomingDocument).mockResolvedValue(completed);
+    const openTask = show();
+    fireEvent.click(await screen.findByRole("button", { name: /№ QA-1/ }));
+    expect(await screen.findByText("Ответ согласован и направлен адресату.")).toBeVisible();
+    expect(screen.getByText("Ответ.pdf")).toBeVisible();
+    expect(screen.getByText("Помощник QA")).toBeVisible();
+    expect(screen.getByText("Принят постановщиком")).toBeVisible();
+    expect(openTask).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Отправить на проверку" })).not.toBeInTheDocument();
+  });
+
+  it("keeps a failed report draft and reconciles before a protected retry", async () => {
+    const working: IncomingDocumentDetail = { ...assigned, executionDetail: {
+      description: "Инструкция", resultText: null, coAssigneeIds: [], latestReturn: null,
+      files: [], canSubmit: true, canAccept: false, canReturn: false,
+    } };
+    vi.mocked(loadIncomingDocument).mockResolvedValue(working);
+    show();
+    fireEvent.click(await screen.findByRole("button", { name: /№ QA-1/ }));
+    fireEvent.change(await screen.findByLabelText("Отчёт об исполнении"), { target: { value: "Готовый ответ" } });
+    vi.mocked(submitWorkspaceTaskResult).mockRejectedValueOnce(new Error("Таймаут проверки"));
+    const submit = screen.getByRole("button", { name: "Отправить на проверку" });
+    fireEvent.click(submit); fireEvent.click(submit);
+    await screen.findByText(/Таймаут проверки/);
+    expect(submitWorkspaceTaskResult).toHaveBeenCalledTimes(1);
+    expect(submit).toBeDisabled();
+    expect(screen.getByLabelText("Отчёт об исполнении")).toHaveValue("Готовый ответ");
+    fireEvent.click(screen.getByRole("button", { name: "Проверить состояние" }));
+    await waitFor(() => expect(submit).toBeEnabled());
+    vi.mocked(loadIncomingDocument).mockResolvedValue({ ...working,
+      document: { ...working.document, execution: { ...working.document.execution!, status: "awaiting_review" } },
+      executionDetail: { ...working.executionDetail!, resultText: "Готовый ответ", canSubmit: false },
+    });
+    fireEvent.click(submit);
+    await waitFor(() => expect(screen.getByText("Готовый ответ", { selector: "p" })).toBeVisible());
+    expect(submitWorkspaceTaskResult).toHaveBeenLastCalledWith("qa-token", "task", "Готовый ответ");
+  });
+
+  it("accepts a submitted result in place with the existing protected action", async () => {
+    const review: IncomingDocumentDetail = { ...assigned,
+      document: { ...assigned.document, execution: { ...assigned.document.execution!, status: "awaiting_review" } },
+      executionDetail: { description: "Инструкция", resultText: "Отчёт готов", coAssigneeIds: [], latestReturn: null,
+        files: [], canSubmit: false, canAccept: true, canReturn: true },
+    };
+    vi.mocked(loadIncomingDocument).mockResolvedValue(review);
+    const openTask = show();
+    fireEvent.click(await screen.findByRole("button", { name: /№ QA-1/ }));
+    const accept = await screen.findByRole("button", { name: "Принять результат" });
+    vi.mocked(loadIncomingDocument).mockResolvedValue({ ...review,
+      document: { ...review.document, execution: { ...review.document.execution!, status: "completed" } },
+      executionDetail: { ...review.executionDetail!, canAccept: false, canReturn: false },
+    });
+    fireEvent.click(accept);
+    await screen.findByText("Принят постановщиком");
+    expect(acceptWorkspaceTaskResult).toHaveBeenCalledWith("qa-token", "task");
+    expect(openTask).not.toHaveBeenCalled();
+  });
+
+  it("renders a text original as text inside the letter viewer", async () => {
+    vi.mocked(loadIncomingDocument).mockResolvedValue({ ...detail, files: [{ ...detail.files[0]!, name: "Письмо.txt" }] });
+    const content = "<script>Содержание письма</script>";
+    // JSDOM's Blob omits the browser text() method.
+    vi.mocked(downloadIncomingDocumentFile).mockResolvedValue(Object.assign(new Blob([content]), { text: async () => content }));
+    show();
+    fireEvent.click(await screen.findByRole("button", { name: /№ QA-1/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Открыть Письмо.txt" }));
+    const viewer = await screen.findByRole("dialog");
+    expect(await within(viewer).findByText("<script>Содержание письма</script>")).toBeVisible();
+    expect(viewer.querySelector("script")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Закрыть" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 });

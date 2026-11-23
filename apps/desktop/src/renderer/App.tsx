@@ -2441,6 +2441,7 @@ export function App() {
               <WorkingUserIdsContext.Provider value={workspace.workingUserIds ?? []}>
               <TeamDecisionFrame active={teamDecision?.section === "tasks"} onClose={closeTeamDecision} onRetry={refreshTeamDecision} available={workspace.tasks.some((item) => item.id === teamDecision?.entityId)}>
               <TasksView
+                canViewIncomingLetters={canView("incoming_letters")}
                 dialogOnly={teamDecision?.section === "tasks"}
                 onDialogClose={teamDecision?.section === "tasks" ? closeTeamDecision : undefined}
                 key={teamDecision?.section === "tasks" ? teamDecision.entityId : focusTarget?.revision}

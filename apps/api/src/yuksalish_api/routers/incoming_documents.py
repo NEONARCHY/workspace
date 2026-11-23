@@ -46,10 +46,11 @@ async def registry(
     category: DocumentFilter = "all",
     offset: Annotated[int, Query(ge=0, le=1_000_000)] = 0,
     limit: Annotated[int, Query(ge=1, le=100)] = 30,
+    personal: bool = False,
 ) -> IncomingDocumentPage:
     response.headers["Cache-Control"] = "private, no-store"
     return await list_documents(connection, user, query=q, category=category,
-                                offset=offset, limit=limit)
+                                offset=offset, limit=limit, personal=personal)
 
 
 @router.get("/{source_id}", response_model=IncomingDocumentDetail)

@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Button } from "@fluentui/react-components";
-import type { IncomingDocument, IncomingDocumentDetail, IncomingDocumentFile, IncomingDocumentFilter, IncomingDocumentPage, TaskStatus, WorkspacePerson } from "@yuksalish/contracts";
+import { Button, DialogBody, DialogContent, DialogSurface, DialogTitle, useRestoreFocusTarget } from "@fluentui/react-components";
+import type { IncomingDocument, IncomingDocumentDetail, IncomingDocumentFile, IncomingDocumentFilter, IncomingDocumentPage, WorkspacePerson } from "@yuksalish/contracts";
 import { Input } from "./WorkspaceInput";
 import { WorkspaceSelect } from "./WorkspaceSelect";
 import { WorkspaceNotice } from "./WorkspaceNotice";
@@ -9,16 +9,13 @@ import { PersonPicker } from "./PersonPicker";
 import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
 import { assignIncomingDocument, downloadIncomingDocumentFile, loadIncomingDocument, loadIncomingDocuments, previewIncomingDocumentFile } from "./workspace-api";
 import { saveReferentBlob } from "./AIReferentFiles";
-import { ProfileAvatar } from "./ProfileAvatar";
+import { IncomingDocumentExecution, IncomingDocumentStatus } from "./IncomingDocumentExecution";
 import { isTaskOverdue } from "./task-deadline";
 import { useTaskDeadlineClock } from "./useTaskDeadlineClock";
+import { focusWorkspaceDialog, WorkspaceDialog } from "./WorkspaceDialog";
 import "./incoming-documents.css";
 
 const ExternalFileViewer = lazy(() => import("./FileViewer").then(module => ({ default: module.ExternalFileViewer })));
-const statusNames: Readonly<Record<TaskStatus, string>> = {
-  new: "Назначено", in_progress: "В работе", overdue: "Просрочено", awaiting_review: "На проверке",
-  completed: "Исполнено", cancelled: "Отменено",
-};
 const filters: Readonly<Record<IncomingDocumentFilter, string>> = {
   all: "Все письма", unassigned: "Без поручения", active: "На исполнении", review: "На проверке",
   completed: "Исполненные", overdue: "Просроченные",
@@ -35,8 +32,38 @@ function errorLabel(error: unknown) {
 function DocumentViewer({ token, documentId, file, onClose }: {
   readonly token: string; readonly documentId: string; readonly file: IncomingDocumentFile; readonly onClose: () => void;
 }) {
+  const [text, setText] = useState<string>();
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const surface = useRef<HTMLDivElement>(null);
+  const plainText = /\.txt$/i.test(file.name);
+  const tooLarge = file.byteSize > 1024 * 1024;
+  const previewError = tooLarge ? "Текстовый файл больше 1 МБ. Скачайте его для просмотра." : error;
+  useEffect(() => {
+    if (!plainText || tooLarge) return;
+    const controller = new AbortController();
+    let active = true;
+    void downloadIncomingDocumentFile(token, documentId, file.id, controller.signal)
+      .then(blob => blob.text()).then(value => { if (active) setText(value); })
+      .catch(cause => { if (active) setError(errorLabel(cause)); });
+    return () => { active = false; controller.abort(); };
+  }, [token, documentId, file.id, plainText, tooLarge]);
   const attachment = { id: file.id, fileName: file.name.split("/").at(-1) || file.name,
     byteSize: file.byteSize, contentType: "application/octet-stream" };
+  if (plainText) return <WorkspaceDialog open onAfterOpen={() => focusWorkspaceDialog(surface.current)}
+    onOpenChange={(_, data) => { if (!data.open) onClose(); }}>
+    <DialogSurface ref={surface} className="incoming-text-preview"><DialogBody>
+      <DialogTitle action={<Button onClick={onClose}>Закрыть</Button>}>{attachment.fileName}</DialogTitle>
+      <DialogContent>{previewError ? <WorkspaceNotice tone="error">{previewError}</WorkspaceNotice> : text === undefined
+        ? <LoadingSkeleton layout="rows" rows={3} label="Читаем текст письма" /> : <pre>{text}</pre>}
+        <Button disabled={saving} onClick={() => {
+          setSaving(true);
+          void downloadIncomingDocumentFile(token, documentId, file.id).then(blob => saveReferentBlob(blob, attachment.fileName))
+            .catch(cause => setError(errorLabel(cause))).finally(() => setSaving(false));
+        }}>Скачать</Button>
+      </DialogContent>
+    </DialogBody></DialogSurface>
+  </WorkspaceDialog>;
   return <Suspense fallback={<LoadingSkeleton layout="rows" rows={3} label="Открываем документ" />}>
     <ExternalFileViewer attachment={attachment} onClose={onClose}
       onLoad={(_file, signal) => downloadIncomingDocumentFile(token, documentId, file.id, signal)}
@@ -128,8 +155,8 @@ function DocumentCard({ token, detail, people, now, onSaved, onOpenTask }: {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const document = detail.document;
+  const restoreFocusTarget = useRestoreFocusTarget();
   const execution = document.execution;
-  const assignee = people.find(person => person.id === execution?.assigneeId);
   const openTask = async () => {
     if (!execution || !onOpenTask) return;
     setBusy(true); setError("");
@@ -138,26 +165,23 @@ function DocumentCard({ token, detail, people, now, onSaved, onOpenTask }: {
     finally { setBusy(false); }
   };
   return <article className="incoming-document-card" aria-label={`Письмо № ${document.number}`}>
-    <span className="incoming-document-eyebrow">Входящее № {document.number}</span>
+    <div className="incoming-section-heading"><span className="incoming-document-eyebrow">Входящее № {document.number}</span><IncomingDocumentStatus status={execution?.status} /></div>
     <h2>{document.subject}</h2><p>{document.sender || "Отправитель не указан"}</p>
     <dl><div><dt>Получено</dt><dd>{dateLabel(document.receivedAt)}</dd></div>
       <div><dt>Канал</dt><dd>{document.source === "exat" ? "E-XAT" : document.source === "webmail" ? "Электронная почта" : "Импорт"}</dd></div></dl>
-    <h3>Документы письма</h3>
+    <details className="incoming-originals" open={!execution}>
+    <summary>Документы письма <span>{detail.files.length}</span></summary>
     {detail.files.length ? <ul className="incoming-document-files">{detail.files.map(file => <li key={file.id}>
       <span>{file.name.split("/").at(-1)}<small>{Math.max(1, Math.round(file.byteSize / 1024))} КБ</small></span>
-      <Button onClick={() => setPreview(file)} aria-label={`Открыть ${file.name.split("/").at(-1)}`}>Открыть</Button>
+      <Button {...restoreFocusTarget} onClick={() => setPreview(file)} aria-label={`Открыть ${file.name.split("/").at(-1)}`}>Открыть</Button>
     </li>)}</ul> : <WorkspaceNotice tone={document.filesExpected ? "warning" : "info"}>
       {document.filesExpected ? "Оригиналы ещё не переданы референтом. Обновите карточку после загрузки файлов." : "Вложения к этому письму не переданы."}
     </WorkspaceNotice>}
-    {execution ? <section className="incoming-document-execution" aria-label="Исполнение письма">
-      <h3>Исполнение</h3><strong>{statusNames[execution.status]}</strong>
-      <div className="incoming-document-assignee">{assignee ? <ProfileAvatar person={assignee} token={token} size={32} /> : null}
-        <span>{execution.assigneeName}</span></div>
-      <p>Срок: {dateLabel(execution.dueAt)}{isTaskOverdue(execution, now) ? " · Срок истёк" : ""}</p>
-      <p className="incoming-document-help">Соисполнители, отчёт с файлами и решение по результату доступны в карточке поручения.</p>
-      {document.canOpenTask && onOpenTask ? <Button appearance="primary" disabled={busy} onClick={() => void openTask()}>Открыть поручение</Button>
-        : <WorkspaceNotice>Для открытия поручения нужен доступ к задачам.</WorkspaceNotice>}
-    </section> : assigning ? <AssignmentForm token={token} detail={detail} people={people}
+    </details>
+    {execution ? <>
+      <IncomingDocumentExecution token={token} detail={detail} people={people} now={now} onSaved={onSaved} />
+      {document.canOpenTask && onOpenTask ? <div className="incoming-advanced-action"><Button appearance="subtle" disabled={busy} onClick={() => void openTask()}>Открыть поручение</Button></div> : null}
+    </> : assigning ? <AssignmentForm token={token} detail={detail} people={people}
       onSaved={next => { setAssigning(false); onSaved(next); }} onRefreshed={onSaved} onCancel={() => setAssigning(false)} />
       : <section className="incoming-document-execution"><h3>Исполнение пока не назначено</h3>
         {document.canAssign ? <Button appearance="primary" disabled={document.filesExpected && !detail.files.length}
@@ -169,8 +193,9 @@ function DocumentCard({ token, detail, people, now, onSaved, onOpenTask }: {
   </article>;
 }
 
-export function IncomingDocumentsView({ token, people, onOpenTask }: {
+export function IncomingDocumentsView({ token, people, onOpenTask, personal = false, refreshKey }: {
   readonly token: string; readonly people: readonly WorkspacePerson[]; readonly onOpenTask?: (taskId: string) => Promise<void>;
+  readonly personal?: boolean; readonly refreshKey?: string;
 }) {
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
@@ -196,22 +221,22 @@ export function IncomingDocumentsView({ token, people, onOpenTask }: {
   useEffect(() => {
     const controller = new AbortController();
     let active = true;
-    void loadIncomingDocuments(token, query, filter, offset, controller.signal)
+    void loadIncomingDocuments(token, query, filter, offset, controller.signal, personal)
       .then(next => { if (active) { setPage(next); setError(""); } })
       .catch(reason => { if (active) { setPage(undefined); setError(errorLabel(reason)); } })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; controller.abort(); };
-  }, [token, query, filter, offset, revision]);
+  }, [token, query, filter, offset, revision, personal, refreshKey]);
   useEffect(() => {
     if (!selectedId) return;
     const controller = new AbortController();
     let active = true;
     void loadIncomingDocument(token, selectedId, controller.signal)
       .then(next => { if (active) { setDetail(next); setDetailError(""); } })
-      .catch(reason => { if (active) { setDetail(undefined); setDetailError(errorLabel(reason)); } })
+      .catch(reason => { if (active) setDetailError(errorLabel(reason)); })
       .finally(() => { if (active) setDetailLoading(false); });
     return () => { active = false; controller.abort(); };
-  }, [token, selectedId, detailRevision]);
+  }, [token, selectedId, detailRevision, refreshKey]);
   const refresh = useCallback(() => {
     setLoading(true); setRevision(current => current + 1);
     if (selectedId) { setDetailLoading(true); setDetailRevision(current => current + 1); }
@@ -222,12 +247,14 @@ export function IncomingDocumentsView({ token, people, onOpenTask }: {
   };
   return <section className="incoming-documents" aria-label="Документооборот Workspace">
     <header className="incoming-documents-header"><div><span className="incoming-document-eyebrow">Документооборот · поручения</span>
-      <h1>Входящие письма</h1><p>Письма референта, исполнители и контроль сроков.</p></div>
+      <h1>{personal ? "Мои письма" : "Входящие письма"}</h1>
+      <p>{personal ? "Поручения по письмам с вашим участием — сроки, документы и результаты." : "Письма референта, исполнители и контроль сроков."}</p></div>
       <Button disabled={loading || detailLoading} onClick={refresh}>Обновить</Button></header>
     <div className="incoming-documents-controls">
       <label>Поиск по письмам<Input value={search} placeholder="Номер, тема или отправитель" onChange={event => setSearch(event.target.value)} /></label>
       <label>Исполнение<WorkspaceSelect value={filter} onChange={event => { setFilter(event.target.value as IncomingDocumentFilter); setOffset(0); setLoading(true); }}>
-        {Object.entries(filters).map(([value, label]) => <option value={value} key={value}>{label}</option>)}
+        {Object.entries(filters).filter(([value]) => !personal || value !== "unassigned")
+          .map(([value, label]) => <option value={value} key={value}>{label}</option>)}
       </WorkspaceSelect></label>
       <span className="incoming-document-count" aria-live="polite">{page ? `Найдено: ${page.total}` : "—"}</span>
     </div>
@@ -237,7 +264,7 @@ export function IncomingDocumentsView({ token, people, onOpenTask }: {
           : error ? <WorkspaceNotice tone="error" actions={<Button onClick={refresh}>Повторить</Button>}>{error}</WorkspaceNotice>
             : page?.documents.length ? page.documents.map(document => <button type="button" className="incoming-document-row"
               key={document.id} aria-pressed={document.id === selectedId} onClick={() => select(document)}>
-              <span className="incoming-document-row-meta"><strong>№ {document.number}</strong><span>{document.execution ? statusNames[document.execution.status] : "Без поручения"}</span></span>
+              <span className="incoming-document-row-meta"><strong>№ {document.number}</strong><IncomingDocumentStatus status={document.execution?.status} /></span>
               <strong>{document.subject}</strong><span>{document.sender || "Отправитель не указан"}</span>
               {document.execution ? <small>{document.execution.assigneeName} · {dateLabel(document.execution.dueAt)}{isTaskOverdue(document.execution, now) ? " · Срок истёк" : ""}</small> : null}
             </button>) : <p className="incoming-document-empty">Писем по выбранным условиям нет.</p>}
@@ -248,11 +275,11 @@ export function IncomingDocumentsView({ token, people, onOpenTask }: {
         </nav> : null}
       </div>
       <div className="incoming-documents-detail" aria-busy={detailLoading}>
-        {detailLoading ? <LoadingSkeleton layout="rows" rows={6} label="Открываем письмо" />
-          : detailError ? <WorkspaceNotice tone="error" actions={<Button onClick={refresh}>Повторить</Button>}>{detailError}</WorkspaceNotice>
-            : detail ? <DocumentCard key={detail.document.id} token={token} detail={detail} people={people} now={now} onOpenTask={onOpenTask}
+        {detailError ? <WorkspaceNotice tone="error" actions={<Button onClick={refresh}>Повторить</Button>}>{detailError}</WorkspaceNotice> : null}
+        {detailLoading && !detail ? <LoadingSkeleton layout="rows" rows={6} label="Открываем письмо" />
+          : detail ? <DocumentCard key={detail.document.id} token={token} detail={detail} people={people} now={now} onOpenTask={onOpenTask}
               onSaved={next => { setDetail(next); setRevision(current => current + 1); }} />
-              : <p className="incoming-document-empty">Выберите письмо, чтобы открыть документы и исполнение.</p>}
+              : !detailError ? <p className="incoming-document-empty">Выберите письмо, чтобы открыть документы и исполнение.</p> : null}
       </div>
     </div>
   </section>;
