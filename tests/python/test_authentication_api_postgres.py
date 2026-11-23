@@ -392,6 +392,13 @@ async def test_authentication_http_vertical_slice() -> None:
             headers=admin_headers,
         )
         assert deleted_approval.status_code == 204
+        finance_removed = await client.delete(
+            f"/api/v1/tasks/{task_id}/participants/{finance_login.json()['user']['id']}",
+            headers=admin_headers,
+        )
+        assert finance_removed.status_code == 200
+        assert all(person["userId"] != finance_login.json()["user"]["id"]
+                   for person in finance_removed.json()["participants"])
 
         directory = await client.get("/api/v1/directory", headers=admin_headers)
         assert directory.status_code == 200
