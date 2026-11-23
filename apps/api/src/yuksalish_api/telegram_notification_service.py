@@ -63,7 +63,9 @@ async def workspace_notice(
     section = notice["section"]
     if section in MODULE_KEYS:
         await ensure_module_action(c, user, section, "view")
-    if section == "messenger" and notice["entity_id"] is not None:
+    if section == "messenger":
+        if notice["entity_id"] is None:
+            return None
         from .messenger_service import chat_access
 
         await chat_access(c, user, notice["entity_id"])
