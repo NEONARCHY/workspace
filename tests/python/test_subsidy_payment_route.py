@@ -250,7 +250,8 @@ async def test_subsidy_payment_uses_askar_and_other_projects_keep_deputy() -> No
                 await connection.execute(update(approval_requests).where(
                     approval_requests.c.id == ordinary_id,
                 ).values(actor_overrides={"deputy_chair": str(davronbek.id)}))
-                for actor, status in ((askar, 404), (davronbek, 404), (admin, 403)):
+                # Lyutfiddinov can read the queue, but only Rajabov can decide.
+                for actor, status in ((askar, 404), (davronbek, 403), (admin, 403)):
                     with pytest.raises(WorkspaceRepositoryError) as forbidden:
                         await act_on_request(
                             connection, actor, ordinary_id, ApprovalActionRequest(action="approve"),

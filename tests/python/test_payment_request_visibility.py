@@ -1,4 +1,5 @@
 import os
+from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import AsyncMock, Mock
@@ -98,6 +99,25 @@ async def test_only_administrators_have_unconditional_payment_visibility(role: s
         connection.execute.assert_not_called()
 
 
+@pytest.mark.anyio
+@pytest.mark.parametrize("username", ["davronbek_lyutfiddinov", "DAVRONBEK_LYUTFIDDINOV"])
+async def test_lyutfiddinov_sees_all_payment_statuses_and_route_versions(username: str) -> None:
+    user = replace(_user(), username=username)
+    rows = [
+        {"id": uuid4(), "template_id": uuid4(), "requester_user_id": uuid4(),
+         "status": status, "payload": payload}
+        for status in ["running", "needs_revision", "approved", "rejected", "cancelled"]
+        for payload in [{}, {"payment_route_variant": "subsidy"}]
+    ]
+    connection = AsyncMock()
+    result = Mock()
+    result.mappings.return_value.all.return_value = []
+    connection.execute.return_value = result
+    assert await _visible_approval_requests(connection, user, rows) == rows
+    # The same policy protects direct reads of an individual request.
+    assert await _visible_approval_requests(connection, user, [rows[0]]) == [rows[0]]
+
+
 async def _insert_user(connection: AsyncConnection, user: AuthenticatedUser) -> None:
     now = datetime.now(UTC)
     await connection.execute(insert(users).values(
@@ -122,8 +142,9 @@ async def test_payment_queue_files_notifications_and_delegation_share_visibility
                 approver, outsider, manager = _user(), _user(), _user("manager")
                 correction_only, delegate = _user(), _user()
                 admin, superadmin = _user("admin"), _user("superadmin")
+                davronbek = replace(_user(), username="davronbek_lyutfiddinov")
                 actors = [author, other_author, approver, outsider, manager,
-                          correction_only, delegate, admin, superadmin]
+                          correction_only, delegate, admin, superadmin, davronbek]
                 for actor in actors:
                     await _insert_user(connection, actor)
                 template_id = await connection.scalar(select(approval_templates.c.id).where(
@@ -178,11 +199,16 @@ async def test_payment_queue_files_notifications_and_delegation_share_visibility
                 for actor, expected in [
                     (author, {requests[0].id, requests[1].id}),
                     (other_author, {requests[2].id, requests[3].id}),
-                    (approver, ids), (admin, ids), (superadmin, ids),
+                    (approver, ids), (admin, ids), (superadmin, ids), (davronbek, ids),
                     (outsider, set()), (manager, set()), (correction_only, set()),
                 ]:
                     snapshot = await load_workspace(connection, actor)
                     assert {item.id for item in snapshot.requests} & ids == expected
+                    if actor.id == davronbek.id:
+                        assert not any(
+                            stage.can_act for item in snapshot.requests if item.id in ids
+                            for stage in item.active_stages
+                        )
                     context = await personal_activity_context(connection, actor)
                     for request in requests:
                         assert (request.title in context) == (request.id in expected)
@@ -199,11 +225,27 @@ async def test_payment_queue_files_notifications_and_delegation_share_visibility
                                 await get_attachment(connection, actor, UUID(file.id))
                             assert denied.value.status_code == 404
                 # Global visibility is independent of decision rights and file writes.
-                with pytest.raises(WorkspaceRepositoryError) as upload_denied:
-                    await validate_attachment_owner(
-                        connection, approver, "approval_request", UUID(requests[0].id), write=True,
+                for actor in [approver, davronbek]:
+                    with pytest.raises(WorkspaceRepositoryError) as upload_denied:
+                        await validate_attachment_owner(
+                            connection, actor, "approval_request", UUID(requests[0].id), write=True,
+                        )
+                    assert upload_denied.value.status_code == 404
+                for action in ["approve", "move", "cancel", "delegate"]:
+                    with pytest.raises(WorkspaceRepositoryError) as read_only:
+                        await act_on_request(
+                            connection, davronbek, UUID(requests[0].id),
+                            ApprovalActionRequest(
+                                action=action, node_key=requests[0].active_node_keys[0],
+                            ),
+                        )
+                    assert read_only.value.status_code == 403
+                with pytest.raises(WorkspaceRepositoryError) as edit_denied:
+                    await update_approval_request(
+                        connection, davronbek, UUID(requests[0].id),
+                        UpdateApprovalRequest(title="Forbidden", amount=100),
                     )
-                assert upload_denied.value.status_code == 404
+                assert edit_denied.value.status_code == 403
                 with pytest.raises(WorkspaceRepositoryError) as decision_denied:
                     await act_on_request(connection, manager, UUID(requests[0].id),
                                          ApprovalActionRequest(action="approve"))
@@ -230,7 +272,7 @@ async def test_payment_queue_files_notifications_and_delegation_share_visibility
                     await load_workspace(connection, correction_only)
                 ).requests} & ids
                 # Old notifications cannot reveal a request after access is revoked.
-                for actor in [outsider, approver]:
+                for actor in [outsider, approver, davronbek]:
                     notification_id, delivery_id = uuid4(), uuid4()
                     common: dict[str, Any] = {
                         "user_id": actor.id, "entity_id": UUID(requests[0].id),
@@ -298,7 +340,9 @@ async def test_payment_queue_files_notifications_and_delegation_share_visibility
                 assert {item.id for item in current.requests} & (ids | {latest.id}) \
                     == ids | {latest.id}
                 now = datetime.now(UTC)
-                for actor, permissions in [(manager, {"admin": True}), (outsider, {})]:
+                for actor, permissions in [
+                    (manager, {"admin": True}), (outsider, {}), (davronbek, {}),
+                ]:
                     await connection.execute(insert(module_access_rules).values(
                         id=uuid4(), subject_type="user", subject_key=str(actor.id),
                         module_key="payment_requests", permissions=permissions,
