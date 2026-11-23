@@ -68,9 +68,11 @@ async def test_task_deadline_extension_requires_setter_decision() -> None:
         })
         assert private.status_code == 201
         private_id = private.json()["id"]
+        # The seeded employee Dilshod is a central deputy: he can read the
+        # history even when not involved, but still cannot decide this task.
         assert (await client.get(
             f"/api/v1/tasks/{private_id}/history", headers=headers("dilshod"),
-        )).status_code == 404
+        )).status_code == 200
         assert (await client.delete(
             f"/api/v1/tasks/{private_id}", headers=headers("malika"),
         )).status_code == 204

@@ -88,4 +88,4 @@ def test_checklist_retry_keeps_original_completion_evidence(
     )) == "existing-task"
     assert "FOR UPDATE" in str(connection.scalar.await_args.args[0])
     connection.execute.assert_not_awaited()
-    response.assert_awaited_once_with(connection, task_id)
+    response.assert_awaited_once_with(connection, task_id, owner)

@@ -58,10 +58,11 @@ async def test_admin_can_suspend_and_restore_own_rights_across_refresh() -> None
         assert normal.json()["currentUser"]["adminModeEnabled"] is False
         assert next(person for person in normal.json()["people"]
                     if person["id"] == session["user"]["id"])["role"] == "employee"
-        assert len(normal.json()["tasks"]) < len(full.json()["tasks"])
-        assert all(task["authorId"] == session["user"]["id"]
-                   or task["assigneeId"] == session["user"]["id"]
-                   or task["participants"] for task in normal.json()["tasks"])
+        # The seeded administrator is also the chairman. Disabling the admin
+        # role preserves the chairman's read access without keeping admin actions.
+        assert {task["id"] for task in normal.json()["tasks"]} == {
+            task["id"] for task in full.json()["tasks"]
+        }
         visible_ids = {task["id"] for task in normal.json()["tasks"]}
         assert all(item["entityId"] in visible_ids for item in normal.json()["notifications"]
                    if item["section"] == "tasks" and item["entityId"] is not None
