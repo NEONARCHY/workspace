@@ -31,7 +31,7 @@ BOT_CATALOG = [
     BotDescriptor(key="ai_referent", label="AI Referent", connected=True),
     BotDescriptor(key="hisobot", label="AI Hisobot", connected=True),
     BotDescriptor(
-        key="workspace_notifications", label="Workspace · задачи и оплаты (ЦА)", connected=True,
+        key="workspace_notifications", label="Workspace · уведомления", connected=True,
     ),
     BotDescriptor(key="takliflar", label="Takliflar va Murojatlar", connected=False),
     BotDescriptor(key="hudud_rating", label="Hudud AI Reyting", connected=False),
@@ -141,14 +141,6 @@ async def save_telegram_access(
         .with_for_update()
     )
     account = await _active_user(connection, user_id)
-    if "workspace_notifications" in payload.bot_keys:
-        from .telegram_notification_scope import central_office
-
-        if not await central_office(connection, user_id):
-            raise HTTPException(
-                422, "Уведомления Workspace доступны только сотрудникам ЦА. "
-                "Проверьте подразделение.",
-            )
     department_rows = {
         row["id"]: row for row in (await connection.execute(select(departments))).mappings().all()
     }

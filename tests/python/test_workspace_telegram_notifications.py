@@ -22,12 +22,18 @@ from yuksalish_api.tables import (
     telegram_bot_grants,
     telegram_identities,
     users,
+    workspace_notifications,
 )
 from yuksalish_api.telegram_notification_events import queue_payment, queue_task
 from yuksalish_api.telegram_notification_schemas import DeliveryAck
 from yuksalish_api.telegram_notification_service import acknowledge, claim, open_notice, prepare
 from yuksalish_api.telegram_notification_tables import deliveries
-from yuksalish_api.workspace_schemas import CreateApprovalRequest, CreateTaskRequest
+from yuksalish_api.workspace_schemas import (
+    CreateApprovalRequest,
+    CreateChatRequest,
+    CreateTaskRequest,
+    SendMessageRequest,
+)
 
 
 @asynccontextmanager
@@ -96,7 +102,7 @@ def settings(mode="preview"):
     )
 
 
-def test_new_task_is_transactional_deduplicated_and_central_only():
+def test_new_task_is_transactional_deduplicated_for_central_and_regions():
     async def run():
         async with scenario() as (c, people, _, __):
             created = await task(c, people)
@@ -104,9 +110,72 @@ def test_new_task_is_transactional_deduplicated_and_central_only():
             await task(c, people, people[1])
             await task(c, people, people[3])
             rows = (await c.execute(select(deliveries))).mappings().all()
-            assert len(rows) == 1 and rows[0]["user_id"] == people[0].id
-            assert "Expected test result" in rows[0]["body"]
-            assert rows[0]["state"] == "pending"
+            assert {row["user_id"] for row in rows} == {
+                people[0].id, people[1].id, people[3].id,
+            }
+            assert all("Expected test result" in row["body"] for row in rows)
+            assert all(row["state"] == "pending" for row in rows)
+
+    asyncio.run(run())
+
+
+def test_new_workspace_notice_is_mirrored_to_a_region_with_private_link():
+    async def run():
+        async with scenario() as (c, people, _, __):
+            notice_id = uuid4()
+            await c.execute(insert(workspace_notifications).values(
+                id=notice_id, user_id=people[1].id,
+                event_key=f"trip:test:{notice_id}", kind="trip", priority="attention",
+                title="Поездка", body="Нужно принять решение", section="trip_approvals",
+                entity_id=uuid4(), requires_action=True, is_reminder=False,
+                occurred_at=datetime.now(UTC),
+            ))
+            queued = (await c.execute(select(deliveries).where(
+                deliveries.c.user_id == people[1].id,
+                deliveries.c.kind == "workspace_notice",
+            ))).mappings().one()
+            assert queued["entity_id"] == notice_id
+            lease = next(item for item in await claim(c) if item.id == queued["id"])
+            prepared = await prepare(c, lease.id, lease.lease_token, settings())
+            assert prepared and not prepared.send_allowed
+            assert prepared.text == "Поездка\n\nНужно принять решение"  # noqa: RUF001
+            assert "workspaceNotice=" in prepared.url
+            target = await open_notice(c, people[1], lease.id)
+            assert target.section == "trip_approvals"
+            with pytest.raises(WorkspaceRepositoryError):
+                await open_notice(c, people[0], lease.id)
+
+    asyncio.run(run())
+
+
+def test_personal_message_text_is_not_truncated_and_requires_chat_membership():
+    from yuksalish_api import messenger_service
+    from yuksalish_api.tables import chat_members
+
+    async def run():
+        async with scenario() as (c, people, _, __):
+            chat = await messenger_service.create_chat(
+                c, people[0], CreateChatRequest(kind="direct", member_ids=[people[1].id]),
+            )
+            message = "Текст уведомления " + "а" * 5000  # noqa: RUF001
+            await messenger_service.send_chat_message(
+                c, people[0], UUID(chat.id), SendMessageRequest(body=message),
+            )
+            row = (await c.execute(select(deliveries).where(
+                deliveries.c.user_id == people[1].id,
+                deliveries.c.kind == "workspace_notice",
+                deliveries.c.stage_key == "messenger",
+            ))).mappings().one()
+            lease = next(item for item in await claim(c) if item.id == row["id"])
+            prepared = await prepare(c, lease.id, lease.lease_token, settings())
+            assert prepared and message in prepared.text
+            assert len(prepared.text) > 4000
+            await c.execute(delete(chat_members).where(
+                chat_members.c.chat_id == UUID(chat.id),
+                chat_members.c.user_id == people[1].id,
+            ))
+            with pytest.raises(WorkspaceRepositoryError):
+                await open_notice(c, people[1], lease.id)
 
     asyncio.run(run())
 
@@ -147,11 +216,11 @@ def test_preview_is_not_a_send_and_links_are_recipient_private():
 
 
 @pytest.mark.parametrize(
-    "change", ["identity", "grant", "region", "blocked", "module", "completed"]
+    "change", ["identity", "grant", "blocked", "module", "completed"]
 )
 def test_scope_and_rights_are_rechecked_immediately_before_prepare(change):
     async def run():
-        async with scenario() as (c, people, _, regional):
+        async with scenario() as (c, people, _, _regional):
             created = await task(c, people)
             lease = (await claim(c))[0]
             if change == "identity":
@@ -163,10 +232,6 @@ def test_scope_and_rights_are_rechecked_immediately_before_prepare(change):
             elif change == "grant":
                 await c.execute(
                     delete(telegram_bot_grants).where(telegram_bot_grants.c.user_id == people[0].id)
-                )
-            elif change == "region":
-                await c.execute(
-                    update(users).where(users.c.id == people[0].id).values(department_id=regional)
                 )
             elif change == "blocked":
                 await c.execute(
@@ -314,31 +379,22 @@ def test_retry_ack_is_idempotent_and_old_lease_cannot_replay():
     asyncio.run(run())
 
 
-def test_region_cannot_receive_notification_grant_and_unknown_department_fails_closed():
-    from fastapi import HTTPException
-
+def test_region_can_receive_notification_grant_without_hisobot_report_obligation():
     from yuksalish_api.telegram_access_schemas import TelegramAccessUpdate
     from yuksalish_api.telegram_access_service import save_telegram_access
-    from yuksalish_api.telegram_notification_scope import central_office
+    from yuksalish_api.telegram_notification_scope import recipient
 
     async def run():
         async with scenario() as (c, people, _, __):
-            with pytest.raises(HTTPException) as denied:
-                await save_telegram_access(
-                    c,
-                    people[2],
-                    people[1].id,
-                    TelegramAccessUpdate(
-                        telegram_id="900000001",
-                        bot_keys=["workspace_notifications"],
-                        expected_revision=1,
-                    ),
-                )
-            assert denied.value.status_code == 422
-            await c.execute(
-                update(users).where(users.c.id == people[0].id).values(department_id=None)
+            result = await save_telegram_access(
+                c, people[2], people[1].id,
+                TelegramAccessUpdate(
+                    telegram_id="900000001", bot_keys=["workspace_notifications"],
+                    expected_revision=1,
+                ),
             )
-            assert not await central_office(c, people[0].id)
+            assert "workspace_notifications" in result.bot_keys
+            assert await recipient(c, people[1].id) == ("900000001", result.revision)
 
     asyncio.run(run())
 

@@ -1611,7 +1611,7 @@ export interface AIReferentConfigurationUpdate {
 export type TelegramBotKey = "ai_referent" | "hisobot" | "takliflar" | "hudud_rating" | "ai_news_reader" | "workspace_notifications";
 
 export interface WorkspaceNoticeTarget {
-  readonly section: "tasks" | "payment_requests";
+  readonly section: WorkspaceSection;
   readonly entityId: string;
 }
 

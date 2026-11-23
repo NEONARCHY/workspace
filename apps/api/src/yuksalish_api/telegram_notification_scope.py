@@ -1,4 +1,4 @@
-"""Additional bot grant never overrides current central-office membership."""
+"""A verified Telegram identity and explicit grant gate Workspace delivery."""
 
 import re
 from uuid import UUID
@@ -60,7 +60,10 @@ async def central_office(c: AsyncConnection, user_id: UUID) -> bool:
 
 
 async def recipient(c: AsyncConnection, user_id: UUID) -> tuple[str, int] | None:
-    if not await central_office(c, user_id):
+    active = await c.scalar(select(users.c.id).where(
+        users.c.id == user_id, users.c.status == "active",
+    ))
+    if active is None:
         return None
     row = (
         (
