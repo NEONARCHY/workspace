@@ -975,6 +975,38 @@ describe("Private messenger", () => {
     await waitFor(() => expect(onDecideTaskDeadline).toHaveBeenCalledWith(authorTask, "deadline-request", true));
   });
 
+  it.each(["manager", "admin", "superadmin"] as const)(
+    "%s executor cannot approve its own deadline request in chat", currentUserRole => {
+      const chat: ChatSummary = {
+        ...initialChats.find((item) => item.id === "task-t-104")!,
+        contextType: "task", contextId: "t-104",
+      };
+      const dueAt = new Date(Date.now() + 2 * 86_400_000).toISOString();
+      const task = { ...initialTasks[0]!, authorId: "baxtiyor", assigneeId: "dilshod",
+        dueAt, chatId: chat.id, deadlineRequests: [{
+          id: "private-deadline", messageId: "private-message", requesterUserId: "dilshod",
+          oldDueAt: dueAt, proposedDueAt: new Date(Date.now() + 4 * 86_400_000).toISOString(),
+          reason: "Нужны материалы", status: "pending" as const, createdAt: new Date().toISOString(),
+        }] };
+      const message: ChatMessage = {
+        id: "private-message", chatId: chat.id, authorId: "dilshod", body: "Прошу перенести срок",
+        systemKind: "task_deadline_request", time: "15:00", createdAt: new Date().toISOString(),
+      };
+      const onDecideTaskDeadline = vi.fn();
+      const { props, rerender } = renderMessenger({
+        chats: [chat], tasks: [task], messages: [message], currentUserId: "dilshod",
+        currentUserRole, onDecideTaskDeadline,
+      });
+      rerender(<FluentProvider theme={webLightTheme}>
+        <EmbeddedConversation {...props} chatId={chat.id} />
+      </FluentProvider>);
+      expect(screen.getByText("Перенос срока · ожидает решения")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Подтвердить перенос" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Отклонить" })).not.toBeInTheDocument();
+      expect(onDecideTaskDeadline).not.toHaveBeenCalled();
+    },
+  );
+
   it("opens the source object from a linked chat", () => {
     const onOpenContext = vi.fn();
     renderMessenger({

@@ -155,8 +155,8 @@ transition, and explanation. Deploy migration `0124_task_reopen_permission` befo
   task endpoint, not only by the desktop filters.
 - The author and primary assignee can read and edit their task.
 - A co-assignee can work on the card; an observer can read and comment.
-- Only the author or an authorized manager can change the deadline directly.
-  Executors request a later deadline from the task chat instead of silently editing it.
+- Only the task author can change the deadline directly, including setting or removing it.
+  Executors request a later deadline from the card or chat instead of silently editing it.
 - Only the author, manager or administrator can change participants.
 - Only the author or an administrator can permanently delete a task. Deletion also
   removes its subtasks, managed task chats, attachment metadata and efficiency events,
@@ -224,9 +224,9 @@ request is pending, its fields, repeated submission and dismissal are blocked.
 Task deletion also removes its task chat and immutable message versions through
 a transaction-scoped purge guard; ordinary message history remains append-only.
 
-An executor or co-assignee can request a later deadline from the task chat with
+An executor or co-assignee can request a later deadline from the task card or chat with
 a reason and local date/time picker. The request and its message are stored in
-one transaction. The author or authorized manager accepts or rejects it in the
+one transaction. Only the task author accepts or rejects it in the
 chat message; the message then shows the persisted decision to every chat
 participant. A task has at most one pending request, duplicate decisions are
 idempotent, and a direct deadline change or task closure supersedes a pending
@@ -252,8 +252,10 @@ by the current employee, and combines with text/role/plan filters. List rows sho
 a compact request badge to all task readers, with personal decision wording for
 the author. Rejected, approved, superseded, closed and stale-deadline requests
 are not counted. The task card uses the existing protected decision endpoint;
-authorized managers retain their prior rights but do not receive every author's
-inbox notification.
+the author's identity is checked again for every decision. Manager, administrator
+and superadministrator roles do not grant direct deadline changes or approval
+of another author's request. The same rule applies to the general task editor,
+the direct extension endpoint and both task-card and messenger controls.
 
 Delivered result and task files precede lifecycle/configuration content in DOM
 and keyboard reading order. The task description, comments and history remain

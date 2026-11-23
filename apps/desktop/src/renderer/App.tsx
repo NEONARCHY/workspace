@@ -2480,6 +2480,7 @@ export function App() {
                 onSubmitResult={handleSubmitTaskResult}
                 onAcceptResult={handleAcceptTaskResult}
                 onExtendDeadline={handleExtendTaskDeadline}
+                onRequestDeadline={handleRequestTaskDeadline}
                 onDecideDeadline={handleDecideTaskDeadline}
                 onSetEfficiencyExclusion={handleTaskEfficiencyExclusion}
                 onUploadAttachments={handleUploadTaskAttachments}

@@ -1,6 +1,6 @@
 import { TaskPersonAvatar } from "./TaskPersonAvatar";
 import { TaskProposalImportLauncher } from "./TaskProposalImport";
-import { canManageAnyTask } from "./task-permissions";
+import { canChangeTaskDeadline, canManageAnyTask } from "./task-permissions";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { LoadingSkeleton } from "./LoadingSkeleton";
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
@@ -32,6 +32,11 @@ import {
   PopoverSurface,
   PopoverTrigger,
   DialogSurface,
+  DialogActions,
+  DialogBody,
+  DialogContent,
+  DialogTitle,
+  Field,
   Textarea,
   useRestoreFocusTarget,
 } from "@fluentui/react-components";
@@ -236,6 +241,7 @@ interface TasksViewProps {
   readonly onAcceptResult: (task: WorkspaceTask) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly onSetEfficiencyExclusion: (task: WorkspaceTask, excluded: boolean, reasonCode?: TaskEfficiencyExclusionReason, reasonText?: string) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly onExtendDeadline: (task: WorkspaceTask, proposedDueAt: string) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
+  readonly onRequestDeadline?: (task: WorkspaceTask, proposedDueAt: string, reason: string) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly onDecideDeadline?: (task: WorkspaceTask, requestId: string, approved: boolean) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly onUploadAttachments: (task: WorkspaceTask, files: readonly File[]) => void | Promise<void>;
   readonly onDownloadAttachment: (attachment: WorkspaceAttachment) => void | Promise<void>;
@@ -283,6 +289,7 @@ export function TasksView(props: TasksViewProps) {
     setSettingsTaskId("");
     if (id !== selectedId) {
       setEditing(false); setExtendingDeadline(false); setCycleEditing(false); setDateError("");
+      setDeadlineReason("");
       setChecklistTitle(""); setCommentBody(""); setParticipantId(""); setDependencyId("");
       setEfficiencyAction(""); setEfficiencyReasonText(""); setReturnDialogOpen(false);
       setResultText(""); setResultError(""); setCreatingSubtask(false); setSubtaskTitle(""); setSubtaskDueAt("");
@@ -343,7 +350,10 @@ export function TasksView(props: TasksViewProps) {
   const [efficiencyReasonText, setEfficiencyReasonText] = useState("");
   const [extendingDeadline, setExtendingDeadline] = useState(false);
   const [extendedDueAt, setExtendedDueAt] = useState("");
+  const [deadlineReason, setDeadlineReason] = useState("");
   const [deadlineBusy, setDeadlineBusy] = useState(false);
+  const deadlineSubmissionLock = useRef(false);
+  const deadlineReasonInput = useRef<HTMLTextAreaElement>(null);
   const [resultText, setResultText] = useState("");
   const [resultError, setResultError] = useState("");
   const [reviewBusy, setReviewBusy] = useState(false);
@@ -500,8 +510,19 @@ export function TasksView(props: TasksViewProps) {
   const canReopenTask = selectedTask?.status === "completed" && props.canReopenCompletedTasks === true;
   const canAcceptResult = selectedTask !== undefined && selectedTask.authorId === currentUserId
     && selectedTask.status === "awaiting_review";
-  const canExtendDeadline = selectedTask !== undefined && canManageParticipants
+  const canChangeDeadline = canChangeTaskDeadline(selectedTask, currentUserId);
+  const canExtendDeadline = selectedTask !== undefined && canChangeDeadline
     && !!selectedTask.dueAt && !["completed", "cancelled"].includes(selectedTask.status);
+  const canRequestDeadline = selectedTask !== undefined && !canChangeDeadline
+    && !!props.onRequestDeadline && !!selectedTask.dueAt
+    && (selectedTask.assigneeId === currentUserId || coAssignee)
+    && !["completed", "cancelled"].includes(selectedTask.status)
+    && !pendingTaskDeadlineRequest(selectedTask);
+  useEffect(() => {
+    if (!detailOpen || !canRequestDeadline || !extendingDeadline) return;
+    const frame = requestAnimationFrame(() => deadlineReasonInput.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [detailOpen, canRequestDeadline, extendingDeadline]);
   const selectedSubtasks = selectedTask === undefined ? [] : tasks.filter((task) => task.parentTaskId === selectedTask.id);
   const selectedParent = selectedTask?.parentTaskId ? tasks.find((task) => task.id === selectedTask.parentTaskId) : undefined;
   const personById = (id: string) => people.find((person) => person.id === id);
@@ -547,7 +568,9 @@ export function TasksView(props: TasksViewProps) {
         ...(editProjectId !== "__legacy__" && editProjectId !== (selectedTask.projectId ?? "")
           ? { projectId: editProjectId || null } : {}),
         assigneeId: editAssigneeId, priority: editPriority,
-        dueAt: editDueAt ? new Date(editDueAt).toISOString() : null,
+        dueAt: canChangeDeadline
+          ? (editDueAt ? new Date(editDueAt).toISOString() : null)
+          : selectedTask.dueAt ?? null,
         ...(editPlanIds !== null ? { planIds: editPlanIds } : {}),
       });
       if (updated !== undefined) {
@@ -652,17 +675,31 @@ export function TasksView(props: TasksViewProps) {
   };
 
   const extendDeadline = async () => {
-    if (!selectedTask?.dueAt || deadlineBusy) return;
+    if (!selectedTask?.dueAt || deadlineSubmissionLock.current
+      || (!canExtendDeadline && !canRequestDeadline)) return;
     const proposed = new Date(extendedDueAt);
     if (!Number.isFinite(proposed.getTime()) || proposed.getTime() <= Math.max(new Date().getTime(), new Date(selectedTask.dueAt).getTime())) {
       setDateError("Выберите дату и время позже текущего срока и настоящего момента.");
       return;
     }
+    const reason = deadlineReason.trim();
+    if (canRequestDeadline && !reason) {
+      setDateError("Укажите причину переноса срока для постановщика.");
+      return;
+    }
+    deadlineSubmissionLock.current = true;
     setDeadlineBusy(true);
     setDateError("");
     try {
-      if (await onExtendDeadline(selectedTask, proposed.toISOString())) setExtendingDeadline(false);
+      const updated = canExtendDeadline
+        ? await onExtendDeadline(selectedTask, proposed.toISOString())
+        : await props.onRequestDeadline?.(selectedTask, proposed.toISOString(), reason);
+      if (updated) { setExtendingDeadline(false); setDeadlineReason(""); }
+      else setDateError("Изменение не сохранено. Повторите попытку.");
+    } catch (cause) {
+      setDateError(cause instanceof Error ? cause.message : "Не удалось отправить изменение срока.");
     } finally {
+      deadlineSubmissionLock.current = false;
       setDeadlineBusy(false);
     }
   };
@@ -841,7 +878,7 @@ export function TasksView(props: TasksViewProps) {
       <DialogSurface ref={decisionSurface} className="task-record-dialog" aria-label={selectedTask.title}><div className="task-record-workspace"><aside className="task-detail task-card-full">
         <div className="task-detail-sticky-header">
         <Button className="task-detail-close" appearance="subtle" icon={<Dismiss24Regular />} aria-label="Закрыть задачу" onClick={() => setDetailOpen(false)} />
-        {dateError ? <div className="auth-error" role="alert">{dateError}</div> : null}
+        {dateError && !(canRequestDeadline && extendingDeadline) ? <div className="auth-error" role="alert">{dateError}</div> : null}
         <div className="task-detail-heading"><div><div className="task-detail-context"><span className="detail-kicker">{selectedTask.project || "Без проекта"}</span><span className="task-detail-context-type">Карточка задачи</span></div><h2>{selectedTask.title}</h2></div><div className="task-detail-heading-actions">{canEdit ? <Button appearance="subtle" icon={<Edit24Regular />} onClick={startEditing}>Редактировать карточку</Button> : null}</div></div>
         {selectedTask.sourceMessageId && sourceNoticeTaskId === selectedTask.id ? <WorkspaceNotice tone="info" className="source-link-note" role="status" actions={<><button type="button" aria-label="Закрыть уведомление" onClick={() => setSourceNoticeTaskId(null)}><Dismiss16Regular /></button></>}>
           <span>Создана из сообщения · связь сохранена</span>
@@ -849,11 +886,11 @@ export function TasksView(props: TasksViewProps) {
         <div className="detail-meta">
           <TaskMetaPerson userId={selectedTask.authorId} person={personById(selectedTask.authorId)} label="Постановщик" token={props.token} />
           <TaskMetaPerson userId={selectedTask.assigneeId} person={personById(selectedTask.assigneeId)} label="Ответственный" token={props.token} />
-          <div className="task-deadline-meta"><Calendar24Regular /><span className="task-meta-copy"><small>Срок</small><strong>{taskDeadlineLabel(selectedTask)}</strong>{canExtendDeadline && <Button className="task-deadline-trigger" size="small" appearance="subtle" aria-expanded={extendingDeadline} disabled={deadlineBusy} onClick={() => {
+          <div className="task-deadline-meta"><Calendar24Regular /><span className="task-meta-copy"><small>Срок</small><strong>{taskDeadlineLabel(selectedTask)}</strong>{(canExtendDeadline || canRequestDeadline) && <Button className="task-deadline-trigger" size="small" appearance="subtle" aria-expanded={extendingDeadline} disabled={deadlineBusy} onClick={() => {
           const base = Math.max(Date.now(), new Date(selectedTask.dueAt!).getTime());
           setExtendedDueAt(localDateTime(new Date(base + 24 * 60 * 60_000).toISOString()));
           setExtendingDeadline(value => !value);
-        }}>Продлить срок</Button>}</span></div></div>
+        }}>{canExtendDeadline ? "Продлить срок" : "Запросить продление"}</Button>}</span></div></div>
         {selectedTask.participants.some((participant) => participant.role === "co_assignee") ? <div className="task-detail-co-assignees">
           <span>Соисполнители</span>
           <div className="task-detail-co-assignee-list">{selectedTask.participants.filter((participant) => participant.role === "co_assignee").map((participant) => {
@@ -866,7 +903,7 @@ export function TasksView(props: TasksViewProps) {
         </div> : null}
         </div>
         {pendingDeadline ? <TaskDeadlineDecision key={pendingDeadline.id} task={selectedTask} request={pendingDeadline}
-          people={people} canDecide={canManageParticipants} onDecide={props.onDecideDeadline}
+          people={people} canDecide={canChangeDeadline} onDecide={props.onDecideDeadline}
           onResolved={() => lifecycleRef.current?.focus()} /> : null}
         <div className={`detail-section task-review-section status-${selectedTask.status}`}><TaskSectionHeading title="Результат и проверка" help="Исполнитель сдаёт результат постановщику. Постановщик принимает задачу или возвращает её с причиной; оба решения сопровождаются уведомлением." meta={reviewStatusLabel(selectedTask.status)} />
           {selectedTask.status === "awaiting_review" ? <p className="task-review-hint">Результат отправлен. Ожидает решения постановщика.</p> : null}
@@ -886,7 +923,7 @@ export function TasksView(props: TasksViewProps) {
         <div ref={lifecycleRef} tabIndex={-1} className="task-lifecycle-summary"><span>Статус <TaskHelp title="Статус задачи">Показывает текущий этап. Действия рядом доступны только тем, у кого есть право менять состояние задачи.</TaskHelp></span><Badge appearance="tint" color={selectedTask.status === "completed" ? "success" : selectedTask.status === "overdue" ? "danger" : selectedTask.status === "awaiting_review" ? "warning" : "informative"}>{statusLabels[selectedTask.status]}</Badge>{canEdit && selectedTask.status === "new" ? <Button appearance="subtle" onClick={() => void onChangeStatus(selectedTask.id, "in_progress")}>Начать работу</Button> : canManageParticipants && ["in_progress", "overdue"].includes(selectedTask.status) ? <Button appearance="subtle" onClick={() => void onChangeStatus(selectedTask.id, "cancelled")}>Отменить задачу</Button> : null}</div>
         {canExtendDeadline && extendingDeadline ? <div className="task-deadline-control">
           <div className="task-deadline-editor" role="region" aria-label="Продление срока">
-            <label>Новый срок<WorkspaceDateTimePicker ariaLabel="Новый срок задачи" value={extendedDueAt} min={localDateTime(selectedTask.dueAt)} onChange={setExtendedDueAt} /></label>
+            <label>Новый срок<WorkspaceDateTimePicker ariaLabel="Новый срок задачи" value={extendedDueAt} min={localDateTime(selectedTask.dueAt)} onChange={setExtendedDueAt} disabled={deadlineBusy} /></label>
             <Button appearance="primary" disabled={deadlineBusy} onClick={() => void extendDeadline()}>{deadlineBusy ? "Сохраняем…" : "Сохранить срок"}</Button>
             <Button appearance="subtle" disabled={deadlineBusy} onClick={() => setExtendingDeadline(false)}>Отмена</Button>
           </div>
@@ -915,7 +952,7 @@ export function TasksView(props: TasksViewProps) {
             onChange={setEditPlanIds} disabled={editBusy} readOnly={!canManageParticipants} />
           <div className="task-people-scope-field"><span>Ответственный</span>{departments ? <EmployeeScopeSwitch value={editAssigneeScope} onChange={(next) => { setEditAssigneeScope(next); setEditAssigneeId(""); }} label="Группа ответственных" /> : null}<WorkspaceSelect aria-label="Ответственный задачи" value={editAssigneeId} onChange={(event) => setEditAssigneeId(event.target.value)}><option value="">Выберите сотрудника</option>{people.filter((person) => inEmployeeScope(person, editAssigneeScope)).map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</WorkspaceSelect></div>
           <label><span>Приоритет</span><WorkspaceSelect aria-label="Приоритет задачи" variant="priority" value={editPriority} onChange={(event) => setEditPriority(event.target.value as WorkspaceTask["priority"])}><option value="low">Низкий</option><option value="normal">Обычный</option><option value="high">Высокий</option><option value="urgent">Срочный</option></WorkspaceSelect></label>
-          <label><span>Срок</span><WorkspaceDateTimePicker ariaLabel="Срок задачи" value={editDueAt} onChange={setEditDueAt} /></label>
+          <label><span>Срок</span><WorkspaceDateTimePicker ariaLabel="Срок задачи" value={editDueAt} onChange={setEditDueAt} disabled={!canChangeDeadline || editBusy} />{!canChangeDeadline ? <small>Срок меняет постановщик. Исполнитель может запросить продление.</small> : null}</label>
           {editError && <WorkspaceNotice tone="error" role="alert">{editError}</WorkspaceNotice>}
           <div className="task-editor-actions"><Button appearance="primary" disabled={editBusy} onClick={() => void saveTask()}>{editBusy ? "Сохраняем…" : "Сохранить карточку"}</Button><Button appearance="subtle" disabled={editBusy} onClick={() => setEditing(false)}>Отмена</Button></div>
         </fieldset> : null}
@@ -994,6 +1031,41 @@ export function TasksView(props: TasksViewProps) {
           reopen={canReopenTask}
           taskTitle={selectedTask.title} onClose={() => setReturnDialogOpen(false)}
           onSubmit={returnForRevision} />
+        <Dialog open={detailOpen && canRequestDeadline && extendingDeadline}
+          onOpenChange={(_event, data) => { if (!data.open && !deadlineBusy) setExtendingDeadline(false); }}>
+          <DialogSurface className="task-deadline-request-dialog" aria-busy={deadlineBusy}>
+            <DialogBody>
+              <DialogTitle action={{ className: "task-deadline-request-close", children:
+                <Button appearance="subtle" shape="circular" icon={<Dismiss24Regular />}
+                  aria-label="Закрыть запрос продления" disabled={deadlineBusy}
+                  onClick={() => setExtendingDeadline(false)} /> }}>
+                Запросить продление срока
+              </DialogTitle>
+              <DialogContent>
+                <section className="task-deadline-request-fields" role="region" aria-label="Запрос продления срока">
+                  <strong>{selectedTask.title}</strong>
+                  <p>Срок изменится после одобрения постановщика.</p>
+                  <Field label="Новый срок" required>
+                    <WorkspaceDateTimePicker ariaLabel="Новый срок задачи" value={extendedDueAt}
+                      min={localDateTime(selectedTask.dueAt)} onChange={setExtendedDueAt} disabled={deadlineBusy} />
+                  </Field>
+                  <Field label="Причина переноса" required>
+                    <Textarea textarea={{ ref: deadlineReasonInput }} aria-label="Причина переноса срока" value={deadlineReason} rows={4}
+                      maxLength={2000} disabled={deadlineBusy}
+                      onChange={(_event, data) => setDeadlineReason(data.value)} />
+                  </Field>
+                  {dateError ? <WorkspaceNotice tone="error" role="alert">{dateError}</WorkspaceNotice> : null}
+                </section>
+              </DialogContent>
+              <DialogActions>
+                <Button appearance="subtle" disabled={deadlineBusy} onClick={() => setExtendingDeadline(false)}>Отмена</Button>
+                <Button appearance="primary" disabled={deadlineBusy} onClick={() => void extendDeadline()}>
+                  {deadlineBusy ? "Сохраняем…" : "Отправить постановщику"}
+                </Button>
+              </DialogActions>
+            </DialogBody>
+          </DialogSurface>
+        </Dialog>
       </DialogSurface>
       </Dialog> : null}
       {pendingTaskDelete ? <ConfirmActionDialog

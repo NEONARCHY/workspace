@@ -678,8 +678,7 @@ function Conversation({
     && !!currentExecutor && taskForChat.authorId !== currentUserId
     && !["completed", "cancelled"].includes(taskForChat.status)
     && !taskForChat.deadlineRequests?.some((item) => item.status === "pending");
-  const canDecideDeadline = taskForChat?.authorId === currentUserId
-    || ["manager", "admin", "superadmin"].includes(currentUserRole);
+  const canDecideDeadline = taskForChat?.authorId === currentUserId;
   const requestDeadline = async () => {
     if (!taskForChat?.dueAt || !onRequestTaskDeadline || deadlineBusy) return;
     const proposed = new Date(deadlineDate);

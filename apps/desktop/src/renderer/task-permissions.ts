@@ -1,4 +1,10 @@
-import type { WorkspacePerson } from "@yuksalish/contracts";
+import type { WorkspacePerson, WorkspaceTask } from "@yuksalish/contracts";
+
+export function canChangeTaskDeadline(
+  task: Pick<WorkspaceTask, "authorId"> | undefined, currentUserId: string,
+): boolean {
+  return task?.authorId === currentUserId;
+}
 
 // Mirror repository._task_access_row / position_policy.is_executive_leader.
 // The chairman can read all tasks, but edit/manage rights depend on participation.

@@ -97,7 +97,7 @@ describe("chairman task actions", () => {
       jobTitle: role === "manager" ? "Руководитель отдела" : taskChairman.jobTitle });
     expect(screen.getByRole("button", { name: "Редактировать карточку" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Вернуть на доработку" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Продлить срок" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Продлить срок" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Утвердить результат" })).not.toBeInTheDocument();
   });
 
