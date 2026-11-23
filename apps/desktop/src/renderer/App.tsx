@@ -2618,6 +2618,11 @@ export function App() {
                 currentUserId={workspace.currentUser.id}
                 canEdit={modulePermissions.incoming_letters?.edit ?? false}
                 canManageAccess={isAdmin}
+                onOpenTask={async (taskId) => {
+                  await refreshWorkspace(session.accessToken);
+                  setFocusTarget((current) => ({ section: "tasks", entityId: taskId, revision: (current?.revision ?? 0) + 1 }));
+                  setActiveSection("tasks");
+                }}
               />
             ) : null}
             {displayedSection === "ai_hisobot" ? (

@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from test_zoom_postgres import zoom_settings
 from yuksalish_api.auth import issue_access_token
 from yuksalish_api.main import create_app
+from yuksalish_api.monthly_report_tables import members as monthly_report_members
 from yuksalish_api.tables import (
     ai_referent_agents,
     ai_referent_incoming_access,
@@ -281,5 +282,10 @@ async def test_incoming_visibility_scopes_and_admin_controls():
                     ai_referent_agents.c.agent_id.in_((agent, f"{agent}-other"))
                 )
             )
+            # The real app scheduler can snapshot these synthetic users during
+            # the test. Remove only their memberships before deleting the users.
+            await connection.execute(delete(monthly_report_members).where(
+                monthly_report_members.c.user_id.in_(ids.values()),
+            ))
             await connection.execute(delete(users).where(users.c.id.in_(ids.values())))
         await engine.dispose()

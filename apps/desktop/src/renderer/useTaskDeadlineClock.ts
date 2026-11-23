@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { WorkspaceTask } from "@yuksalish/contracts";
 
-export function useTaskDeadlineClock(tasks: readonly WorkspaceTask[]): number {
+export function useTaskDeadlineClock(tasks: readonly Pick<WorkspaceTask, "dueAt" | "status">[]): number {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const date = new Date(now);

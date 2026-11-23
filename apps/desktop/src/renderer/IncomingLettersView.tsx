@@ -10,6 +10,8 @@ import {
   loadEdoIncomingLetter, loadEdoIncomingLetters, loadEdoIncomingOfficePreview,
 } from "./workspace-api";
 import "./incoming-letters.css";
+import { Tab, TabList } from "@fluentui/react-components";
+import { IncomingDocumentsView } from "./IncomingDocumentsView";
 import { EdoIncomingAccess, edoVisibilityLabels } from "./EdoIncomingAccess";
 import { WorkspaceSelect } from "./WorkspaceSelect";
 import type { FileViewerSource } from "./FileViewer";
@@ -41,14 +43,29 @@ function safeFileName(name: string): string {
   ).join("").slice(0, 180) || "document";
 }
 
-export function IncomingLettersView({ token, people, currentUserId, canEdit, focusLetterId, canManageAccess = false }: {
+interface IncomingLettersViewProps {
   readonly token: string;
   readonly people: readonly WorkspacePerson[];
   readonly currentUserId: string;
   readonly canEdit: boolean;
   readonly focusLetterId?: number;
   readonly canManageAccess?: boolean;
-}) {
+  readonly onOpenTask?: (taskId: string) => Promise<void>;
+}
+
+export function IncomingLettersView(props: IncomingLettersViewProps) {
+  const [source, setSource] = useState<"workspace" | "edo">(() => props.focusLetterId ? "edo" : "workspace");
+  return <div className="incoming-workspace">
+    <TabList className="incoming-workspace-tabs" aria-label="Источник входящих писем" selectedValue={source}
+      onTabSelect={(_, data) => setSource(data.value === "edo" ? "edo" : "workspace")}>
+      <Tab value="workspace">Документооборот</Tab><Tab value="edo">Письма из ЭДО</Tab>
+    </TabList>
+    {source === "workspace" ? <IncomingDocumentsView token={props.token} people={props.people} onOpenTask={props.onOpenTask} />
+      : <LegacyIncomingLettersView {...props} />}
+  </div>;
+}
+
+export function LegacyIncomingLettersView({ token, people, currentUserId, canEdit, focusLetterId, canManageAccess = false }: IncomingLettersViewProps) {
   const [managingAccess, setManagingAccess] = useState(false);
   const [searchInput, setSearchInput] = useState("");
   const [query, setQuery] = useState("");
