@@ -33,8 +33,8 @@ def upgrade() -> None:
                  'pending', now(), 0
           WHERE EXISTS (
             SELECT 1 FROM core_users u
-            JOIN telegram_identities i ON i.user_id = u.id
-            JOIN telegram_bot_grants g ON g.user_id = u.id
+            JOIN core_telegram_identities i ON i.user_id = u.id
+            JOIN core_telegram_bot_grants g ON g.user_id = u.id
             WHERE u.id = NEW.user_id AND u.status = 'active'
               AND i.telegram_id IS NOT NULL AND i.verified_at IS NOT NULL
               AND g.bot_key = 'workspace_notifications'
