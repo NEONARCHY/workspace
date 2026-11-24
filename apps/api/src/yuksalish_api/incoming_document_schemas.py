@@ -24,6 +24,8 @@ class IncomingDocument(ApiModel):
     subject: str
     sender: str
     received_at: datetime | None
+    registered_at: datetime | None = None
+    added_at: datetime | None = None
     source: str
     files_expected: bool = False
     execution: IncomingExecution | None = None

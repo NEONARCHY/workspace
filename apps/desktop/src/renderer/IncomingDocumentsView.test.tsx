@@ -4,10 +4,11 @@ import { FluentProvider } from "@fluentui/react-components";
 import type { IncomingDocumentDetail, WorkspaceDepartment, WorkspacePerson } from "@yuksalish/contracts";
 import { workspaceTheme } from "./workspace-theme";
 import { IncomingLettersView } from "./IncomingLettersView";
-import { acceptWorkspaceTaskResult, assignIncomingDocument, downloadIncomingDocumentFile, loadEdoIncomingLetters, loadIncomingDocument, loadIncomingDocuments, loadProfileAvatar, submitWorkspaceTaskResult, uploadWorkspaceAttachment } from "./workspace-api";
+import { acceptWorkspaceTaskResult, assignIncomingDocument, downloadIncomingDocumentFile, loadEdoIncomingLetters, loadIncomingDocument, loadIncomingDocuments, loadProfileAvatar, loadTaskHistory, submitWorkspaceTaskResult, uploadWorkspaceAttachment } from "./workspace-api";
 
 vi.mock("./workspace-api", () => ({
   loadIncomingDocuments: vi.fn(), loadIncomingDocument: vi.fn(), assignIncomingDocument: vi.fn(),
+  loadTaskHistory: vi.fn().mockResolvedValue({ events: [], historyComplete: true }),
   downloadIncomingDocumentFile: vi.fn(), previewIncomingDocumentFile: vi.fn(),
   loadEdoIncomingLetters: vi.fn(), loadEdoIncomingLetter: vi.fn(), addEdoIncomingAssignment: vi.fn(),
   completeEdoIncomingLetter: vi.fn(), downloadEdoIncomingAttachment: vi.fn(), loadEdoIncomingOfficePreview: vi.fn(),
@@ -55,6 +56,7 @@ async function openForm() {
 describe("Workspace incoming document workflow", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    vi.mocked(loadTaskHistory).mockResolvedValue({ events: [], historyComplete: true });
     vi.mocked(loadIncomingDocuments).mockResolvedValue({ documents: [detail.document], total: 1, offset: 0, limit: 30 });
     vi.mocked(loadIncomingDocument).mockResolvedValue(detail);
     vi.mocked(loadEdoIncomingLetters).mockResolvedValue({ data: [], meta: { page: 1, limit: 20, total: 0 }, deadline_timezone_verified: false });
@@ -67,6 +69,23 @@ describe("Workspace incoming document workflow", () => {
     expect(loadEdoIncomingLetters).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("tab", { name: "Письма из ЭДО" }));
     await waitFor(() => expect(loadEdoIncomingLetters).toHaveBeenCalled());
+  });
+
+  it("shows the first Workspace import in the list separately from source registration", async () => {
+    const dated = { ...detail, document: { ...detail.document,
+      addedAt: "2026-11-24T05:00:00Z", registeredAt: "2026-11-22T05:00:00Z" } };
+    vi.mocked(loadIncomingDocuments).mockResolvedValue({ documents: [dated.document], total: 1, offset: 0, limit: 30 });
+    vi.mocked(loadIncomingDocument).mockResolvedValue(dated);
+    show();
+    const row = await screen.findByRole("button", { name: /№ QA-1/ });
+    expect(row.querySelector("time")).toHaveAttribute("dateTime", dated.document.addedAt);
+    expect(row).toHaveTextContent(/В Workspace:.*24\.11\.2026/);
+    fireEvent.click(row);
+    expect(await screen.findByText("Регистрация в источнике")).toBeVisible();
+    const activity = screen.getByRole("region", { name: "Активность письма" });
+    expect(within(activity).getByText("Зарегистрировано в источнике")).toBeVisible();
+    expect(within(activity).getByText("Добавлено в Workspace")).toBeVisible();
+    expect(loadTaskHistory).not.toHaveBeenCalled();
   });
 
   it("requires an explicit resolution choice and provides the four requested options", async () => {

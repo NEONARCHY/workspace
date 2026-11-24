@@ -142,3 +142,8 @@
   .incoming-status, .incoming-result, .incoming-responsibility > div { border-color: CanvasText; }
   .incoming-progress li[data-reached="true"] { border-color: Highlight; }
 }
+.incoming-document-row-date { color: var(--ws-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.incoming-document-activity { border-top: 1px solid var(--ws-line); padding-top: 20px; margin-top: 20px; }
+.incoming-document-activity h3 { margin: 0; }
+.incoming-document-activity .task-history-list { margin-bottom: 0; }
+.incoming-document-activity time { font-variant-numeric: tabular-nums; }

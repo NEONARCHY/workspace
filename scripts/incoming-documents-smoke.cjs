@@ -16,7 +16,8 @@ const path = require("node:path");
       let assigned = false;
       let personalMode = false;
       const document = { id: "source", revision: 1, number: "QA-184", subject: "Подготовить ответ по обращению организации",
-        sender: "Тестовая организация", receivedAt: "2026-11-23T05:00:00Z", source: "exat", filesExpected: true,
+        sender: "Тестовая организация", receivedAt: "2026-11-23T05:00:00Z", registeredAt: "2026-11-23T05:15:00Z",
+        addedAt: "2026-11-23T06:00:00Z", source: "exat", filesExpected: true,
         canAssign: true, canOpenTask: false, execution: null };
       const originalText = "Тестовое обращение организации.\n<script>Текст письма, а не исполняемая разметка</script>";
       const files = [{ id: "original", name: "Обращение.txt", byteSize: Buffer.byteLength(originalText), sha256: "a".repeat(64) }];
@@ -40,6 +41,13 @@ const path = require("node:path");
           return route.fulfill({ json: { document, files, executionDetail } });
         }
         assert.equal(route.request().method(), "GET");
+        if (url.pathname.endsWith("/tasks/execution-task/history")) return route.fulfill({ json: {
+          historyComplete: true, nextOffset: null, events: [
+            ...(document.execution.status === "completed" ? [{ id: "closed", kind: "task_completed", occurredAt: "2026-11-24T09:00:00Z", actorUserId: "author", actorName: "Постановщик QA" }] : []),
+            ...(executionDetail.resultText ? [{ id: "submitted", kind: "result_submitted_for_review", occurredAt: "2026-11-24T08:00:00Z", actorUserId: "executor", actorName: "Исполнитель QA" }] : []),
+            { id: "created", kind: "task_created", occurredAt: "2026-11-23T09:00:00Z", actorUserId: "author", actorName: "Постановщик QA" },
+          ],
+        } });
         if (url.pathname.endsWith("/attachments/result-image")) return route.fulfill({ contentType: "image/png", body: imageBytes });
         if (url.pathname.endsWith("/files/original")) return route.fulfill({ contentType: "text/plain; charset=utf-8", body: originalText });
         if (url.pathname.endsWith("/incoming-documents/source")) return route.fulfill({ json: { document, files, executionDetail } });
@@ -52,6 +60,8 @@ const path = require("node:path");
       const base = process.env.INCOMING_QA_BASE || "http://127.0.0.1:5189";
       await page.goto(`${base}/qa/incoming-documents.html?theme=${theme}`);
       await page.getByRole("button", { name: /№ QA-184/ }).click();
+      assert.equal(await page.getByRole("button", { name: /№ QA-184/ }).locator("time").getAttribute("datetime"), document.addedAt);
+      await page.getByRole("region", { name: "Активность письма" }).getByText("Письмо поступило", { exact: true }).waitFor();
       await page.getByRole("button", { name: "Открыть Обращение.txt" }).click();
       await page.getByRole("dialog").getByText(originalText, { exact: true }).waitFor();
       await page.waitForFunction(() => {
@@ -141,6 +151,12 @@ const path = require("node:path");
       await page.getByText(executionDetail.resultText).waitFor();
       await page.getByText("Официальный ответ.pdf", { exact: true }).waitFor();
       await page.getByText("Файлы: 2", { exact: true }).waitFor();
+      const activity = page.getByRole("region", { name: "Активность письма" });
+      await activity.getByText("Исполнение завершено", { exact: true }).waitFor();
+      assert.deepEqual(await activity.locator("li time").evaluateAll(times => times.map(time => time.dateTime)), [
+        "2026-11-24T09:00:00Z", "2026-11-24T08:00:00Z", "2026-11-23T09:00:00Z",
+        document.addedAt, document.registeredAt, document.receivedAt,
+      ]);
       assert(await page.evaluate(() => {
         const result = document.querySelector(".incoming-result");
         return [".incoming-responsibility", ".incoming-originals"].every(selector =>
@@ -168,6 +184,8 @@ const path = require("node:path");
         const dimensions = await page.evaluate(() => ({ width: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth }));
         assert(dimensions.scroll <= dimensions.width + 1, JSON.stringify({ theme, width, dimensions }));
         await page.screenshot({ path: path.join(output, `${theme}-result-${width}.png`), fullPage: true });
+        await activity.getByText("Письмо поступило", { exact: true }).scrollIntoViewIfNeeded();
+        await page.screenshot({ path: path.join(output, `${theme}-activity-${width}.png`), fullPage: true });
         results.push({ theme, width, height, personalLettersTab: true, inlineResult: true, noHorizontalOverflow: true });
       }
       await page.setViewportSize({ width: 1440, height: 900 });

@@ -12,6 +12,7 @@ import { assignIncomingDocument, downloadIncomingDocumentFile, loadIncomingDocum
 import { saveReferentBlob } from "./AIReferentFiles";
 import { IncomingDocumentExecution, IncomingDocumentStatus } from "./IncomingDocumentExecution";
 import { ProfileAvatar } from "./ProfileAvatar";
+import { IncomingDocumentActivity } from "./IncomingDocumentActivity";
 import { isTaskOverdue } from "./task-deadline";
 import { useTaskDeadlineClock } from "./useTaskDeadlineClock";
 import { focusWorkspaceDialog, WorkspaceDialog } from "./WorkspaceDialog";
@@ -34,7 +35,7 @@ function DocumentPerson({ id, name, people, token }: {
   </span>;
 }
 
-function dateLabel(value: string | null) {
+function dateLabel(value: string | null | undefined) {
   return value ? new Date(value).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" }) : "Не указан";
 }
 
@@ -196,6 +197,8 @@ function DocumentCard({ token, detail, people, departments, now, onSaved, onOpen
     <div className="incoming-section-heading"><span className="incoming-document-eyebrow">Входящее № {document.number}</span><IncomingDocumentStatus status={execution?.status} /></div>
     <h2>{document.subject}</h2><p>{document.sender || "Отправитель не указан"}</p>
     <dl><div><dt>Получено</dt><dd>{dateLabel(document.receivedAt)}</dd></div>
+      <div><dt>Добавлено в Workspace</dt><dd>{dateLabel(document.addedAt)}</dd></div>
+      {document.registeredAt ? <div><dt>Регистрация в источнике</dt><dd>{dateLabel(document.registeredAt)}</dd></div> : null}
       <div><dt>Канал</dt><dd>{document.source === "exat" ? "E-XAT" : document.source === "webmail" ? "Электронная почта" : "Импорт"}</dd></div></dl>
     {execution ? <IncomingDocumentExecution token={token} detail={detail} people={people} now={now} onSaved={onSaved} /> : null}
     <details className="incoming-originals" open={!execution}>
@@ -218,6 +221,7 @@ function DocumentCard({ token, detail, people, departments, now, onSaved, onOpen
           : <p className="incoming-document-help">Назначение доступно сотруднику с правами на это письмо и создание поручений.</p>}
       </section>}
     {error ? <WorkspaceNotice tone="error">{error}</WorkspaceNotice> : null}
+    <IncomingDocumentActivity token={token} detail={detail} />
     {preview ? <DocumentViewer token={token} documentId={document.id} file={preview} onClose={() => setPreview(undefined)} /> : null}
   </article>;
 }
@@ -296,6 +300,7 @@ export function IncomingDocumentsView({ token, people, departments, onOpenTask, 
               key={document.id} aria-pressed={document.id === selectedId} onClick={() => select(document)}>
               <span className="incoming-document-row-meta"><strong>№ {document.number}</strong><IncomingDocumentStatus status={document.execution?.status} /></span>
               <strong>{document.subject}</strong><span>{document.sender || "Отправитель не указан"}</span>
+              <span className="incoming-document-row-date">В Workspace: {document.addedAt ? <time dateTime={document.addedAt}>{dateLabel(document.addedAt)}</time> : "Дата не передана"}</span>
               {document.execution ? <span className="incoming-document-row-execution">
                 <DocumentPerson id={document.execution.assigneeId} name={document.execution.assigneeName} people={people} token={token} />
                 <small data-overdue={isTaskOverdue(document.execution, now)}>{dateLabel(document.execution.dueAt)}{isTaskOverdue(document.execution, now) ? " · Срок истёк" : ""}</small>
