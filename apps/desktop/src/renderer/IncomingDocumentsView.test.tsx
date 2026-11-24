@@ -4,7 +4,7 @@ import { FluentProvider } from "@fluentui/react-components";
 import type { IncomingDocumentDetail, WorkspacePerson } from "@yuksalish/contracts";
 import { workspaceTheme } from "./workspace-theme";
 import { IncomingLettersView } from "./IncomingLettersView";
-import { acceptWorkspaceTaskResult, assignIncomingDocument, downloadIncomingDocumentFile, loadEdoIncomingLetters, loadIncomingDocument, loadIncomingDocuments, submitWorkspaceTaskResult } from "./workspace-api";
+import { acceptWorkspaceTaskResult, assignIncomingDocument, downloadIncomingDocumentFile, loadEdoIncomingLetters, loadIncomingDocument, loadIncomingDocuments, loadProfileAvatar, submitWorkspaceTaskResult } from "./workspace-api";
 
 vi.mock("./workspace-api", () => ({
   loadIncomingDocuments: vi.fn(), loadIncomingDocument: vi.fn(), assignIncomingDocument: vi.fn(),
@@ -12,7 +12,7 @@ vi.mock("./workspace-api", () => ({
   loadEdoIncomingLetters: vi.fn(), loadEdoIncomingLetter: vi.fn(), addEdoIncomingAssignment: vi.fn(),
   completeEdoIncomingLetter: vi.fn(), downloadEdoIncomingAttachment: vi.fn(), loadEdoIncomingOfficePreview: vi.fn(),
   submitWorkspaceTaskResult: vi.fn(), acceptWorkspaceTaskResult: vi.fn(), returnWorkspaceTaskForRevision: vi.fn(),
-  uploadWorkspaceAttachment: vi.fn(), downloadWorkspaceAttachment: vi.fn(), loadOfficeFilePreview: vi.fn(),
+  uploadWorkspaceAttachment: vi.fn(), downloadWorkspaceAttachment: vi.fn(), loadOfficeFilePreview: vi.fn(), loadProfileAvatar: vi.fn(),
 }));
 vi.mock("./AIReferentFiles", () => ({ saveReferentBlob: vi.fn() }));
 vi.mock("./WorkspaceDateTimePicker", () => ({
@@ -34,8 +34,8 @@ const detail: IncomingDocumentDetail = {
 const assigned: IncomingDocumentDetail = { ...detail, document: { ...detail.document, canAssign: false, canOpenTask: true,
   execution: { taskId: "task", status: "new", dueAt: "2030-01-01T12:00:00Z", assigneeId: "executor", assigneeName: "Исполнитель QA", authorId: "author" } } };
 
-function show(onOpenTask = vi.fn().mockResolvedValue(undefined), focusLetterId?: number) {
-  render(<FluentProvider theme={workspaceTheme}><IncomingLettersView token="qa-token" people={people}
+function show(onOpenTask = vi.fn().mockResolvedValue(undefined), focusLetterId?: number, directory = people) {
+  render(<FluentProvider theme={workspaceTheme}><IncomingLettersView token="qa-token" people={directory}
     currentUserId="author" canEdit canManageAccess onOpenTask={onOpenTask} focusLetterId={focusLetterId} /></FluentProvider>);
   return onOpenTask;
 }
@@ -43,7 +43,8 @@ function show(onOpenTask = vi.fn().mockResolvedValue(undefined), focusLetterId?:
 async function openForm() {
   fireEvent.click(await screen.findByRole("button", { name: /№ QA-1/ }));
   fireEvent.click(await screen.findByRole("button", { name: "Назначить исполнение" }));
-  fireEvent.change(screen.getByLabelText("Что нужно сделать"), { target: { value: "Подготовить официальный ответ" } });
+  fireEvent.click(screen.getByRole("combobox", { name: "Что нужно сделать" }));
+  fireEvent.click(await screen.findByRole("option", { name: "Таклиф киритиш учун" }));
   fireEvent.click(screen.getByRole("button", { name: "Основной исполнитель" }));
   fireEvent.click(await screen.findByRole("button", { name: /Исполнитель QA/ }));
   fireEvent.click(screen.getByRole("button", { name: "Добавить соисполнителя" }));
@@ -58,7 +59,7 @@ describe("Workspace incoming document workflow", () => {
     vi.mocked(loadIncomingDocument).mockResolvedValue(detail);
     vi.mocked(loadEdoIncomingLetters).mockResolvedValue({ data: [], meta: { page: 1, limit: 20, total: 0 }, deadline_timezone_verified: false });
   });
-  afterEach(cleanup);
+  afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
   it("opens the local registry by default and preserves explicit legacy navigation", async () => {
     show();
@@ -66,6 +67,30 @@ describe("Workspace incoming document workflow", () => {
     expect(loadEdoIncomingLetters).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("tab", { name: "Письма из ЭДО" }));
     await waitFor(() => expect(loadEdoIncomingLetters).toHaveBeenCalled());
+  });
+
+  it("requires an explicit resolution choice and provides the four requested options", async () => {
+    show();
+    fireEvent.click(await screen.findByRole("button", { name: /№ QA-1/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Назначить исполнение" }));
+    expect(screen.queryByRole("textbox", { name: "Что нужно сделать" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Создать поручение" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("combobox", { name: "Что нужно сделать" }));
+    const options = await screen.findAllByRole("option");
+    expect(options.filter(option => option.getAttribute("aria-disabled") !== "true").map(option => option.textContent)).toEqual([
+      "Ижро учун", "Тезкор", "Маълумот учун", "Таклиф киритиш учун",
+    ]);
+  });
+
+  it("shows the responsible person's authenticated photo in the letter list", async () => {
+    vi.mocked(loadIncomingDocuments).mockResolvedValue({ documents: [assigned.document], total: 1, offset: 0, limit: 30 });
+    vi.mocked(loadProfileAvatar).mockResolvedValue(new Blob(["synthetic photo"], { type: "image/png" }));
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:incoming-assignee-photo");
+    show(undefined, undefined, people.map(person => person.id === "executor" ? { ...person, avatarVersion: "incoming-photo-v1" } : person));
+    const row = await screen.findByRole("button", { name: /№ QA-1/ });
+    await waitFor(() => expect(row.querySelector(".fui-Avatar__image")).toHaveAttribute("src", "blob:incoming-assignee-photo"));
+    expect(loadProfileAvatar).toHaveBeenCalledWith("qa-token", "executor", "incoming-photo-v1");
+    expect(row.querySelector(".fui-Avatar")).toHaveAttribute("aria-hidden", "true");
   });
 
   it("creates only after confirmation and submits the reviewed people, deadline and source revision", async () => {
@@ -76,7 +101,7 @@ describe("Workspace incoming document workflow", () => {
     fireEvent.click(screen.getByRole("button", { name: "Создать поручение" }));
     await screen.findByRole("button", { name: "Открыть поручение" });
     expect(assignIncomingDocument).toHaveBeenCalledWith("qa-token", "source", expect.objectContaining({
-      expectedRevision: 1, instruction: "Подготовить официальный ответ", assigneeId: "executor", coAssigneeIds: ["co"],
+      expectedRevision: 1, instruction: "Таклиф киритиш учун", assigneeId: "executor", coAssigneeIds: ["co"],
       fileIds: ["file"],
       operationId: expect.any(String), dueAt: new Date("2030-01-01T17:00").toISOString(),
     }));
@@ -89,12 +114,12 @@ describe("Workspace incoming document workflow", () => {
     vi.mocked(assignIncomingDocument).mockRejectedValueOnce(new Error("Временный сбой хранилища"));
     fireEvent.click(screen.getByRole("button", { name: "Создать поручение" }));
     await screen.findByText("Временный сбой хранилища");
-    expect(screen.getByLabelText("Что нужно сделать")).toHaveValue("Подготовить официальный ответ");
+    expect(screen.getByRole("combobox", { name: "Что нужно сделать" })).toHaveTextContent("Таклиф киритиш учун");
     expect(screen.getByRole("button", { name: "Создать поручение" })).toBeDisabled();
     vi.mocked(loadIncomingDocument).mockResolvedValue({ ...detail, document: { ...detail.document, revision: 2 } });
     fireEvent.click(screen.getByRole("button", { name: "Проверить состояние" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Создать поручение" })).toBeEnabled());
-    expect(screen.getByLabelText("Что нужно сделать")).toHaveValue("Подготовить официальный ответ");
+    expect(screen.getByRole("combobox", { name: "Что нужно сделать" })).toHaveTextContent("Таклиф киритиш учун");
     vi.mocked(assignIncomingDocument).mockResolvedValue(assigned);
     fireEvent.click(screen.getByRole("button", { name: "Создать поручение" }));
     await screen.findByRole("button", { name: "Открыть поручение" });
