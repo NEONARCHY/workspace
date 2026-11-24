@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from "react";
+import { useId, useLayoutEffect, useRef, useState } from "react";
 import { Button } from "@fluentui/react-components";
 import type { GrantAction, GrantDeadlineRequest, GrantDetail, WorkspacePerson } from "@yuksalish/contracts";
 import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
@@ -30,6 +30,9 @@ export function GrantDeadlinePanel({ detail, people, busy, now, onPerform }: {
   const [uncertain, setUncertain] = useState(false);
   const submitting = useRef(false);
   const reasonHelpId = useId();
+  const panelRef = useRef<HTMLElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const checkRef = useRef<HTMLButtonElement>(null);
   const pending = detail.pendingDeadlineRequest;
   const expired = Boolean(pending && Date.parse(pending.dueAt) <= now);
   const history = detail.deadlineRequests?.filter(request => request.status !== "pending") ?? [];
@@ -53,12 +56,30 @@ export function GrantDeadlinePanel({ detail, people, busy, now, onPerform }: {
       setUncertain(true);
     } finally { submitting.current = false; }
   };
-  if (!pending && !history.length && !can("extend_deadline") && !can("request_deadline")) return null;
   const stale = Boolean(form && form.revision !== detail.revision);
   const allowed = Boolean(form && can(form.action));
+  const needsCheck = Boolean(uncertain || stale || (form && !allowed));
+  const formAction = form?.action;
+  const previousFocus = useRef<{ action?: FormAction; pendingId?: string; needsCheck: boolean }>({
+    pendingId: pending?.id, needsCheck: false,
+  });
+  useLayoutEffect(() => {
+    const previous = previousFocus.current;
+    previousFocus.current = { action: formAction, pendingId: pending?.id, needsCheck };
+    const lostFocus = document.activeElement === document.body;
+    if (formAction && !needsCheck && (previous.action !== formAction || (previous.needsCheck && lostFocus))) {
+      formRef.current?.querySelector<HTMLElement>(".ws-date-time-trigger, textarea, input:not(.ws-date-time-required-proxy)")?.focus();
+    } else if (needsCheck && lostFocus && !busy) {
+      checkRef.current?.focus();
+    } else if (lostFocus && !formAction && (previous.action || (previous.pendingId && previous.pendingId !== pending?.id))) {
+      const target = panelRef.current?.querySelector<HTMLElement>(".grant-deadline-heading button") ?? panelRef.current;
+      target?.focus({ preventScroll: true });
+    }
+  }, [formAction, pending?.id, needsCheck, busy]);
+  if (!pending && !history.length && !can("extend_deadline") && !can("request_deadline")) return null;
   const validDate = form?.action === "reject_deadline" || (Number.isFinite(Date.parse(dueAt))
     && Date.parse(dueAt) > Math.max(now, Date.parse(detail.dueAt)));
-  return <section className="grant-section grant-deadline-panel" aria-label="Срок и продление">
+  return <section ref={panelRef} tabIndex={-1} className="grant-section grant-deadline-panel" aria-label="Срок и продление">
     <div className="grant-deadline-heading"><div><h3>Срок и продление</h3><p>Текущий срок: <strong>{date(detail.dueAt)}</strong></p></div>
       {!form && !uncertain && <div className="grants-actions">
         {can("extend_deadline") ? <Button disabled={busy} onClick={() => open("extend_deadline")}>Продлить срок</Button>
@@ -79,7 +100,7 @@ export function GrantDeadlinePanel({ detail, people, busy, now, onPerform }: {
         {can("reject_deadline") && <Button disabled={busy} onClick={() => open("reject_deadline")}>Отклонить запрос</Button>}
       </div>}
     </div>}
-    {form && <form className="grant-deadline-form" aria-label={form.action === "extend_deadline" ? "Продление срока" : form.action === "request_deadline" ? "Запрос продления" : "Отклонение запроса"}
+    {form && <form ref={formRef} className="grant-deadline-form" aria-label={form.action === "extend_deadline" ? "Продление срока" : form.action === "request_deadline" ? "Запрос продления" : "Отклонение запроса"}
       onSubmit={event => {
         event.preventDefault();
         if (!allowed || !validDate || reason.trim().length < 3 || uncertain || stale) return;
@@ -100,10 +121,10 @@ export function GrantDeadlinePanel({ detail, people, busy, now, onPerform }: {
       {stale && <WorkspaceNotice tone="warning">Заявка изменилась. Проверьте состояние перед отправкой; введённая причина сохранена.</WorkspaceNotice>}
       <div className="grants-actions"><Button type="submit" appearance="primary" disabled={busy || !allowed || !validDate || reason.trim().length < 3 || uncertain || stale}>
         {form.action === "extend_deadline" ? "Подтвердить продление" : form.action === "request_deadline" ? "Отправить запрос" : "Подтвердить отклонение"}
-      </Button><Button disabled={busy} onClick={() => { setForm(undefined); setError(""); }}>Отмена</Button></div>
+      </Button><Button type="button" disabled={busy} onClick={() => { setForm(undefined); setError(""); }}>Отмена</Button></div>
     </form>}
     {error && <WorkspaceNotice tone="error" role="alert">{error}</WorkspaceNotice>}
-    {(uncertain || stale || (form && !allowed)) && <Button disabled={busy} onClick={() => void perform()}>Проверить состояние</Button>}
+    {needsCheck && <Button ref={checkRef} disabled={busy} onClick={() => void perform()}>Проверить состояние</Button>}
     {history.length > 0 && <details className="grant-deadline-history"><summary>История запросов · {history.length}</summary>
       <ol>{history.map(request => <li key={request.id}><strong>{labels[request.status]}</strong>
         <p>{person(request.requestedByUserId)} · {date(request.createdAt)}</p>

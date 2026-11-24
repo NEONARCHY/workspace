@@ -138,8 +138,15 @@ async function main() {
       await page.goto(`http://127.0.0.1:5179/qa/grants/index.html?theme=${theme}`);
       await page.getByRole("button", { name: grant.title }).click();
       let dialog = page.getByRole("dialog", { name: grant.title });
-      await dialog.getByRole("button", { name: "Продлить срок", exact: true }).click();
-      await dialog.getByRole("button", { name: "Новый срок гранта: открыть выбор" }).click();
+      const extensionTrigger = dialog.getByRole("button", { name: "Продлить срок", exact: true });
+      await extensionTrigger.focus(); await page.keyboard.press("Enter");
+      await page.waitForFunction(() => document.activeElement?.getAttribute("aria-label") === "Новый срок гранта: открыть выбор");
+      await dialog.getByRole("button", { name: "Отмена", exact: true }).focus();
+      await page.keyboard.press("Enter");
+      await page.waitForFunction(() => document.activeElement?.textContent === "Продлить срок");
+      await page.keyboard.press("Enter");
+      await page.waitForFunction(() => document.activeElement?.getAttribute("aria-label") === "Новый срок гранта: открыть выбор");
+      await page.keyboard.press("Enter");
       await page.getByRole("button", { name: "Следующий месяц" }).click();
       await page.locator(".ws-calendar-days button:not(.is-outside):not(:disabled)").last().click();
       await page.keyboard.press("Escape");

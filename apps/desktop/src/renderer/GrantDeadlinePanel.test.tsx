@@ -115,3 +115,14 @@ it("blocks approval of a proposal that has expired while keeping rejection avail
   expect(screen.getByRole("button", { name: "Отклонить запрос" })).toBeEnabled();
   expect(screen.getByText(/Предложенный срок уже истёк/)).toBeVisible();
 });
+
+it("moves keyboard focus into the inline form and restores it after cancellation", () => {
+  const onPerform = vi.fn().mockResolvedValue(grant);
+  show(grant, onPerform);
+  const trigger = screen.getByRole("button", { name: "Запросить продление" });
+  trigger.focus(); fireEvent.click(trigger);
+  expect(screen.getByLabelText("Новый срок гранта")).toHaveFocus();
+  fireEvent.click(screen.getByRole("button", { name: "Отмена" }));
+  expect(screen.getByRole("button", { name: "Запросить продление" })).toHaveFocus();
+  expect(onPerform).not.toHaveBeenCalled();
+});
