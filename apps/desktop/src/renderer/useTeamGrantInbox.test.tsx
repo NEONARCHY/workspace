@@ -26,11 +26,13 @@ it("separates launch and result decisions using server-authorized actions", asyn
     grant, { ...grant, id: "result", status: "chair_review", allowedActions: ["approve"] },
     { ...grant, id: "foreign", chairUserId: "other-chair", allowedActions: [] },
     { ...grant, id: "read-only", allowedActions: [] },
+    { ...grant, id: "deadline", status: "in_progress", allowedActions: ["approve_deadline"] },
+    { ...grant, id: "both", status: "chair_review", allowedActions: ["approve", "approve_deadline"] },
   ]);
   const { result } = renderHook(() => useTeamGrantInbox("token", "chair", true));
   await waitFor(() => expect(result.current.loading).toBe(false));
   expect(result.current.launches?.map((item) => item.id)).toEqual(["grant"]);
-  expect(result.current.reviews?.map((item) => item.id)).toEqual(["result"]);
+  expect(result.current.reviews?.map((item) => item.id)).toEqual(["result", "deadline", "both"]);
 });
 
 it("keeps failed counts unknown and retries explicitly", async () => {

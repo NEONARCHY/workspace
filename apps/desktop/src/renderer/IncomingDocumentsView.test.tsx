@@ -1,9 +1,11 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FluentProvider } from "@fluentui/react-components";
+import { disposeTabster, getTabster } from "tabster";
 import type { IncomingDocumentDetail, WorkspaceDepartment, WorkspacePerson } from "@yuksalish/contracts";
 import { workspaceTheme } from "./workspace-theme";
 import { IncomingLettersView } from "./IncomingLettersView";
+import { mockVisibleWindowLayout } from "./test-fixtures/visible-window";
 import { acceptWorkspaceTaskResult, assignIncomingDocument, downloadIncomingDocumentFile, loadEdoIncomingLetters, loadIncomingDocument, loadIncomingDocuments, loadProfileAvatar, loadTaskHistory, submitWorkspaceTaskResult, uploadWorkspaceAttachment } from "./workspace-api";
 
 vi.mock("./workspace-api", () => ({
@@ -41,27 +43,47 @@ function show(onOpenTask = vi.fn().mockResolvedValue(undefined), focusLetterId?:
   return onOpenTask;
 }
 
+function clickWithFocus(element: HTMLElement) {
+  element.focus(); fireEvent.click(element);
+}
+
 async function openForm() {
   fireEvent.click(await screen.findByRole("button", { name: /№ QA-1/ }));
   fireEvent.click(await screen.findByRole("button", { name: "Назначить исполнение" }));
-  fireEvent.click(screen.getByRole("combobox", { name: "Что нужно сделать" }));
-  fireEvent.click(await screen.findByRole("option", { name: "Таклиф киритиш учун" }));
-  fireEvent.click(screen.getByRole("button", { name: "Основной исполнитель" }));
-  fireEvent.click(await screen.findByRole("button", { name: /Исполнитель QA/ }));
-  fireEvent.click(screen.getByRole("button", { name: "Добавить соисполнителя" }));
-  fireEvent.click(await screen.findByRole("button", { name: /Помощник QA/ }));
-  fireEvent.change(screen.getByLabelText("Срок исполнения"), { target: { value: "2030-01-01T17:00" } });
+  clickWithFocus(screen.getByRole("combobox", { name: "Что нужно сделать" }));
+  clickWithFocus(await screen.findByRole("option", { name: "Таклиф киритиш учун" }));
+  const primaryTrigger = screen.getByRole("button", { name: "Основной исполнитель" });
+  const coTrigger = screen.getByRole("button", { name: "Добавить соисполнителя" });
+  const deadline = screen.getByLabelText("Срок исполнения");
+  clickWithFocus(primaryTrigger);
+  const primaryPicker = await screen.findByRole("dialog", { name: "Основной исполнитель" });
+  clickWithFocus(await within(primaryPicker).findByRole("button", { name: /Исполнитель QA/ }));
+  await waitFor(() => expect(primaryPicker).not.toBeInTheDocument());
+  clickWithFocus(coTrigger);
+  const coPicker = await screen.findByRole("dialog", { name: "Добавить соисполнителя" });
+  clickWithFocus(await within(coPicker).findByRole("button", { name: /Помощник QA/ }));
+  await waitFor(() => expect(coPicker).not.toBeInTheDocument());
+  deadline.focus();
+  fireEvent.change(deadline, { target: { value: "2030-01-01T17:00" } });
+  await screen.findByRole("form", { name: "Назначение исполнения" });
+  return { primaryTrigger, coTrigger, deadline };
 }
 
 describe("Workspace incoming document workflow", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    mockVisibleWindowLayout();
     vi.mocked(loadTaskHistory).mockResolvedValue({ events: [], historyComplete: true });
     vi.mocked(loadIncomingDocuments).mockResolvedValue({ documents: [detail.document], total: 1, offset: 0, limit: 30 });
     vi.mocked(loadIncomingDocument).mockResolvedValue(detail);
     vi.mocked(loadEdoIncomingLetters).mockResolvedValue({ data: [], meta: { page: 1, limit: 20, total: 0 }, deadline_timezone_verified: false });
   });
-  afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+  afterEach(() => {
+    cleanup();
+    const tabster = getTabster(window);
+    if (tabster) disposeTabster(tabster, true);
+    vi.restoreAllMocks();
+  });
 
   it("opens the local registry by default and preserves explicit legacy navigation", async () => {
     show();
@@ -112,17 +134,23 @@ describe("Workspace incoming document workflow", () => {
       { ...people[2]!, id: "regional-co", name: "Региональный помощник QA", departmentId: "regional-unit" },
     ];
     show(undefined, undefined, directory, departments);
-    await openForm();
-    fireEvent.click(screen.getByRole("button", { name: "Основной исполнитель" }));
-    expect(await screen.findByRole("button", { name: "Центральный аппарат" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.queryByRole("button", { name: /Регион QA/ })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Регионы" }));
-    fireEvent.click(await screen.findByRole("button", { name: /Регион QA/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Добавить соисполнителя" }));
-    expect(await screen.findByRole("button", { name: "Центральный аппарат" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.queryByRole("button", { name: /Региональный помощник QA/ })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Регионы" }));
-    fireEvent.click(await screen.findByRole("button", { name: /Региональный помощник QA/ }));
+    const { primaryTrigger, coTrigger, deadline } = await openForm();
+    clickWithFocus(primaryTrigger);
+    const primaryPicker = await screen.findByRole("dialog", { name: "Основной исполнитель" });
+    expect(within(primaryPicker).getByRole("button", { name: "Центральный аппарат" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(primaryPicker).queryByRole("button", { name: /Регион QA/ })).not.toBeInTheDocument();
+    clickWithFocus(within(primaryPicker).getByRole("button", { name: "Регионы" }));
+    clickWithFocus(await within(primaryPicker).findByRole("button", { name: /Регион QA/ }));
+    await waitFor(() => expect(primaryPicker).not.toBeInTheDocument());
+    clickWithFocus(coTrigger);
+    const coPicker = await screen.findByRole("dialog", { name: "Добавить соисполнителя" });
+    expect(within(coPicker).getByRole("button", { name: "Центральный аппарат" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(coPicker).queryByRole("button", { name: /Региональный помощник QA/ })).not.toBeInTheDocument();
+    clickWithFocus(within(coPicker).getByRole("button", { name: "Регионы" }));
+    clickWithFocus(await within(coPicker).findByRole("button", { name: /Региональный помощник QA/ }));
+    await waitFor(() => expect(coPicker).not.toBeInTheDocument());
+    deadline.focus();
+    await screen.findByRole("form", { name: "Назначение исполнения" });
     expect(screen.getByRole("list", { name: "Соисполнители" })).toHaveTextContent("Помощник QA");
     vi.mocked(assignIncomingDocument).mockResolvedValue(assigned);
     fireEvent.click(screen.getByRole("button", { name: "Создать поручение" }));

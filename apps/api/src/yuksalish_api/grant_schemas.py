@@ -64,11 +64,21 @@ class GrantAction(ApiModel):
     action: Literal[
         "submit", "approve", "return", "comment", "check",
         "approve_launch", "return_launch", "reject_launch", "submit_launch",
+        "extend_deadline", "request_deadline", "approve_deadline", "reject_deadline",
     ]
     expected_revision: int = Field(ge=1)
     text: str = Field(default="", max_length=12000)
     item_id: UUID | None = None
     completed: bool | None = None
+    due_at: datetime | None = None
+    request_id: UUID | None = None
+
+    @field_validator("due_at")
+    @classmethod
+    def aware_deadline(cls, value: datetime | None) -> datetime | None:
+        if value is not None and value.tzinfo is None:
+            raise ValueError("Укажите часовой пояс срока")
+        return value
 
 
 class GrantChecklistItem(ApiModel):
@@ -96,6 +106,19 @@ class GrantReviewersWrite(GrantSettingsWrite):
     reason: str = Field(min_length=3, max_length=2000)
 
 
+class GrantDeadlineRequest(ApiModel):
+    id: str
+    requested_by_user_id: str
+    old_due_at: datetime
+    due_at: datetime
+    reason: str
+    status: Literal["pending", "approved", "rejected", "superseded"]
+    decided_by_user_id: str | None
+    decision_reason: str
+    created_at: datetime
+    decided_at: datetime | None
+
+
 class GrantSummary(ApiModel):
     id: str
     title: str
@@ -118,6 +141,7 @@ class GrantSummary(ApiModel):
     created_at: datetime
     updated_at: datetime
     allowed_actions: list[str]
+    pending_deadline_request: GrantDeadlineRequest | None = None
 
 
 class GrantEvent(ApiModel):
@@ -128,8 +152,11 @@ class GrantEvent(ApiModel):
     from_status: GrantStatus
     to_status: GrantStatus
     created_at: datetime
+    old_due_at: datetime | None = None
+    due_at: datetime | None = None
 
 
 class GrantDetail(GrantSummary):
     events: list[GrantEvent]
     attachments: list[AttachmentResponse]
+    deadline_requests: list[GrantDeadlineRequest] = Field(default_factory=list)

@@ -229,3 +229,22 @@ it("shows the new deputy-first result route without an extra author-review step"
   expect(within(route).getByText("Заместитель")).toBeInTheDocument();
   expect(within(dialog).getByRole("textbox", { name: "Результат работы для заместителя" })).toBeInTheDocument();
 });
+
+it("saves a deadline extension inside the card while preserving its review stage and result", async () => {
+  const reviewing: GrantDetail = { ...request, status: "chair_review", resultText: "Бюджет подготовлен",
+    allowedActions: ["extend_deadline"] };
+  const saved: GrantDetail = { ...reviewing, dueAt: "2099-11-05T09:00:00Z", revision: 5 };
+  api.list.mockResolvedValue([reviewing]); api.detail.mockResolvedValue(reviewing);
+  api.act.mockImplementation(async () => { api.detail.mockResolvedValue(saved); return saved; });
+  show(0); const dialog = await open();
+  fireEvent.click(within(dialog).getByRole("button", { name: "Продлить срок" }));
+  fireEvent.change(within(dialog).getByLabelText("Новый срок гранта"), { target: { value: "2099-11-05T14:00" } });
+  fireEvent.change(within(dialog).getByLabelText("Причина продления *"), { target: { value: "Ожидаем документы партнёра" } });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Подтвердить продление" }));
+  expect(await within(dialog).findByRole("status")).toHaveTextContent("Изменения срока сохранены");
+  expect(api.act).toHaveBeenCalledWith("grant-token", request.id, expect.objectContaining({
+    action: "extend_deadline", expectedRevision: 4, text: "Ожидаем документы партнёра",
+  }));
+  expect(within(dialog).getByText("Бюджет подготовлен")).toBeVisible();
+  expect(within(dialog).getAllByText("Проверка председателя").length).toBeGreaterThan(0);
+});
