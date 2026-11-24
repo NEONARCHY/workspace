@@ -1,10 +1,10 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FluentProvider } from "@fluentui/react-components";
-import type { IncomingDocumentDetail, WorkspacePerson } from "@yuksalish/contracts";
+import type { IncomingDocumentDetail, WorkspaceDepartment, WorkspacePerson } from "@yuksalish/contracts";
 import { workspaceTheme } from "./workspace-theme";
 import { IncomingLettersView } from "./IncomingLettersView";
-import { acceptWorkspaceTaskResult, assignIncomingDocument, downloadIncomingDocumentFile, loadEdoIncomingLetters, loadIncomingDocument, loadIncomingDocuments, loadProfileAvatar, submitWorkspaceTaskResult } from "./workspace-api";
+import { acceptWorkspaceTaskResult, assignIncomingDocument, downloadIncomingDocumentFile, loadEdoIncomingLetters, loadIncomingDocument, loadIncomingDocuments, loadProfileAvatar, submitWorkspaceTaskResult, uploadWorkspaceAttachment } from "./workspace-api";
 
 vi.mock("./workspace-api", () => ({
   loadIncomingDocuments: vi.fn(), loadIncomingDocument: vi.fn(), assignIncomingDocument: vi.fn(),
@@ -34,8 +34,8 @@ const detail: IncomingDocumentDetail = {
 const assigned: IncomingDocumentDetail = { ...detail, document: { ...detail.document, canAssign: false, canOpenTask: true,
   execution: { taskId: "task", status: "new", dueAt: "2030-01-01T12:00:00Z", assigneeId: "executor", assigneeName: "Исполнитель QA", authorId: "author" } } };
 
-function show(onOpenTask = vi.fn().mockResolvedValue(undefined), focusLetterId?: number, directory = people) {
-  render(<FluentProvider theme={workspaceTheme}><IncomingLettersView token="qa-token" people={directory}
+function show(onOpenTask = vi.fn().mockResolvedValue(undefined), focusLetterId?: number, directory = people, departments?: readonly WorkspaceDepartment[]) {
+  render(<FluentProvider theme={workspaceTheme}><IncomingLettersView token="qa-token" people={directory} departments={departments}
     currentUserId="author" canEdit canManageAccess onOpenTask={onOpenTask} focusLetterId={focusLetterId} /></FluentProvider>);
   return onOpenTask;
 }
@@ -80,6 +80,37 @@ describe("Workspace incoming document workflow", () => {
     expect(options.filter(option => option.getAttribute("aria-disabled") !== "true").map(option => option.textContent)).toEqual([
       "Ижро учун", "Тезкор", "Маълумот учун", "Таклиф киритиш учун",
     ]);
+  });
+
+  it("defaults both pickers to central staff and selects regional staff through their department hierarchy", async () => {
+    const departments: readonly WorkspaceDepartment[] = [
+      { id: "ca", code: "CA", name: "Центральный аппарат", scope: "central", assignedUsersCount: 3 },
+      { id: "region", code: "REG", name: "Регион", scope: "regional", assignedUsersCount: 0 },
+      { id: "regional-unit", code: "REG-UNIT", name: "Отдел", parentId: "region", assignedUsersCount: 2 },
+    ];
+    const directory: readonly WorkspacePerson[] = [...people,
+      { ...people[1]!, id: "regional", name: "Регион QA", departmentId: "regional-unit" },
+      { ...people[2]!, id: "regional-co", name: "Региональный помощник QA", departmentId: "regional-unit" },
+    ];
+    show(undefined, undefined, directory, departments);
+    await openForm();
+    fireEvent.click(screen.getByRole("button", { name: "Основной исполнитель" }));
+    expect(await screen.findByRole("button", { name: "Центральный аппарат" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByRole("button", { name: /Регион QA/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Регионы" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Регион QA/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Добавить соисполнителя" }));
+    expect(await screen.findByRole("button", { name: "Центральный аппарат" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByRole("button", { name: /Региональный помощник QA/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Регионы" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Региональный помощник QA/ }));
+    expect(screen.getByRole("list", { name: "Соисполнители" })).toHaveTextContent("Помощник QA");
+    vi.mocked(assignIncomingDocument).mockResolvedValue(assigned);
+    fireEvent.click(screen.getByRole("button", { name: "Создать поручение" }));
+    await screen.findByRole("button", { name: "Открыть поручение" });
+    expect(assignIncomingDocument).toHaveBeenCalledWith("qa-token", "source", expect.objectContaining({
+      assigneeId: "regional", coAssigneeIds: ["co", "regional-co"],
+    }));
   });
 
   it("shows the responsible person's authenticated photo in the letter list", async () => {
@@ -176,8 +207,36 @@ describe("Workspace incoming document workflow", () => {
     expect(screen.getByText("Ответ.pdf")).toBeVisible();
     expect(screen.getByText("Помощник QA")).toBeVisible();
     expect(screen.getByText("Принят постановщиком")).toBeVisible();
+    const result = screen.getByRole("region", { name: "Результат исполнения" });
+    expect(within(result).getByText("Файлы: 1")).toBeVisible();
+    expect(result.compareDocumentPosition(screen.getByRole("heading", { name: "Исполнение" })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(result.compareDocumentPosition(screen.getByText("Документы письма")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(openTask).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: "Отправить на проверку" })).not.toBeInTheDocument();
+  });
+
+  it("highlights uploaded materials before a report and retains the report draft during upload", async () => {
+    const file = { id: "report", ownerType: "task" as const, ownerId: "task", fileName: "Отчёт.pdf",
+      contentType: "application/pdf", documentRole: "general" as const, byteSize: 1024,
+      sha256: "b".repeat(64), uploadedByUserId: "executor", createdAt: "2026-11-24T06:00:00Z" };
+    const working: IncomingDocumentDetail = { ...assigned, executionDetail: {
+      description: "Ижро учун", resultText: null, coAssigneeIds: [], latestReturn: null,
+      files: [file], canSubmit: true, canAccept: false, canReturn: false,
+    } };
+    vi.mocked(loadIncomingDocument).mockResolvedValue(working);
+    show();
+    fireEvent.click(await screen.findByRole("button", { name: /№ QA-1/ }));
+    expect(await screen.findByText("Файлы: 1")).toBeVisible();
+    expect(screen.getByText("Отчёт.pdf")).toBeVisible();
+    fireEvent.change(screen.getByLabelText("Отчёт об исполнении"), { target: { value: "Черновик результата" } });
+    const uploaded = { ...file, id: "new-file", fileName: "Дополнение.pdf" };
+    vi.mocked(uploadWorkspaceAttachment).mockResolvedValue(uploaded);
+    vi.mocked(loadIncomingDocument).mockResolvedValue({ ...working, executionDetail: { ...working.executionDetail!, files: [file, uploaded] } });
+    const inputFile = new File(["test report"], "Дополнение.pdf", { type: "application/pdf" });
+    fireEvent.change(screen.getByLabelText("Добавить файлы: Материалы исполнения"), { target: { files: [inputFile] } });
+    expect(await screen.findByText("Файлы: 2")).toBeVisible();
+    expect(screen.getByLabelText("Отчёт об исполнении")).toHaveValue("Черновик результата");
+    expect(uploadWorkspaceAttachment).toHaveBeenCalledWith("qa-token", "task", "task", inputFile);
   });
 
   it("keeps a failed report draft and reconciles before a protected retry", async () => {

@@ -21,6 +21,7 @@ const path = require("node:path");
       const originalText = "Тестовое обращение организации.\n<script>Текст письма, а не исполняемая разметка</script>";
       const files = [{ id: "original", name: "Обращение.txt", byteSize: Buffer.byteLength(originalText), sha256: "a".repeat(64) }];
       let executionDetail = null;
+      const imageBytes = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
       await page.route("**/api/v1/**", async route => {
         const url = new URL(route.request().url());
         if (url.pathname.endsWith("/execution")) {
@@ -39,6 +40,7 @@ const path = require("node:path");
           return route.fulfill({ json: { document, files, executionDetail } });
         }
         assert.equal(route.request().method(), "GET");
+        if (url.pathname.endsWith("/attachments/result-image")) return route.fulfill({ contentType: "image/png", body: imageBytes });
         if (url.pathname.endsWith("/files/original")) return route.fulfill({ contentType: "text/plain; charset=utf-8", body: originalText });
         if (url.pathname.endsWith("/incoming-documents/source")) return route.fulfill({ json: { document, files, executionDetail } });
         if (url.pathname.endsWith("/incoming-documents")) {
@@ -73,8 +75,17 @@ const path = require("node:path");
       await page.keyboard.press("Enter");
       assert.equal(await resolution.textContent(), "Ижро учун");
       await page.getByRole("button", { name: "Основной исполнитель" }).click();
+      assert.equal(await page.getByRole("button", { name: "Центральный аппарат", exact: true }).getAttribute("aria-pressed"), "true");
+      assert.equal(await page.getByRole("button", { name: /Региональный сотрудник QA/ }).count(), 0);
+      await page.getByRole("button", { name: "Регионы", exact: true }).click();
+      await page.getByRole("button", { name: /Региональный сотрудник QA/ }).waitFor();
+      await page.waitForFunction(() => !document.querySelector(".person-picker-surface").getAnimations({ subtree: true }).some(animation => animation.playState === "running"));
+      await page.screenshot({ path: path.join(output, `${theme}-regional-picker.png`), fullPage: true });
+      await page.getByRole("button", { name: "Центральный аппарат", exact: true }).click();
       await page.getByRole("button", { name: /Исполнитель QA/ }).click();
       await page.getByRole("button", { name: "Добавить соисполнителя" }).click();
+      assert.equal(await page.getByRole("button", { name: "Центральный аппарат", exact: true }).getAttribute("aria-pressed"), "true");
+      assert.equal(await page.getByRole("button", { name: /Региональный сотрудник QA/ }).count(), 0);
       await page.getByRole("button", { name: /Соисполнитель QA/ }).click();
       await page.evaluate(require("axe-core").source);
       const assignmentAccessibility = await page.evaluate(async () => window.axe.run(".incoming-document-assignment", {
@@ -120,13 +131,32 @@ const path = require("node:path");
       document.execution.status = "completed";
       executionDetail.resultText = "Проект ответа согласован. Письмо направлено адресату, подтверждение приложено.";
       executionDetail.files = [{ id: "result-file", ownerType: "task", ownerId: "execution-task", fileName: "Официальный ответ.pdf",
-        byteSize: 245760, contentType: "application/pdf", sha256: "b".repeat(64), uploadedByUserId: "executor", createdAt: "2026-11-23T12:00:00Z" }];
+        byteSize: 245760, contentType: "application/pdf", documentRole: "general", sha256: "b".repeat(64), uploadedByUserId: "executor", createdAt: "2026-11-23T12:00:00Z" },
+        { id: "result-image", ownerType: "task", ownerId: "execution-task", fileName: "Подтверждение.png", byteSize: imageBytes.length,
+          contentType: "image/png", documentRole: "general", sha256: "c".repeat(64), uploadedByUserId: "co", createdAt: "2026-11-23T12:10:00Z" }];
       personalMode = true;
       await page.goto(`${base}/qa/incoming-documents.html?theme=${theme}&domain=tasks`);
       await page.getByRole("tab", { name: "Мои письма 1" }).click();
       await page.getByRole("button", { name: /№ QA-184/ }).click();
       await page.getByText(executionDetail.resultText).waitFor();
       await page.getByText("Официальный ответ.pdf", { exact: true }).waitFor();
+      await page.getByText("Файлы: 2", { exact: true }).waitFor();
+      assert(await page.evaluate(() => {
+        const result = document.querySelector(".incoming-result");
+        return [".incoming-responsibility", ".incoming-originals"].every(selector =>
+          Boolean(result.compareDocumentPosition(document.querySelector(selector)) & Node.DOCUMENT_POSITION_FOLLOWING));
+      }), "The result and files precede responsibility and original documents");
+      const imageFile = page.getByRole("button", { name: /Подтверждение.png/ });
+      await imageFile.focus(); await page.keyboard.press("Enter");
+      const viewer = page.getByRole("dialog");
+      await viewer.getByRole("img", { name: "Подтверждение.png", exact: true }).waitFor();
+      await viewer.getByRole("img", { name: "Подтверждение.png", exact: true }).evaluate(image => image.decode());
+      const downloading = page.waitForEvent("download");
+      await viewer.getByRole("button", { name: "Скачать", exact: true }).click();
+      assert.equal((await downloading).suggestedFilename(), "Подтверждение.png");
+      await page.waitForFunction(() => !!document.activeElement?.closest('[role="dialog"]'));
+      await page.keyboard.press("Escape"); await viewer.waitFor({ state: "hidden" });
+      await page.waitForFunction(() => document.activeElement?.textContent?.includes("Подтверждение.png"));
       await page.evaluate(require("axe-core").source);
       const accessibility = await page.evaluate(async () => window.axe.run(".incoming-documents", {
         runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"] },

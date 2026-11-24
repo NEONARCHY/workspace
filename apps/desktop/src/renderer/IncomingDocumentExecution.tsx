@@ -1,6 +1,6 @@
 import { lazy, Suspense, useRef, useState } from "react";
 import { Button } from "@fluentui/react-components";
-import { CheckmarkCircle20Regular, Clock20Regular, Document20Regular, DismissCircle20Regular, Send20Regular } from "@fluentui/react-icons";
+import { Attach20Regular, CheckmarkCircle20Regular, Clock20Regular, Document20Regular, DismissCircle20Regular, Send20Regular } from "@fluentui/react-icons";
 import type { IncomingDocumentDetail, TaskReturnReason, TaskStatus, WorkspaceAttachment, WorkspacePerson } from "@yuksalish/contracts";
 import { AttachmentPanel } from "./AttachmentPanel";
 import { LoadingSkeleton } from "./LoadingSkeleton";
@@ -79,6 +79,43 @@ export function IncomingDocumentExecution({ token, detail, people, now, onSaved 
   const phase = execution.status === "completed" ? 3 : execution.status === "awaiting_review" ? 2 : 1;
   const returnResult = (reason: TaskReturnReason, text: string) => mutate(() => returnWorkspaceTaskForRevision(token, execution.taskId, reason, text));
   return <section className="incoming-document-execution" aria-label="Исполнение письма" aria-busy={busy}>
+    {data ? (
+      <section className="incoming-result" aria-label="Результат исполнения" data-has-files={data.files.length > 0}>
+        <div className="incoming-section-heading"><h3>Результат исполнения</h3>
+          <div className="incoming-result-heading-meta">
+            {execution.status === "completed" ? <span className="incoming-result-caption">Принят постановщиком</span> : null}
+            {data.files.length ? <span className="incoming-attachment-count"><Attach20Regular aria-hidden="true" />Файлы: {data.files.length}</span> : null}
+          </div></div>
+        {data.latestReturn && execution.status !== "completed" ? <WorkspaceNotice tone="warning">
+          <strong>{returnReasons[data.latestReturn.reasonCode] ?? "Замечания к результату"}</strong>
+          {data.latestReturn.reasonText ? <p>{data.latestReturn.reasonText}</p> : null}
+        </WorkspaceNotice> : null}
+        {data.resultText ? <p className="incoming-result-text">{data.resultText}</p>
+          : <p className="incoming-document-help">Результат ещё не представлен.</p>}
+        <AttachmentPanel title="Материалы исполнения" attachments={data.files}
+          canUpload={data.canSubmit && !locked}
+          onLoad={(file, signal) => downloadWorkspaceAttachment(token, file.id, signal)}
+          onDownload={file => setPreview(file)} onUpload={async files => {
+            await mutate(async () => { for (const file of files) await uploadWorkspaceAttachment(token, "task", execution.taskId, file); });
+          }} />
+        {data.canSubmit ? <form className="incoming-result-form" onSubmit={event => {
+          event.preventDefault(); if (draft.trim()) void mutate(() => submitWorkspaceTaskResult(token, execution.taskId, draft.trim()));
+        }}>
+          <label htmlFor={`incoming-result-${detail.document.id}`}>Отчёт об исполнении</label>
+          <textarea id={`incoming-result-${detail.document.id}`} rows={4} maxLength={10000} required
+            value={draft} disabled={locked} onChange={event => setDraft(event.target.value)} placeholder="Что сделано и какой результат получен" />
+          <Button type="submit" appearance="primary" icon={<Send20Regular />} disabled={locked || !draft.trim()}>Отправить на проверку</Button>
+        </form> : null}
+        {data.canAccept || data.canReturn ? <div className="incoming-document-actions">
+          {data.canAccept ? <Button appearance="primary" disabled={locked} icon={<CheckmarkCircle20Regular />}
+            onClick={() => void mutate(() => acceptWorkspaceTaskResult(token, execution.taskId))}>Принять результат</Button> : null}
+          {data.canReturn ? <Button disabled={locked} onClick={() => setReturnOpen(true)}>На доработку</Button> : null}
+        </div> : null}
+      </section>
+    ) : <WorkspaceNotice>Для просмотра результата и материалов нужен доступ к поручению в разделе «Задачи».</WorkspaceNotice>}
+    {error ? <WorkspaceNotice tone="error" actions={uncertain ? <Button disabled={busy} onClick={() => void reconcile()}>Проверить состояние</Button> : undefined}>
+      {error}{uncertain ? " Проверьте состояние перед повторным действием. Введённый текст сохранён." : ""}
+    </WorkspaceNotice> : null}
     <div className="incoming-section-heading"><h3>Исполнение</h3><IncomingDocumentStatus status={execution.status} /></div>
     {execution.status !== "cancelled" ? <ol className="incoming-progress" aria-label="Этап исполнения">
       {["Назначено", "На проверке", "Исполнено"].map((label, index) => <li key={label} data-reached={phase >= index + 1}
@@ -93,40 +130,7 @@ export function IncomingDocumentExecution({ token, detail, people, now, onSaved 
     </div>
     {data?.coAssigneeIds.length ? <div className="incoming-coassignees"><small>Соисполнители</small>
       <div>{data.coAssigneeIds.map(id => person(id, "Сотрудник"))}</div></div> : null}
-    {data ? <>
-      <details className="incoming-instruction"><summary>Поручение и контекст</summary><p>{data.description}</p></details>
-      {data.latestReturn && execution.status !== "completed" ? <WorkspaceNotice tone="warning">
-        <strong>{returnReasons[data.latestReturn.reasonCode] ?? "Замечания к результату"}</strong>
-        {data.latestReturn.reasonText ? <p>{data.latestReturn.reasonText}</p> : null}
-      </WorkspaceNotice> : null}
-      <section className="incoming-result" aria-label="Результат исполнения">
-        <div className="incoming-section-heading"><h3>Результат исполнения</h3>
-          {execution.status === "completed" ? <span className="incoming-result-caption">Принят постановщиком</span> : null}</div>
-        {data.resultText ? <p className="incoming-result-text">{data.resultText}</p>
-          : <p className="incoming-document-help">Результат ещё не представлен.</p>}
-        {data.canSubmit ? <form className="incoming-result-form" onSubmit={event => {
-          event.preventDefault(); if (draft.trim()) void mutate(() => submitWorkspaceTaskResult(token, execution.taskId, draft.trim()));
-        }}>
-          <label htmlFor={`incoming-result-${detail.document.id}`}>Отчёт об исполнении</label>
-          <textarea id={`incoming-result-${detail.document.id}`} rows={4} maxLength={10000} required
-            value={draft} disabled={locked} onChange={event => setDraft(event.target.value)} placeholder="Что сделано и какой результат получен" />
-          <Button type="submit" appearance="primary" icon={<Send20Regular />} disabled={locked || !draft.trim()}>Отправить на проверку</Button>
-        </form> : null}
-        <AttachmentPanel title="Материалы исполнения" attachments={data.files} canUpload={data.canSubmit && !locked}
-          onLoad={(file, signal) => downloadWorkspaceAttachment(token, file.id, signal)}
-          onDownload={file => setPreview(file)} onUpload={async files => {
-            await mutate(async () => { for (const file of files) await uploadWorkspaceAttachment(token, "task", execution.taskId, file); });
-          }} />
-        {data.canAccept || data.canReturn ? <div className="incoming-document-actions">
-          {data.canAccept ? <Button appearance="primary" disabled={locked} icon={<CheckmarkCircle20Regular />}
-            onClick={() => void mutate(() => acceptWorkspaceTaskResult(token, execution.taskId))}>Принять результат</Button> : null}
-          {data.canReturn ? <Button disabled={locked} onClick={() => setReturnOpen(true)}>На доработку</Button> : null}
-        </div> : null}
-      </section>
-    </> : <WorkspaceNotice>Для просмотра результата и материалов нужен доступ к поручению в разделе «Задачи».</WorkspaceNotice>}
-    {error ? <WorkspaceNotice tone="error" actions={uncertain ? <Button disabled={busy} onClick={() => void reconcile()}>Проверить состояние</Button> : undefined}>
-      {error}{uncertain ? " Проверьте состояние перед повторным действием. Введённый текст сохранён." : ""}
-    </WorkspaceNotice> : null}
+    {data ? <details className="incoming-instruction"><summary>Поручение и контекст</summary><p>{data.description}</p></details> : null}
     <TaskReturnDialog open={returnOpen} taskTitle={detail.document.subject} onClose={() => setReturnOpen(false)} onSubmit={returnResult} />
     {preview ? <Suspense fallback={<LoadingSkeleton layout="rows" rows={3} label="Открываем материал" />}>
       <ExternalFileViewer attachment={preview} onClose={() => setPreview(undefined)}

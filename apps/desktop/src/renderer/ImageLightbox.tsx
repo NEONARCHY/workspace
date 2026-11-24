@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, DialogSurface, DialogTitle, Spinner } from "@fluentui/react-components";
 import { ChevronLeft, ChevronRight, Copy, Download, Grid2X2, Minus, MoreHorizontal, Plus, RotateCw, X, Forward, Eye } from "lucide-react";
-import { WorkspaceDialog } from "./WorkspaceDialog";
+import { focusWorkspaceDialog, WorkspaceDialog } from "./WorkspaceDialog";
 import { MessageContextMenu } from "./MessageContextMenu";
 import type { GalleryImage } from "./image-gallery";
 import "./image-lightbox.css";
@@ -147,7 +147,12 @@ export default function ImageLightbox<T extends ImageSource>({ attachment, image
     setMenu(undefined); setSaving(true); setError("");
     try { await onDownload(item.attachment); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "Не удалось сохранить фото"); }
-    finally { setSaving(false); }
+    finally {
+      setSaving(false);
+      requestAnimationFrame(() => {
+        if (document.activeElement === document.body) focusWorkspaceDialog(surfaceRef.current);
+      });
+    }
   };
   const copy = async () => {
     setMenu(undefined); setError("");

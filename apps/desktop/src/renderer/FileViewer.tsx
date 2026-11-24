@@ -3,7 +3,7 @@ import { Button, DialogBody, DialogContent, DialogSurface, DialogTitle, Spinner 
 import { Input } from "./WorkspaceInput";
 import { ArrowDownload20Regular, Dismiss20Regular, Add20Regular, Subtract20Regular, ArrowLeft20Regular, ArrowRight20Regular } from "@fluentui/react-icons";
 import type { OfficeFilePreview, WorkspaceAttachment } from "@yuksalish/contracts";
-import { WorkspaceDialog } from "./WorkspaceDialog";
+import { focusWorkspaceDialog, WorkspaceDialog } from "./WorkspaceDialog";
 import { fileViewerKind } from "./file-viewer-kind";
 import type { OfficePreviewResult } from "./file-viewer-kind";
 import { InlineAudioPlayer } from "./AttachmentPanel";
@@ -130,7 +130,14 @@ function FileViewer<T extends FileViewerSource>({ attachment, onClose, onLoad, o
     setSaving(true);
     try { await onDownload(attachment); }
     catch (reason) { setError(reason instanceof Error ? reason.message : "Не удалось скачать файл"); }
-    finally { setSaving(false); }
+    finally {
+      setSaving(false);
+      requestAnimationFrame(() => {
+        if (document.activeElement === document.body) {
+          focusWorkspaceDialog(closeButtonRef.current?.closest<HTMLElement>(".fui-DialogSurface") ?? null);
+        }
+      });
+    }
   };
   const size = attachment.byteSize > 0
     ? attachment.byteSize < 1024 * 1024 ? `${Math.ceil(attachment.byteSize / 1024)} КБ` : `${(attachment.byteSize / 1024 / 1024).toFixed(1)} МБ`

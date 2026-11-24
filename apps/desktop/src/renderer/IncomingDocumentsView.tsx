@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, DialogBody, DialogContent, DialogSurface, DialogTitle, useRestoreFocusTarget } from "@fluentui/react-components";
-import type { IncomingDocument, IncomingDocumentDetail, IncomingDocumentFile, IncomingDocumentFilter, IncomingDocumentPage, WorkspacePerson } from "@yuksalish/contracts";
+import { Document20Regular } from "@fluentui/react-icons";
+import type { IncomingDocument, IncomingDocumentDetail, IncomingDocumentFile, IncomingDocumentFilter, IncomingDocumentPage, WorkspaceDepartment, WorkspacePerson } from "@yuksalish/contracts";
 import { Input } from "./WorkspaceInput";
 import { WorkspaceSelect } from "./WorkspaceSelect";
 import { WorkspaceNotice } from "./WorkspaceNotice";
@@ -84,10 +85,11 @@ function DocumentViewer({ token, documentId, file, onClose }: {
   </Suspense>;
 }
 
-function AssignmentForm({ token, detail, people, onSaved, onRefreshed, onCancel }: {
+function AssignmentForm({ token, detail, people, departments, onSaved, onRefreshed, onCancel }: {
   readonly token: string; readonly detail: IncomingDocumentDetail; readonly people: readonly WorkspacePerson[];
   readonly onSaved: (detail: IncomingDocumentDetail) => void; readonly onCancel: () => void;
   readonly onRefreshed: (detail: IncomingDocumentDetail) => void;
+  readonly departments?: readonly WorkspaceDepartment[];
 }) {
   const [instruction, setInstruction] = useState("");
   const [assigneeId, setAssigneeId] = useState("");
@@ -141,7 +143,7 @@ function AssignmentForm({ token, detail, people, onSaved, onRefreshed, onCancel 
     </div>
     <div className="incoming-assignment-fields">
     <div className="incoming-document-field"><span>Основной исполнитель</span>
-      <PersonPicker people={available} token={token} value={assigneeId} label="Основной исполнитель" disabled={locked}
+      <PersonPicker people={available} departments={departments} token={token} value={assigneeId} label="Основной исполнитель" disabled={locked}
         onChange={id => { setAssigneeId(id); setCoAssigneeIds(current => current.filter(value => value !== id)); }} />
     </div>
     <div className="incoming-document-field"><span>Срок исполнения</span>
@@ -150,7 +152,7 @@ function AssignmentForm({ token, detail, people, onSaved, onRefreshed, onCancel 
     </div>
     <section className="incoming-assignment-team" aria-label="Команда исполнения">
     <div className="incoming-section-heading"><span>Соисполнители</span><small>Необязательно</small></div>
-    <PersonPicker people={available.filter(person => person.id !== assigneeId && !coAssigneeIds.includes(person.id))}
+    <PersonPicker departments={departments} people={available.filter(person => person.id !== assigneeId && !coAssigneeIds.includes(person.id))}
       token={token} value="" label="Добавить соисполнителя" emptyLabel="Добавить соисполнителя" disabled={locked}
       onChange={id => setCoAssigneeIds(current => [...current, id])} />
     {coAssigneeIds.length ? <ul className="incoming-document-participants" aria-label="Соисполнители">
@@ -170,10 +172,11 @@ function AssignmentForm({ token, detail, people, onSaved, onRefreshed, onCancel 
   </form>;
 }
 
-function DocumentCard({ token, detail, people, now, onSaved, onOpenTask }: {
+function DocumentCard({ token, detail, people, departments, now, onSaved, onOpenTask }: {
   readonly token: string; readonly detail: IncomingDocumentDetail; readonly people: readonly WorkspacePerson[];
   readonly onSaved: (detail: IncomingDocumentDetail) => void; readonly onOpenTask?: (taskId: string) => Promise<void>;
   readonly now: number;
+  readonly departments?: readonly WorkspaceDepartment[];
 }) {
   const [assigning, setAssigning] = useState(false);
   const [preview, setPreview] = useState<IncomingDocumentFile>();
@@ -194,19 +197,20 @@ function DocumentCard({ token, detail, people, now, onSaved, onOpenTask }: {
     <h2>{document.subject}</h2><p>{document.sender || "Отправитель не указан"}</p>
     <dl><div><dt>Получено</dt><dd>{dateLabel(document.receivedAt)}</dd></div>
       <div><dt>Канал</dt><dd>{document.source === "exat" ? "E-XAT" : document.source === "webmail" ? "Электронная почта" : "Импорт"}</dd></div></dl>
+    {execution ? <IncomingDocumentExecution token={token} detail={detail} people={people} now={now} onSaved={onSaved} /> : null}
     <details className="incoming-originals" open={!execution}>
     <summary>Документы письма <span>{detail.files.length}</span></summary>
     {detail.files.length ? <ul className="incoming-document-files">{detail.files.map(file => <li key={file.id}>
-      <span>{file.name.split("/").at(-1)}<small>{Math.max(1, Math.round(file.byteSize / 1024))} КБ</small></span>
+      <span className="incoming-original-file-icon" aria-hidden="true"><Document20Regular /></span>
+      <span className="incoming-original-file-copy">{file.name.split("/").at(-1)}<small>{Math.max(1, Math.round(file.byteSize / 1024))} КБ</small></span>
       <Button {...restoreFocusTarget} onClick={() => setPreview(file)} aria-label={`Открыть ${file.name.split("/").at(-1)}`}>Открыть</Button>
     </li>)}</ul> : <WorkspaceNotice tone={document.filesExpected ? "warning" : "info"}>
       {document.filesExpected ? "Оригиналы ещё не переданы референтом. Обновите карточку после загрузки файлов." : "Вложения к этому письму не переданы."}
     </WorkspaceNotice>}
     </details>
     {execution ? <>
-      <IncomingDocumentExecution token={token} detail={detail} people={people} now={now} onSaved={onSaved} />
       {document.canOpenTask && onOpenTask ? <div className="incoming-advanced-action"><Button appearance="subtle" disabled={busy} onClick={() => void openTask()}>Открыть поручение</Button></div> : null}
-    </> : assigning ? <AssignmentForm token={token} detail={detail} people={people}
+    </> : assigning ? <AssignmentForm token={token} detail={detail} people={people} departments={departments}
       onSaved={next => { setAssigning(false); onSaved(next); }} onRefreshed={onSaved} onCancel={() => setAssigning(false)} />
       : <section className="incoming-document-execution"><h3>Исполнение пока не назначено</h3>
         {document.canAssign ? <Button appearance="primary" disabled={document.filesExpected && !detail.files.length}
@@ -218,9 +222,10 @@ function DocumentCard({ token, detail, people, now, onSaved, onOpenTask }: {
   </article>;
 }
 
-export function IncomingDocumentsView({ token, people, onOpenTask, personal = false, refreshKey }: {
+export function IncomingDocumentsView({ token, people, departments, onOpenTask, personal = false, refreshKey }: {
   readonly token: string; readonly people: readonly WorkspacePerson[]; readonly onOpenTask?: (taskId: string) => Promise<void>;
   readonly personal?: boolean; readonly refreshKey?: string;
+  readonly departments?: readonly WorkspaceDepartment[];
 }) {
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
@@ -305,7 +310,7 @@ export function IncomingDocumentsView({ token, people, onOpenTask, personal = fa
       <div className="incoming-documents-detail" aria-busy={detailLoading}>
         {detailError ? <WorkspaceNotice tone="error" actions={<Button onClick={refresh}>Повторить</Button>}>{detailError}</WorkspaceNotice> : null}
         {detailLoading && !detail ? <LoadingSkeleton layout="rows" rows={6} label="Открываем письмо" />
-          : detail ? <DocumentCard key={detail.document.id} token={token} detail={detail} people={people} now={now} onOpenTask={onOpenTask}
+          : detail ? <DocumentCard key={detail.document.id} token={token} detail={detail} people={people} departments={departments} now={now} onOpenTask={onOpenTask}
               onSaved={next => { setDetail(next); setRevision(current => current + 1); }} />
               : !detailError ? <p className="incoming-document-empty">Выберите письмо, чтобы открыть документы и исполнение.</p> : null}
       </div>

@@ -281,7 +281,7 @@ export function TasksView(props: TasksViewProps) {
     </TabList>
     <div className="task-domain-panel" hidden={section !== "tasks"}><TaskWorkspaceView {...props} separateLetterTasks /></div>
     {lettersVisited ? <div className="task-domain-panel" hidden={section !== "letters"}>
-      <IncomingDocumentsView token={props.token} people={props.people} personal refreshKey={refreshKey}
+      <IncomingDocumentsView token={props.token} people={props.people} departments={props.departments} personal refreshKey={refreshKey}
         onOpenTask={async id => { await props.onRefreshTasks?.(); setOpenedLetterTask(id); }} />
     </div> : null}
     {openedLetterTask ? <TaskWorkspaceView {...props} key={openedLetterTask} dialogOnly focusTaskId={openedLetterTask}
