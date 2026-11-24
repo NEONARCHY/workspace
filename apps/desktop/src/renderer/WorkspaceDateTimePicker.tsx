@@ -260,7 +260,6 @@ export function WorkspaceDateTimePicker({
         type="button"
         className={`ws-date-time-trigger${value ? " has-value" : ""}`}
         aria-label={`${ariaLabel ?? "Дата и время"}: открыть выбор`}
-        aria-required={required || undefined}
         disabled={disabled}
       >
         {mode === "time" ? <Clock20Regular aria-hidden="true" /> : <CalendarLtr20Regular aria-hidden="true" />}

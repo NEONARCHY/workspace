@@ -10,6 +10,7 @@ import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
 import { assignIncomingDocument, downloadIncomingDocumentFile, loadIncomingDocument, loadIncomingDocuments, previewIncomingDocumentFile } from "./workspace-api";
 import { saveReferentBlob } from "./AIReferentFiles";
 import { IncomingDocumentExecution, IncomingDocumentStatus } from "./IncomingDocumentExecution";
+import { ProfileAvatar } from "./ProfileAvatar";
 import { isTaskOverdue } from "./task-deadline";
 import { useTaskDeadlineClock } from "./useTaskDeadlineClock";
 import { focusWorkspaceDialog, WorkspaceDialog } from "./WorkspaceDialog";
@@ -20,6 +21,17 @@ const filters: Readonly<Record<IncomingDocumentFilter, string>> = {
   all: "Все письма", unassigned: "Без поручения", active: "На исполнении", review: "На проверке",
   completed: "Исполненные", overdue: "Просроченные",
 };
+const assignmentInstructions = ["Ижро учун", "Тезкор", "Маълумот учун", "Таклиф киритиш учун"] as const;
+
+function DocumentPerson({ id, name, people, token }: {
+  readonly id: string; readonly name: string; readonly people: readonly WorkspacePerson[]; readonly token: string;
+}) {
+  const person = people.find(item => item.id === id) ?? { id, name };
+  return <span className="incoming-document-person">
+    <ProfileAvatar person={person} token={token} size={28} aria-hidden />
+    <span>{person.name}</span>
+  </span>;
+}
 
 function dateLabel(value: string | null) {
   return value ? new Date(value).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" }) : "Не указан";
@@ -88,6 +100,7 @@ function AssignmentForm({ token, detail, people, onSaved, onRefreshed, onCancel 
   const submitting = useRef(false);
   const locked = busy || reconcile || !detail.document.canAssign;
   const available = people.filter(person => person.status === "active");
+  const hasInstruction = assignmentInstructions.some(value => value === instruction);
   const checkState = async () => {
     setBusy(true);
     try {
@@ -102,7 +115,7 @@ function AssignmentForm({ token, detail, people, onSaved, onRefreshed, onCancel 
     finally { setBusy(false); }
   };
   const submit = async () => {
-    if (submitting.current || locked || !instruction.trim() || !assigneeId || !dueAt) return;
+    if (submitting.current || locked || !hasInstruction || !assigneeId || !dueAt) return;
     submitting.current = true; setBusy(true); setError("");
     operationId.current ??= crypto.randomUUID();
     try {
@@ -116,30 +129,42 @@ function AssignmentForm({ token, detail, people, onSaved, onRefreshed, onCancel 
   };
   return <form className="incoming-document-assignment" aria-label="Назначение исполнения"
     onSubmit={event => { event.preventDefault(); void submit(); }}>
-    <h3>Поручение по письму</h3>
-    <label htmlFor="incoming-instruction">Что нужно сделать</label>
-    <textarea id="incoming-instruction" value={instruction} disabled={locked} required maxLength={10_000}
-      rows={4} onChange={event => setInstruction(event.target.value)} />
+    <header className="incoming-assignment-heading"><h3>Поручение по письму</h3>
+      <p className="incoming-document-help">Выберите действие, назначьте ответственного и срок.</p></header>
+    <div className="incoming-document-field">
+      <label htmlFor="incoming-instruction">Что нужно сделать</label>
+      <WorkspaceSelect id="incoming-instruction" aria-label="Что нужно сделать" value={instruction} disabled={locked} required
+        onChange={event => setInstruction(event.target.value)}>
+        <option value="" disabled>Выберите действие</option>
+        {assignmentInstructions.map(value => <option value={value} key={value}>{value}</option>)}
+      </WorkspaceSelect>
+    </div>
+    <div className="incoming-assignment-fields">
     <div className="incoming-document-field"><span>Основной исполнитель</span>
       <PersonPicker people={available} token={token} value={assigneeId} label="Основной исполнитель" disabled={locked}
         onChange={id => { setAssigneeId(id); setCoAssigneeIds(current => current.filter(value => value !== id)); }} />
     </div>
+    <div className="incoming-document-field"><span>Срок исполнения</span>
+      <WorkspaceDateTimePicker value={dueAt} onChange={setDueAt} ariaLabel="Срок исполнения" required disabled={locked} />
+    </div>
+    </div>
+    <section className="incoming-assignment-team" aria-label="Команда исполнения">
+    <div className="incoming-section-heading"><span>Соисполнители</span><small>Необязательно</small></div>
     <PersonPicker people={available.filter(person => person.id !== assigneeId && !coAssigneeIds.includes(person.id))}
       token={token} value="" label="Добавить соисполнителя" emptyLabel="Добавить соисполнителя" disabled={locked}
       onChange={id => setCoAssigneeIds(current => [...current, id])} />
     {coAssigneeIds.length ? <ul className="incoming-document-participants" aria-label="Соисполнители">
-      {coAssigneeIds.map(id => <li key={id}><span>{people.find(person => person.id === id)?.name ?? "Сотрудник"}</span>
+      {coAssigneeIds.map(id => <li key={id}>
+        <DocumentPerson id={id} name="Сотрудник" people={people} token={token} />
         <Button appearance="subtle" disabled={locked} aria-label={`Убрать соисполнителя ${people.find(person => person.id === id)?.name ?? "Сотрудник"}`}
           onClick={() => setCoAssigneeIds(current => current.filter(value => value !== id))}>Убрать</Button></li>)}
     </ul> : null}
-    <div className="incoming-document-field"><span>Срок исполнения</span>
-      <WorkspaceDateTimePicker value={dueAt} onChange={setDueAt} ariaLabel="Срок исполнения" required disabled={locked} />
-    </div>
+    </section>
     <p className="incoming-document-help">После подтверждения будет создано поручение. Перечисленные выше документы скопируются в его карточку.</p>
-    {!detail.document.canAssign ? <WorkspaceNotice tone="warning">Назначение этого письма больше недоступно. Введённый текст сохранён в форме.</WorkspaceNotice> : null}
+    {!detail.document.canAssign ? <WorkspaceNotice tone="warning">Назначение этого письма больше недоступно. Выбранные настройки сохранены в форме.</WorkspaceNotice> : null}
     {error ? <WorkspaceNotice tone="error" actions={reconcile ? <Button disabled={busy} onClick={() => void checkState()}>Проверить состояние</Button> : undefined}>{error}</WorkspaceNotice> : null}
     <div className="incoming-document-actions">
-      <Button appearance="primary" type="submit" disabled={locked || !instruction.trim() || !assigneeId || !dueAt}>Создать поручение</Button>
+      <Button appearance="primary" type="submit" disabled={locked || !hasInstruction || !assigneeId || !dueAt}>Создать поручение</Button>
       <Button disabled={busy || reconcile} onClick={onCancel}>Отмена</Button>
     </div>
   </form>;
@@ -266,7 +291,10 @@ export function IncomingDocumentsView({ token, people, onOpenTask, personal = fa
               key={document.id} aria-pressed={document.id === selectedId} onClick={() => select(document)}>
               <span className="incoming-document-row-meta"><strong>№ {document.number}</strong><IncomingDocumentStatus status={document.execution?.status} /></span>
               <strong>{document.subject}</strong><span>{document.sender || "Отправитель не указан"}</span>
-              {document.execution ? <small>{document.execution.assigneeName} · {dateLabel(document.execution.dueAt)}{isTaskOverdue(document.execution, now) ? " · Срок истёк" : ""}</small> : null}
+              {document.execution ? <span className="incoming-document-row-execution">
+                <DocumentPerson id={document.execution.assigneeId} name={document.execution.assigneeName} people={people} token={token} />
+                <small data-overdue={isTaskOverdue(document.execution, now)}>{dateLabel(document.execution.dueAt)}{isTaskOverdue(document.execution, now) ? " · Срок истёк" : ""}</small>
+              </span> : null}
             </button>) : <p className="incoming-document-empty">Писем по выбранным условиям нет.</p>}
         {page && page.total > page.limit ? <nav className="incoming-document-actions" aria-label="Страницы входящих писем">
           <Button disabled={loading || offset === 0} onClick={() => { setLoading(true); setOffset(current => Math.max(0, current - page.limit)); }}>Назад</Button>

@@ -27,6 +27,7 @@ const path = require("node:path");
           assert.equal(route.request().method(), "POST");
           const payload = route.request().postDataJSON();
           assert.equal(payload.assigneeId, "executor");
+          assert.equal(payload.instruction, "Ижро учун");
           assert.deepEqual(payload.coAssigneeIds, ["co"]);
           assert.deepEqual(payload.fileIds, ["original"]);
           assigned = true;
@@ -61,14 +62,33 @@ const path = require("node:path");
       await page.getByRole("dialog").waitFor({ state: "hidden" });
       await page.waitForFunction(() => document.activeElement?.getAttribute("aria-label") === "Открыть Обращение.txt");
       await page.getByRole("button", { name: "Назначить исполнение" }).click();
-      await page.getByLabel("Что нужно сделать").fill("Подготовить проект официального ответа и приложить подтверждающие документы.");
+      const resolution = page.getByRole("combobox", { name: "Что нужно сделать" });
+      await resolution.focus();
+      await page.keyboard.press("Enter");
+      for (const name of ["Ижро учун", "Тезкор", "Маълумот учун", "Таклиф киритиш учун"]) {
+        assert(await page.getByRole("option", { name, exact: true }).isVisible());
+      }
+      await page.screenshot({ path: path.join(output, `${theme}-resolution-options.png`), fullPage: true });
+      await page.keyboard.press("ArrowDown");
+      await page.keyboard.press("Enter");
+      assert.equal(await resolution.textContent(), "Ижро учун");
       await page.getByRole("button", { name: "Основной исполнитель" }).click();
       await page.getByRole("button", { name: /Исполнитель QA/ }).click();
       await page.getByRole("button", { name: "Добавить соисполнителя" }).click();
       await page.getByRole("button", { name: /Соисполнитель QA/ }).click();
+      await page.evaluate(require("axe-core").source);
+      const assignmentAccessibility = await page.evaluate(async () => window.axe.run(".incoming-document-assignment", {
+        runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"] },
+      }));
+      assert.deepEqual(assignmentAccessibility.violations.map(issue => ({ id: issue.id, nodes: issue.nodes.map(node => node.target) })), [], `${theme} assignment accessibility`);
       await page.screenshot({ path: path.join(output, `${theme}-desktop.png`), fullPage: true });
       for (const [width, height] of [[1024, 768], [640, 640], [512, 384]]) {
         await page.setViewportSize({ width, height });
+        // Open the real deadline control: a visible sticky footer alone does not
+        // prove that the fields above it remain reachable in a short window.
+        await page.getByRole("button", { name: "Срок исполнения: открыть выбор" }).click();
+        await page.getByRole("button", { name: "Следующий месяц" }).waitFor();
+        await page.keyboard.press("Escape");
         const submit = page.getByRole("button", { name: "Создать поручение" });
         await submit.scrollIntoViewIfNeeded();
         const dimensions = await page.evaluate(() => ({ width: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth }));

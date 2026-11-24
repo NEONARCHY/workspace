@@ -9,6 +9,14 @@ import * as timeMotion from "./time-wheel-motion";
 describe("workspace date and file inputs", () => {
   afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
+  it("keeps native required validation for an empty deadline", () => {
+    const view = render(<WorkspaceDateTimePicker ariaLabel="Обязательный срок" required value="" onChange={vi.fn()} />);
+    expect(screen.getByLabelText("Обязательный срок", { selector: "input" })).toBeRequired();
+    expect(screen.getByLabelText("Обязательный срок", { selector: "input" })).toBeInvalid();
+    view.rerender(<WorkspaceDateTimePicker ariaLabel="Обязательный срок" required value="2030-01-01T17:00" onChange={vi.fn()} />);
+    expect(screen.getByLabelText("Обязательный срок", { selector: "input" })).toBeValid();
+  });
+
   it("uses a compact numeric date only when requested, keeping the full date elsewhere", () => {
     render(<><WorkspaceDateTimePicker mode="date" dateFormat="numeric" ariaLabel="Перейти к дате" value="2026-09-04" onChange={vi.fn()} />
       <WorkspaceDateTimePicker mode="date" ariaLabel="Дата события" value="2026-09-04" onChange={vi.fn()} /></>);
