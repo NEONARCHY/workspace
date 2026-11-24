@@ -33,7 +33,7 @@ export function useTeamGrantInbox(token: string, currentUserId: string, enabled:
   const current = enabled && resource?.key === key ? resource : undefined;
   return {
     launches: current?.grants?.filter((grant) => grant.chairUserId === currentUserId && grant.allowedActions.includes("approve_launch")),
-    reviews: current?.grants?.filter((grant) => grant.allowedActions.includes("approve")),
+    reviews: current?.grants?.filter((grant) => grant.allowedActions.some(action => ["approve", "approve_deadline"].includes(action))),
     error: current?.error,
     loading: enabled && !current,
     refresh: () => setRevision((value) => value + 1),

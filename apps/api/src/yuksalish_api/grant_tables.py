@@ -51,4 +51,21 @@ grant_events = sa.Table(
     sa.Column("from_status", sa.String(24)),
     sa.Column("to_status", sa.String(24)),
     sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("old_due_at", sa.DateTime(timezone=True)),
+    sa.Column("due_at", sa.DateTime(timezone=True)),
+)
+
+grant_deadline_requests = sa.Table(
+    "grant_deadline_requests", metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("grant_id", uuid_type),
+    sa.Column("requested_by_user_id", uuid_type),
+    sa.Column("old_due_at", sa.DateTime(timezone=True)),
+    sa.Column("due_at", sa.DateTime(timezone=True)),
+    sa.Column("reason", sa.Text()),
+    sa.Column("status", sa.String(16)),
+    sa.Column("decided_by_user_id", uuid_type),
+    sa.Column("decision_reason", sa.Text()),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("decided_at", sa.DateTime(timezone=True)),
 )

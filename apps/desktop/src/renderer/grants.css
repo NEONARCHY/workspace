@@ -150,3 +150,20 @@
 @media (forced-colors: active) {
   .grants-status, .grants-route li[aria-current="step"] { border: 1px solid Highlight; color: CanvasText; }
 }
+.grant-deadline-heading, .grant-deadline-dates { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; }
+.grant-deadline-heading p { margin: 6px 0 0; }
+.grant-deadline-request > p { margin-top: 8px; }
+.grant-deadline-request > .grants-actions { margin-top: 12px; }
+.grant-record-deadline-request { display: block; margin-top: 4px; color: var(--ws-link); font-size: 12px; }
+.grant-deadline-panel .grant-deadline-request { margin-top: 14px; padding: 16px; border: 1px solid var(--ws-line); border-radius: 16px; background: var(--ws-surface-recessed, var(--ws-muted-surface)); }
+.grant-deadline-dates { justify-content: flex-start; gap: 16px 32px; margin: 14px 0; }
+.grant-deadline-dates dt, .grant-deadline-form small { color: var(--ws-muted); font-size: 12px; }
+.grant-deadline-dates dd { margin: 4px 0 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+.grant-deadline-form, .grant-deadline-form label, .grant-deadline-form > div:first-child { display: grid; gap: 8px; }
+.grant-deadline-form { margin-top: 16px; gap: 14px; }
+.grants-dialog .grant-deadline-form input.ws-date-time-required-proxy { width: 1px; height: 1px; min-width: 0; min-height: 0; padding: 0; border: 0; }
+.grant-deadline-form textarea { width: 100%; box-sizing: border-box; resize: vertical; }
+.grant-deadline-history { margin-top: 16px; }
+.grant-deadline-history summary { cursor: pointer; color: var(--ws-link); }
+.grant-deadline-history ol { padding-inline-start: 20px; }
+.grant-deadline-history li { margin: 14px 0; overflow-wrap: anywhere; }

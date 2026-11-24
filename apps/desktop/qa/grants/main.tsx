@@ -6,6 +6,8 @@ import { workspaceTheme, workspaceDarkTheme } from "../../src/renderer/workspace
 import "../../src/renderer/styles.css";
 import "../../src/renderer/responsive.css";
 import "../../src/renderer/design-system.css";
+import "../../src/renderer/workspace-inputs.css";
+import "../../src/renderer/sliding-segmented.css";
 import "../../src/renderer/record-lists.css";
 import "../../src/renderer/spatial-workspace.css";
 import "../../src/renderer/section-headers.css";

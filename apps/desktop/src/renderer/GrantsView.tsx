@@ -11,6 +11,7 @@ import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
 import { GrantParticipant } from "./GrantParticipant";
 import { GrantComposer } from "./GrantComposer";
 import { GrantRecords } from "./GrantRecords";
+import { GrantDeadlinePanel } from "./GrantDeadlinePanel";
 import { WorkspaceFileDropzone } from "./WorkspaceFileDropzone";
 import {
   actOnGrant, changeGrantReviewers, createGrant, editGrant, loadGrant, loadGrants, loadGrantSettings,
@@ -46,6 +47,8 @@ const eventLabels: Readonly<Record<string, string>> = {
   approve_launch: "Председатель разрешил запуск и стал постановщиком",
   return_launch: "Заявка на запуск возвращена инициатору",
   reject_launch: "Председатель отклонил запуск", submit_launch: "Повторный запрос на запуск",
+  extend_deadline: "Срок продлён", request_deadline: "Запрошено продление срока",
+  approve_deadline: "Продление срока одобрено", reject_deadline: "Продление срока отклонено",
 };
 type Filter = "all" | "mine" | "launch" | "working" | "review" | "revision" | "completed";
 const filters: readonly [Filter, string][] = [
@@ -156,6 +159,16 @@ export function GrantsView({ token, currentUser, people, departments, canCreate,
     if (["return", "return_launch", "reject_launch"].includes(action.action)) { setReturning(false); setLaunchDecision(undefined); setReturnReason(""); }
     setSuccess("Изменения сохранены");
   });
+  const deadlineOperation = async (action?: GrantAction): Promise<GrantDetail> => {
+    if (!detail || busyRef.current) throw new Error("Дождитесь завершения текущего действия");
+    busyRef.current = true; setBusy(true); setActionError(""); setSuccess("");
+    try {
+      const saved = action ? await actOnGrant(token, detail.id, action) : await loadGrant(token, detail.id);
+      saveDetail(saved);
+      if (action) setSuccess("Изменения срока сохранены");
+      return saved;
+    } finally { busyRef.current = false; setBusy(false); }
+  };
   const openEditor = (grant?: GrantDetail) => {
     setSourceFiles([]);
     setDraft(grant ? { title: grant.title, description: grant.description, assigneeId: grant.assigneeId,
@@ -177,7 +190,7 @@ export function GrantsView({ token, currentUser, people, departments, canCreate,
     const fits = filter === "all" || (filter === "mine" && [row.initiatorUserId, row.authorUserId, row.assigneeId, ...row.coAssigneeIds].includes(currentUser.id))
       || (filter === "launch" && ["launch_review", "launch_revision", "launch_rejected"].includes(row.status))
       || (filter === "working" && row.status === "in_progress")
-      || (filter === "review" && row.allowedActions.some((action) => ["approve", "approve_launch"].includes(action)))
+      || (filter === "review" && row.allowedActions.some((action) => ["approve", "approve_launch", "approve_deadline"].includes(action)))
       || (filter === "revision" && ["needs_revision", "launch_revision"].includes(row.status))
       || (filter === "completed" && row.status === "completed");
     return fits && `${row.title} ${row.description} ${name(row.assigneeId)} ${name(row.authorUserId)} ${name(row.initiatorUserId)}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase());
@@ -230,6 +243,7 @@ export function GrantsView({ token, currentUser, people, departments, canCreate,
         <div className="grants-dialog-body">
           {detailError && <WorkspaceNotice tone="error" role="alert" actions={<Button onClick={() => void run(async () => { saveDetail(await loadGrant(token, selectedId ?? "")); setDetailError(""); })}>Повторить</Button>}>{detailError}</WorkspaceNotice>}
           {detail && <>
+            <GrantDeadlinePanel key={detail.id} detail={detail} people={people} busy={busy} now={now} onPerform={deadlineOperation} />
             <section className="grant-section grant-result-section"><h3>Результат и проверка</h3><p className="grants-preserve">{detail.resultText || "Результат ещё не передан на проверку."}</p>
               {can("submit") && <div className="grants-result"><label><span>{detail.workflowVersion === 2 ? "Результат работы для заместителя" : "Результат работы для постановщика"}</span><textarea rows={5} maxLength={12000} value={result} onChange={(event) => setResult(event.target.value)} placeholder="Что подготовлено, какие материалы приложены" /></label>
                 <Button appearance="primary" disabled={busy || !result.trim() || detail.checklist.some((item) => !item.completed)} onClick={() => act({ action: "submit", text: result })}>Отправить на проверку</Button>
@@ -271,6 +285,7 @@ export function GrantsView({ token, currentUser, people, departments, canCreate,
               <ol className="grants-history">{[...detail.events].reverse().map((event) => <li key={event.id}><strong>{eventLabels[event.action] ?? event.action}</strong>
                 <small>{name(event.actorUserId)} · {readableDate(event.createdAt)}</small>
                 {event.fromStatus !== event.toStatus && <span>{grantStatusLabels[event.fromStatus]} → {grantStatusLabels[event.toStatus]}</span>}
+                {event.oldDueAt && event.dueAt && <p>{["request_deadline", "reject_deadline"].includes(event.action) ? "Предложенный срок" : "Срок"}: {readableDate(event.oldDueAt)} → {readableDate(event.dueAt)}</p>}
                 {event.text && <p className="grants-preserve">{event.text}</p>}</li>)}</ol>
             </section>
           </>}

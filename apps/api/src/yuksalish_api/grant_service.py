@@ -11,6 +11,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+from . import grant_deadlines
 from .access_control import ModuleAction, ensure_module_action, module_permissions_for_user
 from .auth import AuthenticatedUser, load_authenticated_user
 from .errors import WorkspaceRepositoryError
@@ -28,7 +29,7 @@ from .grant_schemas import (
     GrantStatus,
     GrantSummary,
 )
-from .grant_tables import grant_events, grant_requests, grant_settings
+from .grant_tables import grant_deadline_requests, grant_events, grant_requests, grant_settings
 from .repository import _active_user_id, _attachment, _sync_context_chat, _upsert_notification
 from .tables import attachments, audit_events, hr_settings, users, workspace_notifications
 
@@ -59,7 +60,9 @@ def participants(row: RowMapping) -> set[UUID]:
     }
 
 
-def allowed_actions(row: RowMapping, user: AuthenticatedUser) -> list[str]:
+def allowed_actions(
+    row: RowMapping, user: AuthenticatedUser, pending: RowMapping | None = None,
+) -> list[str]:
     """Administrative visibility never substitutes for a named reviewer."""
     actions: list[str] = []
     if user.id not in participants(row):
@@ -85,7 +88,7 @@ def allowed_actions(row: RowMapping, user: AuthenticatedUser) -> list[str]:
     actor_field = REVIEW_ACTORS.get(row["status"])
     if actor_field and user.id == row[actor_field]:
         actions.extend(["approve", "return"])
-    return actions
+    return [*actions, *grant_deadlines.actions(row, user, pending)]
 
 
 async def access_grant(
@@ -111,12 +114,13 @@ async def _actions(
     row: RowMapping,
     user: AuthenticatedUser,
     rights: Mapping[ModuleAction, bool] | None = None,
+    pending: RowMapping | None = None,
 ) -> list[str]:
     if rights is None:
         rights = (await module_permissions_for_user(connection, user))["grants"]
     return [
         action
-        for action in allowed_actions(row, user)
+        for action in allowed_actions(row, user, pending)
         if rights["approve" if action in REVIEW_ACTIONS else "edit"]
     ]
 
@@ -126,6 +130,7 @@ async def _summary(
     row: RowMapping,
     user: AuthenticatedUser,
     rights: Mapping[ModuleAction, bool] | None = None,
+    pending: RowMapping | None = None,
 ) -> GrantSummary:
     return GrantSummary(
         id=str(row["id"]),
@@ -150,7 +155,8 @@ async def _summary(
         chat_id=str(row["chat_id"]),
         created_at=row["created_at"],
         updated_at=row["updated_at"],
-        allowed_actions=await _actions(connection, row, user, rights),
+        allowed_actions=await _actions(connection, row, user, rights, pending),
+        pending_deadline_request=grant_deadlines.response(pending) if pending is not None else None,
     )
 
 
@@ -173,7 +179,13 @@ async def list_grants(
         )
     rows = (await connection.execute(statement)).mappings().all()
     rights = (await module_permissions_for_user(connection, user))["grants"]
-    return [await _summary(connection, row, user, rights) for row in rows]
+    pending_rows = (await connection.execute(select(grant_deadline_requests).where(
+        grant_deadline_requests.c.grant_id.in_([row["id"] for row in rows]),
+        grant_deadline_requests.c.status == "pending",
+    ))).mappings().all()
+    pending_by_grant = {item["grant_id"]: item for item in pending_rows}
+    return [await _summary(connection, row, user, rights, pending_by_grant.get(row["id"]))
+            for row in rows]
 
 
 async def _validate_reviewer(connection: AsyncConnection, user_id: UUID) -> None:
@@ -193,6 +205,11 @@ async def get_grant(
     grant_id: UUID,
 ) -> GrantDetail:
     row = await access_grant(connection, user, grant_id)
+    deadlines = (await connection.execute(
+        select(grant_deadline_requests).where(grant_deadline_requests.c.grant_id == grant_id)
+        .order_by(grant_deadline_requests.c.created_at.desc(), grant_deadline_requests.c.id),
+    )).mappings().all()
+    pending = next((item for item in deadlines if item["status"] == "pending"), None)
     history = (
         (
             await connection.execute(
@@ -221,7 +238,8 @@ async def get_grant(
         .all()
     )
     return GrantDetail(
-        **(await _summary(connection, row, user)).model_dump(),
+        **(await _summary(connection, row, user, pending=pending)).model_dump(),
+        deadline_requests=[grant_deadlines.response(item) for item in deadlines],
         events=[
             GrantEvent(
                 id=str(event["id"]),
@@ -231,6 +249,7 @@ async def get_grant(
                 from_status=event["from_status"],
                 to_status=event["to_status"],
                 created_at=event["created_at"],
+                old_due_at=event["old_due_at"], due_at=event["due_at"],
             )
             for event in history
         ],
@@ -382,6 +401,7 @@ async def _event(
     action: str,
     text: str,
     to_status: str,
+    *, old_due_at: datetime | None = None, due_at: datetime | None = None,
 ) -> None:
     now = datetime.now(UTC)
     event_id = uuid4()
@@ -395,6 +415,7 @@ async def _event(
             from_status=row["status"],
             to_status=to_status,
             created_at=now,
+            old_due_at=old_due_at, due_at=due_at,
         )
     )
     await connection.execute(
@@ -415,7 +436,9 @@ async def _event(
     )
 
 
-async def _notify(connection: AsyncConnection, row: RowMapping) -> None:
+async def _notify(
+    connection: AsyncConnection, row: RowMapping, deadline_action: str | None = None,
+) -> None:
     now = datetime.now(UTC)
     # Every stage owns its attention item. Old actions are resolved in the same transaction.
     await connection.execute(
@@ -439,6 +462,16 @@ async def _notify(connection: AsyncConnection, row: RowMapping) -> None:
             else {row["initiator_user_id"]} if row["status"] == "launch_revision" else set()
         )
     )
+    if await grant_deadlines.pending(connection, row["id"]) is not None:
+        next_actors |= {row["initiator_user_id"]}
+        if row["author_user_id"] is not None:
+            next_actors.add(row["author_user_id"])
+    deadline_title = {
+        "request_deadline": "Запрос продления срока гранта",
+        "extend_deadline": "Срок гранта продлён",
+        "approve_deadline": "Продление срока гранта одобрено",
+        "reject_deadline": "Продление срока гранта отклонено",
+    }.get(deadline_action or "")
     for person_id in participants(row):
         await _upsert_notification(
             connection,
@@ -446,7 +479,7 @@ async def _notify(connection: AsyncConnection, row: RowMapping) -> None:
             event_key=f"grant:{row['id']}:{row['revision']}",
             kind="approval",
             priority="normal",
-            title={
+            title=deadline_title or {
                 "completed": "Грант завершён",
                 "launch_review": "Запрос на запуск гранта",
                 "launch_revision": "Уточните заявку на запуск гранта",
@@ -616,7 +649,16 @@ async def edit_grant(
             updated_at=datetime.now(UTC),
         )
     )
-    await _event(connection, row, user, "edited", "", row["status"])
+    due_changed = payload.due_at != row["due_at"]
+    await _event(connection, row, user, "edited", "", row["status"],
+                 old_due_at=row["due_at"] if due_changed else None,
+                 due_at=payload.due_at if due_changed else None)
+    pending = await grant_deadlines.pending(connection, grant_id)
+    executor_ids = {payload.assignee_id, *payload.co_assignee_ids}
+    if due_changed or (pending is not None and pending["requested_by_user_id"] not in executor_ids):
+        await grant_deadlines.supersede(
+            connection, grant_id, user.id, "Срок или состав исполнителей изменён в карточке",
+        )
     updated = await access_grant(connection, user, grant_id)
     await _sync_chat(connection, updated)
     await _notify(connection, updated)
@@ -637,7 +679,8 @@ async def act_on_grant(
     )
     row = await access_grant(connection, user, grant_id, lock=True)
     _check_revision(row, payload.expected_revision)
-    if payload.action not in allowed_actions(row, user):
+    pending = await grant_deadlines.pending(connection, grant_id)
+    if payload.action not in allowed_actions(row, user, pending):
         raise WorkspaceRepositoryError(
             403,
             "Это действие доступно только назначенному участнику этапа",
@@ -645,6 +688,12 @@ async def act_on_grant(
     text = payload.text.strip()
     to_status = row["status"]
     values: dict[str, object] = {"revision": row["revision"] + 1, "updated_at": datetime.now(UTC)}
+    old_due_at: datetime | None = None
+    due_at: datetime | None = None
+    if payload.action in grant_deadlines.ACTIONS:
+        old_due_at, due_at = await grant_deadlines.apply(connection, row, user, payload, pending)
+        if payload.action in {"extend_deadline", "approve_deadline"}:
+            values["due_at"] = due_at
     if (
         payload.action in {"return", "comment", "submit", "return_launch", "reject_launch"}
         and not text
@@ -708,11 +757,17 @@ async def act_on_grant(
             **values,
         )
     )
-    await _event(connection, row, user, payload.action, text, to_status)
+    await _event(connection, row, user, payload.action, text, to_status,
+                 old_due_at=old_due_at, due_at=due_at)
+    if to_status in TERMINAL:
+        await grant_deadlines.supersede(
+            connection, grant_id, user.id, "Заявка завершена или запуск отклонён",
+        )
     if payload.action == "approve_launch":
         await _sync_chat(connection, await access_grant(connection, user, grant_id))
-    if payload.action in {"submit", "approve", "return", "submit_launch", *REVIEW_ACTIONS}:
-        await _notify(connection, await access_grant(connection, user, grant_id))
+    if payload.action in {"submit", "approve", "return", "submit_launch", *REVIEW_ACTIONS,
+                          *grant_deadlines.ACTIONS}:
+        await _notify(connection, await access_grant(connection, user, grant_id), payload.action)
     return await get_grant(connection, user, grant_id)
 
 

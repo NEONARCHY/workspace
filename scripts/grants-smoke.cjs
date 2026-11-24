@@ -13,6 +13,7 @@ async function main() {
   const checks = [];
   const creationAttempts = [];
   const creationFiles = [];
+  const deadlineWrites = [];
   page.on("pageerror", (error) => errors.push(error.message));
   const grant = {
     id: "synthetic-grant", title: "Подготовка грантовой заявки: развитие местных инициатив",
@@ -30,6 +31,28 @@ async function main() {
   await page.route("**/api/v1/**", async (route) => {
     const url = new URL(route.request().url());
     let data;
+    if (url.pathname === "/api/v1/grants/synthetic-grant/actions") {
+      const payload = route.request().postDataJSON();
+      deadlineWrites.push(payload);
+      assert.equal(payload.expectedRevision, grant.revision);
+      if (payload.action === "request_deadline") {
+        assert(Date.parse(payload.dueAt) > Date.parse(grant.dueAt));
+        grant.pendingDeadlineRequest = { id: "deadline-qa", requestedByUserId: "actor-1", oldDueAt: grant.dueAt,
+          dueAt: payload.dueAt, reason: payload.text, status: "pending", decidedByUserId: null,
+          decisionReason: "", createdAt: "2026-11-24T09:00:00Z", decidedAt: null };
+        grant.deadlineRequests = [grant.pendingDeadlineRequest];
+        grant.allowedActions = [];
+      } else if (payload.action === "extend_deadline") {
+        assert(Date.parse(payload.dueAt) > Date.parse(grant.dueAt)); grant.dueAt = payload.dueAt;
+      } else if (payload.action === "approve_deadline") {
+        assert.equal(payload.requestId, grant.pendingDeadlineRequest.id);
+        grant.dueAt = grant.pendingDeadlineRequest.dueAt;
+        grant.deadlineRequests = [{ ...grant.pendingDeadlineRequest, status: "approved", decidedByUserId: "actor-0", decidedAt: "2026-11-24T10:00:00Z" }];
+        grant.pendingDeadlineRequest = null; grant.allowedActions = ["extend_deadline"];
+      } else throw new Error("Unexpected synthetic grant action: " + payload.action);
+      grant.revision += 1;
+      return route.fulfill({ json: grant });
+    }
     if (["/api/v1/grants", "/api/v1/grants/with-files"].includes(url.pathname) && route.request().method() === "POST") {
       if (url.pathname.endsWith("/with-files")) {
         const form = await new Response(route.request().postDataBuffer(), {headers: {"content-type": await route.request().headerValue("content-type")}}).formData();
@@ -107,6 +130,64 @@ async function main() {
     await form.getByRole("button",{name:"Отмена",exact:true}).click();
     await form.waitFor({state:"hidden"});
     checks.push("real browser: failed creation preserves input, retries the same request, and cancels without another request");
+    for (const theme of ["light", "dark"]) {
+      grant.allowedActions = ["extend_deadline"];
+      grant.pendingDeadlineRequest = null; grant.deadlineRequests = [];
+      grant.dueAt = "2099-11-01T12:00:00Z";
+      await page.setViewportSize({ width: 1440, height: 1000 });
+      await page.goto(`http://127.0.0.1:5179/qa/grants/index.html?theme=${theme}`);
+      await page.getByRole("button", { name: grant.title }).click();
+      let dialog = page.getByRole("dialog", { name: grant.title });
+      await dialog.getByRole("button", { name: "Продлить срок", exact: true }).click();
+      await dialog.getByRole("button", { name: "Новый срок гранта: открыть выбор" }).click();
+      await page.getByRole("button", { name: "Следующий месяц" }).click();
+      await page.locator(".ws-calendar-days button:not(.is-outside):not(:disabled)").last().click();
+      await page.keyboard.press("Escape");
+      await dialog.getByLabel("Причина продления *", { exact: true }).fill("Ожидаем документы партнёра");
+      for (const [width, height] of [[1440, 1000], [1024, 768], [640, 480], [512, 384]]) {
+        await page.setViewportSize({ width, height });
+        const confirm = dialog.getByRole("button", { name: "Подтвердить продление" });
+        await confirm.scrollIntoViewIfNeeded();
+        assert(await confirm.isEnabled());
+        const geometry = await dialog.evaluate(el => ({ client: el.clientWidth, scroll: el.scrollWidth,
+          overflowing: [...el.querySelectorAll("*")].filter(child => child.getBoundingClientRect().right > el.getBoundingClientRect().right + 1)
+            .slice(0, 8).map(child => ({ tag: child.tagName, class: child.className, width: child.getBoundingClientRect().width })),
+        }));
+        assert(geometry.scroll <= geometry.client + 1, JSON.stringify({ width, height, geometry }));
+        await page.screenshot({ path: path.join(output, `deadline-${theme}-${width}.png`) });
+      }
+      await page.setViewportSize({ width: 1440, height: 1000 });
+      await page.addScriptTag({ path: require.resolve("axe-core/axe.min.js") });
+      let audit = await page.evaluate(async () => axe.run(document.querySelector('[role="dialog"]'), { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"] } }));
+      assert.deepEqual(audit.violations.map(issue => ({ id: issue.id, nodes: issue.nodes.map(node => node.target) })), []);
+      await dialog.getByRole("button", { name: "Подтвердить продление" }).click();
+      await dialog.getByRole("button", { name: "Продлить срок", exact: true }).waitFor();
+      assert.equal(grant.status, "author_review");
+      assert.equal(deadlineWrites.at(-1).action, "extend_deadline");
+      // Switch only the synthetic server's allowed role, then exercise the request and owner decision.
+      grant.allowedActions = ["request_deadline"];
+      await dialog.getByRole("button", { name: "Обновить карточку", exact: true }).click();
+      await dialog.getByRole("button", { name: "Запросить продление", exact: true }).click();
+      await dialog.getByRole("button", { name: "Новый срок гранта: открыть выбор" }).click();
+      await page.getByRole("button", { name: "Следующий месяц" }).click();
+      await page.locator(".ws-calendar-days button:not(.is-outside):not(:disabled)").last().click();
+      await page.keyboard.press("Escape");
+      await dialog.getByLabel("Причина продления *", { exact: true }).fill("Нужен бюджет партнёра");
+      await dialog.getByRole("button", { name: "Отправить запрос", exact: true }).click();
+      await dialog.getByText("Запрос ожидает решения", { exact: true }).waitFor();
+      grant.allowedActions = ["extend_deadline", "approve_deadline", "reject_deadline"];
+      await dialog.getByRole("button", { name: "Обновить карточку", exact: true }).click();
+      await dialog.getByRole("button", { name: "Одобрить продление", exact: true }).scrollIntoViewIfNeeded();
+      await page.screenshot({ path: path.join(output, `deadline-request-${theme}.png`) });
+      audit = await page.evaluate(async () => axe.run(document.querySelector('[role="dialog"]'), { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"] } }));
+      assert.deepEqual(audit.violations.map(issue => ({ id: issue.id, nodes: issue.nodes.map(node => node.target) })), []);
+      await dialog.getByRole("button", { name: "Одобрить продление", exact: true }).click();
+      await dialog.getByText("История запросов · 1", { exact: true }).click();
+      await dialog.getByText("Одобрено", { exact: true }).waitFor();
+      await page.screenshot({ path: path.join(output, `deadline-approved-${theme}.png`) });
+      checks.push(`${theme}: real date picker, direct extension, executor request, owner decision, history, compact scroll and axe AA`);
+      await page.keyboard.press("Escape");
+    }
     assert.equal(errors.length,0,errors.join("\n"));
     await fs.writeFile(path.join(output,"report.json"),JSON.stringify({checks,errors},null,2));
     console.log(JSON.stringify({checks,errors,output}));

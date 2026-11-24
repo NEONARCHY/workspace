@@ -33,6 +33,7 @@ export interface GrantSummary extends Omit<GrantFields, "checklist"> {
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly allowedActions: readonly string[];
+  readonly pendingDeadlineRequest?: GrantDeadlineRequest | null;
 }
 export interface GrantEvent {
   readonly id: string;
@@ -42,10 +43,25 @@ export interface GrantEvent {
   readonly fromStatus: GrantStatus;
   readonly toStatus: GrantStatus;
   readonly createdAt: string;
+  readonly oldDueAt?: string | null;
+  readonly dueAt?: string | null;
+}
+export interface GrantDeadlineRequest {
+  readonly id: string;
+  readonly requestedByUserId: string;
+  readonly oldDueAt: string;
+  readonly dueAt: string;
+  readonly reason: string;
+  readonly status: "pending" | "approved" | "rejected" | "superseded";
+  readonly decidedByUserId: string | null;
+  readonly decisionReason: string;
+  readonly createdAt: string;
+  readonly decidedAt: string | null;
 }
 export interface GrantDetail extends GrantSummary {
   readonly events: readonly GrantEvent[];
   readonly attachments: readonly WorkspaceAttachment[];
+  readonly deadlineRequests?: readonly GrantDeadlineRequest[];
 }
 export interface GrantSettings {
   readonly leaderUserId: string | null;
@@ -53,9 +69,11 @@ export interface GrantSettings {
   readonly revision: number;
 }
 export interface GrantAction {
-  readonly action: "submit" | "approve" | "return" | "comment" | "check" | "approve_launch" | "return_launch" | "reject_launch" | "submit_launch";
+  readonly action: "submit" | "approve" | "return" | "comment" | "check" | "approve_launch" | "return_launch" | "reject_launch" | "submit_launch" | "extend_deadline" | "request_deadline" | "approve_deadline" | "reject_deadline";
   readonly expectedRevision: number;
   readonly text?: string;
   readonly itemId?: string;
   readonly completed?: boolean;
+  readonly dueAt?: string;
+  readonly requestId?: string;
 }
