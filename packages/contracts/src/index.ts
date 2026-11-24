@@ -1414,6 +1414,10 @@ export interface IncomingDocument {
   readonly subject: string;
   readonly sender: string;
   readonly receivedAt: string | null;
+  /** Registration timestamp supplied by the source; never inferred from import time. */
+  readonly registeredAt?: string | null;
+  /** First persisted in Workspace; unchanged by later source synchronizations. */
+  readonly addedAt?: string | null;
   readonly source: string;
   readonly filesExpected: boolean;
   readonly execution: IncomingDocumentExecution | null;

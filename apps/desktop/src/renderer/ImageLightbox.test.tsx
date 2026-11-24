@@ -13,6 +13,34 @@ function setup() {
 beforeEach(() => { vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:image"); vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {}); });
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
 describe("ImageLightbox", () => {
+  it("restores lost dialog focus after downloading without stealing another control's focus", async () => {
+    const { onDownload } = setup();
+    await screen.findByRole("img", { name: "second.png" });
+    const dialog = screen.getByRole("dialog");
+    await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
+    let finish: () => void = () => undefined;
+    onDownload.mockImplementation(() => new Promise<void>(resolve => { finish = resolve; }));
+    const download = screen.getByRole("button", { name: "Скачать" });
+    act(() => download.focus()); fireEvent.click(download);
+    const bodyTabIndex = document.body.getAttribute("tabindex");
+    act(() => {
+      // JSDOM does not blur disabled buttons like Chromium does.
+      document.body.tabIndex = -1; document.body.focus();
+      if (bodyTabIndex === null) document.body.removeAttribute("tabindex");
+      else document.body.setAttribute("tabindex", bodyTabIndex);
+    });
+    expect(document.body).toHaveFocus();
+    await act(async () => { finish(); });
+    await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
+    expect(download).toBeEnabled();
+    fireEvent.click(download);
+    const close = screen.getByRole("button", { name: "Закрыть просмотрщик" });
+    act(() => close.focus());
+    await act(async () => { finish(); });
+    await waitFor(() => expect(download).toBeEnabled());
+    expect(close).toHaveFocus();
+  });
+
   it("never flashes the loading indicator for fast or cached images", async () => {
     vi.useFakeTimers();
     setup();

@@ -2616,6 +2616,7 @@ export function App() {
                 focusLetterId={focusTarget?.section === "incoming_letters" ? Number(focusTarget.entityId) : undefined}
                 token={session.accessToken}
                 people={displayPeople}
+                departments={workspace.departments}
                 currentUserId={workspace.currentUser.id}
                 canEdit={modulePermissions.incoming_letters?.edit ?? false}
                 canManageAccess={isAdmin}

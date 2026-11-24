@@ -138,6 +138,38 @@ async def scenario():
             await engine.dispose()
 
 
+async def test_registration_dates_are_distinct_and_first_import_survives_resync(scenario):
+    client, engine, _storage, _ids, source, _file, headers, _payload, agent = scenario
+    path = f"/api/v1/incoming-documents/{source}"
+    original = (await client.get(path, headers=headers("author"))).json()["document"]
+    assert original["registeredAt"] is None
+    assert original["receivedAt"] is None
+    assert original["addedAt"] is not None
+    received = datetime(2026, 11, 20, 5, tzinfo=UTC)
+    registered = received + timedelta(hours=1)
+    async with engine.begin() as connection:
+        row = (await connection.execute(select(incoming).where(
+            incoming.c.id == source,
+        ))).mappings().one()
+        assert datetime.fromisoformat(original["addedAt"]) == row["created_at"]
+        await sync_incoming_letters(connection, AIReferentIncomingSyncRequest(
+            agent_id=agent, agent_name="Document QA", letters=[AIReferentIncomingSyncItem(
+                external_id=row["external_id"], sequence_number="QA-1",
+                received_at=received, registered_at=registered, subject="Updated source",
+                status="platform_submitted", source="exat",
+            )],
+        ))
+    updated = (await client.get(path, headers=headers("author"))).json()["document"]
+    assert updated["addedAt"] == original["addedAt"]
+    assert datetime.fromisoformat(updated["receivedAt"]) == received
+    assert datetime.fromisoformat(updated["registeredAt"]) == registered
+    listing = (await client.get("/api/v1/incoming-documents", params={"q": "QA-1"},
+                                headers=headers("author"))).json()["documents"]
+    listed = next(item for item in listing if item["id"] == str(source))
+    assert listed["addedAt"] == original["addedAt"]
+    assert listed["registeredAt"] == updated["registeredAt"]
+
+
 async def test_document_assignment_and_full_review_cycle(scenario):
     client, engine, storage, ids, source, file, headers, payload, agent = scenario
     path = f"/api/v1/incoming-documents/{source}"
@@ -241,6 +273,16 @@ async def test_document_assignment_and_full_review_cycle(scenario):
     completed = (await client.get(path, headers=headers("co"))).json()["executionDetail"]
     assert completed["resultText"] == "Corrected report"
     assert not any(completed[key] for key in ("canSubmit", "canAccept", "canReturn"))
+    history = await client.get(task_path + "/history", headers=headers("co"))
+    assert history.status_code == 200, history.text
+    events = history.json()["events"]
+    assert {"task_created", "result_submitted_for_review", "result_returned_for_revision",
+            "result_accepted", "task_completed"} <= {event["kind"] for event in events}
+    closed = next(event for event in events if event["kind"] == "task_completed")
+    assert closed["actorUserId"] == str(ids["author"])
+    assert datetime.fromisoformat(closed["occurredAt"]).utcoffset() is not None
+    denied = await client.get(task_path + "/history", headers=headers("stranger"))
+    assert denied.status_code == 404
     assert (await client.delete(task_path, headers=headers("author"))).status_code == 409
 
 
@@ -317,6 +359,8 @@ async def test_document_pagination_filters_and_module_denial(scenario):
     assert without_task_access.status_code == 200
     assert without_task_access.json()["executionDetail"] is None
     assert without_task_access.json()["document"]["canOpenTask"] is False
+    denied_history = await client.get(f"/api/v1/tasks/{task_id}/history", headers=headers("co"))
+    assert denied_history.status_code == 403
     async with engine.begin() as connection:
         await connection.execute(insert(module_access_rules).values(
             id=uuid4(), subject_type="user", subject_key=str(ids["co"]),

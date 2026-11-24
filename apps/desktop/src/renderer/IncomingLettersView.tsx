@@ -3,7 +3,7 @@ import { LoadingSkeleton, SkeletonBlock } from "./LoadingSkeleton";
 import { Input } from "./WorkspaceInput";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
-  EdoIncomingDetail, EdoIncomingFilter, EdoIncomingLetter, EdoIncomingPage, WorkspacePerson,
+  EdoIncomingDetail, EdoIncomingFilter, EdoIncomingLetter, EdoIncomingPage, WorkspaceDepartment, WorkspacePerson,
 } from "@yuksalish/contracts";
 import {
   addEdoIncomingAssignment, completeEdoIncomingLetter, downloadEdoIncomingAttachment,
@@ -46,6 +46,7 @@ function safeFileName(name: string): string {
 interface IncomingLettersViewProps {
   readonly token: string;
   readonly people: readonly WorkspacePerson[];
+  readonly departments?: readonly WorkspaceDepartment[];
   readonly currentUserId: string;
   readonly canEdit: boolean;
   readonly focusLetterId?: number;
@@ -60,7 +61,7 @@ export function IncomingLettersView(props: IncomingLettersViewProps) {
       onTabSelect={(_, data) => setSource(data.value === "edo" ? "edo" : "workspace")}>
       <Tab value="workspace">Документооборот</Tab><Tab value="edo">Письма из ЭДО</Tab>
     </TabList>
-    {source === "workspace" ? <IncomingDocumentsView token={props.token} people={props.people} onOpenTask={props.onOpenTask} />
+    {source === "workspace" ? <IncomingDocumentsView token={props.token} people={props.people} departments={props.departments} onOpenTask={props.onOpenTask} />
       : <LegacyIncomingLettersView {...props} />}
   </div>;
 }

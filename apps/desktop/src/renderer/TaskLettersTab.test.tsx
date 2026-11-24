@@ -6,8 +6,8 @@ import { workspaceTheme } from "./workspace-theme";
 import { chairmanScenarioProps, chairmanScenarioTask, taskChairman } from "./test-fixtures/task-chairman-scenarios";
 
 vi.mock("./IncomingDocumentsView", () => ({
-  IncomingDocumentsView: ({ personal, token }: { personal: boolean; token: string }) =>
-    <section aria-label="Личный реестр писем" data-personal={personal} data-token={token} />,
+  IncomingDocumentsView: ({ personal, token, departments }: { personal: boolean; token: string; departments?: readonly unknown[] }) =>
+    <section aria-label="Личный реестр писем" data-personal={personal} data-token={token} data-departments={departments?.length ?? 0} />,
 }));
 afterEach(cleanup);
 
@@ -19,11 +19,12 @@ const props = { ...chairmanScenarioProps(letter), focusTaskId: undefined, tasks:
 
 describe("Tasks personal letters domain", () => {
   it("separates by source identity and opens the personal registry in its own tab", () => {
-    render(<FluentProvider theme={workspaceTheme}><TasksView {...props} /></FluentProvider>);
+    render(<FluentProvider theme={workspaceTheme}><TasksView {...props} departments={[{ id: "central", code: "CA", name: "ЦА", scope: "central", assignedUsersCount: 0 }]} /></FluentProvider>);
     expect(screen.getByRole("button", { name: "Открыть задачу: Письмо № обычная задача" })).toBeVisible();
     expect(screen.queryByRole("button", { name: "Открыть задачу: Поручение из письма" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("tab", { name: "Мои письма 1" }));
     expect(screen.getByRole("region", { name: "Личный реестр писем" })).toHaveAttribute("data-personal", "true");
+    expect(screen.getByRole("region", { name: "Личный реестр писем" })).toHaveAttribute("data-departments", "1");
     expect(screen.getByRole("region", { name: "Личный реестр писем" })).toHaveAttribute("data-token", "synthetic-only");
     fireEvent.click(screen.getByRole("tab", { name: "Задачи" }));
     expect(screen.getByRole("button", { name: "Открыть задачу: Письмо № обычная задача" })).toBeVisible();
