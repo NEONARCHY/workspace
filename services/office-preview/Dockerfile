@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && useradd --system --uid 10001 --home-dir /tmp preview \
     && mkdir -p /run/office-preview && chown preview /run/office-preview
 WORKDIR /app
-COPY services/office-preview/server.py /app/server.py
+RUN pip install --no-cache-dir defusedxml==0.7.1
+COPY services/office-preview/server.py services/office-preview/docx_letterhead.py /app/
 USER preview
 CMD ["python", "/app/server.py"]

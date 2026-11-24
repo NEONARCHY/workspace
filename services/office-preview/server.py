@@ -10,6 +10,8 @@ from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 from socketserver import ThreadingMixIn, UnixStreamServer
 
+from docx_letterhead import prepare_letterhead
+
 SOCKET = "/run/office-preview/preview.sock"
 MAX_INPUT = 25 * 1024 * 1024
 MAX_OUTPUT = 40 * 1024 * 1024
@@ -40,7 +42,7 @@ def convert(content: bytes, extension: str) -> bytes:
         (profile / "user").mkdir(parents=True)
         (profile / "user/registrymodifications.xcu").write_bytes(PROFILE)
         source = work / f"input.{extension}"
-        source.write_bytes(content)
+        source.write_bytes(prepare_letterhead(content) if extension == "docx" else content)
         command = [
             "/usr/bin/libreoffice",
             f"-env:UserInstallation={profile.as_uri()}",

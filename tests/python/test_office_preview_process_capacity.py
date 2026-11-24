@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 @pytest.fixture
 def service(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
+    monkeypatch.syspath_prepend(str(ROOT / "services/office-preview"))
     # Windows does not expose UnixStreamServer. No sockets are opened by these
     # capacity/handler tests; the real Linux socket is tested in container QA.
     if not hasattr(socketserver, "UnixStreamServer"):
