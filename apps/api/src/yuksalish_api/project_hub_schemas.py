@@ -39,6 +39,7 @@ class PaymentProjectOption(HubModel):
     id: str
     code: str
     title: str
+    payment_approver_user_ids: list[str] | None = None
 
 
 class PaymentWorkstreamOption(HubModel):
@@ -70,6 +71,7 @@ class ProjectHubWrite(HubModel):
     manager_user_id: str
     responsible_user_ids: list[str] = Field(default_factory=list, max_length=100)
     approver_user_ids: list[str] = Field(default_factory=list, max_length=20)
+    payment_approver_user_ids: list[str] | None = Field(default=None, max_length=20)
     start_date: date | None = None
     end_date: date | None = None
     budget: int = Field(default=0, ge=0, le=9_007_199_254_740_991)
@@ -87,6 +89,10 @@ class ProjectHubWrite(HubModel):
             raise ValueError("Project end date must not precede start date")
         if len(set(self.approver_user_ids)) != len(self.approver_user_ids):
             raise ValueError("Approvers must be unique")
+        if self.payment_approver_user_ids is not None and (
+            len(set(self.payment_approver_user_ids)) != len(self.payment_approver_user_ids)
+        ):
+            raise ValueError("Payment approvers must be unique")
         if len(set(self.responsible_user_ids)) != len(self.responsible_user_ids):
             raise ValueError("Responsible people must be unique")
         return self

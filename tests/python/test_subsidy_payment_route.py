@@ -133,13 +133,14 @@ async def test_subsidy_stage_label_keeps_approvers_and_ordinary_stage_unchanged(
 @pytest.mark.anyio
 async def test_subsidy_selection_requires_one_active_askar_account() -> None:
     connection = AsyncMock()
+    connection.scalar.return_value = None
     template_id, askar_id = uuid4(), uuid4()
     assert await _payment_route_variant_payload(
         connection, template_id, str(uuid4()), "Другой проект",
     ) == {}
-    connection.scalar.assert_not_called()
+    connection.scalar.assert_awaited_once()
 
-    connection.scalar.return_value = "deputy_chair"
+    connection.scalar.side_effect = [None, "deputy_chair", None, "deputy_chair"]
     rows = Mock()
     rows.mappings.return_value.all.return_value = [
         {"id": askar_id, "username": "askar_mamatxanov", "full_name": "Аскар Маматханов"},

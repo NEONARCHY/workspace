@@ -103,6 +103,24 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.clearAllMocks(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe("standalone project hub", () => {
+  it("keeps the payment route in the project form after an error and saves it on retry", async () => {
+    vi.mocked(saveProjectHubProject).mockRejectedValueOnce(new Error("Не удалось сохранить маршрут"))
+      .mockResolvedValue({ ...project, paymentApproverUserIds: [] });
+    setup();
+    fireEvent.click(await screen.findByRole("button", { name: "Настроить проект" }));
+    const dialog = within(screen.getByRole("dialog"));
+    dialog.getByRole("textbox", { name: "Название проекта" }).focus();
+    fireEvent.change(dialog.getByRole("combobox", { name: "Маршрут оплаты после главбуха" }), { target: { value: "custom" } });
+    expect(saveProjectHubProject).not.toHaveBeenCalled();
+    fireEvent.click(dialog.getByRole("button", { name: "Сохранить проект" }));
+    await waitFor(() => expect(dialog.getByRole("alert")).toHaveTextContent("Не удалось сохранить маршрут"));
+    expect(dialog.getByRole("status")).toHaveTextContent("Главбух → Председатель");
+    fireEvent.click(dialog.getByRole("button", { name: "Сохранить проект" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(saveProjectHubProject).toHaveBeenLastCalledWith("test-token", expect.objectContaining({
+      paymentApproverUserIds: [], approverUserIds: project.approverUserIds,
+    }), project.id);
+  });
   it("offers a useful empty state without creating a project before confirmation", async () => {
     vi.mocked(loadProjectHub).mockResolvedValue({ projects: [], workstreams: [], items: [], requests: [] });
     setup();
