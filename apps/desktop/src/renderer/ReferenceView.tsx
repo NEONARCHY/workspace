@@ -1,5 +1,5 @@
 import { formatRussianDateTime } from "./date-time-format";
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Button, DialogSurface } from "@fluentui/react-components";
 import { Add20Regular, ArrowClockwise20Regular, Document20Regular, Edit20Regular } from "@fluentui/react-icons";
 import type {
@@ -10,6 +10,8 @@ import type {
 import { WorkspaceDialog } from "./WorkspaceDialog";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
+import { Input } from "./WorkspaceInput";
+import { createRefreshQueue } from "./refresh-queue";
 import { ExternalFileViewer, type FileViewerSource } from "./FileViewer";
 import {
   createReferenceExpert, createReferencePartner, createReferenceTemplate,
@@ -119,22 +121,23 @@ export function ReferenceView({ token, canCreate, canEdit, people }: Props) {
   const [preview, setPreview] = useState<Preview>();
   const [uploadTarget, setUploadTarget] = useState<ReferenceTemplate>();
   const fileInput = useRef<HTMLInputElement>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const activeToken = useRef<string | undefined>(token);
+  const readDirectory = useRef<ReturnType<typeof createRefreshQueue<ReferenceDirectory>> | undefined>(undefined);
 
   const refresh = useCallback(async () => {
     setLoading(true); setLoadError("");
-    try { setDirectory(await loadReferenceDirectory(token)); }
-    catch (error) { setLoadError(readableError(error)); }
-    finally { setLoading(false); }
+    try { await readDirectory.current?.(token, { trailing: false }); }
+    catch (error) { if (activeToken.current === token) setLoadError(readableError(error)); }
+    finally { if (activeToken.current === token) setLoading(false); }
   }, [token]);
   useEffect(() => {
-    let active = true;
-    void loadReferenceDirectory(token).then((data) => {
-      if (active) { setDirectory(data); setLoading(false); }
-    }).catch((error: unknown) => {
-      if (active) { setLoadError(readableError(error)); setLoading(false); }
-    });
-    return () => { active = false; };
-  }, [token]);
+    activeToken.current = token;
+    readDirectory.current = createRefreshQueue(loadReferenceDirectory,
+      data => { setDirectory(data); setLoadError(""); }, () => activeToken.current);
+    const start = window.setTimeout(() => { void refresh(); }, 0);
+    return () => { activeToken.current = undefined; readDirectory.current = undefined; window.clearTimeout(start); };
+  }, [token, refresh]);
 
   const openProfile = () => {
     if (!directory) return;
@@ -170,6 +173,7 @@ export function ReferenceView({ token, canCreate, canEdit, people }: Props) {
         if (editor.original) await saveReferenceTemplate(token, editor.original.id, templateDraft, editor.original.revision, archivedDraft);
         else await createReferenceTemplate(token, templateDraft);
       }
+      readDirectory.current?.invalidate(token);
       setEditor(undefined);
       await refresh();
     } catch (error) { setActionError(readableError(error)); }
@@ -181,6 +185,7 @@ export function ReferenceView({ token, canCreate, canEdit, people }: Props) {
     setBusy(true); setActionError("");
     try {
       await uploadReferenceTemplate(token, uploadTarget.id, uploadTarget.revision, file);
+      readDirectory.current?.invalidate(token);
       setUploadTarget(undefined);
       await refresh();
     } catch (error) { setActionError(readableError(error)); }
@@ -198,15 +203,19 @@ export function ReferenceView({ token, canCreate, canEdit, people }: Props) {
     } catch (error) { setActionError(readableError(error)); }
   }
 
-  const match = (parts: readonly (string | null | undefined)[]) =>
-    parts.join(" ").toLocaleLowerCase().includes(query.trim().toLocaleLowerCase());
-  const partners = directory?.partners.filter((item) => (showArchived || !item.archived)
-    && match([item.name, item.tin, item.contactPerson, item.kind])) ?? [];
-  const experts = directory?.experts.filter((item) => (showArchived || !item.archived)
-    && match([item.name, item.specialization, item.email])) ?? [];
-  const templates = directory?.templates.filter((item) => (showArchived || !item.archived)
-    && (canEdit || item.versions.length > 0)
-    && match([item.title, item.description, item.kind])) ?? [];
+  const peopleById = useMemo(() => new Map(people.map(person => [person.id, person.name])), [people]);
+  const partnerNames = useMemo(() => new Map(directory?.partners.map(partner => [partner.id, partner.name]) ?? []), [directory?.partners]);
+  const searchIndex = useMemo(() => ({
+    partners: directory?.partners.map(item => ({ item, text: [item.name, item.tin, item.contactPerson, item.kind].join(" ").toLocaleLowerCase() })) ?? [],
+    experts: directory?.experts.map(item => ({ item, text: [item.name, item.specialization, item.email].join(" ").toLocaleLowerCase() })) ?? [],
+    templates: directory?.templates.map(item => ({ item, text: [item.title, item.description, item.kind].join(" ").toLocaleLowerCase() })) ?? [],
+  }), [directory]);
+  const search = query.trim().toLocaleLowerCase();
+  const { partners, experts, templates } = useMemo(() => ({
+    partners: searchIndex.partners.filter(({ item, text }) => (showArchived || !item.archived) && text.includes(search)).map(({ item }) => item),
+    experts: searchIndex.experts.filter(({ item, text }) => (showArchived || !item.archived) && text.includes(search)).map(({ item }) => item),
+    templates: searchIndex.templates.filter(({ item, text }) => (showArchived || !item.archived) && (canEdit || item.versions.length > 0) && text.includes(search)).map(({ item }) => item),
+  }), [searchIndex, search, showArchived, canEdit]);
   const editorTitle = editor?.kind === "profile" ? "Реквизиты «Юксалиш»"
     : editor?.kind === "partner" ? `${editor.original ? "Изменить" : "Добавить"} организацию`
       : editor?.kind === "expert" ? `${editor.original ? "Изменить" : "Добавить"} эксперта`
@@ -216,7 +225,7 @@ export function ReferenceView({ token, canCreate, canEdit, people }: Props) {
     contentType: preview.version.contentType, byteSize: preview.version.byteSize,
   } : undefined;
 
-  return <section className="workspace-view reference-view" aria-label="Справочник">
+  return <section className="workspace-view workspace-queue reference-view" aria-label="Справочник">
     <WorkspaceSectionHeader motif="employees" className="reference-header">
       <div><span className="view-kicker">Проверенные сведения · документы · контакты</span>
         <h1>Справочник</h1>
@@ -241,19 +250,18 @@ export function ReferenceView({ token, canCreate, canEdit, people }: Props) {
         <dl className="reference-profile-grid">{profileFields.map(({ key, label }) =>
           <div key={key}><dt>{label}</dt><dd>{directory.profile[key] || <span className="reference-muted">Не заполнено</span>}</dd></div>)}</dl>
         {directory.profile.updatedAt ? <p className="reference-footnote">Обновлено {formatRussianDateTime(new Date(directory.profile.updatedAt))}</p> : null}
-        {directory.changes.length ? <details className="reference-history"><summary>История изменений</summary>
-          <ol>{directory.changes.map((change, index) => <li key={`${change.targetId}:${change.createdAt}:${index}`}>
+        {directory.changes.length ? <details className="reference-history" open={historyOpen} onToggle={event => setHistoryOpen(event.currentTarget.open)}><summary>История изменений</summary>
+          {historyOpen && <ol>{directory.changes.map((change, index) => <li key={`${change.targetId}:${change.createdAt}:${index}`}>
             <span>{changeLabels[change.action] ?? "Изменение справочника"}</span>
-            <small>{people.find((person) => person.id === change.actorUserId)?.name ?? "Сотрудник"} · {formatRussianDateTime(new Date(change.createdAt))}</small>
-          </li>)}</ol></details> : null}
+            <small>{peopleById.get(change.actorUserId) ?? "Сотрудник"} · {formatRussianDateTime(new Date(change.createdAt))}</small>
+          </li>)}</ol>}</details> : null}
       </section> : <>
         <div className="reference-toolbar"><div><h2>{tabs.find((item) => item.key === tab)?.label}</h2>
           <p>{tab === "partners" ? "Партнёры, доноры и контрагенты без повторяющихся карточек."
             : tab === "experts" ? "Люди, специализация и связанная организация."
               : "Утверждённые образцы документов с сохранением прежних версий."}</p></div>
           <div className="reference-toolbar-actions">
-            <label className="reference-search"><span className="sr-only">Поиск по справочнику</span>
-              <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Поиск" /></label>
+            <Input type="search" aria-label="Поиск по справочнику" value={query} onChange={event => setQuery(event.target.value)} placeholder="Поиск" />
             <label className="reference-archive-toggle"><input type="checkbox" checked={showArchived} onChange={(event) => setShowArchived(event.target.checked)} /> Архив</label>
             {canCreate && (tab !== "templates" || canEdit) ? <Button appearance="primary" icon={<Add20Regular />} onClick={() => {
               if (tab === "partners") openPartner(); else if (tab === "experts") openExpert(); else openTemplate();
@@ -272,7 +280,7 @@ export function ReferenceView({ token, canCreate, canEdit, people }: Props) {
           {tab === "experts" && (experts.length ? experts.map((item) => <article className="reference-record" key={item.id}>
             <span className="reference-record-kind">Эксперт{item.archived ? " · архив" : ""}</span>
             <h3>{item.name}</h3><p>{item.specialization}</p>
-            {item.partnerId ? <p>{directory.partners.find((partner) => partner.id === item.partnerId)?.name ?? "Организация в архиве"}</p> : null}
+            {item.partnerId ? <p>{partnerNames.get(item.partnerId) ?? "Организация в архиве"}</p> : null}
             {item.phone || item.email ? <p>{[item.phone, item.email].filter(Boolean).join(" · ")}</p> : null}
             {item.notes ? <p className="reference-note">{item.notes}</p> : null}
             {canEdit ? <Button icon={<Edit20Regular />} onClick={() => openExpert(item)}>Изменить</Button> : null}

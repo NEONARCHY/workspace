@@ -85,6 +85,7 @@ import "./topbar-insights.css";
 import "./mobile-density.css";
 import "./page-scroll-layout.css";
 import "./workspace-queue.css";
+import "./registry-workspace.css";
 import "./workspace-topbar.css";
 import "./workday-actions.css";
 import "./workspace-surfaces.css";

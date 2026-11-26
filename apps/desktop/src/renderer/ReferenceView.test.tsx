@@ -4,6 +4,8 @@ import type { ReferenceDirectory } from "@yuksalish/contracts";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ReferenceView } from "./ReferenceView";
 import { workspaceTheme } from "./workspace-theme";
+import { disposeTabster, getTabster } from "tabster";
+import { mockVisibleWindowLayout } from "./test-fixtures/visible-window";
 
 const api = vi.hoisted(() => ({
   load: vi.fn(), saveProfile: vi.fn(), createPartner: vi.fn(), savePartner: vi.fn(),
@@ -46,8 +48,21 @@ function show(canEdit = false) {
   </FluentProvider>);
 }
 
-beforeEach(() => { vi.clearAllMocks(); api.load.mockResolvedValue(directory); });
-afterEach(cleanup);
+beforeEach(() => { mockVisibleWindowLayout(); vi.clearAllMocks(); api.load.mockResolvedValue(directory); });
+afterEach(() => { cleanup(); const tabster = getTabster(window); if (tabster) disposeTabster(tabster, true); vi.restoreAllMocks(); });
+
+it("mounts history rows only while their disclosure is open", async () => {
+  api.load.mockResolvedValue({ ...directory, changes: [{ actorUserId: "owner", action: "profile_updated", targetType: "profile", targetId: "profile", createdAt: "2026-11-26T09:00:00Z", details: {} }] });
+  const { container } = show();
+  await screen.findByText("История изменений");
+  const history = container.querySelector<HTMLDetailsElement>(".reference-history");
+  if (!history) throw new Error("History disclosure is missing");
+  expect(history.querySelectorAll("li")).toHaveLength(0);
+  history.open = true; fireEvent(history, new Event("toggle"));
+  await waitFor(() => expect(history.querySelectorAll("li")).toHaveLength(1));
+  history.open = false; fireEvent(history, new Event("toggle"));
+  await waitFor(() => expect(history.querySelectorAll("li")).toHaveLength(0));
+});
 
 it("shows verified profile fields without inventing official requisites", async () => {
   show();
@@ -69,7 +84,7 @@ it("keeps unsaved requisites after a server conflict", async () => {
   show(true);
   await screen.findByText("Официальное название");
   fireEvent.click(screen.getByRole("button", { name: "Изменить" }));
-  fireEvent.change(screen.getByRole("textbox", { name: "ИНН" }), { target: { value: "123456789" } });
+  fireEvent.change(await screen.findByRole("textbox", { name: "ИНН" }), { target: { value: "123456789" } });
   fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
   await waitFor(() => expect(api.saveProfile).toHaveBeenCalledWith("token", expect.objectContaining({ tin: "123456789" }), 0));
   expect(await screen.findByText("Реквизиты изменились")).toBeInTheDocument();

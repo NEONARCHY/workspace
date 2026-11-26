@@ -9,6 +9,7 @@ const attentionSuite = process.argv.includes("--attention");
 const peopleSuite = process.argv.includes("--people");
 const operationsSuite = process.argv.includes("--operations");
 const documentsSuite = process.argv.includes("--documents");
+const registrySuite = process.argv.includes("--registry");
 const workdaySuite = process.argv.includes("--workday");
 const promptSuite = process.argv.includes("--hisobot-prompt");
 const topbarSuite = process.argv.includes("--topbar") || workdaySuite;
@@ -18,9 +19,9 @@ const onlyWidth = Number(process.env.UI_QA_WIDTH || 0);
 assert([0, 320, 390, 720, 1024, 1440].includes(onlyWidth));
 const origin = process.env.UI_QA_ORIGIN || "http://127.0.0.1:5186";
 assert(["127.0.0.1", "localhost"].includes(new URL(origin).hostname));
-const iteration = promptSuite ? "10" : workdaySuite ? "9" : reportingSuite ? "8" : topbarSuite ? "7" : planningSuite ? "6" : documentsSuite ? "5" : operationsSuite ? "4" : peopleSuite ? "3" : attentionSuite ? "2" : "1";
+const iteration = registrySuite ? "11" : promptSuite ? "10" : workdaySuite ? "9" : reportingSuite ? "8" : topbarSuite ? "7" : planningSuite ? "6" : documentsSuite ? "5" : operationsSuite ? "4" : peopleSuite ? "3" : attentionSuite ? "2" : "1";
 const output = path.resolve(process.env.UI_QA_OUTPUT || `tmp/ui-consistency-iteration-${iteration}`);
-const sections = promptSuite ? [{ id: "home", label: "Главная", root: ".personal-home" }, { id: "tasks", label: "Задачи", root: ".tasks-view" }, { id: "messenger", label: "Мессенджер", root: ".messenger-view" }].filter(section => section.id === (process.env.UI_QA_SECTION || "messenger")) : workdaySuite ? [{ id: "home", label: "Главная", root: ".personal-home" }] : reportingSuite
+const sections = registrySuite ? [{ id: "grants", label: "Гранты", root: ".grants-view" }, { id: "reference", label: "Справочник", root: ".reference-view" }, { id: "mail", label: "Почта", root: ".mail-view" }] : promptSuite ? [{ id: "home", label: "Главная", root: ".personal-home" }, { id: "tasks", label: "Задачи", root: ".tasks-view" }, { id: "messenger", label: "Мессенджер", root: ".messenger-view" }].filter(section => section.id === (process.env.UI_QA_SECTION || "messenger")) : workdaySuite ? [{ id: "home", label: "Главная", root: ".personal-home" }] : reportingSuite
   ? [{ id: "hisobot", label: "AI Hisobot", root: ".ai-hisobot-view" }, { id: "monthly", label: "Ойлик ҳисоботлар", root: ".monthly-reports-page" }, { id: "efficiency", label: "Эффективность", navLabel: "Задачи", root: ".tasks-view" }]
   : planningSuite
   ? [{ id: "home", label: "Главная", root: ".personal-home" }, { id: "calendar", label: "Календарь", root: ".calendar-view" }, { id: "projects", label: "Проекты", root: ".project-hub-view" }]
@@ -42,6 +43,17 @@ async function capture(subject, target) {
   const temporary = target + ".tmp";
   try { await fs.writeFile(temporary, await subject.screenshot()); await fs.rename(temporary, target); }
   finally { await fs.rm(temporary, { force: true }); }
+}
+function registryFixtures(people, user) {
+  const grantSettings = { leaderUserId: people[1].id, chairUserId: people[2].id, revision: 1 };
+  const grants = Array.from({ length: 24 }, (_, i) => ({ id: `qa-grant-${i}`, title: ["Развитие молодёжных инициатив", "Образовательная программа регионов", "Подготовка местных координаторов", "Исследование общественных инициатив"][i % 4], description: "Подготовить заявку, план мероприятий и бюджет программы.", initiatorUserId: user.id, authorUserId: people[2].id, assigneeId: people[i % people.length].id, coAssigneeIds: [], workflowVersion: 2, launchApprovedAt: "2026-11-20T10:00:00Z", launchApprovedByUserId: people[2].id, ...grantSettings, dueAt: "2026-12-12T12:00:00Z", status: ["in_progress", "leader_review", "needs_revision", "completed"][i % 4], revision: 2, checklist: [], resultText: "", chatId: `qa-grant-chat-${i}`, createdAt: "2026-11-20T09:00:00Z", updatedAt: "2026-11-24T09:00:00Z", allowedActions: i % 4 === 1 ? ["approve", "return"] : ["comment"], events: [], attachments: [] }));
+  const reference = {
+    profile: { legalName: "Тестовая организация «Юксалиш»", shortName: "Юксалиш", tin: "", registeredAddress: "", postalAddress: "", bankName: "", bankCode: "", bankAccount: "", phone: "", email: "office@example.test", website: "", revision: 1, updatedAt: "2026-11-24T09:00:00Z" },
+    partners: Array.from({ length: 12 }, (_, i) => ({ id: `qa-partner-${i}`, name: ["Центр региональных инициатив", "Образовательный фонд", "Агентство развития", "Ассоциация местных сообществ"][i % 4], kind: ["partner", "donor", "government", "contractor"][i % 4], tin: "", contactPerson: people[i % people.length].name, phone: "", email: `contact${i}@example.test`, address: "", notes: "Совместные региональные программы и рабочие встречи", archived: i === 11, revision: 1, updatedAt: "2026-11-24T09:00:00Z" })),
+    experts: [], templates: [], changes: [],
+  };
+  const messages = Array.from({ length: 20 }, (_, i) => ({ id: `qa-mail-${i}`, threadId: `qa-thread-${i}`, subject: ["Программа региональной встречи", "Документы по образовательной программе", "Согласование бюджета проекта", "Итоги рабочей встречи"][i % 4], sender: `Координатор программы <team${i}@example.test>`, recipients: "qa-user@example.test", receivedAt: "2026-11-26T09:30:00Z", snippet: "Направляем материалы для согласования. Просим проверить программу и подготовить замечания.", unread: i % 3 === 0, body: "Здравствуйте. Направляем материалы для согласования региональной программы. Все данные этого письма — тестовые.", replyTo: "", messageId: `<qa-${i}@example.test>`, references: "", attachments: [] }));
+  return { grants, grantSettings, reference, messages, connection: { accountId: "qa-mail-account", email: "qa-user@example.test", configured: true, sendingEnabled: true, connectedAt: "2026-11-20T09:00:00Z", reconnectRequired: false } };
 }
 function fixtures(demo) {
   const people = demo.people.map(person => ({ ...person, avatarVersion: null }));
@@ -116,10 +128,10 @@ async function measure(page, selector) {
   const browser = await chromium.launch({ channel: "msedge", headless: true });
   const results = [], errors = [];
   try {
-    for (const [width, height, theme] of galleryOnly ? [] : [[1440, 960, "dark"], [1440, 960, "light"], [1024, 768, "dark"], [390, 844, "dark"], ...((phase === "after" || topbarSuite || reportingSuite) && (peopleSuite || operationsSuite || documentsSuite || planningSuite || reportingSuite) ? [[320, 800, "dark"]] : []), ...((phase === "after" || topbarSuite || reportingSuite) && (documentsSuite || planningSuite || reportingSuite) ? [[720, 480, "dark"]] : [])].filter(([width]) => !onlyWidth || width === onlyWidth)) {
+    for (const [width, height, theme] of galleryOnly ? [] : [[1440, 960, "dark"], [1440, 960, "light"], [1024, 768, "dark"], [390, 844, "dark"], ...((phase === "after" || topbarSuite || reportingSuite || registrySuite) && (peopleSuite || operationsSuite || documentsSuite || planningSuite || reportingSuite || registrySuite) ? [[320, 800, "dark"]] : []), ...((phase === "after" || topbarSuite || reportingSuite || registrySuite) && (documentsSuite || planningSuite || reportingSuite || registrySuite) ? [[720, 480, "dark"]] : [])].filter(([width]) => !onlyWidth || width === onlyWidth)) {
       const context = await browser.newContext({ viewport: { width, height }, reducedMotion: "reduce" });
       const page = await context.newPage(); page.setDefaultTimeout(15000);
-      if (planningSuite || reportingSuite) await page.clock.setFixedTime(new Date(promptSuite ? "2026-11-26T12:39:00Z" : "2026-11-26T09:30:00Z"));
+      if (planningSuite || reportingSuite || registrySuite) await page.clock.setFixedTime(new Date(promptSuite ? "2026-11-26T12:39:00Z" : "2026-11-26T09:30:00Z"));
       page.on("pageerror", error => errors.push(error.message));
       await page.addInitScript(theme => localStorage.setItem("yuksalish:color-theme:last", theme), theme);
       let data, releaseIds = [], workdayWorking = false, workdayWrites = 0;
@@ -129,11 +141,19 @@ async function measure(page, selector) {
       }));
       await page.route("**/api/v1/**", async route => {
         const request = route.request(), endpoint = new URL(request.url()).pathname.replace("/api/v1", "");
-        const send = json => route.fulfill({ json });
+        const send = json => route.fulfill({ json: registrySuite && endpoint === "/workspace/bootstrap" ? { ...json, moduleAccess: data.registry.moduleAccess } : json });
         if (/\/auth\/(web\/)?login$/.test(endpoint)) return send({ accessToken: "qa-token", expiresIn: 3600, user: data.user });
+        if (registrySuite && endpoint === "/mail/messages/search") { const { query } = request.postDataJSON(); return send({ messages: data.registry.messages.filter(item => !query || `${item.subject} ${item.sender}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())), nextPageToken: null }); }
         if (!["GET", "HEAD"].includes(request.method())) { if (endpoint.startsWith("/workday/")) workdayWrites++; return route.fulfill({ status: 403, json: { detail: "Synthetic QA: no writes" } }); }
         if (endpoint === "/workspace/bootstrap") return send({ currentUser: { ...data.user, ...(planningSuite ? { departmentId: "qa-dept" } : {}) }, people: planningSuite ? data.people.map(p => ({ ...p, departmentId: "qa-dept" })) : data.people, tasks: planningSuite ? data.home.tasks : data.tasks, requests: data.requests, tripRequests: data.tripRequests, workflow: data.workflow, projectWorkflow: null, tripWorkflow: null, requestWorkflows: {}, projects: [], chats: planningSuite ? data.home.chats : [], messages: planningSuite ? data.home.messages : [], departments: planningSuite ? [{ ...data.departments[0], assignedUsersCount: data.people.length }] : [], positions: [], attachments: [], feedPosts: attentionSuite || planningSuite ? data.feedPosts : [], calendarEvents: planningSuite ? data.calendarEvents : [], notifications: attentionSuite ? data.notifications : planningSuite ? data.home.notifications : [], absenceRequests: peopleSuite ? data.absenceRequests : [], presenceSummary: peopleSuite ? data.presenceSummary : [], canCreatePaymentRequests: true, notificationPreferences: { desktopEnabled: false, soundEnabled: false, messagesEnabled: true, tasksEnabled: true, approvalsEnabled: true, calendarEnabled: true, tripsEnabled: true, remindersEnabled: true } });
         if (planningSuite && endpoint === "/profile/me/efficiency") return send(data.personalEfficiency);
+        if (registrySuite && endpoint === "/grants") return send(data.registry.grants);
+        if (registrySuite && endpoint === "/grants/settings") return send(data.registry.grantSettings);
+        if (registrySuite && endpoint.startsWith("/grants/")) return send(data.registry.grants.find(item => item.id === endpoint.split("/").at(-1)));
+        if (registrySuite && endpoint === "/reference") return send(data.registry.reference);
+        if (registrySuite && endpoint === "/mail/connection") return send(data.registry.connection);
+        if (registrySuite && endpoint === "/mail/drafts") return send([]);
+        if (registrySuite && endpoint.startsWith("/mail/threads/")) return send({ messages: [data.registry.messages.find(item => item.threadId === endpoint.split("/").at(-1))], truncated: false });
         if (planningSuite && endpoint.startsWith("/recognition/profiles/")) return send(data.recognition);
         if (planningSuite && endpoint === "/home/reactions") return send({ totalCount: 7, reactions: [{ emoji: "👍", count: 7 }] });
         if (planningSuite && endpoint === "/ai-referent/incoming") return send({ letters: [], totalCount: 0, filteredCount: 0, registeredCount: 0, attentionCount: 0, withAttachmentsCount: 0, journal: { available: false } });
@@ -186,6 +206,7 @@ async function measure(page, selector) {
       data = fixtures(await page.evaluate(async () => { const d = await import("/src/renderer/test-fixtures/demo-data.ts"), h = await import("/src/renderer/test-fixtures/personal-home-fixture.ts"), c = await import("/qa/context-fixtures.ts"); return { people: d.people, initialTasks: d.initialTasks, home: h.homeFixture("malika", Date.parse("2026-11-26T09:30:00Z")), personalEfficiency: h.homeEfficiency("malika"), recognition: h.homeRecognition("malika"), contextRates: c.contextRates, contextWeather: c.contextWeather }; }));
       if (promptSuite) data.home.notifications = [...data.home.notifications, { id: "qa-hisobot-reminder", kind: "hisobot", title: "AI Hisobot", body: "Черновик отчёта готов", priority: "attention", section: "ai_hisobot", requiresAction: true, isReminder: true, occurredAt: "2026-11-26T12:40:00Z" }];
       releaseIds = await page.evaluate(async () => (await import("/src/renderer/release-history.ts")).bundledReleaseEntries().map(entry => entry.id));
+      if (registrySuite) { data.registry = registryFixtures(data.people, data.user); data.registry.moduleAccess = await page.evaluate(async () => (await import('/src/renderer/module-catalog.ts')).fallbackModules.map(module => ({ moduleKey: module.key, permissions: { view: true, create: true, edit: true, approve: true, admin: true } }))); }
       await page.evaluate(({ id, theme }) => localStorage.setItem(`yuksalish:color-theme:${id}`, theme), { id: data.user.id, theme });
       await page.getByRole("textbox", { name: /Логин/ }).fill("qa-user");
       await page.getByLabel(/Пароль/).fill("qa-only-password");
@@ -193,7 +214,7 @@ async function measure(page, selector) {
       for (const section of sections) {
         // Isolate responsive content geometry from the separately tested rail drawer.
         await page.setViewportSize({ width: 1440, height: 960 }); await settle(page);
-        const nav = section.id === "notifications" ? page.locator(".notification-bell") : reportingSuite ? page.getByRole("button", { name: section.navLabel || section.label, exact: true }) : page.locator(`.rail-action[aria-label="${section.navLabel || section.label}"]`);
+        const nav = section.id === "notifications" ? page.locator(".notification-bell") : registrySuite ? page.getByRole("button", { name: section.label, exact: true }).or(page.getByRole("menuitem", { name: section.label, exact: true })) : reportingSuite ? page.getByRole("button", { name: section.navLabel || section.label, exact: true }) : page.locator(`.rail-action[aria-label="${section.navLabel || section.label}"]`);
         if (!await nav.isVisible()) {
           const menu = page.getByRole("button", { name: "Открыть меню", exact: true });
           if (await menu.count()) await menu.click();
@@ -207,6 +228,9 @@ async function measure(page, selector) {
         if (reportingSuite && section.id === "efficiency") { await page.getByRole("button", { name: "Эффективность", exact: true }).click(); await page.locator(".eff-summary .eff-gauge-ring strong").first().waitFor(); }
         if (reportingSuite && section.id === "hisobot") await page.locator("#hisobot-report-text").waitFor();
         if (reportingSuite && section.id === "monthly") await page.locator(".monthly-reports-period").waitFor();
+        if (registrySuite && section.id === "grants") await page.locator('.grant-records tbody tr').first().waitFor();
+        if (registrySuite && section.id === "reference") { await page.getByRole('button', { name: 'Организации', exact: true }).click(); await page.locator('.reference-record').first().waitFor(); }
+        if (registrySuite && section.id === "mail") await page.locator('.mail-row').first().waitFor();
         try { await page.locator(section.root).waitFor(); } catch (error) {
           await page.screenshot({ path: path.join(output, `${phase}-failure-${width}.png`) });
           console.log((await page.locator(".workspace").innerText().catch(() => page.locator("body").innerText())).slice(0, 2500));
@@ -221,6 +245,54 @@ async function measure(page, selector) {
         if (topbarSuite && section.id === "home" || phase === "after" && reportingSuite && section.id === "hisobot") await capture(page.locator(".global-bar"), path.join(output, phase, `topbar-${theme}-${width}.png`));
         const geometry = await measure(page, section.root);
         results.push({ section: section.id, width, height, theme, ...geometry });
+        if (registrySuite && phase === "after") {
+          assert(geometry.pageOverflow <= 1, `${file}: page overflow`);
+          const pane = page.locator(`${section.root} ${section.id === 'grants' ? '.grant-records' : section.id === 'reference' ? '.reference-content' : '.mail-workspace'}`);
+          const bounds = await pane.boundingBox();
+          assert(Math.abs(bounds.x - geometry.hero.x) <= 1 && bounds.x + bounds.width <= geometry.hero.right + 1, `${file}: shared panel edges`);
+          const field = section.id === 'mail' ? page.getByRole('textbox', { name: 'Поиск писем', exact: true }) : page.getByRole('searchbox', { name: section.id === 'grants' ? 'Поиск заявок' : 'Поиск по справочнику', exact: true });
+          const rows = page.locator(`${section.root} ${section.id === 'grants' ? '.record-row' : section.id === 'reference' ? '.reference-record' : '.mail-row'}`);
+          const count = await rows.count(); assert(count > 0, `${file}: populated registry`);
+          await field.fill('несуществующий-qa-результат');
+          if (section.id === 'mail') await page.getByRole('button', { name: 'Найти', exact: true }).click();
+          await rows.first().waitFor({ state: 'hidden' });
+          assert((await measure(page, section.root)).pageOverflow <= 1, `${file}: expanded search overflow`);
+          await field.fill('');
+          if (section.id === 'mail') await page.getByRole('button', { name: 'Найти', exact: true }).click();
+          await rows.first().waitFor(); assert.equal(await rows.count(), count, `${file}: clearing restores rows`);
+          if (section.id === 'reference') {
+            await page.getByLabel('Архив', { exact: true }).check();
+            assert.equal(await rows.count(), count + 1, `${file}: archive remains accessible`);
+            await page.getByLabel('Архив', { exact: true }).uncheck();
+            await page.getByRole('button', { name: 'Юксалиш', exact: true }).click();
+            await page.getByRole('button', { name: 'Изменить', exact: true }).click();
+            const dialog = page.getByRole('dialog', { name: 'Реквизиты «Юксалиш»', exact: true });
+            await dialog.getByRole('textbox', { name: 'ИНН', exact: true }).fill('123456789');
+            await dialog.getByRole('button', { name: 'Сохранить', exact: true }).click();
+            await dialog.getByRole('alert').waitFor();
+            assert.equal(await dialog.getByRole('textbox', { name: 'ИНН', exact: true }).inputValue(), '123456789', 'rejected save preserves input');
+            await dialog.getByRole('button', { name: 'Отмена', exact: true }).click();
+            await dialog.waitFor({ state: 'hidden' });
+            await page.getByRole('button', { name: 'Организации', exact: true }).click();
+          }
+          if (section.id === 'mail') {
+            await page.getByRole('button', { name: 'Управление Gmail', exact: true }).click();
+            await page.getByRole('menuitem', { name: 'Переподключить Gmail', exact: true }).waitFor();
+            assert(await page.getByRole('menuitem', { name: 'Отключить Gmail', exact: true }).isVisible());
+            await page.keyboard.press('Escape');
+            if (width <= 720) {
+              await page.getByLabel('Папка почты', { exact: true }).selectOption('drafts');
+              await page.getByText('Писем в этом списке нет.', { exact: true }).waitFor();
+              await page.getByLabel('Папка почты', { exact: true }).selectOption('inbox');
+              await rows.first().waitFor();
+            }
+          }
+          await page.emulateMedia({ forcedColors: 'active' });
+          assert((await measure(page, section.root)).pageOverflow <= 1, `${file}: forced colors overflow`);
+          await page.emulateMedia({ forcedColors: 'none' });
+          console.log(`PASS ${file}: edges, search/reset, navigation, forced colors`);
+          continue;
+        }
         if (promptSuite) {
           let beforeBounds = await page.locator(section.root).boundingBox();
           let composer;
@@ -798,7 +870,7 @@ async function measure(page, selector) {
     if (promptSuite) return;
     await fs.writeFile(path.join(output, "index.html"), `<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Yuksalish — сравнение интерфейса</title>
       <style>*{box-sizing:border-box}body{margin:0;padding:24px;background:#111318;color:#eceef4;font:15px/1.5 system-ui}main{max-width:1600px;margin:auto}h1{font-size:28px}p,figcaption{color:#bfc6d3}select{margin:0 0 24px;padding:12px;border-radius:8px;background:#252a33;color:inherit}section{margin:0 0 32px}h2{font-size:20px}article{display:grid;grid-template-columns:1fr 1fr;gap:16px}figure{margin:0;min-width:0}img{display:block;width:100%;height:auto;border-radius:12px}figcaption{margin-bottom:8px}@media(max-width:700px){article{grid-template-columns:1fr}body{padding:12px}}</style>
-      <main><h1>Итерация ${iteration} · Общая сетка рабочих разделов</h1><p>Реальные компоненты приложения, одинаковые синтетические данные до и после. Нажмите на снимок для исходного размера.</p><select id="size" aria-label="Размер и тема"><option value="dark-1440">1440 × 960 · тёмная</option><option value="light-1440">1440 × 960 · светлая</option><option value="dark-1024">1024 × 768 · тёмная</option><option value="dark-390">390 × 844 · тёмная</option>${topbarSuite || reportingSuite ? '<option value="dark-320">320 × 800 · тёмная</option><option value="dark-720">720 × 480 · тёмная</option>' : ''}</select>
+      <main><h1>Итерация ${iteration} · Общая сетка рабочих разделов</h1><p>Реальные компоненты приложения, одинаковые синтетические данные до и после. Нажмите на снимок для исходного размера.</p><select id="size" aria-label="Размер и тема"><option value="dark-1440">1440 × 960 · тёмная</option><option value="light-1440">1440 × 960 · светлая</option><option value="dark-1024">1024 × 768 · тёмная</option><option value="dark-390">390 × 844 · тёмная</option>${topbarSuite || reportingSuite || registrySuite ? '<option value="dark-320">320 × 800 · тёмная</option><option value="dark-720">720 × 480 · тёмная</option>' : ''}</select>
       ${workdaySuite ? '<select id="interaction" aria-label="Состояние кнопки"><option value="">Обычное состояние</option><option value="hover">Наведение</option><option value="pressed">Нажатие</option></select>' : ''}
       ${(workdaySuite ? [{ id: "workday-start", label: "Начать работу" }, { id: "workday-finish", label: "Завершить работу" }, { id: "topbar", label: "Заметная иконка рабочего дня" }] : topbarSuite ? [{ id: "topbar", label: "Общая верхняя панель" }, ...sections] : sections).map(section => `<section data-section="${section.id}"><h2>${section.label}</h2><article>${["before", "after"].map((state, i) => `<figure><figcaption>${i ? "После" : "До"}</figcaption><a data-state="${state}" href="${state}/${section.id}-dark-1440.png"><img loading="lazy" ${workdaySuite && section.id !== "topbar" ? 'style="max-width:360px"' : ''} src="${state}/${section.id}-dark-1440.png" alt="${section.label} — ${i ? "после" : "до"}"></a></figure>`).join("")}</article></section>`).join("")}
       ${topbarSuite && !workdaySuite ? [1440, 720].map(width => `<section><h2>Открытый ассистент · ${width} px</h2><article>${["before", "after"].map((state, i) => `<figure><figcaption>${i ? "После: орба остаётся в кнопке" : "До: орба переносится в окно"}</figcaption><a href="${state}/assistant-open-dark-${width}.png"><img loading="lazy" src="${state}/assistant-open-dark-${width}.png" alt="Ассистент — ${i ? "после" : "до"}"></a></figure>`).join("")}</article></section>`).join("") : ''}

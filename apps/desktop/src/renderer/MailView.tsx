@@ -1,9 +1,12 @@
 import { formatRussianDateTime } from "./date-time-format";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Button, Checkbox, DialogSurface, Spinner } from "@fluentui/react-components";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Button, Checkbox, DialogSurface, Menu, MenuGroupHeader, MenuItem, MenuList, MenuPopover, MenuTrigger, Spinner } from "@fluentui/react-components";
+import { ArrowClockwise20Regular, Search20Regular, Settings20Regular } from "@fluentui/react-icons";
 import type { MailConnect, MailConnection, MailDraft, MailDraftSummary, MailFields, MailMessage,
   MailMessageSummary, MailPage, MailThread, TaskProjectOption, WorkspaceDepartment, WorkspacePerson, WorkspaceTask } from "@yuksalish/contracts";
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
+import { createRefreshQueue } from "./refresh-queue";
+import { Input } from "./WorkspaceInput";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { WorkspaceDialog } from "./WorkspaceDialog";
 import { ConfirmActionDialog } from "./ConfirmActionDialog";
@@ -33,6 +36,16 @@ function replyAddress(value: string): string[] {
   return address ? [address] : [];
 }
 
+const MailListRow = memo(function MailListRow({ message, selected, onSelect }: {
+  readonly message: MailMessageSummary; readonly selected: boolean;
+  readonly onSelect: (message: MailMessageSummary, button: HTMLButtonElement) => void;
+}) {
+  return <button className="mail-row" aria-pressed={selected} onClick={event => onSelect(message, event.currentTarget)}>
+    <span className="mail-sender">{message.sender}{message.unread && <small>Непрочитано</small>}</span>
+    <strong>{message.subject || "Без темы"}</strong><span>{message.snippet}</span><small>{date(message.receivedAt)}</small>
+  </button>;
+});
+
 export function MailView({ token, currentUserId, people, departments, tasks, canCreate, canEdit, canCreateTask, canUseSigned, onTaskCreated }: Props) {
   const [account, setAccount] = useState<MailConnection>(); const [connecting, setConnecting] = useState<MailConnect>();
   const [folder, setFolder] = useState<Folder>("inbox"); const [query, setQuery] = useState(""); const [search, setSearch] = useState("");
@@ -46,6 +59,15 @@ export function MailView({ token, currentUserId, people, departments, tasks, can
   const [taskSelection, setTaskSelection] = useState<TaskSelection>(); const [taskStage, setTaskStage] = useState<"select" | "compose">("select");
   const [projects, setProjects] = useState<readonly TaskProjectOption[]>([]); const [projectsError, setProjectsError] = useState(""); const [projectsLoading, setProjectsLoading] = useState(false);
   const selectedButton = useRef<HTMLButtonElement | null>(null);
+  const activeToken = useRef<string | undefined>(token);
+  const listRead = useRef<{ key: string; controller: AbortController; promise: Promise<void> } | undefined>(undefined);
+  const readConnection = useRef<ReturnType<typeof createRefreshQueue<MailConnection>> | undefined>(undefined);
+  useEffect(() => {
+    activeToken.current = token;
+    readConnection.current = createRefreshQueue(loadMailConnection, value => { setAccount(value); setError(""); }, () => activeToken.current);
+    return () => { activeToken.current = undefined; readConnection.current = undefined; };
+  }, [token]);
+  const accountId = account?.accountId;
   const localFolder = folder === "drafts" || folder === "outbox";
   async function run<T>(action: () => Promise<T>): Promise<T | undefined> {
     if (busyRef.current) return undefined;
@@ -54,34 +76,43 @@ export function MailView({ token, currentUserId, people, departments, tasks, can
     finally { busyRef.current = false; setBusy(false); }
   }
   const refreshConnection = useCallback(async () => {
-    try { setAccount(await loadMailConnection(token)); setError(""); }
-    catch (failure) { setError(errorText(failure)); }
+    try { await readConnection.current?.(token, { trailing: false }); }
+    catch (failure) { if (activeToken.current === token) setError(errorText(failure)); }
   }, [token]);
   const refresh = useCallback(async () => {
-    if (!account?.accountId) return;
+    if (!accountId) { setLoading(false); return; }
+    const key = JSON.stringify([token, accountId, folder, search, pageToken]);
+    if (listRead.current?.key === key) return listRead.current.promise;
+    listRead.current?.controller.abort();
+    const controller = new AbortController();
     const sequence = ++requestSequence.current;
+    const entry = { key, controller, promise: Promise.resolve() };
+    listRead.current = entry;
     setLoading(true);
-    try {
+    entry.promise = (async () => { try {
       if (localFolder) {
         const loaded = await loadMailDrafts(token);
         if (sequence === requestSequence.current) { setDrafts(loaded); setError(""); }
       } else {
-        const loaded = await loadMailMessages(token, folder, search, pageToken);
+        const loaded = await loadMailMessages(token, folder, search, pageToken, controller.signal);
         if (sequence === requestSequence.current) { setPage(loaded); setError(""); }
       }
-    } catch (failure) { if (sequence === requestSequence.current) setError(errorText(failure)); }
-    finally { if (sequence === requestSequence.current) setLoading(false); }
-  }, [account?.accountId, folder, localFolder, search, pageToken, token]);
+    } catch (failure) { if (!controller.signal.aborted && sequence === requestSequence.current) setError(errorText(failure)); }
+    finally { if (listRead.current === entry) listRead.current = undefined; if (sequence === requestSequence.current) setLoading(false); }
+    })();
+    return entry.promise;
+  }, [accountId, folder, localFolder, search, pageToken, token]);
   useEffect(() => {
     const start = window.setTimeout(() => { void refreshConnection(); }, 0);
     return () => window.clearTimeout(start);
   }, [refreshConnection]);
   useEffect(() => {
+    if (editor) return undefined;
     const start = window.setTimeout(() => { void refresh(); }, 0);
     const timer = window.setInterval(() => { if (!document.hidden && !busyRef.current && !editor) void refresh(); }, 30_000);
     const focus = () => { if (!busyRef.current && !editor) { void refreshConnection(); void refresh(); } };
     window.addEventListener("focus", focus);
-    return () => { window.clearTimeout(start); window.clearInterval(timer); window.removeEventListener("focus", focus); requestSequence.current += 1; };
+    return () => { window.clearTimeout(start); window.clearInterval(timer); window.removeEventListener("focus", focus); requestSequence.current += 1; listRead.current?.controller.abort(); listRead.current = undefined; };
   }, [refresh, refreshConnection, editor]);
   useEffect(() => {
     if (!connecting) return;
@@ -113,15 +144,20 @@ export function MailView({ token, currentUserId, people, departments, tasks, can
     try { setProjects(await loadTaskProjectOptions(token)); } catch (failure) { setProjectsError(errorText(failure)); }
     finally { setProjectsLoading(false); }
   }, [token]);
-  const localDrafts = drafts.filter(item => folder === "drafts" ? ["draft", "failed"].includes(item.status) : item.status !== "draft")
-    .filter(item => !search || `${item.subject} ${item.to.join(" ")}`.toLowerCase().includes(search.toLowerCase()));
+  const draftIndex = useMemo(() => drafts.map(item => ({ item, text: `${item.subject} ${item.to.join(" ")}`.toLowerCase() })), [drafts]);
+  const localSearch = search.toLowerCase();
+  const localDrafts = useMemo(() => draftIndex.filter(({ item, text }) => (folder === "drafts" ? ["draft", "failed"].includes(item.status) : item.status !== "draft") && (!localSearch || text.includes(localSearch))).map(({ item }) => item), [draftIndex, folder, localSearch]);
+  const selectMessage = useCallback((message: MailMessageSummary, button: HTMLButtonElement) => {
+    selectedButton.current = button; setThread(undefined); setThreadError(""); setSelected(message);
+  }, []);
   const taskDescription = taskSelection ? `Письмо: ${taskSelection.source.subject}\nОт: ${taskSelection.source.sender}\nДата: ${date(taskSelection.source.receivedAt)}${taskSelection.includeBody ? `\n\n${taskSelection.source.body}` : ""}`.slice(0,19000) : "";
-  return <section className="workspace-view mail-view" aria-label="Почта">
-    <WorkspaceSectionHeader motif="messages"><div className="mail-header-copy"><p className="eyebrow">Gmail · личный ящик</p><h1>Почта</h1><p>{account?.email ?? "Подключите свой Gmail к рабочему пространству"}</p></div>
-      <div className="mail-header-actions"><Button disabled={busy || loading} onClick={() => { void refreshConnection(); void refresh(); }}>Обновить</Button>
+  return <section className="workspace-view workspace-queue mail-view" aria-label="Почта">
+    <WorkspaceSectionHeader motif="messages"><div className="mail-header-copy"><p className="view-kicker">Gmail · личный ящик</p><h1>Почта</h1><p>{account?.email ?? "Подключите свой Gmail к рабочему пространству"}</p></div>
+      <div className="mail-header-actions"><Button className="mail-refresh" aria-label="Обновить" icon={<ArrowClockwise20Regular />} disabled={busy || loading} onClick={() => { void refreshConnection(); void refresh(); }}><span className="mail-refresh-label">Обновить</span></Button>
         {account?.accountId && canCreate && canEdit && <Button appearance="primary" disabled={busy} onClick={() => openEditor()}>Написать письмо</Button>}
-        {canEdit && <Button disabled={busy || !account?.configured} onClick={() => void run(async () => setConnecting(await connectMail(token)))}>{account?.accountId ? "Переподключить Gmail" : "Подключить Gmail"}</Button>}
-        {account?.accountId && canEdit && <Button disabled={busy} onClick={() => setDisconnecting(true)}>Отключить</Button>}</div>
+        {canEdit && !account?.accountId && <Button disabled={busy || !account?.configured} onClick={() => void run(async () => setConnecting(await connectMail(token)))}>Подключить Gmail</Button>}
+        {account?.accountId && canEdit && <Menu><MenuTrigger disableButtonEnhancement><Button className="mail-account-menu" shape="circular" appearance="subtle" icon={<Settings20Regular />} aria-label="Управление Gmail" disabled={busy} /></MenuTrigger>
+          <MenuPopover><MenuList><MenuGroupHeader>{account.email ?? "Личный ящик"}</MenuGroupHeader><MenuItem disabled={!account.configured} onClick={() => void run(async () => setConnecting(await connectMail(token)))}>Переподключить Gmail</MenuItem><MenuItem onClick={() => setDisconnecting(true)}>Отключить Gmail</MenuItem></MenuList></MenuPopover></Menu>}</div>
     </WorkspaceSectionHeader>
     {error && <WorkspaceNotice tone="error" role="alert" actions={<Button onClick={() => { void refreshConnection(); void refresh(); }}>Повторить загрузку</Button>}>{error}</WorkspaceNotice>}
     {notice && <WorkspaceNotice tone="success" role="status">{notice}</WorkspaceNotice>}
@@ -140,17 +176,15 @@ export function MailView({ token, currentUserId, people, departments, tasks, can
     {account?.accountId && <>
       {!account.sendingEnabled && <WorkspaceNotice tone="warning">Отправка Gmail отключена на сервере. Можно читать почту и сохранять черновики.</WorkspaceNotice>}
       <div className="mail-workspace" data-detail={Boolean(selected)}>
-        <nav className="mail-folders" aria-label="Папки почты">{Object.entries(folders).map(([key,label]) => <Button key={key} aria-pressed={folder === key} appearance={folder === key ? "primary" : "subtle"} onClick={() => selectFolder(key as Folder)}>{label}</Button>)}<p className="mail-muted">Чтение не меняет отметку «непрочитано» в Gmail. Внешние изображения и скрипты не загружаются.</p></nav>
+        <nav className="mail-folders" aria-label="Папки почты"><label className="mail-folder-select"><span className="sr-only">Папка почты</span><select aria-label="Папка почты" value={folder} onChange={event => selectFolder(event.target.value as Folder)}>{Object.entries(folders).map(([key,label]) => <option key={key} value={key}>{label}</option>)}</select></label>{Object.entries(folders).map(([key,label]) => <Button key={key} aria-pressed={folder === key} appearance={folder === key ? "primary" : "subtle"} onClick={() => selectFolder(key as Folder)}>{label}</Button>)}<p className="mail-muted">Чтение не меняет отметку «непрочитано» в Gmail. Внешние изображения и скрипты не загружаются.</p></nav>
         <section className="mail-list" aria-label={folders[folder]} aria-busy={loading}>
-          <form className="mail-search" onSubmit={event => { event.preventDefault(); setSearch(query); setPageTokens([""]); }}><label><span>Поиск писем</span><input value={query} maxLength={300} onChange={event => setQuery(event.target.value)} placeholder="Тема, отправитель, текст" /></label><Button type="submit" disabled={loading}>Найти</Button></form>
+          <form className="mail-search" onSubmit={event => { event.preventDefault(); setSearch(query); setPageTokens([""]); setSelected(undefined); setThread(undefined); setThreadError(""); }}><Input expandable={false} aria-label="Поиск писем" contentBefore={<Search20Regular />} value={query} maxLength={300} onChange={event => setQuery(event.target.value)} placeholder="Тема, отправитель, текст" /><Button type="submit" disabled={loading}>Найти</Button></form>
           <div className="mail-list-scroll">
             {loading && !page && !localFolder && <p role="status">Загружаем письма…</p>}
             {localFolder ? localDrafts.map(draft => <button className="mail-row" key={draft.id} onClick={() => void run(async () => {
               const full = await loadMailDraft(token, draft.id); setEditor({ id: full.id, draft: full, fields: full });
             })}><strong>{draft.subject || "Без темы"}</strong><span>{draft.to.join(", ") || "Получатель не выбран"}</span><small>{mailStateLabels[draft.status]} · {date(draft.updatedAt)}</small></button>)
-              : page?.messages.map(message => <button className="mail-row" key={message.id} aria-pressed={selected?.id === message.id} onClick={event => {
-                selectedButton.current = event.currentTarget; setThread(undefined); setThreadError(""); setSelected(message);
-              }}><span className="mail-sender">{message.sender}{message.unread && <small>Непрочитано</small>}</span><strong>{message.subject || "Без темы"}</strong><span>{message.snippet}</span><small>{date(message.receivedAt)}</small></button>)}
+              : page?.messages.map(message => <MailListRow key={message.id} message={message} selected={selected?.id === message.id} onSelect={selectMessage} />)}
             {!loading && ((localFolder && !localDrafts.length) || (!localFolder && page && !page.messages.length)) && <p className="mail-empty">Писем в этом списке нет.</p>}
           </div>
           {!localFolder && <footer className="mail-pagination"><Button disabled={pageTokens.length === 1 || loading} onClick={() => { setPageTokens(current => current.slice(0,-1)); setPage(undefined); }}>Предыдущие</Button><span>Страница {pageTokens.length}</span><Button disabled={!page?.nextPageToken || loading} onClick={() => { if (page?.nextPageToken) setPageTokens(current => [...current, page.nextPageToken!]); setPage(undefined); }}>Следующие</Button></footer>}
@@ -179,7 +213,7 @@ export function MailView({ token, currentUserId, people, departments, tasks, can
     <ConfirmActionDialog open={disconnecting} title="Отключить Gmail?" confirmLabel="Отключить Gmail" busyLabel="Отключаем…" busy={busy}
       message="Ключи доступа, черновики и файлы личной почты будут удалены из Workspace. Оригиналы в Gmail и уже переданные в задачи копии сохранятся. Это не отзывает отправленные письма."
       onCancel={() => { if (!busyRef.current) setDisconnecting(false); }} onConfirm={() => run(async () => {
-        const result = await disconnectMail(token); requestSequence.current += 1; setAccount(current => current ? { ...current, accountId: null, email: null } : current);
+        const result = await disconnectMail(token); readConnection.current?.invalidate(token); requestSequence.current += 1; setAccount(current => current ? { ...current, accountId: null, email: null } : current);
         setPage(undefined); setThread(undefined); setSelected(undefined); setDrafts([]); setEditor(undefined); setConnecting(undefined); setTaskSelection(undefined); setPreviewFile(undefined); setDisconnecting(false);
         setNotice(result.googleRevoked ? "Gmail отключён. Оригиналы писем не изменены." : "Gmail отключён в Workspace. Google недоступен: дополнительно отзовите доступ в настройках своего Google-аккаунта.");
       })} />
