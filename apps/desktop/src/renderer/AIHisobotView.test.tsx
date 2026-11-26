@@ -46,6 +46,7 @@ const unitReport: HisobotUnitReport = {
 describe("AI Hisobot", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    Object.defineProperty(navigator, "clipboard", { value: { writeText: vi.fn().mockResolvedValue(undefined) }, configurable: true });
     vi.mocked(loadHisobotProfile).mockResolvedValue(profile);
     vi.mocked(loadHisobotHistory).mockResolvedValue([]);
     vi.mocked(loadHisobotReports).mockResolvedValue([]);
@@ -86,6 +87,20 @@ describe("AI Hisobot", () => {
     expect(screen.getByRole("textbox", { name: /Опишите выполненные задачи/ })).toHaveValue("Моя ручная работа");
     fireEvent.click(screen.getByRole("button", { name: "Добавить к моему тексту" }));
     expect(screen.getByRole("textbox", { name: /Опишите выполненные задачи/ })).toHaveValue("Моя ручная работа\n\nАвтоматические факты");
+    expect(saveHisobotReport).not.toHaveBeenCalled();
+  });
+
+  it("copies edited draft text without submitting and preserves it on clipboard failure", async () => {
+    render(<AIHisobotView token="token" incomingDraft={{ content: "Готовый черновик", reportDate: profile.today, revision: 1 }} />);
+    const editor = await screen.findByDisplayValue("Готовый черновик");
+    fireEvent.change(editor, { target: { value: "Мой дополненный отчёт" } });
+    fireEvent.click(screen.getByRole("button", { name: "Скопировать" }));
+    await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalledWith("Мой дополненный отчёт"));
+    expect(await screen.findByText("Текст скопирован. Отчёт ещё не отправлен.")).toBeInTheDocument();
+    vi.mocked(navigator.clipboard.writeText).mockRejectedValueOnce(new Error("denied"));
+    fireEvent.click(screen.getByRole("button", { name: "Скопировать" }));
+    expect(await screen.findByText(/Выделите текст отчёта/)).toBeInTheDocument();
+    expect(editor).toHaveValue("Мой дополненный отчёт");
     expect(saveHisobotReport).not.toHaveBeenCalled();
   });
 

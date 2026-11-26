@@ -28,6 +28,9 @@ import "../src/renderer/workspace-popups.css";
 import "../src/renderer/workspace-field-borders.css";
 import "../src/renderer/mobile-density.css";
 import "../src/renderer/page-scroll-layout.css";
+import "../src/renderer/workspace-queue.css";
+import "../src/renderer/workspace-topbar.css";
+import "../src/renderer/workspace-surfaces.css";
 
 document.documentElement.classList.add("web-platform");
 const empty = new URLSearchParams(location.search).has("empty");

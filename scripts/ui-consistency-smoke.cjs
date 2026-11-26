@@ -10,16 +10,17 @@ const peopleSuite = process.argv.includes("--people");
 const operationsSuite = process.argv.includes("--operations");
 const documentsSuite = process.argv.includes("--documents");
 const workdaySuite = process.argv.includes("--workday");
+const promptSuite = process.argv.includes("--hisobot-prompt");
 const topbarSuite = process.argv.includes("--topbar") || workdaySuite;
 const reportingSuite = process.argv.includes("--reporting");
-const planningSuite = process.argv.includes("--planning") || topbarSuite;
+const planningSuite = process.argv.includes("--planning") || topbarSuite || promptSuite;
 const onlyWidth = Number(process.env.UI_QA_WIDTH || 0);
 assert([0, 320, 390, 720, 1024, 1440].includes(onlyWidth));
 const origin = process.env.UI_QA_ORIGIN || "http://127.0.0.1:5186";
 assert(["127.0.0.1", "localhost"].includes(new URL(origin).hostname));
-const iteration = workdaySuite ? "9" : reportingSuite ? "8" : topbarSuite ? "7" : planningSuite ? "6" : documentsSuite ? "5" : operationsSuite ? "4" : peopleSuite ? "3" : attentionSuite ? "2" : "1";
+const iteration = promptSuite ? "10" : workdaySuite ? "9" : reportingSuite ? "8" : topbarSuite ? "7" : planningSuite ? "6" : documentsSuite ? "5" : operationsSuite ? "4" : peopleSuite ? "3" : attentionSuite ? "2" : "1";
 const output = path.resolve(process.env.UI_QA_OUTPUT || `tmp/ui-consistency-iteration-${iteration}`);
-const sections = workdaySuite ? [{ id: "home", label: "Главная", root: ".personal-home" }] : reportingSuite
+const sections = promptSuite ? [{ id: "home", label: "Главная", root: ".personal-home" }, { id: "tasks", label: "Задачи", root: ".tasks-view" }, { id: "messenger", label: "Мессенджер", root: ".messenger-view" }].filter(section => section.id === (process.env.UI_QA_SECTION || "messenger")) : workdaySuite ? [{ id: "home", label: "Главная", root: ".personal-home" }] : reportingSuite
   ? [{ id: "hisobot", label: "AI Hisobot", root: ".ai-hisobot-view" }, { id: "monthly", label: "Ойлик ҳисоботлар", root: ".monthly-reports-page" }, { id: "efficiency", label: "Эффективность", navLabel: "Задачи", root: ".tasks-view" }]
   : planningSuite
   ? [{ id: "home", label: "Главная", root: ".personal-home" }, { id: "calendar", label: "Календарь", root: ".calendar-view" }, { id: "projects", label: "Проекты", root: ".project-hub-view" }]
@@ -118,7 +119,7 @@ async function measure(page, selector) {
     for (const [width, height, theme] of galleryOnly ? [] : [[1440, 960, "dark"], [1440, 960, "light"], [1024, 768, "dark"], [390, 844, "dark"], ...((phase === "after" || topbarSuite || reportingSuite) && (peopleSuite || operationsSuite || documentsSuite || planningSuite || reportingSuite) ? [[320, 800, "dark"]] : []), ...((phase === "after" || topbarSuite || reportingSuite) && (documentsSuite || planningSuite || reportingSuite) ? [[720, 480, "dark"]] : [])].filter(([width]) => !onlyWidth || width === onlyWidth)) {
       const context = await browser.newContext({ viewport: { width, height }, reducedMotion: "reduce" });
       const page = await context.newPage(); page.setDefaultTimeout(15000);
-      if (planningSuite || reportingSuite) await page.clock.setFixedTime(new Date("2026-11-26T09:30:00Z"));
+      if (planningSuite || reportingSuite) await page.clock.setFixedTime(new Date(promptSuite ? "2026-11-26T12:39:00Z" : "2026-11-26T09:30:00Z"));
       page.on("pageerror", error => errors.push(error.message));
       await page.addInitScript(theme => localStorage.setItem("yuksalish:color-theme:last", theme), theme);
       let data, releaseIds = [], workdayWorking = false, workdayWrites = 0;
@@ -139,6 +140,8 @@ async function measure(page, selector) {
         if (planningSuite && endpoint === "/incoming-letters") return send({ visibility: "assigned", deadline_timezone_verified: false, meta: { page: 1, limit: 20, total: 0 }, data: [] });
         if (reportingSuite && endpoint === "/monthly-reports") return send(data.reporting.monthly);
         if (reportingSuite && endpoint === "/hisobot/me") return send(data.reporting.hisobot.profile);
+        if (promptSuite && endpoint === "/hisobot/me/activity-draft") return send({ reportDate: "2026-11-26", generatedAt: "2026-11-26T12:40:00Z", seenAt: null, content: "Отчёт за 26.11.2026\n\n1. Подготовлен результат по задаче.", activityCount: 1, omittedCount: 0 });
+        if (promptSuite && /^\/chats\/[^/]+\/messages$/.test(endpoint)) return send(data.home.messages.filter(message => message.chatId === endpoint.split("/")[2]));
         if (reportingSuite && endpoint === "/hisobot/me/history") return send(data.reporting.hisobot.reports.slice(0, 3));
         if (reportingSuite && endpoint === "/hisobot/reports") return send(data.reporting.hisobot.reports);
         if (reportingSuite && /\/hisobot\/(me\/unit-history|unit-reports)$/.test(endpoint)) return send([]);
@@ -181,6 +184,7 @@ async function measure(page, selector) {
       });
       await page.goto(origin);
       data = fixtures(await page.evaluate(async () => { const d = await import("/src/renderer/test-fixtures/demo-data.ts"), h = await import("/src/renderer/test-fixtures/personal-home-fixture.ts"), c = await import("/qa/context-fixtures.ts"); return { people: d.people, initialTasks: d.initialTasks, home: h.homeFixture("malika", Date.parse("2026-11-26T09:30:00Z")), personalEfficiency: h.homeEfficiency("malika"), recognition: h.homeRecognition("malika"), contextRates: c.contextRates, contextWeather: c.contextWeather }; }));
+      if (promptSuite) data.home.notifications = [...data.home.notifications, { id: "qa-hisobot-reminder", kind: "hisobot", title: "AI Hisobot", body: "Черновик отчёта готов", priority: "attention", section: "ai_hisobot", requiresAction: true, isReminder: true, occurredAt: "2026-11-26T12:40:00Z" }];
       releaseIds = await page.evaluate(async () => (await import("/src/renderer/release-history.ts")).bundledReleaseEntries().map(entry => entry.id));
       await page.evaluate(({ id, theme }) => localStorage.setItem(`yuksalish:color-theme:${id}`, theme), { id: data.user.id, theme });
       await page.getByRole("textbox", { name: /Логин/ }).fill("qa-user");
@@ -217,6 +221,32 @@ async function measure(page, selector) {
         if (topbarSuite && section.id === "home" || phase === "after" && reportingSuite && section.id === "hisobot") await capture(page.locator(".global-bar"), path.join(output, phase, `topbar-${theme}-${width}.png`));
         const geometry = await measure(page, section.root);
         results.push({ section: section.id, width, height, theme, ...geometry });
+        if (promptSuite) {
+          let beforeBounds = await page.locator(section.root).boundingBox();
+          let composer;
+          if (section.id === "messenger") {
+            composer = page.locator('.messenger-view textarea, .messenger-view [contenteditable="true"]').first();
+            if (!await composer.isVisible()) await page.locator('.chat-row, .chat-list-item, .chat-item').first().click();
+            await composer.fill("Сообщение до появления уведомления");
+            await composer.focus();
+            beforeBounds = await page.locator(section.root).boundingBox();
+          }
+          await page.clock.setFixedTime(new Date("2026-11-26T12:41:00Z"));
+          await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+          const notice = page.locator('.hisobot-draft-notice'); await notice.waitFor();
+          assert.equal(await page.getByRole('dialog').count(), 0, 'no modal interruption');
+          if (composer) {
+            assert(await composer.evaluate(node => node === document.activeElement), 'messenger keeps focus');
+            await composer.fill("Сообщение после появления уведомления");
+          }
+          assert.deepEqual(await page.locator(section.root).boundingBox(), beforeBounds, 'section geometry unchanged');
+          await capture(page, path.join(output, phase, file));
+          await page.getByRole('button', { name: 'Закрыть уведомление AI Hisobot' }).click();
+          await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+          assert.equal(await notice.count(), 0, 'dismissal stays closed');
+          console.log(`PASS ${file}: nonmodal reminder and usable section`);
+          continue;
+        }
         if (workdaySuite) {
           let startFill;
           for (const working of [false, true]) {
@@ -760,10 +790,12 @@ async function measure(page, selector) {
     }
     if (!galleryOnly) {
       const resultPath = path.join(output, `${phase}.json`);
-      const previous = onlyWidth ? JSON.parse(await fs.readFile(resultPath, "utf8")).results.filter(result => result.width !== onlyWidth) : [];
+      const saved = onlyWidth ? await fs.readFile(resultPath, "utf8").catch(error => { if (error.code === "ENOENT") return '{"results":[]}'; throw error; }) : '{"results":[]}';
+      const previous = JSON.parse(saved).results.filter(result => result.width !== onlyWidth);
       await fs.writeFile(resultPath, JSON.stringify({ results: [...previous, ...results], errors }, null, 2));
     }
     assert.deepEqual(errors, []);
+    if (promptSuite) return;
     await fs.writeFile(path.join(output, "index.html"), `<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Yuksalish — сравнение интерфейса</title>
       <style>*{box-sizing:border-box}body{margin:0;padding:24px;background:#111318;color:#eceef4;font:15px/1.5 system-ui}main{max-width:1600px;margin:auto}h1{font-size:28px}p,figcaption{color:#bfc6d3}select{margin:0 0 24px;padding:12px;border-radius:8px;background:#252a33;color:inherit}section{margin:0 0 32px}h2{font-size:20px}article{display:grid;grid-template-columns:1fr 1fr;gap:16px}figure{margin:0;min-width:0}img{display:block;width:100%;height:auto;border-radius:12px}figcaption{margin-bottom:8px}@media(max-width:700px){article{grid-template-columns:1fr}body{padding:12px}}</style>
       <main><h1>Итерация ${iteration} · Общая сетка рабочих разделов</h1><p>Реальные компоненты приложения, одинаковые синтетические данные до и после. Нажмите на снимок для исходного размера.</p><select id="size" aria-label="Размер и тема"><option value="dark-1440">1440 × 960 · тёмная</option><option value="light-1440">1440 × 960 · светлая</option><option value="dark-1024">1024 × 768 · тёмная</option><option value="dark-390">390 × 844 · тёмная</option>${topbarSuite || reportingSuite ? '<option value="dark-320">320 × 800 · тёмная</option><option value="dark-720">720 × 480 · тёмная</option>' : ''}</select>

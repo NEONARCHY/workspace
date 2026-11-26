@@ -2342,10 +2342,11 @@ export function App() {
           <DossierReminderPrompt key={`${session.user.id}:${activeApiOrigin}`} token={session.accessToken}
             userId={session.user.id} people={displayPeople}
             paused={accountOpen || Boolean(profileUserId) || supportOpen || Boolean(previewAttachment) || Boolean(forwardPhoto) || switchingNetwork} />
-          <HisobotDraftPrompt key={workspace.currentUser.id} token={session.accessToken}
+          <HisobotDraftPrompt key={`${workspace.currentUser.id}:${activeApiOrigin}`} token={session.accessToken}
             userId={workspace.currentUser.id} notifications={workspace.notifications}
             enabled={modulePermissions.ai_hisobot?.view === true}
             editingReport={displayedSection === "ai_hisobot"}
+            paused={accountOpen || Boolean(profileUserId) || supportOpen || Boolean(previewAttachment) || Boolean(forwardPhoto) || monthlyWindow.open || Boolean(teamDecision) || switchingNetwork}
             onEdit={(draft) => {
               setHisobotIncoming({ userId: workspace.currentUser.id, draft });
               setFocusTarget(undefined); setFocusNotification(undefined); setActiveSection("ai_hisobot");

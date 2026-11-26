@@ -208,6 +208,16 @@ export function AIHisobotView({ token, incomingDraft, onDraftHandled }: {
     reportTextRef.current?.focus();
   };
 
+  const copyReport = async () => {
+    try {
+      await navigator.clipboard.writeText(content);
+      setNotice(profile?.todayReport ? "Текст скопирован. Изменения не отправлены." : "Текст скопирован. Отчёт ещё не отправлен.");
+      setError("");
+    } catch {
+      setError("Не удалось скопировать. Выделите текст отчёта и скопируйте его вручную.");
+    }
+  };
+
   const save = async () => {
     if (saving.current) return; saving.current = true;
     setBusy(true); setError(""); setNotice("");
@@ -308,7 +318,7 @@ export function AIHisobotView({ token, incomingDraft, onDraftHandled }: {
             </section>}
             <label htmlFor="hisobot-report-text">{profile.todayReport ? "Чтобы исправить или дополнить, измените полный текст отчёта:" : "Опишите выполненные задачи одним текстовым сообщением:"}</label>
             <textarea ref={reportTextRef} id="hisobot-report-text" data-satin-excluded value={content} onChange={(event) => { setContent(event.target.value); markDirty(true); }} disabled={!profile.canSubmit || busy} placeholder={"1. Текст первой выполненной задачи.\n2. Текст второй выполненной задачи.\n3. Текст третьей выполненной задачи."} />
-            <div className="hisobot-compose-footer"><span>{content.trim().length} символов</span><button type="button" onClick={() => void save()} disabled={!profile.canSubmit || busy || content.trim().length < 3 || content.length > 20_000 || !dirty}>{busy ? "Сохраняем…" : profile.todayReport ? "Сохранить изменения" : "Отправить отчёт"}</button></div>
+            <div className="hisobot-compose-footer"><span>{content.trim().length} символов</span><div className="hisobot-compose-actions"><button type="button" className="hisobot-copy-action" onClick={() => void copyReport()} disabled={busy || !content.trim()}>Скопировать</button><button type="button" onClick={() => void save()} disabled={!profile.canSubmit || busy || content.trim().length < 3 || content.length > 20_000 || !dirty}>{busy ? "Сохраняем…" : profile.todayReport ? "Сохранить изменения" : "Отправить отчёт"}</button></div></div>
             {notice ? <p className="hisobot-success" role="status">{notice}</p> : null}
           </> : !profile.reportRequired && !ownUnitReport ? <p className="hisobot-exempt">Для вас сдача ежедневного отчёта не обязательна. История и доступные сводки остаются в меню.</p> : null}
           {profile.unit?.isLead && !profile.todayReport ? <section className="hisobot-unit-compose" aria-label="Отчёт от лица отдела или подразделения">
