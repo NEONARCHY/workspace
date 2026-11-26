@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { Input } from "./WorkspaceInput";
 
 describe("shared expandable workspace search", () => {
-  afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+  afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
   it("preserves refs, keyboard handlers, controlled values and disabled state", () => {
     const ref = createRef<HTMLInputElement>();
     const change = vi.fn(), key = vi.fn();
@@ -72,5 +72,37 @@ describe("shared expandable workspace search", () => {
     expect(css).toContain("box-shadow: none;");
     const referentCss = readFileSync(resolve(process.cwd(), "src/renderer/ai-referent-workspace.css"), "utf8");
     expect(referentCss).not.toContain("translateX(var(--ai-toolbar-search-shift))");
+  });
+  it("coalesces neighbour resize bursts, skips identical style writes and cancels on unmount", () => {
+    let notify = () => {};
+    const disconnect = vi.fn();
+    vi.stubGlobal("ResizeObserver", class {
+      constructor(callback: () => void) { notify = callback; }
+      observe() {}
+      disconnect = disconnect;
+    });
+    let scheduled: FrameRequestCallback | undefined;
+    const frame = vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => { scheduled = callback; return 71; });
+    const cancel = vi.spyOn(window, "cancelAnimationFrame");
+    let height = 40;
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(() => (
+      { height, width: 100, top: 0, left: 0, right: 100, bottom: height, x: 0, y: 0, toJSON: () => ({}) }
+    ));
+    const { container, unmount } = render(<div><Input aria-label="Поиск" /><button>Фильтр</button></div>);
+    const search = container.querySelector<HTMLElement>(".workspace-search")!;
+    const write = vi.spyOn(search.style, "setProperty");
+    notify(); notify(); notify();
+    expect(frame).toHaveBeenCalledTimes(1);
+    scheduled?.(0);
+    expect(write).not.toHaveBeenCalled();
+    height = 44;
+    notify(); scheduled?.(0);
+    expect(search.style.getPropertyValue("--search-height")).toBe("44px");
+    expect(write).toHaveBeenCalledTimes(1);
+    height = 0; notify(); scheduled?.(0);
+    expect(search.style.getPropertyValue("--search-height")).toBe("");
+    notify(); unmount();
+    expect(cancel).toHaveBeenCalledWith(71);
+    expect(disconnect).toHaveBeenCalledTimes(1);
   });
 });

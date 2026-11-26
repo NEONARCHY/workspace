@@ -44,6 +44,12 @@ const card = () => document.querySelector(".trip-board-card")!;
 async function drop(target: string) { await dropSpatialCard(card(), column(target)); }
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 describe("Trip approvals interaction", async () => {
+  it("keeps a legacy invalid date from crashing the whole queue", () => {
+    setup({ ...request, startDate: "" });
+    expect(card()).toHaveTextContent("Самарканд");
+    expect(card()).toHaveTextContent("Invalid Date");
+  });
+
   it("requests a separate correction of a legacy approved order with a required reason", async () => {
     const trip: TripRequest = { ...request, stage: "approved", status: "approved", stageLabel: "Утверждено",
       statusLabel: "Утверждено", hasOrderPdf: true, orderNumber: "010-WS", allowedActions: ["revise_order"] };
