@@ -1,0 +1,168 @@
+/* Shared queue composition. Opt in page by page; embedded record dialogs keep
+   their own geometry. Next visual iterations should reuse these same tokens. */
+.workspace-view.workspace-queue:not([data-dialog-only]) {
+  --ws-view-edge: 0px;
+  --ws-queue-space: 12px;
+  --ws-queue-control: 44px;
+  --ws-queue-button: 36px;
+  --ws-queue-radius: 12px;
+  --ws-section-header-height: 96px;
+  --ws-section-header-padding: 20px;
+  --ws2-process-section-gap: var(--ws-queue-space);
+  padding-inline: 0;
+}
+html:root body .app-provider .workspace-view.workspace-queue:not([data-dialog-only]) .ws-section-header {
+  gap: 12px 24px;
+  margin-block-end: 0;
+  padding-inline: 24px;
+}
+body .app-provider .workspace-queue .ws-section-header :is(h1, h2) {
+  margin: 0 0 4px;
+  font-size: 28px;
+  line-height: 1.2;
+  font-weight: 600;
+}
+html:root body .app-provider .workspace-view.workspace-queue .ws-section-header .view-kicker { display: none; }
+body .app-provider .workspace-queue .ws-section-header :is(.task-toolbar-actions, .toolbar-actions, .trip-header-actions) { gap: 8px; }
+body .app-provider .workspace-queue .ws-section-header :is(.view-switch, .approval-mode-switch, .process-view-tabs) {
+  min-width: 0;
+  max-width: 100%;
+  flex-wrap: nowrap;
+  gap: 4px;
+  padding: 4px;
+  border: 0;
+  border-radius: var(--ws-queue-radius);
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+body .app-provider .workspace-queue .ws-section-header :is(.view-switch, .approval-mode-switch, .process-view-tabs) > button {
+  flex: none;
+  min-height: var(--ws-queue-button);
+  height: var(--ws-queue-button);
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+/* Stable two-row composition: controls/search first, scope filters second.
+   Filters scroll within their own row, never through the edge of the page. */
+body .app-provider .workspace-queue .workspace-queue-toolbar {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px 12px;
+  flex: none;
+  min-width: 0;
+  margin: 0;
+  padding: var(--ws-queue-space) 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.workspace-queue-options { display: flex; align-items: center; gap: 8px; min-width: 0; }
+body .app-provider .workspace-queue .workspace-queue-toolbar > .workspace-search {
+  --search-width: 320px;
+  --search-height: var(--ws-queue-control);
+  justify-self: end;
+  margin: 0;
+}
+body .app-provider .workspace-queue .workspace-queue-toolbar :is(.ws2-segmented, .task-filter-tabs) {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+  min-width: 0;
+  min-height: var(--ws-queue-control);
+  max-width: 100%;
+  padding: 4px;
+  border: 0;
+  border-radius: var(--ws-queue-radius);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+body .app-provider .workspace-queue .workspace-queue-toolbar .workspace-queue-filters {
+  grid-column: 1 / -1;
+  width: max-content;
+  justify-self: start;
+  margin: 0;
+}
+body .app-provider .workspace-queue .workspace-queue-toolbar :is(.ws2-segmented, .task-filter-tabs) > button {
+  flex: none;
+  gap: 8px;
+  min-height: var(--ws-queue-button);
+  height: var(--ws-queue-button);
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 20px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+body .app-provider .workspace-queue .workspace-queue-toolbar :is(.ws2-segmented, .task-filter-tabs) > button[aria-pressed="true"] { font-weight: 600; }
+body .app-provider .workspace-queue .workspace-queue-options .workspace-select {
+  min-width: 160px;
+  min-height: var(--ws-queue-control);
+  margin: 0;
+  border-radius: var(--ws-queue-radius);
+}
+.workspace-queue :is(.approval-filter-count, .task-filter-tabs b, .approval-column-count) { font-variant-numeric: tabular-nums; }
+body .app-provider .workspace-queue .task-workbench-summary { gap: 12px; padding: 12px 0 0; }
+body .app-provider .workspace-queue .task-focus-object {
+  min-height: 64px;
+  padding: 12px 16px;
+  border-radius: 16px;
+  box-shadow: none;
+}
+body .app-provider .workspace-queue .task-focus-object::after { content: none; }
+body .app-provider .workspace-queue .task-focus-object:hover { transform: none; box-shadow: none; }
+body .app-provider .workspace-queue :is(.approval-kanban, .process-record-list, .approval-record-list) { padding-inline: 0; }
+body .app-provider .workspace-queue .approval-column > header { gap: 8px; min-height: 52px; padding: 12px 16px 8px; }
+body .app-provider .workspace-queue .approval-column-total { gap: 4px; min-height: 52px; padding: 0 16px 12px 32px; }
+body .app-provider .workspace-queue .approval-column-stack { gap: 8px; padding: 12px; }
+body .app-provider .workspace-queue .approval-card-open { padding: 16px; }
+body .app-provider .workspace-queue .approval-board-card > footer { padding: 8px 12px; }
+body .app-provider .workspace-queue .record-table-frame.task-records { margin-inline: 0; }
+
+@container workspace (max-width: 720px) {
+  body .app-provider .workspace-queue .workspace-queue-toolbar { grid-template-columns: minmax(0, 1fr); }
+  body .app-provider .workspace-queue .workspace-queue-toolbar > .workspace-search {
+    /* The focus reveal uses the available slot instead of widening the page. */
+    --search-width: 100%;
+    justify-self: stretch;
+  }
+  .workspace-queue-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  body .app-provider .workspace-queue .workspace-queue-options .workspace-select { width: 100%; min-width: 0; }
+  body .app-provider .workspace-queue .workspace-queue-toolbar > .ws2-segmented:not(.workspace-queue-filters) { width: max-content; }
+}
+@media (max-width: 1023px), (max-width: 1366px) and (any-pointer: coarse) {
+  .web-platform .workspace-view.workspace-queue:not([data-dialog-only]) {
+    --ws-section-header-padding: 12px;
+    --ws-section-header-height: 0px;
+    --ws-queue-button: 44px;
+    --ws-queue-control: 52px;
+    --ws-queue-space: 8px;
+  }
+  html.web-platform:root body .app-provider .workspace-view.workspace-queue:not([data-dialog-only]) .ws-section-header { padding: 12px; gap: 8px 12px; }
+  body .app-provider .workspace-queue .ws-section-header :is(h1, h2) { font-size: 22px; }
+  body .app-provider .workspace-queue .task-workbench-summary { gap: 8px; padding-top: 8px; }
+  body .app-provider .workspace-queue .task-focus-object { min-height: 60px; padding: 8px; }
+  body .app-provider .workspace-queue .approval-card-open { padding: 12px; }
+}
+@media (forced-colors: active) {
+  body .app-provider .workspace-queue .workspace-queue-toolbar :is(.ws2-segmented, .task-filter-tabs) { outline: 1px solid CanvasText; outline-offset: -1px; }
+}
+@container workspace (max-width: 480px) {
+  body .app-provider .workspace-queue .task-focus-object {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 88px;
+  }
+  body .app-provider .workspace-queue .task-focus-object > span { min-height: 32px; line-height: 16px; }
+  body .app-provider .workspace-queue .task-focus-object > strong { font-size: 24px; line-height: 28px; }
+  body .app-provider .workspace-queue .task-focus-object > small { display: none; }
+}

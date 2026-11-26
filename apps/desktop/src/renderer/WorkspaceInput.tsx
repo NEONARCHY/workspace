@@ -47,14 +47,24 @@ const ExpandableInput = forwardRef<HTMLInputElement, InputProps>(function Expand
       });
       // Page-entry transforms must not shrink the search's permanent layout height.
       const height = neighbour && (neighbour.offsetHeight || neighbour.getBoundingClientRect().height);
-      if (height) element.style.setProperty("--search-height", `${height}px`);
+      const value = `${height}px`;
+      if (height && element.style.getPropertyValue("--search-height") !== value) element.style.setProperty("--search-height", value);
+      // After wrapping onto its own row, use that page's responsive CSS height
+      // instead of keeping a stale measurement from the desktop toolbar.
+      else if (!height && element.style.getPropertyValue("--search-height")) element.style.removeProperty("--search-height");
     };
     matchHeight();
     if (!row || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(matchHeight);
+    // Width morphing can resize several neighbours in one frame. Batch reads,
+    // and never invalidate styles again when the matched height is unchanged.
+    let frame: number | undefined;
+    const observer = new ResizeObserver(() => {
+      if (frame !== undefined) return;
+      frame = window.requestAnimationFrame(() => { frame = undefined; matchHeight(); });
+    });
     observer.observe(row);
     controls.forEach(control => observer.observe(control));
-    return () => observer.disconnect();
+    return () => { observer.disconnect(); if (frame !== undefined) window.cancelAnimationFrame(frame); };
   }, []);
 
   return <div ref={root} className={`workspace-search ${className}`}
