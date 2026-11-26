@@ -6,7 +6,6 @@ it("anchors the header title to its header rather than running a separate layout
   expect(source).toContain('<span className="assistant-header-title">');
   expect(source).not.toContain('<motion.span layout="position" className="assistant-header-title"');
   expect(source).toContain("const animation = panel.animate([");
-  expect(source).toContain("const orbResize = orb");
   const css = readFileSync("src/renderer/assistant-chat.css", "utf8");
   expect(css).toContain(".assistant-resize-snapshot { position: absolute; inset: 0 auto auto 0;");
 });

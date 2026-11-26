@@ -9,12 +9,13 @@ const attentionSuite = process.argv.includes("--attention");
 const peopleSuite = process.argv.includes("--people");
 const operationsSuite = process.argv.includes("--operations");
 const documentsSuite = process.argv.includes("--documents");
-const planningSuite = process.argv.includes("--planning");
+const topbarSuite = process.argv.includes("--topbar");
+const planningSuite = process.argv.includes("--planning") || topbarSuite;
 const onlyWidth = Number(process.env.UI_QA_WIDTH || 0);
 assert([0, 320, 390, 720, 1024, 1440].includes(onlyWidth));
 const origin = process.env.UI_QA_ORIGIN || "http://127.0.0.1:5186";
 assert(["127.0.0.1", "localhost"].includes(new URL(origin).hostname));
-const iteration = planningSuite ? "6" : documentsSuite ? "5" : operationsSuite ? "4" : peopleSuite ? "3" : attentionSuite ? "2" : "1";
+const iteration = topbarSuite ? "7" : planningSuite ? "6" : documentsSuite ? "5" : operationsSuite ? "4" : peopleSuite ? "3" : attentionSuite ? "2" : "1";
 const output = path.resolve(process.env.UI_QA_OUTPUT || `tmp/ui-consistency-iteration-${iteration}`);
 const sections = planningSuite
   ? [{ id: "home", label: "Главная", root: ".personal-home" }, { id: "calendar", label: "Календарь", root: ".calendar-view" }, { id: "projects", label: "Проекты", root: ".project-hub-view" }]
@@ -32,6 +33,11 @@ const settle = async page => page.evaluate(async () => {
   await Promise.race([Promise.all(document.getAnimations().filter(a => Number(a.effect?.getComputedTiming().endTime) < 2000).map(a => a.finished.catch(() => undefined))), new Promise(r => setTimeout(r, 900))]);
   await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 });
+async function capture(subject, target) {
+  const temporary = target + ".tmp";
+  try { await fs.writeFile(temporary, await subject.screenshot()); await fs.rename(temporary, target); }
+  finally { await fs.rm(temporary, { force: true }); }
+}
 function fixtures(demo) {
   const people = demo.people.map(person => ({ ...person, avatarVersion: null }));
   const user = { ...people.find(p => p.username === "malika"), role: "admin", jobTitle: "Руководитель подразделения" };
@@ -85,7 +91,7 @@ function fixtures(demo) {
   hub.items = hub.workstreams.flatMap(w => Array.from({ length: 5 }, (_, i) => ({ id: `${w.id}-item-${i}`, projectId: w.projectId, workstreamId: w.id, kind: i % 2 ? "event" : "task", title: ["Подготовить программу встречи", "Провести встречу команды", "Согласовать материалы"][i % 3], description: "Подготовка материалов и проверка результата.", startsAt: "2026-12-02T07:00:00Z", dueAt: i === 0 ? "2026-11-25T12:00:00Z" : "2026-12-04T12:00:00Z", budget: 1000000, status: ["active", "planned", "completed", "rejected", "active"][i], assigneeUserIds: [user.id], calendarEventId: null, createdByUserId: user.id, createdAt: "2026-11-01T07:00:00Z", updatedAt: "2026-11-26T07:00:00Z", requestCount: 0, approvedRequestCount: 0, actions: [] })));
   const home = demo.home;
   const calendarEvents = Array.from({ length: 15 }, (_, i) => ({ ...home.calendarEvents[0], id: `calendar-${i}`, title: ["Рабочая встреча региональной команды", "Обсуждение материалов программы", "Согласование плана проекта"][i % 3], startsAt: `2026-11-${String(20 + i % 9).padStart(2, "0")}T${String(7 + i % 4).padStart(2, "0")}:00:00Z`, endsAt: `2026-11-${String(20 + i % 9).padStart(2, "0")}T${String(8 + i % 4).padStart(2, "0")}:00:00Z` }));
-  return { user, people, tasks, requests, tripRequests, workflow, feedPosts, notifications, employees, departments, leaves, absenceRequests, presenceSummary, hr, members, zoom, incomingDocuments, telegram, survey, hub, home, calendarEvents, personalEfficiency: demo.personalEfficiency, recognition: demo.recognition };
+  return { user, people, tasks, requests, tripRequests, workflow, feedPosts, notifications, employees, departments, leaves, absenceRequests, presenceSummary, hr, members, zoom, incomingDocuments, telegram, survey, hub, home, calendarEvents, personalEfficiency: demo.personalEfficiency, recognition: demo.recognition, rates: demo.contextRates, weather: demo.contextWeather };
 }
 async function measure(page, selector) {
   return page.locator(selector).evaluate(root => {
@@ -105,7 +111,7 @@ async function measure(page, selector) {
   const browser = await chromium.launch({ channel: "msedge", headless: true });
   const results = [], errors = [];
   try {
-    for (const [width, height, theme] of galleryOnly ? [] : [[1440, 960, "dark"], [1440, 960, "light"], [1024, 768, "dark"], [390, 844, "dark"], ...(phase === "after" && (peopleSuite || operationsSuite || documentsSuite || planningSuite) ? [[320, 800, "dark"]] : []), ...(phase === "after" && (documentsSuite || planningSuite) ? [[720, 480, "dark"]] : [])].filter(([width]) => !onlyWidth || width === onlyWidth)) {
+    for (const [width, height, theme] of galleryOnly ? [] : [[1440, 960, "dark"], [1440, 960, "light"], [1024, 768, "dark"], [390, 844, "dark"], ...((phase === "after" || topbarSuite) && (peopleSuite || operationsSuite || documentsSuite || planningSuite) ? [[320, 800, "dark"]] : []), ...((phase === "after" || topbarSuite) && (documentsSuite || planningSuite) ? [[720, 480, "dark"]] : [])].filter(([width]) => !onlyWidth || width === onlyWidth)) {
       const context = await browser.newContext({ viewport: { width, height }, reducedMotion: "reduce" });
       const page = await context.newPage(); page.setDefaultTimeout(15000);
       if (planningSuite) await page.clock.setFixedTime(new Date("2026-11-26T09:30:00Z"));
@@ -156,12 +162,16 @@ async function measure(page, selector) {
         if (endpoint === "/leave-requests/context") return send({ hrUserId: data.people[0].id, deputyUserId: data.people[1].id, canConfigureSignature: false, signatureReady: true, tenureRules: [], canEditTenureRules: false });
         if (endpoint === "/leave-requests") return send(data.leaves);
         if (endpoint.includes("/directory")) return send({ canTerminateEmployees: true, employees: peopleSuite ? data.employees : data.people, people: data.people, roles: [], positions: [{ id: "qa-position", name: "Координатор региональных программ", isActive: true, sortOrder: 0 }], departments: peopleSuite ? data.departments : [], modules: [], accessRules: [] });
+        if (topbarSuite && endpoint === "/assistant/chats") return send([{ id: "qa-assistant-chat", title: "Рабочие вопросы", isDefault: true, isPinned: false, createdAt: "2026-11-26T08:00:00Z", updatedAt: "2026-11-26T08:00:00Z" }]);
+        if (topbarSuite && endpoint === "/assistant/messages") return send([]);
+        if (topbarSuite && endpoint.includes("/context/exchange")) return send(data.rates);
+        if (topbarSuite && endpoint.includes("/weather")) return send(data.weather);
         if (endpoint.includes("/context/exchange")) return send({ rates: [], asOf: "2026-11-26", stale: false });
         if (endpoint.includes("/weather")) return send({ regions: [], places: [], asOf: "2026-11-26", stale: false });
         return route.fulfill({ status: 204, body: "" });
       });
       await page.goto(origin);
-      data = fixtures(await page.evaluate(async () => { const d = await import("/src/renderer/test-fixtures/demo-data.ts"), h = await import("/src/renderer/test-fixtures/personal-home-fixture.ts"); return { people: d.people, initialTasks: d.initialTasks, home: h.homeFixture("malika", Date.parse("2026-11-26T09:30:00Z")), personalEfficiency: h.homeEfficiency("malika"), recognition: h.homeRecognition("malika") }; }));
+      data = fixtures(await page.evaluate(async () => { const d = await import("/src/renderer/test-fixtures/demo-data.ts"), h = await import("/src/renderer/test-fixtures/personal-home-fixture.ts"), c = await import("/qa/context-fixtures.ts"); return { people: d.people, initialTasks: d.initialTasks, home: h.homeFixture("malika", Date.parse("2026-11-26T09:30:00Z")), personalEfficiency: h.homeEfficiency("malika"), recognition: h.homeRecognition("malika"), contextRates: c.contextRates, contextWeather: c.contextWeather }; }));
       releaseIds = await page.evaluate(async () => (await import("/src/renderer/release-history.ts")).bundledReleaseEntries().map(entry => entry.id));
       await page.evaluate(({ id, theme }) => localStorage.setItem(`yuksalish:color-theme:${id}`, theme), { id: data.user.id, theme });
       await page.getByRole("textbox", { name: /Логин/ }).fill("qa-user");
@@ -190,13 +200,59 @@ async function measure(page, selector) {
         await page.locator("#workspace-content").focus();
         await page.mouse.move(width - 1, 0);
         const file = `${section.id}-${theme}-${width}.png`;
-        const screenshotPath = path.join(output, phase, file), temporaryPath = screenshotPath + ".tmp";
-        try {
-          await fs.writeFile(temporaryPath, await page.screenshot());
-          await fs.rename(temporaryPath, screenshotPath);
-        } finally { await fs.rm(temporaryPath, { force: true }); }
+        await capture(page, path.join(output, phase, file));
+        if (topbarSuite && section.id === "home") await capture(page.locator(".global-bar"), path.join(output, phase, `topbar-${theme}-${width}.png`));
         const geometry = await measure(page, section.root);
         results.push({ section: section.id, width, height, theme, ...geometry });
+        if (phase === "after" && topbarSuite) {
+          const toolbar = await page.locator(".global-bar").evaluate(bar => {
+            const controls = [...bar.querySelectorAll(".browser-menu-trigger, .section-jump-trigger, .notification-bell, .color-theme-toggle, .assistant-launcher, .workspace-identity-menu, .connection-indicator, .context-trigger, .workday-control-mobile-trigger")].filter(node => node.getBoundingClientRect().height > 0);
+            return controls.map(node => { const rect = node.getBoundingClientRect(), style = getComputedStyle(node); return { name: node.className, x: rect.x, y: rect.y, width: rect.width, height: rect.height, fill: style.backgroundColor, image: style.backgroundImage, shadow: style.boxShadow, radius: style.borderRadius, border: style.borderTopWidth }; });
+          });
+          for (const control of toolbar) {
+            assert(Math.abs(control.height - 44) <= 1, `${file}: toolbar height ${control.name}`);
+            assert.equal(control.radius, "12px", `${file}: toolbar corner ${control.name}`);
+            assert.equal(control.border, "0px", `${file}: toolbar without frames ${control.name}`);
+            assert.equal(control.fill, toolbar[0].fill, `${file}: shared toolbar fill ${control.name}`);
+            assert.notEqual(control.fill, "rgba(0, 0, 0, 0)", `${file}: visible toolbar fill ${control.name}`);
+            assert.equal(control.image, "none", `${file}: no gradient frame ${control.name}`);
+            assert.equal(control.shadow, "none", `${file}: no inset frame ${control.name}`);
+            if (width <= 1023) assert(Math.abs(control.width - 44) <= 1, `${file}: compact toolbar target ${control.name}`);
+          }
+          assert.equal(await page.locator(".section-jump-trigger").isVisible(), width > 700, `${file}: phone search stays hidden`);
+          if (width <= 1023) {
+            const positions = [...toolbar].sort((a, b) => a.x - b.x);
+            const gaps = positions.slice(1).map((item, index) => item.x - positions[index].x - positions[index].width);
+            assert(Math.min(...gaps) >= 7, `${file}: toolbar minimum spacing`);
+            assert(Math.max(...gaps) - Math.min(...gaps) <= 1, `${file}: equal toolbar spacing`);
+          }
+          if (section.id === "home") {
+            const themeButton = page.locator(".color-theme-toggle"), targetTheme = theme === "dark" ? "тёмную" : "светлую";
+            await themeButton.scrollIntoViewIfNeeded(); await themeButton.click();
+            await page.getByRole("button", { name: `Включить ${targetTheme} тему`, exact: true }).waitFor(); await themeButton.click();
+            for (const [trigger, title] of [[".context-currency-trigger", "Курсы валют"], [".context-weather-trigger", "Погода Узбекистана"]]) {
+              await page.locator(trigger).scrollIntoViewIfNeeded(); await page.locator(trigger).click();
+              await page.getByRole("dialog", { name: title, exact: true }).waitFor(); await page.keyboard.press("Escape");
+              await page.getByRole("dialog", { name: title, exact: true }).waitFor({ state: "hidden" });
+              assert.equal(await page.locator(trigger).evaluate(node => node === document.activeElement), true, `${file}: restore ${trigger} focus`);
+            }
+            await page.locator(".workspace-identity-menu").scrollIntoViewIfNeeded(); await page.locator(".workspace-identity-menu").click();
+            await page.getByRole("button", { name: "Настройки", exact: true }).waitFor(); await page.keyboard.press("Escape");
+            await page.getByRole("button", { name: "Настройки", exact: true }).waitFor({ state: "hidden" });
+            await page.locator(".connection-indicator").scrollIntoViewIfNeeded(); await page.locator(".connection-indicator").click();
+            await page.getByText("Связь с рабочим сервером", { exact: true }).waitFor(); await page.keyboard.press("Escape");
+            await page.getByText("Связь с рабочим сервером", { exact: true }).waitFor({ state: "hidden" });
+            if (width <= 1023) {
+              await page.locator(".workday-control-mobile-trigger").scrollIntoViewIfNeeded(); await page.locator(".workday-control-mobile-trigger").click();
+              await page.getByRole("dialog", { name: "Рабочий день", exact: true }).waitFor();
+              assert(await page.getByRole("button", { name: "Начать работу", exact: true }).isEnabled(), `${file}: workday action retained`);
+              await page.keyboard.press("Escape"); await page.getByRole("dialog", { name: "Рабочий день", exact: true }).waitFor({ state: "hidden" });
+              await page.locator(".browser-menu-trigger").scrollIntoViewIfNeeded(); await page.locator(".browser-menu-trigger").click();
+              await page.locator("#browser-navigation").waitFor(); await page.keyboard.press("Escape"); await page.locator("#browser-navigation").waitFor({ state: "hidden" });
+            }
+            await page.locator(".global-bar").evaluate(bar => { bar.scrollLeft = 0; });
+          }
+        }
         if (phase === "after") {
           const framed = await page.locator(section.root).evaluate(root => [...root.querySelectorAll(".ws-section-header, .record-table-frame, .team-dash-metric, .team-dash-panel, .notification-metrics > button, .notification-progress-card, .feed-card, .feed-context-card, .leave-list-area, .leave-detail, .leave-list-item, .absence-summary > button, .absence-column, .absence-card, .hr-summary > div, .members-summary > div, .members-regional-ranking, .zoom-split, .zoom-row, .zoom-side, .incoming-document-row, .incoming-status, .telegram-access-overview > span, .telegram-access-row, .telegram-access-bot, .survey-panel, .survey-file-drop, .survey-analysis-item")].filter(node => {
             const style = getComputedStyle(node);
@@ -244,7 +300,7 @@ async function measure(page, selector) {
             await field.fill("несуществующее-qa-событие"); assert.match(await count.innerText(), /Событий: 0/);
             await field.fill(""); await field.blur(); assert.match(await count.innerText(), /Событий: 19/);
             await page.getByRole("button", { name: "Фильтры", exact: true }).click();
-            await page.emulateMedia({ forcedColors: "active" });
+            await page.emulateMedia({ forcedColors: "active" }); await settle(page);
             const outline = await page.locator('.calendar-day[aria-selected="true"]').evaluate(node => getComputedStyle(node).outlineStyle);
             assert.notEqual(outline, "none", `${file}: high contrast selection`);
             await page.emulateMedia({ forcedColors: "none" });
@@ -537,6 +593,40 @@ async function measure(page, selector) {
             await page.locator(".team-dash-dialog").getByRole("button", { name: "Закрыть", exact: true }).click();
           }
         }
+        if (topbarSuite && section.id === "home" && (phase === "after" || theme === "dark" && [1440, 720].includes(width))) {
+          const liveMotion = phase === "after" && theme === "dark" && width === 1440;
+          if (liveMotion) { await page.emulateMedia({ reducedMotion: "no-preference" }); await settle(page); }
+          const launcher = page.locator(".assistant-launcher"); await launcher.scrollIntoViewIfNeeded();
+          const beforeOrb = await launcher.boundingBox();
+          const beforeControls = await page.locator(".global-bar").evaluate(bar => [...bar.querySelectorAll(".assistant-launcher, .color-theme-toggle, .workspace-identity-menu, .context-trigger")].map(node => ({ name: node.className, x: node.getBoundingClientRect().x, y: node.getBoundingClientRect().y })));
+          await page.locator(".assistant-launcher").click(); await page.locator(".assistant-empty h2").waitFor(); await settle(page);
+          if (phase === "after") {
+            assert(await launcher.isVisible(), `${file}: launcher remains visible`);
+            const afterOrb = await launcher.boundingBox();
+            assert(Math.abs(afterOrb.x - beforeOrb.x) <= 1 && Math.abs(afterOrb.y - beforeOrb.y) <= 1, `${file}: stationary orb`);
+            assert.equal(await launcher.locator(":scope > .gradient-orb, :scope > .gradient-orb-fallback").count(), 1, `${file}: orb remains in button`);
+            const afterControls = await page.locator(".global-bar").evaluate(bar => [...bar.querySelectorAll(".assistant-launcher, .color-theme-toggle, .workspace-identity-menu, .context-trigger")].map(node => ({ name: node.className, x: node.getBoundingClientRect().x, y: node.getBoundingClientRect().y })));
+            assert.deepEqual(afterControls, beforeControls, `${file}: no neighbour shift`);
+            const barBounds = await page.locator(".global-bar").boundingBox(), panelBounds = await page.locator(".assistant-panel").boundingBox();
+            assert(panelBounds.y >= barBounds.y + barBounds.height - 1, `${file}: assistant keeps toolbar accessible`);
+            const panelStyle = await page.locator(".assistant-panel").evaluate(node => ({ border: getComputedStyle(node).borderTopWidth, image: getComputedStyle(node).backgroundImage }));
+            assert.deepEqual(panelStyle, { border: "0px", image: "none" }, `${file}: assistant window without frame`);
+            await page.getByRole("button", { name: "Развернуть окно", exact: true }).click(); await settle(page);
+            const expanded = await page.locator(".assistant-panel").boundingBox();
+            assert(expanded.y >= barBounds.y + barBounds.height - 1 && expanded.y + expanded.height <= height + 1, `${file}: expanded assistant below toolbar`);
+            await page.getByRole("button", { name: "Свернуть окно", exact: true }).click(); await settle(page);
+          }
+          await capture(page, path.join(output, phase, `assistant-open-${theme}-${width}.png`));
+          await page.getByRole("button", { name: "Закрыть ассистента", exact: true }).click();
+          await page.locator(".assistant-panel").waitFor({ state: "hidden" });
+          if (phase === "after") assert(await launcher.evaluate(node => node === document.activeElement), `${file}: assistant restores launcher focus`);
+          if (liveMotion) await page.emulateMedia({ reducedMotion: "reduce" });
+          if (phase === "after") {
+            await page.emulateMedia({ forcedColors: "active" });
+            assert.notEqual(await launcher.evaluate(node => getComputedStyle(node).outlineStyle), "none", `${file}: high contrast launcher`);
+            await page.emulateMedia({ forcedColors: "none" });
+          }
+        }
         console.log(`${phase} ${file}`);
       }
       await context.close();
@@ -549,9 +639,10 @@ async function measure(page, selector) {
     assert.deepEqual(errors, []);
     await fs.writeFile(path.join(output, "index.html"), `<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Yuksalish — сравнение интерфейса</title>
       <style>*{box-sizing:border-box}body{margin:0;padding:24px;background:#111318;color:#eceef4;font:15px/1.5 system-ui}main{max-width:1600px;margin:auto}h1{font-size:28px}p,figcaption{color:#bfc6d3}select{margin:0 0 24px;padding:12px;border-radius:8px;background:#252a33;color:inherit}section{margin:0 0 32px}h2{font-size:20px}article{display:grid;grid-template-columns:1fr 1fr;gap:16px}figure{margin:0;min-width:0}img{display:block;width:100%;height:auto;border-radius:12px}figcaption{margin-bottom:8px}@media(max-width:700px){article{grid-template-columns:1fr}body{padding:12px}}</style>
-      <main><h1>Итерация ${iteration} · Общая сетка рабочих разделов</h1><p>Реальные компоненты приложения, одинаковые синтетические данные до и после. Нажмите на снимок для исходного размера.</p><select id="size" aria-label="Размер и тема"><option value="dark-1440">1440 × 960 · тёмная</option><option value="light-1440">1440 × 960 · светлая</option><option value="dark-1024">1024 × 768 · тёмная</option><option value="dark-390">390 × 844 · тёмная</option></select>
-      ${sections.map(section => `<section data-section="${section.id}"><h2>${section.label}</h2><article>${["before", "after"].map((state, i) => `<figure><figcaption>${i ? "После" : "До"}</figcaption><a data-state="${state}" href="${state}/${section.id}-dark-1440.png"><img loading="lazy" src="${state}/${section.id}-dark-1440.png" alt="${section.label} — ${i ? "после" : "до"}"></a></figure>`).join("")}</article></section>`).join("")}
+      <main><h1>Итерация ${iteration} · Общая сетка рабочих разделов</h1><p>Реальные компоненты приложения, одинаковые синтетические данные до и после. Нажмите на снимок для исходного размера.</p><select id="size" aria-label="Размер и тема"><option value="dark-1440">1440 × 960 · тёмная</option><option value="light-1440">1440 × 960 · светлая</option><option value="dark-1024">1024 × 768 · тёмная</option><option value="dark-390">390 × 844 · тёмная</option>${topbarSuite ? '<option value="dark-320">320 × 800 · тёмная</option><option value="dark-720">720 × 480 · тёмная</option>' : ''}</select>
+      ${(topbarSuite ? [{ id: "topbar", label: "Общая верхняя панель" }, ...sections] : sections).map(section => `<section data-section="${section.id}"><h2>${section.label}</h2><article>${["before", "after"].map((state, i) => `<figure><figcaption>${i ? "После" : "До"}</figcaption><a data-state="${state}" href="${state}/${section.id}-dark-1440.png"><img loading="lazy" src="${state}/${section.id}-dark-1440.png" alt="${section.label} — ${i ? "после" : "до"}"></a></figure>`).join("")}</article></section>`).join("")}
+      ${topbarSuite ? [1440, 720].map(width => `<section><h2>Открытый ассистент · ${width} px</h2><article>${["before", "after"].map((state, i) => `<figure><figcaption>${i ? "После: орба остаётся в кнопке" : "До: орба переносится в окно"}</figcaption><a href="${state}/assistant-open-dark-${width}.png"><img loading="lazy" src="${state}/assistant-open-dark-${width}.png" alt="Ассистент — ${i ? "после" : "до"}"></a></figure>`).join("")}</article></section>`).join("") : ''}
       ${documentsSuite ? '<section data-section="admin-menu"><h2>Режим администратора в меню аватара</h2><figure><figcaption>После · переключение прав и возврат к правам своей должности</figcaption><a data-state="after" href="after/admin-menu-dark-1440.png"><img loading="lazy" src="after/admin-menu-dark-1440.png" alt="Переключатель прав в меню профиля"></a></figure></section>' : ''}
-      <p>Подход: <a href="https://github.com/heydamir/unslop" style="color:#90d5df">unslop · Damir Sokolovsky · CC BY 4.0</a>. Цвета статусов, права и рабочие процессы сохранены.</p></main><script>document.querySelector('#size').addEventListener('change',event=>{document.querySelectorAll('section').forEach(section=>section.querySelectorAll('[data-state]').forEach(link=>{const src=link.dataset.state+'/'+section.dataset.section+'-'+event.target.value+'.png';link.href=src;link.querySelector('img').src=src}))})</script></html>`);
+      <p>Подход: <a href="https://github.com/heydamir/unslop" style="color:#90d5df">unslop · Damir Sokolovsky · CC BY 4.0</a>. Цвета статусов, права и рабочие процессы сохранены.</p></main><script>document.querySelector('#size').addEventListener('change',event=>{document.querySelectorAll('section[data-section]').forEach(section=>section.querySelectorAll('[data-state]').forEach(link=>{const src=link.dataset.state+'/'+section.dataset.section+'-'+event.target.value+'.png';link.href=src;link.querySelector('img').src=src}))})</script></html>`);
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

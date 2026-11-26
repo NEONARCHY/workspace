@@ -2311,7 +2311,7 @@ export function App() {
         </BrowserNavigation>
 
         <div className={`app-stage ${backgroundError ? "has-feedback" : ""}`}>
-          <header className="global-bar">
+          <header className="global-bar workspace-topbar">
             {browserCompact ? <button ref={browserMenuTrigger} type="button" className="browser-menu-trigger" aria-label="Открыть меню" aria-controls={browserMenuOpen ? "browser-navigation" : undefined} aria-haspopup="dialog" aria-expanded={browserMenuOpen} onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setBrowserMenuOpen(true); }}><Navigation24Regular /></button> : null}
             <SectionJump items={orderedNavItems} commands={[
               ...(canView("tasks") ? workspace.tasks.map(task => ({ id: `task:${task.id}`, label: task.title, context: `Задача · ${task.project}`, icon: <TaskListSquareLtr24Regular />, onSelect: () => { setPreparedAction(undefined); setFocusTarget(current => ({ section: "tasks", entityId: task.id, revision: (current?.revision ?? 0) + 1 })); setActiveSection("tasks"); } })) : []),

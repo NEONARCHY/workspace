@@ -103,8 +103,7 @@ html body .topbar-context-surface { display: flex; flex-direction: column; width
 }
 @media (min-width: 601px) {
   .browser-compact .app-stage .global-bar:has(.topbar-insights) { grid-template-columns: 48px 48px minmax(0, 1fr) repeat(3, 48px) auto; }
-  .browser-compact .app-stage .global-bar:has(.topbar-insights):not(:has(.assistant-launcher)),
-  .browser-compact .app-stage .global-bar:has(.topbar-insights):has(.assistant-launcher-space[data-vacated]) { grid-template-columns: 48px 48px minmax(0, 1fr) repeat(2, 48px) auto; }
+  .browser-compact .app-stage .global-bar:has(.topbar-insights):not(:has(.assistant-launcher)) { grid-template-columns: 48px 48px minmax(0, 1fr) repeat(2, 48px) auto; }
   .browser-compact .global-bar:has(.topbar-insights) .workspace-top-context { display: contents; }
   .browser-compact .global-bar:has(.topbar-insights) .browser-menu-trigger { grid-column: 1; grid-row: 1; }
   .browser-compact .global-bar:has(.topbar-insights) .section-jump-trigger { grid-column: 2; grid-row: 1; }
@@ -116,8 +115,7 @@ html body .topbar-context-surface { display: flex; flex-direction: column; width
 }
 @media (max-width: 600px) {
   .browser-compact .app-stage .global-bar:has(.topbar-insights) { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-  .browser-compact .app-stage .global-bar:has(.topbar-insights):not(:has(.assistant-launcher)),
-  .browser-compact .app-stage .global-bar:has(.topbar-insights):has(.assistant-launcher-space[data-vacated]) { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .browser-compact .app-stage .global-bar:has(.topbar-insights):not(:has(.assistant-launcher)) { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .browser-compact .workspace-workday-status:has(.topbar-insights) { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 8px; }
   .browser-compact .workspace-workday-status:has(.topbar-insights) > .connection-indicator { position: static; grid-column: 1; grid-row: 1; }
   .browser-compact .workspace-workday-status:has(.topbar-insights) > .topbar-insights { grid-column: 2; grid-row: 1; display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); }

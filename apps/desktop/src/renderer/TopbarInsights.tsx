@@ -100,7 +100,7 @@ export function TopbarInsights({ token }: { readonly token: string }) {
       toggle("rates", data.open);
       if (!data.open && "key" in event && event.key === "Escape") close("rates");
     }} positioning={{ position: "below", align: "end", offset: 8, autoSize: "height", overflowBoundaryPadding: 12 }} trapFocus>
-      <PopoverTrigger disableButtonEnhancement><button ref={currencyTrigger} type="button" className="context-trigger context-currency-trigger" data-stale={staleRates || undefined}
+      <PopoverTrigger disableButtonEnhancement><button ref={currencyTrigger} type="button" className="context-trigger context-currency-trigger" data-satin-excluded data-stale={staleRates || undefined}
         aria-label={`Курсы валют: 1 USD — ${usd ? number(Number(usd.rateUzs), 2) : "нет данных"} UZS${staleRates ? ". Данные устарели" : ""}`} aria-expanded={open === "rates"}>
         <CircleDollarSign size={18} aria-hidden /><span><small>USD <ArrowRight size={11} aria-hidden /> UZS</small><strong>{usd ? number(Number(usd.rateUzs), 2) : rates.pending ? <SkeletonBlock width="80px" height="16px" /> : "Нет данных"}</strong></span><ChevronDown size={13} aria-hidden /></button></PopoverTrigger>
       {/* Explicit overflow keeps Fluent autoSize from adding a second scrollbar. */}
@@ -129,7 +129,7 @@ export function TopbarInsights({ token }: { readonly token: string }) {
       toggle("weather", data.open);
       if (!data.open && "key" in event && event.key === "Escape") close("weather");
     }} positioning={{ position: "below", align: "end", offset: 8, autoSize: "height", overflowBoundaryPadding: 12 }} trapFocus>
-      <PopoverTrigger disableButtonEnhancement><button ref={weatherTrigger} type="button" className="context-trigger context-weather-trigger" data-stale={staleWeather || undefined}
+      <PopoverTrigger disableButtonEnhancement><button ref={weatherTrigger} type="button" className="context-trigger context-weather-trigger" data-satin-excluded data-stale={staleWeather || undefined}
         aria-label={`Погода в Ташкенте: ${number(tashkent?.weather?.temperature)} градусов${staleWeather ? ". Данные устарели" : ""}`} aria-expanded={open === "weather"}>
         <ContextWeatherIcon weather={tashkent?.weather} /><span><small>Ташкент</small><strong>{tashkent?.weather ? `${number(tashkent.weather.temperature, 0)}°` : weather.pending ? <SkeletonBlock width="30px" height="16px" /> : "—"}</strong></span><ChevronDown size={13} aria-hidden /></button></PopoverTrigger>
       <PopoverSurface className="topbar-context-surface context-weather-surface" data-surface-resize-motion="off" style={{ overflowY: "hidden" }} aria-label="Погода Узбекистана">
