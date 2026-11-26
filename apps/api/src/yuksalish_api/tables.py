@@ -827,6 +827,7 @@ project_hub_projects = sa.Table(
     sa.Column("code", sa.String(48)),
     sa.Column("title", sa.String(240)),
     sa.Column("description", sa.Text()),
+    sa.Column("payment_approver_user_ids", postgresql.JSONB()),
     sa.Column("manager_user_id", uuid_type),
     sa.Column("start_date", sa.Date()),
     sa.Column("end_date", sa.Date()),

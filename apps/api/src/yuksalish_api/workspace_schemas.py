@@ -932,6 +932,11 @@ class PaymentRequestDetails(ApiModel):
         return value
 
 
+class PaymentRouteApprover(ApiModel):
+    user_id: str
+    name: str
+
+
 class ApprovalRequestResponse(ApiModel):
     id: str
     workflow_id: str
@@ -942,6 +947,8 @@ class ApprovalRequestResponse(ApiModel):
     status: ApprovalStatus
     status_label: str
     route_variant: Literal["subsidy"] | None = None
+    payment_approval_route: list[PaymentRouteApprover] | None = None
+    payment_approval_step: int = 0
     active_node_keys: list[str]
     active_stages: list[ApprovalStageResponse] = Field(default_factory=list)
     stage_label: str

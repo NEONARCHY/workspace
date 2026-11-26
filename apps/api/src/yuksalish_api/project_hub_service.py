@@ -10,6 +10,7 @@ from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from .auth import AuthenticatedUser
+from .payment_routes import is_payment_deputy
 from .position_policy import is_executive_leader
 from .project_hub_schemas import (
     PaymentItemOption,
@@ -177,7 +178,8 @@ async def load_payment_project_targets(
     return PaymentProjectTargets(
         budget_articles=await article_choices(connection, [UUID(value) for value in project_ids]),
         projects=[
-            PaymentProjectOption(id=row.id, code=row.code, title=row.title)
+            PaymentProjectOption(id=row.id, code=row.code, title=row.title,
+                                 payment_approver_user_ids=row.payment_approver_user_ids)
             for row in projects
         ],
         workstreams=[
@@ -404,6 +406,7 @@ async def _project_response(
         manager_user_id=str(row["manager_user_id"]),
         responsible_user_ids=[str(value) for value in responsible],
         approver_user_ids=[str(value) for value in approvers],
+        payment_approver_user_ids=row["payment_approver_user_ids"],
         start_date=row["start_date"],
         end_date=row["end_date"],
         budget=row["budget"],
@@ -442,6 +445,19 @@ async def save_project(
     manager = (await _active_people(connection, [payload.manager_user_id]))[0]
     responsible = await _active_people(connection, payload.responsible_user_ids)
     approvers = await _active_people(connection, payload.approver_user_ids)
+    payment_approvers = (
+        payload.payment_approver_user_ids
+        if "payment_approver_user_ids" in payload.model_fields_set or existing is None
+        else existing["payment_approver_user_ids"]
+    )
+    if payment_approvers:
+        ids = await _active_people(connection, payment_approvers)
+        payment_approvers = [str(value) for value in ids]
+        titles = (await connection.execute(
+            select(users.c.job_title).where(users.c.id.in_(ids))
+        )).scalars().all()
+        if not all(is_payment_deputy(title) for title in titles):
+            raise WorkspaceRepositoryError(422, "Выберите заместителей председателя")
     duplicate_query = select(project_hub_projects.c.id).where(
         func.lower(project_hub_projects.c.code) == payload.code.lower()
     )
@@ -452,6 +468,7 @@ async def save_project(
         raise WorkspaceRepositoryError(409, "Project code is already used")
     now = datetime.now(UTC)
     fields = dict(
+        payment_approver_user_ids=payment_approvers,
         code=payload.code,
         title=payload.title,
         description=payload.description,
