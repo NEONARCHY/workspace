@@ -1,3 +1,4 @@
+import { formatRussianDateTime } from "./date-time-format";
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
@@ -306,7 +307,7 @@ export function NotificationCenter({
         <aside className="notification-settings" aria-label="Настройки уведомлений">
           {context ? <section ref={contextRef} tabIndex={-1} className="notification-context" key={context.id} aria-label="Контекст уведомления">
             <div><span>{kindLabels[context.kind]}</span><button type="button" aria-label="Закрыть контекст уведомления" onClick={() => { setContextId(undefined); contextTrigger.current?.focus(); }}>×</button></div>
-            <h2>{context.title}</h2><p>{context.body}</p><small>{new Date(context.occurredAt).toLocaleString("ru-RU")}</small>
+            <h2>{context.title}</h2><p>{context.body}</p><small>{formatRussianDateTime(new Date(context.occurredAt))}</small>
             <Button appearance="primary" onClick={() => void onOpen(context)}>Открыть в разделе</Button>
           </section> : null}
           <div className="notification-settings-title">

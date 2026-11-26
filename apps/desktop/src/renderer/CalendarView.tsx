@@ -1,4 +1,4 @@
-import { russianDateTimeFormatter } from "./date-time-format";
+import { formatRussianDateTime, formatRussianTime, russianDateTimeFormatter } from "./date-time-format";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { LoadingSkeleton } from "./LoadingSkeleton";
 import { CalendarAudienceActions } from "./CalendarAudienceActions";
@@ -814,8 +814,8 @@ export function CalendarView({
                         {...eventFocusTarget}
                         className={`calendar-event-pill ${item.kind === "zoom" ? "zoom" : `${item.record.eventType} ${item.record.status}`}`}
                         style={item.kind === "event" ? calendarAppearanceStyle(item.record) : undefined}
-                        aria-label={`${item.kind === "event" ? eventTime(item.record) : `Zoom · ${new Date(item.record.startsAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}`} · ${item.title}`}
-                        title={`${item.title} · ${new Date(item.record.startsAt).toLocaleString("ru-RU")}`}
+                        aria-label={`${item.kind === "event" ? eventTime(item.record) : `Zoom · ${formatRussianTime(new Date(item.record.startsAt), { hour: "2-digit", minute: "2-digit" })}`} · ${item.title}`}
+                        title={`${item.title} · ${formatRussianDateTime(new Date(item.record.startsAt))}`}
                         key={item.key}
                         type="button"
                         onClick={(clickEvent) => {
@@ -828,7 +828,7 @@ export function CalendarView({
                           setError("");
                         }}
                       >
-                        <span>{item.kind === "event" && item.record.allDay ? "День" : dayKey(new Date(item.record.startsAt)) === key ? new Date(item.record.startsAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }) : "↳"}</span>
+                        <span>{item.kind === "event" && item.record.allDay ? "День" : dayKey(new Date(item.record.startsAt)) === key ? formatRussianTime(new Date(item.record.startsAt), { hour: "2-digit", minute: "2-digit" }) : "↳"}</span>
                         <CalendarIcon zoom={item.kind === "zoom"} iconKey={item.kind === "event" ? item.record.iconKey : undefined} /><strong>{item.title}</strong>
                       </button>
                     ))}

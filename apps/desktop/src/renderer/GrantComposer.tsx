@@ -1,3 +1,4 @@
+import { formatRussianDateTime } from "./date-time-format";
 import { useState, type FormEvent } from "react";
 import { Button, DialogSurface, Textarea } from "@fluentui/react-components";
 import { Add20Regular, Delete20Regular } from "@fluentui/react-icons";
@@ -76,7 +77,7 @@ export function GrantComposer({ fields, onChange, onSubmit, onClose, editing, bu
               <GrantParticipant person={person(authorId ?? chairId)} label={authorId ? "Постановщик" : "Постановщик после разрешения запуска"} token={token} />
               <GrantParticipant person={person(initiatorId)} label="Инициатор" token={token} />
               {fields.assigneeId && <GrantParticipant person={person(fields.assigneeId)} label="Ответственный" token={token} />}
-              <dl className="record-summary-facts"><div><dt>Срок</dt><dd>{fields.dueAt && Number.isFinite(new Date(fields.dueAt).getTime()) ? new Date(fields.dueAt).toLocaleString("ru-RU", {dateStyle: "medium", timeStyle: "short"}) : "Не указан"}</dd></div>
+              <dl className="record-summary-facts"><div><dt>Срок</dt><dd>{fields.dueAt && Number.isFinite(new Date(fields.dueAt).getTime()) ? formatRussianDateTime(new Date(fields.dueAt), {dateStyle: "medium", timeStyle: "short"}) : "Не указан"}</dd></div>
                 <div><dt>Соисполнители</dt><dd>{fields.coAssigneeIds.length}</dd></div><div><dt>Чек-лист</dt><dd>{fields.checklist.length} пунктов</dd></div>
                 {!editing && <div><dt>Файлы для ознакомления</dt><dd>{files.length}</dd></div>}</dl>
             </div>

@@ -1,3 +1,4 @@
+import { formatRussianDateTime } from "./date-time-format";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, Checkbox, DialogSurface, Spinner } from "@fluentui/react-components";
 import type { MailConnect, MailConnection, MailDraft, MailDraftSummary, MailFields, MailMessage,
@@ -26,7 +27,7 @@ type Folder = keyof typeof folders;
 interface TaskSelection { readonly source: MailMessage; readonly operationId: string; readonly files: readonly string[]; readonly includeBody: boolean; }
 const emptyFields: MailFields = { to: [], cc: [], bcc: [], subject: "", body: "" };
 function errorText(value: unknown) { return value instanceof Error ? value.message : "Действие не выполнено"; }
-function date(value: string) { return new Date(value).toLocaleString("ru-RU", { dateStyle: "medium", timeStyle: "short" }); }
+function date(value: string) { return formatRussianDateTime(new Date(value), { dateStyle: "medium", timeStyle: "short" }); }
 function replyAddress(value: string): string[] {
   const address = value.match(/[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,63}/)?.[0];
   return address ? [address] : [];

@@ -4,10 +4,12 @@ import { useState } from "react";
 import type { WorkspacePerson } from "@yuksalish/contracts";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { ReleaseHistoryDialog } from "./ReleaseHistoryDialog";
+import { AdminModeControl, useAdministratorMode } from "./AdminModeToggle";
 
 interface WorkspaceIdentityProps {
   readonly person: WorkspacePerson;
   readonly token: string;
+  readonly adminModeEnabled?: boolean | null;
   readonly onProfile?: () => void;
   readonly onSupport: () => void;
   readonly supportMode: "support" | "inbox";
@@ -17,8 +19,10 @@ interface WorkspaceIdentityProps {
   readonly onLogout: () => void;
 }
 
-export function WorkspaceIdentity({ person, token, onProfile, onSupport, supportMode, supportIndicator, supportUnreadCount = 0, onSettings, onLogout }: WorkspaceIdentityProps) {
+export function WorkspaceIdentity({ person, token, adminModeEnabled, onProfile, onSupport, supportMode, supportIndicator, supportUnreadCount = 0, onSettings, onLogout }: WorkspaceIdentityProps) {
   const [open, setOpen] = useState(false);
+  // Keep pending/error state when the profile popover closes and reopens.
+  const adminMode = useAdministratorMode(token, adminModeEnabled === true);
   const close = (afterClose?: () => void) => {
     setOpen(false);
     afterClose?.();
@@ -44,6 +48,7 @@ export function WorkspaceIdentity({ person, token, onProfile, onSupport, support
             {supportMode === "inbox" ? "Обращения" : "Поддержка"}
           </Button>
           <Button appearance="subtle" icon={<Settings20Regular />} onClick={() => close(onSettings)}>Настройки</Button>
+          {adminModeEnabled != null ? <AdminModeControl enabled={adminModeEnabled} state={adminMode} /> : null}
           <Button className="identity-signout" appearance="subtle" icon={<SignOut20Regular />} onClick={() => close(onLogout)}>Выйти</Button>
         </div>
         </> : null}

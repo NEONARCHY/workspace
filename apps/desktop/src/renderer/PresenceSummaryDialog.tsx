@@ -1,3 +1,4 @@
+import { formatRussianDateTime } from "./date-time-format";
 import { useId, useMemo } from "react";
 import type { AbsenceRequest, PresenceSummaryItem, WorkspacePerson } from "@yuksalish/contracts";
 import { Avatar, Button, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle } from "@fluentui/react-components";
@@ -23,7 +24,7 @@ export function findPresenceRequest(item: PresenceSummaryItem, requests: readonl
 
 function dateLabel(value: string | null | undefined) {
   if (!value || !Number.isFinite(Date.parse(value))) return "Не указано";
-  return new Date(value).toLocaleString("ru-RU", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  return formatRussianDateTime(new Date(value), { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
 interface Props {

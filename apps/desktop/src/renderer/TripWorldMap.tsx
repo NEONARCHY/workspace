@@ -1,3 +1,4 @@
+import { formatRussianDate } from "./date-time-format";
 import { LoadingSkeleton } from "./LoadingSkeleton";
 import { useCallback, useEffect, useMemo, useRef, useState,
   type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent } from "react";
@@ -28,7 +29,7 @@ const coordinate = (place: TripPlace) => ({
   x: (place.longitude + 180) * 1000 / 360,
   y: (90 - place.latitude) * 500 / 180,
 });
-const period = (request: TripRequest) => `${new Date(`${request.startDate}T00:00:00`).toLocaleDateString("ru-RU")} — ${new Date(`${request.endDate}T00:00:00`).toLocaleDateString("ru-RU")}`;
+const period = (request: TripRequest) => `${formatRussianDate(new Date(`${request.startDate}T00:00:00`))} — ${formatRussianDate(new Date(`${request.endDate}T00:00:00`))}`;
 const plural = (count: number, one: string, few: string, many: string) => {
   const rest = count % 100;
   if (rest >= 11 && rest <= 14) return many;

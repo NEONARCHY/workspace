@@ -16,7 +16,7 @@ export function surveyNumber(value: string): number | undefined {
   const number = Number(text.replace(",", "."));
   return Number.isFinite(number) ? number : undefined;
 }
-export function surveyMissing(value: string, configuration: SurveyConfiguration): boolean {
+export function surveyMissing(value: string, configuration: Pick<SurveyConfiguration, "missingValues">): boolean {
   const normalized = normalizeSurveyValue(value);
   return !normalized || configuration.missingValues.some((marker) => normalizeSurveyValue(marker) === normalized);
 }
@@ -30,7 +30,7 @@ function detect(values: readonly string[], label: string): { type: SurveyQuestio
     ? { type: "text", reason: "Много уникальных ответов. Предложен текстовый тип." }
     : { type: "categorical", reason: "Предложен один вариант ответа. Множественный выбор включается вручную." };
 }
-export function buildSurveyDataset(workbook: SurveyWorkbook, configuration: SurveyConfiguration): SurveyDataset {
+export function buildSurveyDataset(workbook: SurveyWorkbook, configuration: Pick<SurveyConfiguration, "sheet" | "headerRow" | "types" | "missingValues">): SurveyDataset {
   const sheet = workbook.sheets[configuration.sheet];
   if (!sheet) return { questions: [], rows: [], blankRows: 0, sheetName: "" };
   const header = sheet.rows[configuration.headerRow] ?? [];

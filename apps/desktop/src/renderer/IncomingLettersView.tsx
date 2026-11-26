@@ -14,6 +14,7 @@ import { Tab, TabList } from "@fluentui/react-components";
 import { IncomingDocumentsView } from "./IncomingDocumentsView";
 import { EdoIncomingAccess, edoVisibilityLabels } from "./EdoIncomingAccess";
 import { WorkspaceSelect } from "./WorkspaceSelect";
+import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
 import type { FileViewerSource } from "./FileViewer";
 import { fileViewerKind } from "./file-viewer-kind";
 
@@ -234,9 +235,9 @@ export function LegacyIncomingLettersView({ token, people, currentUserId, canEdi
     <EdoIncomingAccess token={token} people={people} />
   </section>;
 
-  return <section className="workspace-view edo-incoming" aria-label="Входящие письма">
-    <header className="edo-incoming-header">
-      <div><p className="edo-incoming-eyebrow">Документооборот · поручения</p><h1>Входящие письма</h1>
+  return <section className="workspace-view workspace-queue edo-incoming" aria-label="Входящие письма">
+    <WorkspaceSectionHeader motif="messages" className="edo-incoming-header">
+      <div><h1>Входящие письма</h1>
         <p>{edoVisibilityLabels[registry?.visibility ?? "assigned"]}. Выполнение передаётся обратно в ЭДО.</p></div>
       <div className="edo-access-actions">
       {canManageAccess ? <button type="button" className="edo-incoming-secondary" onClick={() => setManagingAccess(true)}>Доступ к письмам</button> : null}
@@ -244,7 +245,7 @@ export function LegacyIncomingLettersView({ token, people, currentUserId, canEdi
         void refreshList(); if (selectedId !== undefined) void refreshDetail(selectedId);
       }} disabled={loading || detailLoading}>Обновить</button>
       </div>
-    </header>
+    </WorkspaceSectionHeader>
     <div className="edo-incoming-summary" aria-live="polite">
       <span><strong>{registry?.meta.total ?? "—"}</strong> найдено писем</span>
       <span><strong>{registry?.deadline_timezone_verified ? overdueOnPage : "—"}</strong> просрочено на этой странице</span>

@@ -1,4 +1,31 @@
 import { describe, expect, it, vi } from "vitest";
+import { formatRussianDate, formatRussianDateTime, formatRussianTime } from "./date-time-format";
+
+const displays = [
+  { format: formatRussianDate, native: "toLocaleDateString" },
+  { format: formatRussianTime, native: "toLocaleTimeString" },
+  { format: formatRussianDateTime, native: "toLocaleString" },
+] as const;
+const options: readonly Intl.DateTimeFormatOptions[] = [
+  {}, { timeZone: "Asia/Tashkent" }, { timeZone: "UTC", hour: "2-digit", minute: "2-digit" },
+  { weekday: "long" }, { year: "numeric", month: "short", day: "2-digit" },
+  { dayPeriod: "short" }, { fractionalSecondDigits: 3 }, { dateStyle: "short" },
+  { timeStyle: "short" }, { dateStyle: "medium", timeStyle: "short" },
+];
+
+describe.each(displays)("native-compatible cached $native", ({ format, native }) => {
+  it.each(options)("keeps requested fields, defaults and style errors for %j", settings => {
+    const date = new Date("2026-11-26T07:30:45.123Z");
+    let expected: string;
+    try { expected = date[native]("ru-RU", settings); }
+    catch (error) { expect(() => format(date, settings)).toThrow(error!.constructor); return; }
+    expect(format(date, settings)).toBe(expected);
+  });
+  it("keeps the invalid-date label before validating options", () => {
+    const date = new Date("invalid");
+    expect(format(date, { timeZone: "invalid" })).toBe(date[native]("ru-RU", { timeZone: "invalid" }));
+  });
+});
 
 describe("shared row date formatters", () => {
   it("reuses equivalent options without changing locale or timezone output", async () => {

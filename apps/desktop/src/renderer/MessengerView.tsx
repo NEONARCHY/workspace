@@ -1,3 +1,4 @@
+import { formatRussianDate, formatRussianDateTime } from "./date-time-format";
 import { EmployeeAvatar as Avatar } from "./EmployeeAvatar";
 import { RichMessageEditor } from "./RichMessageEditor";
 import { RichMessageText, EMPTY_ENTITIES, editorSelection, setEditorSelection, trimRichDocument } from "./message-rich-text";
@@ -714,11 +715,11 @@ function Conversation({
             (item) => item.id === message.replyToMessageId,
           );
           const date = message.createdAt
-            ? new Date(message.createdAt).toLocaleDateString("ru-RU")
+            ? formatRussianDate(new Date(message.createdAt))
             : "История переписки";
           const previous = renderedMessages[index - 1]?.createdAt;
           const previousDate = previous
-            ? new Date(previous).toLocaleDateString("ru-RU")
+            ? formatRussianDate(new Date(previous))
             : "История переписки";
           const deadlineRequest = message.systemKind === "task_deadline_request"
             ? taskForChat?.deadlineRequests?.find((item) => item.messageId === message.id) : undefined;
@@ -731,7 +732,7 @@ function Conversation({
               <strong>Перенос срока · {deadlineRequest.status === "pending" ? "ожидает решения" : deadlineRequest.status === "approved" ? "подтверждён" : deadlineRequest.status === "rejected" ? "отклонён" : "неактуален"}</strong>
               <small>Запросил: {people.find((person) => person.id === deadlineRequest.requesterUserId)?.name ?? "Исполнитель"}</small>
               <p><MessageTextAnimate key={`${message.id}:${arrivingIds.has(message.id)}`} enabled={arrivingIds.has(message.id)} disabled={motionDisabled}>{message.body}</MessageTextAnimate></p>
-              <div><span>Было: {new Date(deadlineRequest.oldDueAt).toLocaleString("ru-RU")}</span><span>Предложено: {new Date(deadlineRequest.proposedDueAt).toLocaleString("ru-RU")}</span></div>
+              <div><span>Было: {formatRussianDateTime(new Date(deadlineRequest.oldDueAt))}</span><span>Предложено: {formatRussianDateTime(new Date(deadlineRequest.proposedDueAt))}</span></div>
               {deadlineRequest.status === "pending" && canDecideDeadline && onDecideTaskDeadline ? <div className="task-deadline-message-actions">
                 <Button appearance="primary" disabled={!!deadlineDecisionId} onClick={() => void decideDeadline(deadlineRequest.id, true)}>Подтвердить перенос</Button>
                 <Button appearance="secondary" disabled={!!deadlineDecisionId} onClick={() => void decideDeadline(deadlineRequest.id, false)}>Отклонить</Button>

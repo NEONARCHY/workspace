@@ -1,3 +1,4 @@
+import { formatRussianDateTime } from "./date-time-format";
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import type { AIReferentPacketFile, AIReferentPacketKind } from "@yuksalish/contracts";
 import { Button, DialogBody, DialogContent, DialogSurface, DialogTitle, DialogTrigger, useRestoreFocusTarget } from "@fluentui/react-components";
@@ -92,7 +93,7 @@ export const AIReferentFiles = memo(function AIReferentFiles({ token, kind, owne
             {!loading && !error && files.length === 0 ? <p>Робот ещё не передал файлы этого письма.</p> : null}
             {files.map((file) => <div className="ai-referent-file ai-referent-packet-file" key={`${file.source}:${file.id}`}>
               <Document20Regular aria-hidden="true" />
-              <span className="ai-referent-file-info"><strong>{file.name.split("/").at(-1)}</strong><small>{Math.max(1, Math.round(file.byteSize / 1024))} КБ · {new Date(file.createdAt).toLocaleString("ru-RU")}</small></span>
+              <span className="ai-referent-file-info"><strong>{file.name.split("/").at(-1)}</strong><small>{Math.max(1, Math.round(file.byteSize / 1024))} КБ · {formatRussianDateTime(new Date(file.createdAt))}</small></span>
               <div className="ai-referent-packet-file-actions">
                 {fileViewerKind({ fileName: file.name, contentType: "" }) !== "unsupported" && <Button {...previewFocusTarget} disabled={busy} onClick={() => setPreview(file)} aria-label={`Открыть в Workspace: ${file.name.split("/").at(-1)}`}>Открыть в Workspace</Button>}
                 <Button disabled={busy} icon={<ArrowDownload20Regular />} aria-label={`Скачать ${file.name.split("/").at(-1)}`} onClick={() => void download(file)} />

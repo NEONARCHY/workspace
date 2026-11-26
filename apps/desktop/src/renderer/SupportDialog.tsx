@@ -1,3 +1,4 @@
+import { formatRussianDateTime } from "./date-time-format";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { employeeDisplayName } from "./employee-display-name";
 import { LoadingSkeleton } from "./LoadingSkeleton";
@@ -66,7 +67,7 @@ const rejectionReasons: readonly { key: SupportRejectionReason; label: string }[
 ];
 
 function timeLabel(value: string) {
-  return new Date(value).toLocaleString("ru-RU", {
+  return formatRussianDateTime(new Date(value), {
     day: "2-digit",
     month: "short",
     hour: "2-digit",

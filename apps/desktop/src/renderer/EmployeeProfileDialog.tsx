@@ -1,3 +1,4 @@
+import { formatRussianDate } from "./date-time-format";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { DossierProfileEntry } from "./DossierProfileEntry";
 import { LoadingSkeleton } from "./LoadingSkeleton";
@@ -93,7 +94,7 @@ function groupRewards(rewards: readonly EmployeeReward[], catalog: readonly Empl
 }
 
 function issuedAt(value: string) {
-  return new Date(value).toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" });
+  return formatRussianDate(new Date(value), { day: "numeric", month: "long", year: "numeric" });
 }
 
 function countLabel(value: number, forms: readonly [string, string, string]): string {
@@ -706,7 +707,7 @@ export function EmployeeProfileDialog({
               </div>
 
               <section ref={overviewRef} id="employee-profile-overview" className="employee-profile-overview" aria-label="Обзор">
-                <article><span>Стаж работы</span><strong>{serviceLabel(profile)}</strong>{profile.employmentDate ? <small>с {new Date(`${profile.employmentDate}T00:00:00`).toLocaleDateString("ru-RU")}</small> : null}</article>
+                <article><span>Стаж работы</span><strong>{serviceLabel(profile)}</strong>{profile.employmentDate ? <small>с {formatRussianDate(new Date(`${profile.employmentDate}T00:00:00`))}</small> : null}</article>
                 <article><span>Активные задачи</span><strong>{profile.activeTaskCount == null ? "Скрыто" : profile.activeTaskCount}</strong><small>{profile.activeTaskCountVisible ? "Видно всем сотрудникам" : "Видимость отключена администратором"}</small></article>
                 <article><span>Награды коллег</span><strong>{profile.rewards.length}</strong><small>{rewardGroups.length} видов · выдаются сотрудниками</small></article>
                 <article className="employee-profile-efficiency" aria-busy={efficiencyLoading}>

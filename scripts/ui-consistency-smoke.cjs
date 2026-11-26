@@ -8,11 +8,14 @@ const galleryOnly = process.argv.includes("--gallery-only");
 const attentionSuite = process.argv.includes("--attention");
 const peopleSuite = process.argv.includes("--people");
 const operationsSuite = process.argv.includes("--operations");
+const documentsSuite = process.argv.includes("--documents");
 const origin = process.env.UI_QA_ORIGIN || "http://127.0.0.1:5186";
 assert(["127.0.0.1", "localhost"].includes(new URL(origin).hostname));
-const iteration = operationsSuite ? "4" : peopleSuite ? "3" : attentionSuite ? "2" : "1";
+const iteration = documentsSuite ? "5" : operationsSuite ? "4" : peopleSuite ? "3" : attentionSuite ? "2" : "1";
 const output = path.resolve(process.env.UI_QA_OUTPUT || `tmp/ui-consistency-iteration-${iteration}`);
-const sections = operationsSuite
+const sections = documentsSuite
+  ? [{ id: "letters", label: "Входящие письма", root: ".incoming-documents" }, { id: "telegram", label: "Доступ к ботам", root: ".telegram-access-view" }, { id: "survey", label: "Аналитика опросов", root: ".survey-analytics" }]
+  : operationsSuite
   ? [{ id: "hr", label: "HR", root: ".hr-view" }, { id: "members", label: "Работа с членами", root: ".members-view" }, { id: "zoom", label: "Zoom-конференции", root: ".zoom-view" }]
   : peopleSuite
   ? [{ id: "employees", label: "Сотрудники", root: ".employees-view" }, { id: "leaves", label: "Отпуска", root: ".leave-view" }, { id: "absences", label: "Отсутствия", root: ".absences-view" }]
@@ -68,12 +71,16 @@ function fixtures(demo) {
     members: Array.from({ length: 64 }, (_, i) => ({ id: i + 1, username: `member.${i + 1}`, firstName: people[i % people.length].name, lastName: String(i + 1), status: "active", createdAt: "2026-11-20T09:00:00Z", regionId: i % 4 + 1, regionNameRu: regions[i % 4].nameRu, sphereId: i % 2 + 1, sphereNameRu: i % 2 ? "Предпринимательство" : "Образование", gender: i % 2 ? "male" : "female" })) };
   const zoom = { configured: true, timezone: "Asia/Tashkent", reminderMinutes: 30, bookingHorizonDays: 90, slotMinutes: 15,
     meetings: Array.from({ length: 10 }, (_, i) => ({ id: `zoom-${i}`, topic: ["Региональное рабочее совещание", "Обсуждение плана совместной программы", "Подведение итогов проекта"][i % 3], description: "Материалы и текущие задачи региональной команды.", startsAt: i < 6 ? `2026-12-0${i + 1}T09:00:00Z` : "2026-11-20T09:00:00Z", endsAt: i < 6 ? `2026-12-0${i + 1}T10:00:00Z` : "2026-11-20T10:00:00Z", durationMinutes: 60, status: "scheduled", source: "workspace", organizerUserId: user.id, organizerName: user.name, participantIds: [user.id], canEdit: true, canCancel: true })) };
-  return { user, people, tasks, requests, tripRequests, workflow, feedPosts, notifications, employees, departments, leaves, absenceRequests, presenceSummary, hr, members, zoom };
+  user.adminModeEnabled = true;
+  const incomingDocuments = Array.from({ length: 36 }, (_, i) => ({ id: `letter-${i}`, revision: 1, number: `26/${151 + i}`, subject: ["Подготовка регионального рабочего совещания", "Материалы совместной программы", "Ответ на обращение подразделения"][i % 3], sender: "Управление региональных программ", receivedAt: "2026-11-25T05:00:00Z", addedAt: "2026-11-26T05:00:00Z", source: "exat", filesExpected: false, execution: null, canAssign: true, canOpenTask: false }));
+  const telegram = { bots: [{ key: "ai_referent", label: "AI Referent", connected: true }, { key: "hisobot", label: "AI Hisobot", connected: true }, { key: "workspace_notifications", label: "Уведомления Workspace", connected: true }], people: people.map((p, i) => ({ userId: p.id, username: p.username, fullName: p.name, jobTitle: "Координатор региональных программ", telegramId: i % 2 ? null : String(120000001 + i), verified: i % 2 === 0, verificationSource: i % 2 ? null : "admin", botKeys: i % 2 ? [] : ["ai_referent", "hisobot"], revision: 1, hisobotScope: "central", hisobotRegion: null, hisobotReportRequired: true, hisobotManager: false })) };
+  const survey = { analysis: { id: "survey-qa", title: "Опрос региональной команды", fileName: "team-answers.csv", revision: 1, archived: false, createdAt: "2026-11-25T07:00:00Z", updatedAt: "2026-11-26T07:00:00Z", configuration: { sheet: 0, headerRow: 0, types: {}, separator: ";", missingValues: [], query: "", filters: [], savedViews: [] } }, workbook: { warnings: [], sheets: [{ name: "Ответы", rows: [["Подразделение", "Оценка"], ...Array.from({ length: 64 }, (_, i) => [i % 2 ? "Региональная команда" : "Центральный аппарат", String(i % 5 + 1)])] }] } };
+  return { user, people, tasks, requests, tripRequests, workflow, feedPosts, notifications, employees, departments, leaves, absenceRequests, presenceSummary, hr, members, zoom, incomingDocuments, telegram, survey };
 }
 async function measure(page, selector) {
   return page.locator(selector).evaluate(root => {
     const rect = node => { const r = node?.getBoundingClientRect(); return r ? { x: r.x, y: r.y, width: r.width, height: r.height, bottom: r.bottom, right: r.right } : null; };
-    const hero = root.querySelector(".ws-section-header"), toolbar = root.querySelector(".ws2-process-toolbar, .task-filters, .notification-head-actions, .record-list-controls, .leave-filters, .absence-summary, .hr-tabs, .zoom-buckets, .members-search-row"), search = root.querySelector(".workspace-search, .employee-search");
+    const hero = root.querySelector(".ws-section-header"), toolbar = root.querySelector(".ws2-process-toolbar, .task-filters, .notification-head-actions, .record-list-controls, .leave-filters, .absence-summary, .hr-tabs, .zoom-buckets, .members-search-row, .incoming-documents-controls, .telegram-access-controls, .survey-layout"), search = root.querySelector(".workspace-search, .employee-search");
     return { hero: rect(hero), toolbar: rect(toolbar), search: rect(search), root: rect(root),
       pageOverflow: document.documentElement.scrollWidth - innerWidth,
       filters: rect(root.querySelector(".workspace-queue-filters")),
@@ -88,7 +95,7 @@ async function measure(page, selector) {
   const browser = await chromium.launch({ channel: "msedge", headless: true });
   const results = [], errors = [];
   try {
-    for (const [width, height, theme] of galleryOnly ? [] : [[1440, 960, "dark"], [1440, 960, "light"], [1024, 768, "dark"], [390, 844, "dark"], ...(phase === "after" && (peopleSuite || operationsSuite) ? [[320, 800, "dark"]] : [])]) {
+    for (const [width, height, theme] of galleryOnly ? [] : [[1440, 960, "dark"], [1440, 960, "light"], [1024, 768, "dark"], [390, 844, "dark"], ...(phase === "after" && (peopleSuite || operationsSuite || documentsSuite) ? [[320, 800, "dark"]] : []), ...(phase === "after" && documentsSuite ? [[720, 480, "dark"]] : [])]) {
       const context = await browser.newContext({ viewport: { width, height }, reducedMotion: "reduce" });
       const page = await context.newPage(); page.setDefaultTimeout(15000);
       page.on("pageerror", error => errors.push(error.message));
@@ -106,6 +113,15 @@ async function measure(page, selector) {
         if (endpoint === "/workspace/bootstrap") return send({ currentUser: data.user, people: data.people, tasks: data.tasks, requests: data.requests, tripRequests: data.tripRequests, workflow: data.workflow, projectWorkflow: null, tripWorkflow: null, requestWorkflows: {}, projects: [], chats: [], messages: [], departments: [], positions: [], attachments: [], feedPosts: attentionSuite ? data.feedPosts : [], calendarEvents: [], notifications: attentionSuite ? data.notifications : [], absenceRequests: peopleSuite ? data.absenceRequests : [], presenceSummary: peopleSuite ? data.presenceSummary : [], canCreatePaymentRequests: true, notificationPreferences: { desktopEnabled: false, soundEnabled: false, messagesEnabled: true, tasksEnabled: true, approvalsEnabled: true, calendarEnabled: true, tripsEnabled: true, remindersEnabled: true } });
         if (endpoint === "/efficiency") return send({ period: "2026-11", timezone: "Asia/Tashkent", methodologyVersion: "EFF-1", trackingStartedAt: "2026-09-01T00:00:00Z", currentUserId: data.user.id, employees: [] });
         if (endpoint === "/hr") return send(data.hr);
+        if (endpoint === "/telegram-access") return send(data.telegram);
+        if (endpoint === "/survey-analyses") return send([data.survey.analysis]);
+        if (endpoint === "/survey-analyses/survey-qa") return send(data.survey);
+        if (endpoint === "/incoming-documents") {
+          const params = new URL(request.url()).searchParams, q = (params.get("q") || "").toLocaleLowerCase(), offset = Number(params.get("offset") || 0);
+          const items = data.incomingDocuments.filter(d => `${d.number} ${d.subject} ${d.sender}`.toLocaleLowerCase().includes(q));
+          return send({ documents: items.slice(offset, offset + 30), total: items.length, offset, limit: 30 });
+        }
+        if (endpoint.startsWith("/incoming-documents/")) return send({ document: data.incomingDocuments.find(d => d.id === endpoint.split("/").at(-1)), files: [] });
         if (endpoint === "/members") return send(data.members);
         if (endpoint === "/personnel-dossiers/context") return send({ canManageAccess: false, canViewPhotoRoster: false });
         if (endpoint === "/zoom-meetings") return send(data.zoom);
@@ -162,7 +178,7 @@ async function measure(page, selector) {
         const geometry = await measure(page, section.root);
         results.push({ section: section.id, width, height, theme, ...geometry });
         if (phase === "after") {
-          const framed = await page.locator(section.root).evaluate(root => [...root.querySelectorAll(".ws-section-header, .record-table-frame, .team-dash-metric, .team-dash-panel, .notification-metrics > button, .notification-progress-card, .feed-card, .feed-context-card, .leave-list-area, .leave-detail, .leave-list-item, .absence-summary > button, .absence-column, .absence-card, .hr-summary > div, .members-summary > div, .members-regional-ranking, .zoom-split, .zoom-row, .zoom-side")].filter(node => {
+          const framed = await page.locator(section.root).evaluate(root => [...root.querySelectorAll(".ws-section-header, .record-table-frame, .team-dash-metric, .team-dash-panel, .notification-metrics > button, .notification-progress-card, .feed-card, .feed-context-card, .leave-list-area, .leave-detail, .leave-list-item, .absence-summary > button, .absence-column, .absence-card, .hr-summary > div, .members-summary > div, .members-regional-ranking, .zoom-split, .zoom-row, .zoom-side, .incoming-document-row, .incoming-status, .telegram-access-overview > span, .telegram-access-row, .telegram-access-bot, .survey-panel, .survey-file-drop, .survey-analysis-item")].filter(node => {
             const style = getComputedStyle(node);
             return [style.borderTopWidth, style.borderRightWidth, style.borderBottomWidth, style.borderLeftWidth].some(value => parseFloat(value) > 0)
               || style.boxShadow.includes("inset") || style.backgroundImage.includes("conic-gradient");
@@ -316,7 +332,71 @@ async function measure(page, selector) {
             await page.getByRole("button", { name: "Отмена", exact: true }).click();
           }
         }
-        if (phase === "after" && !attentionSuite && !peopleSuite && !operationsSuite) {
+        if (phase === "after" && documentsSuite) {
+          assert(geometry.pageOverflow <= 1, `${file}: page overflow`);
+          assert(Math.abs(geometry.toolbar.x - geometry.hero.x) <= 1 && Math.abs(geometry.toolbar.right - geometry.hero.right) <= 1, `${file}: shared edges`);
+          const clipped = await page.locator(`${section.root} .ws-section-header`).evaluate(header => {
+            const r = header.getBoundingClientRect();
+            return [...header.children].filter(node => !node.classList.contains("ws-section-header-art")).some(node => {
+              const c = node.getBoundingClientRect(); return c.width && c.height && (c.top < r.top - 1 || c.bottom > r.bottom + 1 || c.left < r.left - 1 || c.right > r.right + 1);
+            });
+          });
+          assert(!clipped, `${file}: clipped header`);
+          if (section.id === "letters") {
+            const rows = page.locator(".incoming-document-row"), search = page.getByPlaceholder("Номер, тема или отправитель");
+            assert.equal(await rows.count(), 30, `${file}: server page`);
+            const pager = page.getByRole("navigation", { name: "Страницы входящих писем" });
+            await pager.getByRole("button", { name: "Далее" }).click(); await page.waitForFunction(() => document.querySelectorAll(".incoming-document-row").length === 6);
+            await pager.getByRole("button", { name: "Назад" }).click(); await page.waitForFunction(() => document.querySelectorAll(".incoming-document-row").length === 30);
+            await search.fill("несуществующий-qa"); await page.waitForFunction(() => !document.querySelector(".incoming-document-row"));
+            await search.fill(""); await page.waitForFunction(() => document.querySelectorAll(".incoming-document-row").length === 30);
+            await rows.first().click(); await page.locator(".incoming-document-card").waitFor();
+            await page.getByRole("button", { name: "Назначить исполнение", exact: true }).click();
+            await page.getByRole("form", { name: "Назначение исполнения" }).waitFor();
+          }
+          if (section.id === "telegram") {
+            const search = page.getByRole("searchbox", { name: "Поиск сотрудников для Telegram" });
+            await search.fill("несуществующий-qa"); assert.equal(await page.locator(".telegram-access-row").count(), 0);
+            await search.fill(""); assert.equal(await page.locator(".telegram-access-row").count(), data.telegram.people.length);
+            await page.locator(".telegram-access-guide summary").click(); assert(await page.locator(".telegram-access-guide p").isVisible());
+            await page.locator(".telegram-access-guide summary").click();
+            const id = page.getByRole("textbox", { name: "Telegram ID", exact: true }).first();
+            await id.fill("000"); await page.locator(".telegram-access-row").first().getByRole("button", { name: "Сохранить", exact: true }).click();
+            assert.match(await page.locator(".telegram-access-row").first().getByRole("alert").innerText(), /не начинаться с нуля/);
+          }
+          if (section.id === "survey") {
+            const search = page.getByRole("textbox", { name: "Поиск анализов", exact: true });
+            await search.fill("несуществующий-qa"); assert.equal(await page.locator(".survey-analysis-item").count(), 0);
+            await search.fill(""); await page.locator(".survey-analysis-item").first().click();
+            const title = page.getByRole("textbox", { name: "Название анализа", exact: true });
+            await title.waitFor(); await title.fill("Черновик анализа команды");
+            assert.equal(await title.inputValue(), "Черновик анализа команды");
+            assert.match(await page.locator(".survey-workbench").innerText(), /64/);
+            await title.fill(data.survey.analysis.title);
+            await page.getByRole("button", { name: "Открыть меню профиля: Малика Нурова" }).click();
+            const toggle = page.getByRole("switch", { name: "Режим администратора" }); await toggle.waitFor();
+            assert.equal(await page.locator(".global-bar .admin-mode-toggle").count(), 0, `${file}: no topbar switch`);
+            assert.equal(await toggle.getAttribute("aria-checked"), "true");
+            await page.screenshot({ path: path.join(output, phase, `admin-menu-${theme}-${width}.png`) });
+            await toggle.click(); await page.locator(".admin-mode-error").waitFor();
+            assert.equal(await toggle.getAttribute("aria-checked"), "true", `${file}: failed change preserves mode`);
+            await page.keyboard.press("Escape");
+            await toggle.waitFor({ state: "hidden" });
+            await page.getByRole("button", { name: "Открыть меню профиля: Малика Нурова" }).click();
+            await page.locator(".admin-mode-error").waitFor();
+            assert.equal(await toggle.getAttribute("aria-checked"), "true", `${file}: state survives menu close`);
+            await page.keyboard.press("Escape");
+          }
+          assert((await measure(page, section.root)).pageOverflow <= 1, `${file}: interaction overflow`);
+          await page.emulateMedia({ forcedColors: "active" });
+          assert((await measure(page, section.root)).pageOverflow <= 1, `${file}: forced-colors overflow`);
+          if (section.id !== "telegram") {
+            const selected = page.locator(section.id === "letters" ? '.incoming-document-row[aria-pressed="true"]' : '.survey-analysis-item[aria-pressed="true"]');
+            assert.equal(await selected.evaluate(node => getComputedStyle(node).outlineStyle), "solid", `${file}: high-contrast selection`);
+          }
+          await page.emulateMedia({ forcedColors: "none" });
+        }
+        if (phase === "after" && !attentionSuite && !peopleSuite && !operationsSuite && !documentsSuite) {
           assert(geometry.pageOverflow <= 1, `${file}: page overflow`);
           assert(Math.abs(geometry.search.height - geometry.filters.height) <= 1, `${file}: search/filter height`);
           for (const [name, rect] of Object.entries({ toolbar: geometry.toolbar, filters: geometry.filters })) {
@@ -387,6 +467,7 @@ async function measure(page, selector) {
       <style>*{box-sizing:border-box}body{margin:0;padding:24px;background:#111318;color:#eceef4;font:15px/1.5 system-ui}main{max-width:1600px;margin:auto}h1{font-size:28px}p,figcaption{color:#bfc6d3}select{margin:0 0 24px;padding:12px;border-radius:8px;background:#252a33;color:inherit}section{margin:0 0 32px}h2{font-size:20px}article{display:grid;grid-template-columns:1fr 1fr;gap:16px}figure{margin:0;min-width:0}img{display:block;width:100%;height:auto;border-radius:12px}figcaption{margin-bottom:8px}@media(max-width:700px){article{grid-template-columns:1fr}body{padding:12px}}</style>
       <main><h1>Итерация ${iteration} · Общая сетка рабочих разделов</h1><p>Реальные компоненты приложения, одинаковые синтетические данные до и после. Нажмите на снимок для исходного размера.</p><select id="size" aria-label="Размер и тема"><option value="dark-1440">1440 × 960 · тёмная</option><option value="light-1440">1440 × 960 · светлая</option><option value="dark-1024">1024 × 768 · тёмная</option><option value="dark-390">390 × 844 · тёмная</option></select>
       ${sections.map(section => `<section data-section="${section.id}"><h2>${section.label}</h2><article>${["before", "after"].map((state, i) => `<figure><figcaption>${i ? "После" : "До"}</figcaption><a data-state="${state}" href="${state}/${section.id}-dark-1440.png"><img loading="lazy" src="${state}/${section.id}-dark-1440.png" alt="${section.label} — ${i ? "после" : "до"}"></a></figure>`).join("")}</article></section>`).join("")}
+      ${documentsSuite ? '<section data-section="admin-menu"><h2>Режим администратора в меню аватара</h2><figure><figcaption>После · переключение прав и возврат к правам своей должности</figcaption><a data-state="after" href="after/admin-menu-dark-1440.png"><img loading="lazy" src="after/admin-menu-dark-1440.png" alt="Переключатель прав в меню профиля"></a></figure></section>' : ''}
       <p>Подход: <a href="https://github.com/heydamir/unslop" style="color:#90d5df">unslop · Damir Sokolovsky · CC BY 4.0</a>. Цвета статусов, права и рабочие процессы сохранены.</p></main><script>document.querySelector('#size').addEventListener('change',event=>{document.querySelectorAll('section').forEach(section=>section.querySelectorAll('[data-state]').forEach(link=>{const src=link.dataset.state+'/'+section.dataset.section+'-'+event.target.value+'.png';link.href=src;link.querySelector('img').src=src}))})</script></html>`);
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

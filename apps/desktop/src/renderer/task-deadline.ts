@@ -1,10 +1,11 @@
+import { formatRussianDateTime } from "./date-time-format";
 import type { WorkspaceTask } from "@yuksalish/contracts";
 
 type DeadlineTask = Pick<WorkspaceTask, "status" | "dueAt">;
 
 export function taskDeadlineLabel(task: Pick<WorkspaceTask, "dueAt" | "dueLabel">): string {
   const due = task.dueAt ? new Date(task.dueAt) : undefined;
-  return due && Number.isFinite(due.getTime()) ? due.toLocaleString("ru-RU", {
+  return due && Number.isFinite(due.getTime()) ? formatRussianDateTime(due, {
     day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit",
   }) : task.dueLabel;
 }

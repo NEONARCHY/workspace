@@ -1,3 +1,4 @@
+import { formatRussianDateTime } from "./date-time-format";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { LoadingSkeleton, SkeletonBlock } from "./LoadingSkeleton";
 import { useCallback, useEffect, useState } from "react";
@@ -65,7 +66,7 @@ function formatMoney(value: number | bigint, currency: string): string {
 
 function formatDate(value?: string | null): string {
   if (!value) return "Срок не указан";
-  return new Date(value).toLocaleString("ru-RU", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  return formatRussianDateTime(new Date(value), { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
 function localDateTime(value?: string | null): string {

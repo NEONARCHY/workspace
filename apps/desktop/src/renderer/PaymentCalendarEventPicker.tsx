@@ -1,3 +1,4 @@
+import { formatRussianDate } from "./date-time-format";
 import { useState } from "react";
 import { Input } from "./WorkspaceInput";
 
@@ -28,7 +29,7 @@ function eventLabel(event: CalendarEvent, projects: PaymentProjectTargets["proje
   return [
     event.eventType === "meeting" ? "Встреча" : "Мероприятие",
     event.title,
-    new Date(event.startsAt).toLocaleDateString("ru-RU"),
+    formatRussianDate(new Date(event.startsAt)),
     project?.title,
   ].filter(Boolean).join(" · ");
 }

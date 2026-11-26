@@ -1,3 +1,4 @@
+import { formatRussianDateTime } from "./date-time-format";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { LoadingSkeleton } from "./LoadingSkeleton";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
@@ -530,7 +531,7 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
               <div key={session.id}>
                 <span>
                   <strong>{session.deviceLabel}</strong>
-                  <small>{session.current ? "Текущее устройство" : new Date(session.lastSeenAt).toLocaleString("ru-RU")}</small>
+                  <small>{session.current ? "Текущее устройство" : formatRussianDateTime(new Date(session.lastSeenAt))}</small>
                 </span>
                 <Button size="small" disabled={operationBusy || securityLoading || !!securityError} onClick={() => setSessionToRevoke(session)}>
                   {session.current ? "Выйти" : "Завершить"}

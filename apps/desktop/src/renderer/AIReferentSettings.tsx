@@ -1,3 +1,4 @@
+import { formatRussianDateTime } from "./date-time-format";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { LoadingSkeleton } from "./LoadingSkeleton";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -134,7 +135,7 @@ export function AIReferentSettings({ token, people, readOnly = false }: Props) {
           <p key={runtime.agentId}>{runtime.agentName}: {runtime.error || (runtime.appliedRevision === config.revision
             ? `применена версия ${runtime.appliedRevision}` : `ожидает обновления до версии ${config.revision}`)}
             {checkedAt - new Date(runtime.lastSeenAt).getTime() > 90_000 ? " · давно не выходил на связь" : ""}
-            {runtime.appliedAt ? ` · ${new Date(runtime.appliedAt).toLocaleString("ru-RU")}` : ""}</p>)}
+            {runtime.appliedAt ? ` · ${formatRussianDateTime(new Date(runtime.appliedAt))}` : ""}</p>)}
       </div>
     </> : null}
   </section>;

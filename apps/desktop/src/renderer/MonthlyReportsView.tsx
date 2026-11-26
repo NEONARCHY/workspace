@@ -1,3 +1,4 @@
+import { formatRussianDate, formatRussianDateTime } from "./date-time-format";
 import { useEffect, useId, useRef, useState } from "react";
 import type { MonthlyCalendarDay, MonthlyReport, MonthlyReportFile } from "@yuksalish/contracts";
 import { Button, Checkbox, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input, Spinner, Textarea } from "@fluentui/react-components";
@@ -23,7 +24,7 @@ import { EmployeeAvatar } from "./EmployeeAvatar";
 import "./monthly-reports.css";
 
 export function monthlyLabel(month: string) {
-  return new Date(`${month}T12:00:00Z`).toLocaleDateString("ru-RU", { month: "long", year: "numeric", timeZone: "Asia/Tashkent" });
+  return formatRussianDate(new Date(`${month}T12:00:00Z`), { month: "long", year: "numeric", timeZone: "Asia/Tashkent" });
 }
 function saveBlob(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob);
@@ -99,7 +100,7 @@ export function MonthlyReportsView({ token, resource, open, onClose, onAfterClos
     {payrollNotice && <section className="monthly-reports-panel monthly-reports-payroll" aria-label="Разрешение на начисление зарплаты">
       <div>
         <h2>Разрешено начисление ЗП · {monthlyLabel(payrollNotice.month)}</h2>
-        <p>{payrollNotice.authorizedByName}{payrollNotice.authorizedAt ? " · " + new Date(payrollNotice.authorizedAt).toLocaleString("ru-RU") : ""}</p>
+        <p>{payrollNotice.authorizedByName}{payrollNotice.authorizedAt ? " · " + formatRussianDateTime(new Date(payrollNotice.authorizedAt)) : ""}</p>
         {payrollNotice.comment && <p>{payrollNotice.comment}</p>}
       </div>
       <Button disabled={busy} onClick={() => void run(async () => {
@@ -124,7 +125,7 @@ export function MonthlyReportsView({ token, resource, open, onClose, onAfterClos
           </Field>
           <div className="monthly-reports-deadline">
             <span className="monthly-reports-icon" aria-hidden="true"><CalendarLtr20Regular /></span>
-            <div><strong>Напоминание · {new Date(cycle.reminderOn + "T12:00:00Z").toLocaleDateString("ru-RU", { day: "numeric", month: "long", timeZone: "Asia/Tashkent" })}</strong>
+            <div><strong>Напоминание · {formatRussianDate(new Date(cycle.reminderOn + "T12:00:00Z"), { day: "numeric", month: "long", timeZone: "Asia/Tashkent" })}</strong>
               <p>За три рабочих дня до конца месяца</p></div>
           </div>
         </section>
@@ -152,7 +153,7 @@ export function MonthlyReportsView({ token, resource, open, onClose, onAfterClos
             {!history.length && <p>Вы ещё не отправили отчёт за этот месяц.</p>}
             {!cycle.authorizedAt && !cycle.canSubmit && <p>Отправка отчёта за этот месяц недоступна для вашей учётной записи.</p>}
             {history.map(report => <article className="monthly-reports-history" key={report.id}>
-              <strong>Версия {report.revision}</strong><time dateTime={report.submittedAt}>{new Date(report.submittedAt).toLocaleString("ru-RU")}</time>
+              <strong>Версия {report.revision}</strong><time dateTime={report.submittedAt}>{formatRussianDateTime(new Date(report.submittedAt))}</time>
               {report.comment && <p>{report.comment}</p>}
               <div className="monthly-reports-files">{report.files.map(file => <Button size="small" icon={<ArrowDownload20Regular />} disabled={busy} key={file.id} onClick={() => void download(report, file)}>{file.name}</Button>)}</div>
             </article>)}
@@ -171,7 +172,7 @@ export function MonthlyReportsView({ token, resource, open, onClose, onAfterClos
               <div className="monthly-reports-person-identity"><EmployeeAvatar name={member.name} size={32} aria-hidden /><div><strong>{member.name}</strong><small>{member.department}</small></div></div>
               <div className="monthly-reports-person-report">
                 <div><span className="monthly-reports-person-status" data-submitted={Boolean(member.report)}>{member.report ? "Сдан" : "Не сдан"}</span>
-                  {member.report && <small>{new Date(member.report.submittedAt).toLocaleString("ru-RU")} · версия {member.report.revision}</small>}</div>
+                  {member.report && <small>{formatRussianDateTime(new Date(member.report.submittedAt))} · версия {member.report.revision}</small>}</div>
                 {member.report?.files.length ? <div className="monthly-reports-files">{member.report.files.map(file => <Button key={file.id} size="small" icon={<ArrowDownload20Regular />} disabled={busy} onClick={() => member.report && void download(member.report, file)}>{file.name}</Button>)}</div> : null}
                 {member.report?.comment && <p>{member.report.comment}</p>}
               </div>
@@ -232,7 +233,7 @@ function MonthlyCalendar({ token, onSaved }: { readonly token: string; readonly 
       </div>
       <Checkbox label="Рабочий день" checked={working} disabled={busy} onChange={(_, v) => setWorking(v.checked === true)} />
       <Button disabled={busy || !day || !note.trim()} onClick={() => { setBusy(true); setError(""); void saveMonthlyCalendar(token, { day, note, working }).then(async () => { setDays(await loadMonthlyCalendar(token)); await onSaved(); setNote(""); }).catch(cause => setError(cause instanceof Error ? cause.message : "Не удалось сохранить дату")).finally(() => setBusy(false)); }}>Сохранить дату</Button>
-      {days?.length ? <ul className="monthly-reports-calendar-days">{days.map(item => <li key={item.day}><time dateTime={item.day}>{new Date(item.day + "T12:00:00Z").toLocaleDateString("ru-RU", { timeZone: "Asia/Tashkent" })}</time><strong>{item.working ? "Рабочий" : "Выходной"}</strong><span>{item.note}</span></li>)}</ul>
+      {days?.length ? <ul className="monthly-reports-calendar-days">{days.map(item => <li key={item.day}><time dateTime={item.day}>{formatRussianDate(new Date(item.day + "T12:00:00Z"), { timeZone: "Asia/Tashkent" })}</time><strong>{item.working ? "Рабочий" : "Выходной"}</strong><span>{item.note}</span></li>)}</ul>
         : days && <p>Исключений пока нет.</p>}
       {!days && !error && <Spinner size="tiny" label="Загрузка календаря" />}
     </div>

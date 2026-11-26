@@ -1,5 +1,4 @@
 import { TeamDecisionFrame } from "./TeamDecisionFrame";
-import { AdminModeToggle } from "./AdminModeToggle";
 import { approvalRequestNeedsAction } from "./approval-board";
 import { MonthlyReportDashboard, MonthlyReportPrompts, MonthlyReportsView } from "./MonthlyReportsView";
 import { useMonthlyReports, useMonthlyReportWindow } from "./useMonthlyReports";
@@ -2332,13 +2331,11 @@ export function App() {
               <NotificationBell unreadCount={badgeBySection.notifications ?? 0} active={activeSection === "notifications"}
                 onOpen={() => { setPreparedAction(undefined); setFocusNotification(undefined); setFocusTarget(undefined); setActiveSection("notifications"); }} />
               <ColorThemeToggle userId={session.user.id} />
-              {workspace.currentUser.adminModeEnabled != null && <AdminModeToggle
-                token={session.accessToken} enabled={workspace.currentUser.adminModeEnabled} />}
               {canUseAssistant && <YuksalishAssistant key={session.user.id} token={session.accessToken}
                 onOpenReference={openAssistantReference} onPrepareAction={prepareAssistantAction} />}
               <div className="workspace-workday-person">
                 <WorkdayControl token={session.accessToken} />
-                <WorkspaceIdentity person={displayCurrentUser} token={session.accessToken} onProfile={() => setProfileUserId(workspace.currentUser.id)} onSupport={() => { setSupportFocusRequestId(undefined); setSupportOpen(true); }} supportMode={supportRegistry?.mode ?? (isAdmin ? "inbox" : "support")} supportIndicator={supportRegistry?.indicator} supportUnreadCount={supportRegistry?.unreadResponseCount} onSettings={() => setAccountOpen(true)} onLogout={() => void handleLogout()} />
+                <WorkspaceIdentity person={displayCurrentUser} token={session.accessToken} adminModeEnabled={workspace.currentUser.adminModeEnabled} onProfile={() => setProfileUserId(workspace.currentUser.id)} onSupport={() => { setSupportFocusRequestId(undefined); setSupportOpen(true); }} supportMode={supportRegistry?.mode ?? (isAdmin ? "inbox" : "support")} supportIndicator={supportRegistry?.indicator} supportUnreadCount={supportRegistry?.unreadResponseCount} onSettings={() => setAccountOpen(true)} onLogout={() => void handleLogout()} />
               </div></div>
           </header>
 

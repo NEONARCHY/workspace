@@ -1,3 +1,4 @@
+import { formatRussianDateTime } from "./date-time-format";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { Button, DialogSurface } from "@fluentui/react-components";
 import { Add20Regular, ArrowClockwise20Regular, Document20Regular, Edit20Regular } from "@fluentui/react-icons";
@@ -239,11 +240,11 @@ export function ReferenceView({ token, canCreate, canEdit, people }: Props) {
           {canEdit ? <Button icon={<Edit20Regular />} onClick={openProfile}>Изменить</Button> : null}</div>
         <dl className="reference-profile-grid">{profileFields.map(({ key, label }) =>
           <div key={key}><dt>{label}</dt><dd>{directory.profile[key] || <span className="reference-muted">Не заполнено</span>}</dd></div>)}</dl>
-        {directory.profile.updatedAt ? <p className="reference-footnote">Обновлено {new Date(directory.profile.updatedAt).toLocaleString("ru-RU")}</p> : null}
+        {directory.profile.updatedAt ? <p className="reference-footnote">Обновлено {formatRussianDateTime(new Date(directory.profile.updatedAt))}</p> : null}
         {directory.changes.length ? <details className="reference-history"><summary>История изменений</summary>
           <ol>{directory.changes.map((change, index) => <li key={`${change.targetId}:${change.createdAt}:${index}`}>
             <span>{changeLabels[change.action] ?? "Изменение справочника"}</span>
-            <small>{people.find((person) => person.id === change.actorUserId)?.name ?? "Сотрудник"} · {new Date(change.createdAt).toLocaleString("ru-RU")}</small>
+            <small>{people.find((person) => person.id === change.actorUserId)?.name ?? "Сотрудник"} · {formatRussianDateTime(new Date(change.createdAt))}</small>
           </li>)}</ol></details> : null}
       </section> : <>
         <div className="reference-toolbar"><div><h2>{tabs.find((item) => item.key === tab)?.label}</h2>

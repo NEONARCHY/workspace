@@ -1,3 +1,4 @@
+import { formatRussianDateTime } from "./date-time-format";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, DialogSurface, DialogTitle, Spinner } from "@fluentui/react-components";
 import { ChevronLeft, ChevronRight, Copy, Download, Grid2X2, Minus, MoreHorizontal, Plus, RotateCw, X, Forward, Eye } from "lucide-react";
@@ -203,7 +204,7 @@ export default function ImageLightbox<T extends ImageSource>({ attachment, image
       </div>
       {!gallery && <><Button className="image-lightbox-prev" appearance="subtle" icon={<ChevronLeft size={32} />} aria-label="Предыдущее фото" disabled={index === 0} onClick={() => move(-1)} /><Button className="image-lightbox-next" appearance="subtle" icon={<ChevronRight size={32} />} aria-label="Следующее фото" disabled={index === items.length - 1} onClick={() => move(1)} /></>}
       <footer className="image-lightbox-footer">
-        <div className="image-lightbox-metadata"><strong>{item.author}</strong>{item.createdAt && <time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleString("ru-RU")}</time>}<small>Ctrl + колесо — масштаб · колесо — листать</small></div>
+        <div className="image-lightbox-metadata"><strong>{item.author}</strong>{item.createdAt && <time dateTime={item.createdAt}>{formatRussianDateTime(new Date(item.createdAt))}</time>}<small>Ctrl + колесо — масштаб · колесо — листать</small></div>
         {item.caption && <p className="image-lightbox-caption">{item.caption}</p>}
         <Button appearance="subtle" icon={<Grid2X2 size={20} />} aria-label={gallery ? "Вернуться к фото" : "Все фотографии"} onClick={() => { setGallery(!gallery); setMenu(undefined); }}>{gallery ? "К фото" : "Все фото"}</Button>
       </footer>

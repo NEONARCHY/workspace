@@ -1,3 +1,4 @@
+import { formatRussianTime } from "./date-time-format";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { LoadingSkeleton, SkeletonBlock } from "./LoadingSkeleton";
 import { Input } from "./WorkspaceInput";
@@ -34,7 +35,7 @@ function ReportCard({ report }: { readonly report: HisobotReport }) {
     <h3>{report.reportScope === "hudud" ? report.regionName ?? employeeDisplayName(report.fullName) : employeeDisplayName(report.fullName)}</h3>
     <p className="hisobot-report-byline">{report.reportScope === "hudud" ? `${employeeDisplayName(report.fullName)} · ` : ""}{report.position}</p>
     <p className="hisobot-report-content">{report.content}</p>
-    <div className="hisobot-report-foot">Отправлено {new Date(report.submittedAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Tashkent" })}{report.isLate ? " · опоздавший (после 18:30)" : ""}</div>
+    <div className="hisobot-report-foot">Отправлено {formatRussianTime(new Date(report.submittedAt), { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Tashkent" })}{report.isLate ? " · опоздавший (после 18:30)" : ""}</div>
   </article>;
 }
 
@@ -44,7 +45,7 @@ function UnitReportCard({ report }: { readonly report: HisobotUnitReport }) {
     <h3>{report.departmentName}</h3>
     <p className="hisobot-report-byline">Отправил: {report.reporterName} · {report.reporterPosition}</p>
     <p className="hisobot-report-content">{report.content}</p>
-    <div className="hisobot-report-foot">Отправлено {new Date(report.submittedAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Tashkent" })}{report.isLate ? " · опоздавший (после 18:30)" : ""}</div>
+    <div className="hisobot-report-foot">Отправлено {formatRussianTime(new Date(report.submittedAt), { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Tashkent" })}{report.isLate ? " · опоздавший (после 18:30)" : ""}</div>
   </article>;
 }
 

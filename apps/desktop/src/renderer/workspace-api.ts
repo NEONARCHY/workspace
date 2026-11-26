@@ -603,8 +603,8 @@ export function loadAIReferentTelegramLink(token: string) {
   return apiRequest<{ readonly telegramId: string | null }>("/ai-referent/telegram-link", {}, token);
 }
 
-export function loadTelegramAccess(token: string): Promise<TelegramAccessRegistry> {
-  return apiRequest<TelegramAccessRegistry>("/telegram-access", {}, token);
+export function loadTelegramAccess(token: string, signal?: AbortSignal): Promise<TelegramAccessRegistry> {
+  return apiRequest<TelegramAccessRegistry>("/telegram-access", { signal }, token);
 }
 
 export function saveTelegramAccess(
@@ -2482,8 +2482,8 @@ export function downloadProjectImportDocument(token: string, id: string, documen
   }, (result) => result.blob(), 120_000);
 }
 
-export function listSurveyAnalyses(token: string): Promise<readonly SurveyAnalysis[]> {
-  return apiRequest("/survey-analyses", {}, token);
+export function listSurveyAnalyses(token: string, signal?: AbortSignal): Promise<readonly SurveyAnalysis[]> {
+  return apiRequest("/survey-analyses", { signal }, token);
 }
 export function loadSurveyAnalysis(token: string, id: string): Promise<SurveyAnalysisDetail> {
   return apiRequest(`/survey-analyses/${encodeURIComponent(id)}`, {}, token, 120_000);

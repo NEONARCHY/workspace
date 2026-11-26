@@ -1,3 +1,4 @@
+import { formatRussianDate } from "./date-time-format";
 import { useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { LoadingSkeleton, SkeletonBlock } from "./LoadingSkeleton";
 import type { PlaceWeather, WeatherConditions } from "@yuksalish/contracts";
@@ -112,7 +113,7 @@ export function TopbarInsights({ token }: { readonly token: string }) {
           </div><div className="context-converter ws-skeleton-copy"><SkeletonBlock width="160px" /><SkeletonBlock height="36px" /><SkeletonBlock width="65%" height="24px" /></div></LoadingSkeleton>}
           {staleRates && rates.value && <p className="context-notice">Показаны последние сохранённые курсы. Источник сейчас недоступен.</p>}
           {rates.value && <>
-            <p className="context-source-note">Действуют с {new Date(`${rates.value.effectiveDate}T12:00:00+05:00`).toLocaleDateString("ru-RU")} · за 1 единицу валюты</p>
+            <p className="context-source-note">Действуют с {formatRussianDate(new Date(`${rates.value.effectiveDate}T12:00:00+05:00`))} · за 1 единицу валюты</p>
             <div className="context-rate-list" role="group" aria-label="Валюта для пересчёта">{rates.value.rates.map(rate => <button key={rate.code} type="button" aria-pressed={currency === rate.code} onClick={() => setCurrency(rate.code)} className="context-rate-row">
               <b>{rate.code}</b><span>{currencyNames[rate.code] ?? rate.code}</span><strong>{number(Number(rate.rateUzs), 2)} <small>UZS</small></strong>
               <small className="context-rate-change" data-positive={rate.changeUzs != null && Number(rate.changeUzs) > 0 || undefined}>{rate.changeUzs == null ? "—" : `${Number(rate.changeUzs) > 0 ? "+" : ""}${number(Number(rate.changeUzs), 2)}`}</small></button>)}</div>

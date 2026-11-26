@@ -1,3 +1,4 @@
+import { formatRussianDate, formatRussianDateTime } from "./date-time-format";
 import { useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useModalFocus } from "./useModalFocus";
 import { DecisionReason } from "./DecisionReason";
@@ -150,7 +151,7 @@ function money(value: number, currency: string): string {
 
 function shortDate(value?: string | null): string {
   if (!value) return "Срок не указан";
-  return new Date(`${value}T00:00:00`).toLocaleDateString("ru-RU", { day: "numeric", month: "short", year: "numeric" });
+  return formatRussianDate(new Date(`${value}T00:00:00`), { day: "numeric", month: "short", year: "numeric" });
 }
 
 function deadlineTone(project: WorkspaceProject): "neutral" | "soon" | "overdue" {
@@ -398,7 +399,7 @@ export function ProjectsView({ projects, people, departments, currentUser, onCre
           <div className="bp7-history">
             <h3>История проекта</h3>
             {[...selected.history].reverse().map((entry) => (
-              <div key={entry.id}><i /><p><strong>{projectStageLabels[entry.toStage]}</strong><span>{personLink(entry.actorUserId, personName(entry.actorUserId))} · {new Date(entry.createdAt).toLocaleString("ru-RU")}</span>{entry.comment ? <small>{entry.comment}</small> : null}</p></div>
+              <div key={entry.id}><i /><p><strong>{projectStageLabels[entry.toStage]}</strong><span>{personLink(entry.actorUserId, personName(entry.actorUserId))} · {formatRussianDateTime(new Date(entry.createdAt))}</span>{entry.comment ? <small>{entry.comment}</small> : null}</p></div>
             ))}
           </div>
           </article>

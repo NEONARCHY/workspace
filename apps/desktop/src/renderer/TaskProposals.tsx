@@ -1,3 +1,4 @@
+import { formatRussianDateTime } from "./date-time-format";
 import { useEffect, useRef, useState } from "react";
 import type { TaskProposal, WorkspacePerson, WorkspaceTask } from "@yuksalish/contracts";
 import { Button, DialogSurface, Textarea, useRestoreFocusTarget } from "@fluentui/react-components";
@@ -13,7 +14,7 @@ const labels: Record<TaskProposal["status"], string> = {
   rejected: "Отклонена", cancelled: "Отозвана",
 };
 const priorityLabels = { low: "Низкий", normal: "Обычный", high: "Высокий", urgent: "Срочный" };
-const dateLabel = (date?: string | null) => date ? new Date(date).toLocaleString("ru-RU") : "Без срока";
+const dateLabel = (date?: string | null) => date ? formatRussianDateTime(new Date(date)) : "Без срока";
 
 export function TaskProposals({ token, currentUserId, people, tasks, revision, focusId, compact = false, onRefresh, onOpenTask, dialogOnly = false, onDialogClose }: {
   readonly dialogOnly?: boolean;

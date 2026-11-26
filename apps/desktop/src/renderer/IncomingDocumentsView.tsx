@@ -1,10 +1,12 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, DialogBody, DialogContent, DialogSurface, DialogTitle, useRestoreFocusTarget } from "@fluentui/react-components";
 import { Document20Regular } from "@fluentui/react-icons";
 import type { IncomingDocument, IncomingDocumentDetail, IncomingDocumentFile, IncomingDocumentFilter, IncomingDocumentPage, WorkspaceDepartment, WorkspacePerson } from "@yuksalish/contracts";
 import { Input } from "./WorkspaceInput";
 import { WorkspaceSelect } from "./WorkspaceSelect";
 import { WorkspaceNotice } from "./WorkspaceNotice";
+import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
+import { russianDateTimeFormatter } from "./date-time-format";
 import { LoadingSkeleton } from "./LoadingSkeleton";
 import { PersonPicker } from "./PersonPicker";
 import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
@@ -36,8 +38,27 @@ function DocumentPerson({ id, name, people, token }: {
 }
 
 function dateLabel(value: string | null | undefined) {
-  return value ? new Date(value).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" }) : "Не указан";
+  if (!value) return "Не указан";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "Invalid Date" : russianDateTimeFormatter({ dateStyle: "short", timeStyle: "short" }).format(date);
 }
+
+const IncomingDocumentRows = memo(function IncomingDocumentRows({ documents, selectedId, people, token, now, onSelect }: {
+  readonly documents: readonly IncomingDocument[]; readonly selectedId?: string;
+  readonly people: readonly WorkspacePerson[]; readonly token: string; readonly now: number;
+  readonly onSelect: (document: IncomingDocument) => void;
+}) {
+  return documents.map(document => <button type="button" className="incoming-document-row"
+    key={document.id} aria-pressed={document.id === selectedId} onClick={() => onSelect(document)}>
+    <span className="incoming-document-row-meta"><strong>№ {document.number}</strong><IncomingDocumentStatus status={document.execution?.status} /></span>
+    <strong>{document.subject}</strong><span>{document.sender || "Отправитель не указан"}</span>
+    <span className="incoming-document-row-date">В Workspace: {document.addedAt ? <time dateTime={document.addedAt}>{dateLabel(document.addedAt)}</time> : "Дата не передана"}</span>
+    {document.execution ? <span className="incoming-document-row-execution">
+      <DocumentPerson id={document.execution.assigneeId} name={document.execution.assigneeName} people={people} token={token} />
+      <small data-overdue={isTaskOverdue(document.execution, now)}>{dateLabel(document.execution.dueAt)}{isTaskOverdue(document.execution, now) ? " · Срок истёк" : ""}</small>
+    </span> : null}
+  </button>);
+});
 
 function errorLabel(error: unknown) {
   return error instanceof Error ? error.message : "Не удалось загрузить данные.";
@@ -173,7 +194,7 @@ function AssignmentForm({ token, detail, people, departments, onSaved, onRefresh
   </form>;
 }
 
-function DocumentCard({ token, detail, people, departments, now, onSaved, onOpenTask }: {
+const DocumentCard = memo(function DocumentCard({ token, detail, people, departments, now, onSaved, onOpenTask }: {
   readonly token: string; readonly detail: IncomingDocumentDetail; readonly people: readonly WorkspacePerson[];
   readonly onSaved: (detail: IncomingDocumentDetail) => void; readonly onOpenTask?: (taskId: string) => Promise<void>;
   readonly now: number;
@@ -224,7 +245,7 @@ function DocumentCard({ token, detail, people, departments, now, onSaved, onOpen
     <IncomingDocumentActivity token={token} detail={detail} />
     {preview ? <DocumentViewer token={token} documentId={document.id} file={preview} onClose={() => setPreview(undefined)} /> : null}
   </article>;
-}
+});
 
 export function IncomingDocumentsView({ token, people, departments, onOpenTask, personal = false, refreshKey }: {
   readonly token: string; readonly people: readonly WorkspacePerson[]; readonly onOpenTask?: (taskId: string) => Promise<void>;
@@ -275,15 +296,16 @@ export function IncomingDocumentsView({ token, people, departments, onOpenTask, 
     setLoading(true); setRevision(current => current + 1);
     if (selectedId) { setDetailLoading(true); setDetailRevision(current => current + 1); }
   }, [selectedId]);
-  const select = (document: IncomingDocument) => {
+  const select = useCallback((document: IncomingDocument) => {
     if (document.id === selectedId) return;
     setDetail(undefined); setDetailError(""); setDetailLoading(true); setSelectedId(document.id);
-  };
-  return <section className="incoming-documents" aria-label="Документооборот Workspace">
-    <header className="incoming-documents-header"><div><span className="incoming-document-eyebrow">Документооборот · поручения</span>
+  }, [selectedId]);
+  const acceptDetail = useCallback((next: IncomingDocumentDetail) => { setDetail(next); setRevision(current => current + 1); }, []);
+  return <section className="workspace-view workspace-queue incoming-documents" aria-label="Документооборот Workspace">
+    <WorkspaceSectionHeader motif="messages" className="incoming-documents-header"><div>
       <h1>{personal ? "Мои письма" : "Входящие письма"}</h1>
       <p>{personal ? "Поручения по письмам с вашим участием — сроки, документы и результаты." : "Письма референта, исполнители и контроль сроков."}</p></div>
-      <Button disabled={loading || detailLoading} onClick={refresh}>Обновить</Button></header>
+      <Button disabled={loading || detailLoading} onClick={refresh}>Обновить</Button></WorkspaceSectionHeader>
     <div className="incoming-documents-controls">
       <label>Поиск по письмам<Input value={search} placeholder="Номер, тема или отправитель" onChange={event => setSearch(event.target.value)} /></label>
       <label>Исполнение<WorkspaceSelect value={filter} onChange={event => { setFilter(event.target.value as IncomingDocumentFilter); setOffset(0); setLoading(true); }}>
@@ -296,16 +318,7 @@ export function IncomingDocumentsView({ token, people, departments, onOpenTask, 
       <div className="incoming-documents-list" aria-busy={loading}>
         {loading ? <LoadingSkeleton layout="rows" rows={5} label="Загружаем письма" />
           : error ? <WorkspaceNotice tone="error" actions={<Button onClick={refresh}>Повторить</Button>}>{error}</WorkspaceNotice>
-            : page?.documents.length ? page.documents.map(document => <button type="button" className="incoming-document-row"
-              key={document.id} aria-pressed={document.id === selectedId} onClick={() => select(document)}>
-              <span className="incoming-document-row-meta"><strong>№ {document.number}</strong><IncomingDocumentStatus status={document.execution?.status} /></span>
-              <strong>{document.subject}</strong><span>{document.sender || "Отправитель не указан"}</span>
-              <span className="incoming-document-row-date">В Workspace: {document.addedAt ? <time dateTime={document.addedAt}>{dateLabel(document.addedAt)}</time> : "Дата не передана"}</span>
-              {document.execution ? <span className="incoming-document-row-execution">
-                <DocumentPerson id={document.execution.assigneeId} name={document.execution.assigneeName} people={people} token={token} />
-                <small data-overdue={isTaskOverdue(document.execution, now)}>{dateLabel(document.execution.dueAt)}{isTaskOverdue(document.execution, now) ? " · Срок истёк" : ""}</small>
-              </span> : null}
-            </button>) : <p className="incoming-document-empty">Писем по выбранным условиям нет.</p>}
+            : page?.documents.length ? <IncomingDocumentRows documents={page.documents} selectedId={selectedId} people={people} token={token} now={now} onSelect={select} /> : <p className="incoming-document-empty">Писем по выбранным условиям нет.</p>}
         {page && page.total > page.limit ? <nav className="incoming-document-actions" aria-label="Страницы входящих писем">
           <Button disabled={loading || offset === 0} onClick={() => { setLoading(true); setOffset(current => Math.max(0, current - page.limit)); }}>Назад</Button>
           <span>{Math.floor(offset / page.limit) + 1} / {Math.max(1, Math.ceil(page.total / page.limit))}</span>
@@ -316,7 +329,7 @@ export function IncomingDocumentsView({ token, people, departments, onOpenTask, 
         {detailError ? <WorkspaceNotice tone="error" actions={<Button onClick={refresh}>Повторить</Button>}>{detailError}</WorkspaceNotice> : null}
         {detailLoading && !detail ? <LoadingSkeleton layout="rows" rows={6} label="Открываем письмо" />
           : detail ? <DocumentCard key={detail.document.id} token={token} detail={detail} people={people} departments={departments} now={now} onOpenTask={onOpenTask}
-              onSaved={next => { setDetail(next); setRevision(current => current + 1); }} />
+              onSaved={acceptDetail} />
               : !detailError ? <p className="incoming-document-empty">Выберите письмо, чтобы открыть документы и исполнение.</p> : null}
       </div>
     </div>

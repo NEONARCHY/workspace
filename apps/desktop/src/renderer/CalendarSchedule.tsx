@@ -1,3 +1,4 @@
+import { formatRussianDate, formatRussianTime } from "./date-time-format";
 import type { CalendarEvent, WorkspacePerson, ZoomMeeting } from "@yuksalish/contracts";
 import { useRestoreFocusTarget } from "@fluentui/react-components";
 import { CalendarIcon, calendarAppearanceStyle } from "./CalendarAppearance";
@@ -24,7 +25,7 @@ export function CalendarSchedule({ items, showDates = false, periodStart, curren
       const person = people.find(person => person.id === item.record.organizerUserId);
       const pending = item.kind === "event" && item.record.attendees.some(attendee => attendee.userId === currentUserId && attendee.status === "pending");
       const time = item.kind === "event" && item.record.allDay ? "Весь день"
-        : `${start.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}–${end.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}`;
+        : `${formatRussianTime(start, { hour: "2-digit", minute: "2-digit" })}–${formatRussianTime(end, { hour: "2-digit", minute: "2-digit" })}`;
       return <div className="calendar-schedule-entry" key={item.key}>
         <button {...eventFocusTarget} type="button" className={`calendar-agenda-card ${item.kind === "zoom" ? "zoom" : `${item.record.eventType} ${item.record.status}`}`}
           disabled={disabled}
@@ -40,14 +41,14 @@ export function CalendarSchedule({ items, showDates = false, periodStart, curren
           <strong>{item.title}</strong>
           <small>{item.kind === "zoom" ? `Zoom-конференция · ${employeeDisplayName(item.record.organizerName)}` : item.record.location || person?.name || "Мероприятие"}</small>
           <span className="calendar-agenda-meta">Участников: {ids.length}{pending ? " · Нужно подтвердить участие" : ""}</span>
-          {actualDay !== lastDay && <span className="calendar-agenda-meta">{start.toLocaleDateString("ru-RU")} — {new Date(end.getTime() - 1).toLocaleDateString("ru-RU")}</span>}
+          {actualDay !== lastDay && <span className="calendar-agenda-meta">{formatRussianDate(start)} — {formatRussianDate(new Date(end.getTime() - 1))}</span>}
           {item.record.status === "cancelled" && <em>Отменено</em>}
         </button>
       </div>;
   };
   if (!showDates) return <div className="calendar-schedule-items">{items.map(renderCard)}</div>;
   return <div className="calendar-tile-days">{calendarScheduleGroups(items, periodStart).map(group => {
-    const label = new Date(`${group.day}T00:00:00`).toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+    const label = formatRussianDate(new Date(`${group.day}T00:00:00`), { weekday: "long", day: "numeric", month: "long", year: "numeric" });
     return <section className="calendar-schedule-day" key={group.day} aria-label={label}>
       <header><h3 className="calendar-schedule-date">{label}</h3><span>Показано: {group.items.length}</span></header>
       <div className="calendar-schedule-tiles">{group.items.map(renderCard)}</div>

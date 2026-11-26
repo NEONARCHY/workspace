@@ -1,3 +1,4 @@
+import { formatRussianDate } from "./date-time-format";
 import { useEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent } from "react";
 
 import { Popover, PopoverSurface, PopoverTrigger } from "@fluentui/react-components";
@@ -62,7 +63,7 @@ function displayValue(value: string, mode: PickerMode, dateFormat: "long" | "num
   if (mode === "time") return value;
   const date = validDate(datePart(value));
   if (!date) return value;
-  const formatted = date.toLocaleDateString("ru-RU", { day: "2-digit", month: dateFormat === "numeric" ? "2-digit" : "long", year: "numeric" });
+  const formatted = formatRussianDate(date, { day: "2-digit", month: dateFormat === "numeric" ? "2-digit" : "long", year: "numeric" });
   return mode === "datetime" && timePart(value) ? `${formatted}, ${timePart(value)}` : formatted;
 }
 

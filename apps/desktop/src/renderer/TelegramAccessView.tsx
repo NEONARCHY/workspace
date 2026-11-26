@@ -4,7 +4,7 @@ import { Input } from "./WorkspaceInput";
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
 import { WorkspaceSelect } from "./WorkspaceSelect";
 import { employeeDisplayName, employeeInitials } from "./employee-display-name";
-import { useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type {
   TelegramAccessPerson,
@@ -29,7 +29,7 @@ function errorText(error: unknown): string {
   return error instanceof Error ? error.message : "Не удалось выполнить действие. Попробуйте ещё раз.";
 }
 
-function PersonAccessRow({
+const PersonAccessRow = memo(function PersonAccessRow({
   person, bots, token, departments, onSaved,
 }: {
   readonly person: TelegramAccessPerson;
@@ -180,7 +180,7 @@ function PersonAccessRow({
       </div>
     </article>
   );
-}
+});
 
 export function TelegramAccessView({ token, departments }: { readonly token: string; readonly departments?: readonly WorkspaceDepartment[] }) {
   const [registry, setRegistry] = useState<TelegramAccessRegistry>();
@@ -189,37 +189,46 @@ export function TelegramAccessView({ token, departments }: { readonly token: str
   const [scope, setScope] = useState<EmployeeScope>("central");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const refresh = async () => {
+  const request = useRef<AbortController | null>(null);
+  const refresh = useCallback(async () => {
+    request.current?.abort();
+    const controller = new AbortController(); request.current = controller;
     setLoading(true);
     setError("");
     try {
-      setRegistry(await loadTelegramAccess(token));
+      const next = await loadTelegramAccess(token, controller.signal);
+      if (controller.signal.aborted) return;
+      setRegistry(next);
       setRefreshEpoch((current) => current + 1);
     } catch (caught) {
-      setError(errorText(caught));
+      if (!controller.signal.aborted) setError(errorText(caught));
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) setLoading(false);
     }
-  };
+  }, [token]);
   useEffect(() => {
     let active = true;
-    void loadTelegramAccess(token).then((result) => {
-      if (active) { setRegistry(result); setLoading(false); }
-    }).catch((caught: unknown) => {
-      if (active) { setError(errorText(caught)); setLoading(false); }
-    });
-    return () => { active = false; };
-  }, [token]);
-  const people = useMemo(() => (registry?.people ?? []).filter((person) =>
-    (!departments || employeeScope(person.departmentId, departments) === scope)
-      && `${person.fullName} ${person.username} ${person.jobTitle ?? ""}`
-        .toLocaleLowerCase("ru-RU").includes(query.trim().toLocaleLowerCase("ru-RU"))), [registry, query, departments, scope]);
-  const verified = registry?.people.filter((person) => person.verified).length ?? 0;
-  const referentAccess = registry?.people.filter((person) => person.verified && person.botKeys.includes("ai_referent")).length ?? 0;
-  return <section className="telegram-access-view" aria-labelledby="telegram-access-title">
+    queueMicrotask(() => { if (active) void refresh(); });
+    return () => { active = false; request.current?.abort(); };
+  }, [refresh]);
+  const index = useMemo(() => (registry?.people ?? []).map(person => ({ person,
+    scope: departments ? employeeScope(person.departmentId, departments) : undefined,
+    text: `${person.fullName} ${person.username} ${person.jobTitle ?? ""}`.toLocaleLowerCase("ru-RU"),
+  })), [registry?.people, departments]);
+  const people = useMemo(() => {
+    const needle = query.trim().toLocaleLowerCase("ru-RU");
+    return index.filter(item => (!departments || item.scope === scope) && item.text.includes(needle)).map(item => item.person);
+  }, [index, query, departments, scope]);
+  const { verified, referentAccess } = useMemo(() => (registry?.people ?? []).reduce((counts, person) => ({
+    verified: counts.verified + Number(person.verified),
+    referentAccess: counts.referentAccess + Number(person.verified && person.botKeys.includes("ai_referent")),
+  }), { verified: 0, referentAccess: 0 }), [registry?.people]);
+  const onSaved = useCallback((saved: TelegramAccessPerson) => setRegistry(current => current ? {
+    ...current, people: current.people.map(item => item.userId === saved.userId ? saved : item),
+  } : current), []);
+  return <section className="workspace-view workspace-queue telegram-access-view" aria-labelledby="telegram-access-title">
     <WorkspaceSectionHeader motif="telegram" className="telegram-access-header">
       <div>
-        <p className="telegram-access-eyebrow">Управление интеграциями</p>
         <h1 id="telegram-access-title">Доступ к Telegram-ботам</h1>
         <p>Один Telegram ID сотрудника, отдельное разрешение для каждого бота.</p>
       </div>
@@ -232,15 +241,16 @@ export function TelegramAccessView({ token, departments }: { readonly token: str
       <span><strong>{verified}</strong> с действующим ID</span>
       <span><strong>{referentAccess}</strong> с доступом к AI Referent</span>
     </div> : null}
-    <div className="telegram-access-guide">
-      <span className="telegram-access-guide-icon" aria-hidden="true">↗</span>
+    <details className="telegram-access-guide"><summary>Как настроить доступ к ботам</summary>
       <p>Укажите Telegram ID и доступ к ботам. Контур AI Hisobot наследуется из подразделения; для сотрудника без подразделения выберите его вручную. Для руководства снимите обязанность сдавать отчёт. Чтобы получать сообщения, сотруднику нужно открыть чат с ботом и нажать «Старт».</p>
-    </div>
+    </details>
+    <div className="telegram-access-controls">
     <label className="telegram-access-search">
       <span>Найти сотрудника</span>
       <Input aria-label="Поиск сотрудников для Telegram" type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Имя, логин или должность" />
     </label>
     {departments ? <EmployeeScopeSwitch value={scope} onChange={setScope} label="Сотрудники с доступом к Telegram-ботам" /> : null}
+    </div>
     {error ? <WorkspaceNotice tone="error" className="telegram-access-page-error" role="alert" actions={<><button type="button" onClick={() => void refresh()}>Повторить</button></>}>{error} </WorkspaceNotice> : null}
     {loading && !registry ? <LoadingSkeleton layout="custom" label="Загружаем сотрудников…"><div className="telegram-access-list">
       {Array.from({ length: 4 }, (_, index) => <article className="telegram-access-row" key={index}>
@@ -257,9 +267,7 @@ export function TelegramAccessView({ token, departments }: { readonly token: str
         bots={registry.bots}
         token={token}
         departments={departments}
-        onSaved={(saved) => setRegistry((current) => current ? {
-          ...current, people: current.people.map((item) => item.userId === saved.userId ? saved : item),
-        } : current)}
+        onSaved={onSaved}
       />) : <p className="telegram-access-empty">По этому запросу сотрудников нет.</p>}
     </div> : null}
   </section>;

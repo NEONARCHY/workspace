@@ -1,3 +1,4 @@
+import { formatRussianDateTime } from "./date-time-format";
 import { lazy, Suspense, useRef, useState } from "react";
 import { Button } from "@fluentui/react-components";
 import { Attach20Regular, CheckmarkCircle20Regular, Clock20Regular, Document20Regular, DismissCircle20Regular, Send20Regular } from "@fluentui/react-icons";
@@ -124,7 +125,7 @@ export function IncomingDocumentExecution({ token, detail, people, now, onSaved 
     <div className="incoming-responsibility">
       <div><small>Ответственный</small>{person(execution.assigneeId, execution.assigneeName)}</div>
       <div className={isTaskOverdue(execution, now) ? "incoming-deadline incoming-deadline--overdue" : "incoming-deadline"}>
-        <small>Срок исполнения</small><strong>{(execution.dueAt ? new Date(execution.dueAt).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" }) : "Не указан")}</strong>
+        <small>Срок исполнения</small><strong>{(execution.dueAt ? formatRussianDateTime(new Date(execution.dueAt), { dateStyle: "short", timeStyle: "short" }) : "Не указан")}</strong>
         {isTaskOverdue(execution, now) ? <span>Срок истёк</span> : null}
       </div>
     </div>

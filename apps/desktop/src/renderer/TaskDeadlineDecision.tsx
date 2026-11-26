@@ -1,3 +1,4 @@
+import { formatRussianDateTime } from "./date-time-format";
 import { useRef, useState } from "react";
 import { Button } from "@fluentui/react-components";
 import type { TaskDeadlineRequest, WorkspacePerson, WorkspaceTask } from "@yuksalish/contracts";
@@ -29,8 +30,8 @@ export function TaskDeadlineDecision({ task, request, people, canDecide, onDecid
     <h3>Запрос на перенос срока</h3>
     <p><strong>{people.find((person) => person.id === request.requesterUserId)?.name ?? "Исполнитель"}</strong> просит изменить срок выполнения этой задачи.</p>
     <dl className="task-deadline-decision-dates">
-      <div><dt>Текущий срок</dt><dd>{new Date(request.oldDueAt).toLocaleString("ru-RU")}</dd></div>
-      <div><dt>Предлагаемый срок</dt><dd>{new Date(request.proposedDueAt).toLocaleString("ru-RU")}</dd></div>
+      <div><dt>Текущий срок</dt><dd>{formatRussianDateTime(new Date(request.oldDueAt))}</dd></div>
+      <div><dt>Предлагаемый срок</dt><dd>{formatRussianDateTime(new Date(request.proposedDueAt))}</dd></div>
     </dl>
     <p className="task-deadline-decision-reason">{request.reason}</p>
     {canDecide && onDecide ? <div className="task-editor-actions">

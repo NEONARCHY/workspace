@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { FluentProvider } from "@fluentui/react-components";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -6,6 +6,7 @@ import { workspaceTheme } from "./workspace-theme";
 import { ConnectionIndicator, WorkspaceIdentity } from "./WorkspaceIdentity";
 import * as profileAvatar from "./ProfileAvatar";
 import { bundledReleaseEntries } from "./release-history";
+import * as api from "./workspace-api";
 
 const person = {
   id: "person-1",
@@ -20,6 +21,39 @@ const person = {
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
 
 describe("WorkspaceIdentity", () => {
+  it.each([true, false])("keeps the mode action in the avatar menu when enabled is %s", enabled => {
+    render(<FluentProvider theme={workspaceTheme}><WorkspaceIdentity person={{ ...person, role: enabled ? "admin" : "employee" }} token="token" adminModeEnabled={enabled}
+      onSupport={vi.fn()} supportMode="support" onSettings={vi.fn()} onLogout={vi.fn()} /></FluentProvider>);
+    expect(screen.queryByRole("switch")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Открыть меню профиля/ }));
+    expect(screen.getByRole("switch", { name: "Режим администратора" })).toHaveAttribute("aria-checked", String(enabled));
+    expect(screen.getByText(enabled ? "Выключить права администратора" : "Вернуть права администратора")).toBeVisible();
+  });
+
+  it("does not offer administrator mode without the account capability", () => {
+    render(<FluentProvider theme={workspaceTheme}><WorkspaceIdentity person={person} token="token"
+      onSupport={vi.fn()} supportMode="support" onSettings={vi.fn()} onLogout={vi.fn()} /></FluentProvider>);
+    fireEvent.click(screen.getByRole("button", { name: /Открыть меню профиля/ }));
+    expect(screen.queryByRole("switch")).not.toBeInTheDocument();
+  });
+
+  it("keeps an outstanding mode change locked and shows its error after reopening the menu", async () => {
+    let fail!: (error: Error) => void;
+    const change = vi.spyOn(api, "setAdministratorMode").mockReturnValue(new Promise((_, reject) => { fail = reject; }));
+    render(<FluentProvider theme={workspaceTheme}><WorkspaceIdentity person={person} token="token" adminModeEnabled
+      onSupport={vi.fn()} supportMode="support" onSettings={vi.fn()} onLogout={vi.fn()} /></FluentProvider>);
+    const trigger = screen.getByRole("button", { name: /Открыть меню профиля/ });
+    fireEvent.click(trigger); fireEvent.click(screen.getByRole("switch"));
+    fireEvent.click(trigger); fireEvent.click(trigger);
+    expect(screen.getByRole("switch")).toBeDisabled();
+    fireEvent.click(screen.getByRole("switch"));
+    expect(change).toHaveBeenCalledExactlyOnceWith("token", false);
+    await act(async () => fail(new Error("Нет связи")));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Нет связи");
+    await waitFor(() => expect(screen.getByRole("switch")).not.toBeDisabled());
+    expect(screen.getByRole("switch")).toHaveAttribute("aria-checked", "true");
+  });
+
   it("opens profile, settings and logout actions from one avatar menu", () => {
     const avatar = vi.spyOn(profileAvatar, "ProfileAvatar");
     const onProfile = vi.fn();

@@ -1,3 +1,4 @@
+import { formatRussianTime } from "./date-time-format";
 import { useEffect, useRef, useState } from "react";
 import type { HisobotActivityDraft, WorkspaceNotification } from "@yuksalish/contracts";
 import { Button, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle } from "@fluentui/react-components";
@@ -97,7 +98,7 @@ export function HisobotDraftPrompt({ token, userId, notifications, enabled, edit
         <DialogTitle action={<Button appearance="subtle" icon={<Dismiss24Regular />} aria-label="Закрыть черновик отчёта" onClick={close} />}>Ваш отчёт уже собран в черновик</DialogTitle>
         <DialogContent>
           <p>Собрали подтверждённые действия за {draft?.reportDate.split("-").reverse().join(".")}. Проверьте текст и дополните работу вне Workspace. Ничего не отправлено.</p>
-          <p className="hisobot-draft-meta">Действий: {draft?.activityCount ?? 0} · Снимок на {draft && new Date(draft.generatedAt).toLocaleTimeString("ru-RU", { timeZone: "Asia/Tashkent", hour: "2-digit", minute: "2-digit" })}</p>
+          <p className="hisobot-draft-meta">Действий: {draft?.activityCount ?? 0} · Снимок на {draft && formatRussianTime(new Date(draft.generatedAt), { timeZone: "Asia/Tashkent", hour: "2-digit", minute: "2-digit" })}</p>
           {draft?.activityCount === 0 && <WorkspaceNotice tone="info">За сегодня нет зафиксированных действий в доступных разделах. Это не означает, что вы не работали — добавьте выполненное вручную.</WorkspaceNotice>}
           {Boolean(draft?.omittedCount) && <WorkspaceNotice tone="warning">Не поместилось действий: {draft?.omittedCount}. Дополните текст перед отправкой.</WorkspaceNotice>}
           <label htmlFor="hisobot-ready-draft">Готовый текст — можно редактировать сразу</label>

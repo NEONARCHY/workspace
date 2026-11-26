@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SurveyAnalysisDetail } from "@yuksalish/contracts";
 import { SurveyAnalyticsView } from "./SurveyAnalyticsView";
 import { importSurveyAnalysis, listSurveyAnalyses, loadSurveyAnalysis, saveSurveyAnalysis } from "./workspace-api";
+import * as engine from "./survey-engine";
 
 vi.mock("./workspace-api", () => ({ importSurveyAnalysis: vi.fn(), listSurveyAnalyses: vi.fn(), loadSurveyAnalysis: vi.fn(), saveSurveyAnalysis: vi.fn(), downloadSurveyOriginal: vi.fn(), exportSurveyWorkbook: vi.fn() }));
 const fixture: SurveyAnalysisDetail = {
@@ -13,7 +14,29 @@ const show = (canCreate = true, canEdit = true) => render(<SurveyAnalyticsView t
 async function open() { fireEvent.click(await screen.findByRole("button", { name: /Опрос команды/ })); await screen.findByRole("textbox", { name: "Название анализа" }); }
 describe("private survey workspace", () => {
   beforeEach(() => { vi.resetAllMocks(); vi.mocked(listSurveyAnalyses).mockResolvedValue([fixture.analysis]); vi.mocked(loadSurveyAnalysis).mockResolvedValue(fixture); });
-  afterEach(cleanup);
+  afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+  it("reuses the parsed workbook during answer search and skips inactive group comparison", async () => {
+    const build = vi.spyOn(engine, "buildSurveyDataset"), compare = vi.spyOn(engine, "surveyComparison");
+    show(); await open(); build.mockClear(); compare.mockClear();
+    fireEvent.click(screen.getByText("2. Поиск, фильтры и сохранённые срезы"));
+    fireEvent.change(screen.getByRole("textbox", { name: "Поиск по всем ответам" }), { target: { value: "A" } });
+    expect(screen.getByText(/Ответили:/)).toHaveTextContent("1 из 1");
+    fireEvent.change(screen.getByRole("textbox", { name: "Название анализа" }), { target: { value: "Черновик" } });
+    expect(build).not.toHaveBeenCalled(); expect(compare).not.toHaveBeenCalled();
+  });
+  it("aborts the old library request and does not accept its late result", async () => {
+    let finish!: (value: typeof fixture.analysis[]) => void;
+    vi.mocked(listSurveyAnalyses).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const view = show(); await waitFor(() => expect(listSurveyAnalyses).toHaveBeenCalledOnce());
+    const signal = vi.mocked(listSurveyAnalyses).mock.calls[0]![1]!;
+    view.rerender(<SurveyAnalyticsView token="new" canCreate canEdit />);
+    await screen.findByRole("button", { name: /Опрос команды/ });
+    expect(signal.aborted).toBe(true);
+    await act(async () => finish([{ ...fixture.analysis, title: "Устаревший анализ" }]));
+    expect(screen.queryByRole("button", { name: /Устаревший анализ/ })).toBeNull();
+    const latestSignal = vi.mocked(listSurveyAnalyses).mock.calls[1]![1]!;
+    view.unmount(); expect(latestSignal.aborted).toBe(true);
+  });
   it("mounts the actual survey layout immediately and only skeletons library records", () => {
     vi.mocked(listSurveyAnalyses).mockImplementationOnce(() => new Promise(() => {}));
     const { container } = show();

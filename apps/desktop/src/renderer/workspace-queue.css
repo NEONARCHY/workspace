@@ -458,3 +458,83 @@ body .app-provider .zoom-view.workspace-queue .zoom-header-actions { gap: 8px; f
   body .app-provider .members-view.workspace-queue .member-inspector { margin-top: 8px; }
   body .app-provider .hr-view.workspace-queue .hr-command-actions { width: 100%; }
 }
+
+/* Documents, bot access and private analyses share the same page rhythm. */
+body .app-provider :is(.incoming-documents, .edo-incoming, .telegram-access-view, .survey-analytics).workspace-queue {
+  display: flex; flex-direction: column; gap: var(--ws-queue-space); min-width: 0; min-height: 0; height: 100%; margin: 0; padding: 0; overflow-y: auto;
+}
+body .app-provider :is(.incoming-documents, .edo-incoming, .telegram-access-view, .survey-analytics).workspace-queue > * { flex-shrink: 0; }
+body .app-provider .incoming-workspace { gap: 12px; min-width: 0; }
+body .app-provider .incoming-workspace-tabs { padding: 4px 0; }
+body .app-provider :is(.incoming-documents, .edo-incoming).workspace-queue :is(.incoming-documents-controls, .edo-incoming-controls) { gap: 8px 12px; margin: 0; }
+body .app-provider :is(.incoming-documents, .edo-incoming).workspace-queue :is(.incoming-documents-controls, .edo-incoming-controls) label { min-width: 0; gap: 4px; }
+body .app-provider :is(.incoming-documents, .edo-incoming).workspace-queue :is(.incoming-documents-controls, .edo-incoming-controls) :is(.workspace-search, .fui-Input, .workspace-select) { --search-height: var(--ws-queue-control); min-height: var(--ws-queue-control); max-width: 100%; }
+body .app-provider .incoming-documents.workspace-queue .incoming-documents-body { gap: 12px; min-height: 320px; }
+body .app-provider .incoming-documents.workspace-queue :is(.incoming-documents-list, .incoming-documents-detail) { padding: 16px; border-radius: 16px; background: var(--ws-muted-surface); }
+body .app-provider .incoming-documents.workspace-queue .incoming-document-row { gap: 8px; padding: 16px; border-radius: var(--ws-queue-radius); background: var(--ws-surface); }
+body .app-provider .incoming-documents.workspace-queue .incoming-document-row[aria-pressed="true"] { background: var(--ws-selected); }
+body .app-provider .incoming-documents.workspace-queue .incoming-document-card { gap: 12px; padding: 0; }
+body .app-provider .incoming-documents.workspace-queue .incoming-document-empty { margin: 0; padding: 24px 8px; }
+body .app-provider .incoming-documents.workspace-queue .incoming-documents-detail:has(> .incoming-document-empty) { display: grid; place-items: center; text-align: center; }
+body .app-provider .edo-incoming.workspace-queue :is(.edo-incoming-summary, .edo-incoming-layout) { gap: 12px; margin: 0; }
+body .app-provider .edo-incoming.workspace-queue :is(.edo-incoming-list, .edo-incoming-detail) { padding: 16px; border-radius: 16px; }
+
+body .app-provider .telegram-access-view.workspace-queue .telegram-access-overview { --ws-satin-fill: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; width: 100%; padding: 0; background: transparent; }
+body .app-provider .telegram-access-view.workspace-queue .telegram-access-overview > span { display: grid; gap: 4px; min-width: 0; min-height: 76px; padding: 16px; border: 0; border-radius: 16px; background: var(--ws-surface); white-space: normal; font-size: 12px; line-height: 18px; }
+body .app-provider .telegram-access-view.workspace-queue .telegram-access-overview strong { margin: 0; font-size: 28px; line-height: 32px; }
+body .app-provider .telegram-access-view.workspace-queue .telegram-access-guide { display: block; max-width: none; padding: 12px 16px; background: var(--ws-muted-surface); }
+body .app-provider .telegram-access-view.workspace-queue .telegram-access-guide summary { cursor: pointer; font-size: 13px; font-weight: 500; }
+body .app-provider .telegram-access-view.workspace-queue .telegram-access-guide p { margin-top: 12px; font-size: 13px; }
+body .app-provider .telegram-access-view.workspace-queue .telegram-access-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 8px 12px; min-width: 0; }
+body .app-provider .telegram-access-view.workspace-queue .telegram-access-search { flex: 1 1 280px; max-width: none; gap: 4px; }
+body .app-provider .telegram-access-view.workspace-queue .telegram-access-search .workspace-search { --search-width: 100%; --search-height: var(--ws-queue-control); }
+body .app-provider .telegram-access-view.workspace-queue .employee-scope-switch { flex: 1 1 400px; margin: 0; min-height: var(--ws-queue-control); }
+body .app-provider .telegram-access-view.workspace-queue .telegram-access-list { flex: 1 0 320px; gap: 12px; min-height: 320px; max-height: 640px; padding: 0 0 8px; }
+body .app-provider .telegram-access-view.workspace-queue .telegram-access-row { gap: 12px 16px; padding: 16px; border-radius: 16px; transform: none; transition: none; }
+body .app-provider .telegram-access-view.workspace-queue .telegram-access-person { padding-top: 0; gap: 12px; }
+body .app-provider .telegram-access-view.workspace-queue .telegram-access-bot-grid { gap: 8px; }
+body .app-provider .telegram-access-view.workspace-queue .telegram-access-bot > span:last-child { white-space: normal; }
+body .app-provider .telegram-access-view.workspace-queue :is(.telegram-access-hisobot, .telegram-access-row-footer) { gap: 8px 16px; border: 0; padding-top: 0; }
+body .app-provider .telegram-access-view.workspace-queue .telegram-access-row > p { grid-column: 1 / -1; margin: 0; color: var(--ws-muted); font-size: 13px; line-height: 1.5; }
+body .app-provider .telegram-access-view.workspace-queue .telegram-access-row-footer { padding-inline-end: 48px; }
+body .app-provider .telegram-access-view.workspace-queue :is(.telegram-access-primary, .telegram-access-secondary) { min-height: var(--ws-queue-button); padding: 8px 12px; border: 0; }
+
+body .app-provider .survey-analytics.workspace-queue .survey-heading { margin: 0; }
+body .app-provider .survey-analytics.workspace-queue .survey-layout { gap: 12px; }
+body .app-provider .survey-analytics.workspace-queue .survey-panel { padding: 16px; border-radius: 16px; }
+body .app-provider .survey-analytics.workspace-queue :is(.survey-library, .survey-import) { gap: 12px; }
+body .app-provider .survey-analytics.workspace-queue .survey-section-label { display: none; }
+body .app-provider .survey-analytics.workspace-queue .survey-panel-heading h2 { margin: 0; font-size: 18px; font-weight: 600; }
+body .app-provider .survey-analytics.workspace-queue .survey-panel-heading p { font-size: 13px; }
+body .app-provider .survey-analytics.workspace-queue .survey-library-search { --search-height: var(--ws-queue-control); }
+body .app-provider .survey-analytics.workspace-queue .survey-file-drop { min-height: 144px; padding: 16px; }
+body .app-provider .survey-analytics.workspace-queue .survey-import-options { gap: 12px; }
+body .app-provider .survey-analytics.workspace-queue :is(.survey-actions, .survey-tabs, .survey-controls) { gap: 8px 12px; margin-bottom: 12px; }
+body .app-provider .survey-analytics.workspace-queue .survey-settings { margin: 12px 0; padding: 16px; background: var(--ws-muted-surface); }
+body .app-provider .survey-analytics.workspace-queue .survey-start-steps { gap: 12px; margin: 16px 0; }
+body .app-provider .survey-analytics.workspace-queue :is(.survey-methodology, .survey-note) { padding: 12px; }
+
+@media (max-width: 1023px), (max-width: 1366px) and (any-pointer: coarse) {
+  body .app-provider :is(.incoming-documents, .edo-incoming, .telegram-access-view, .survey-analytics).workspace-queue { gap: 8px; }
+  body .app-provider .incoming-workspace { gap: 8px; }
+  body .app-provider .incoming-documents.workspace-queue .incoming-documents-body { gap: 8px; }
+  body .app-provider .incoming-documents.workspace-queue :is(.incoming-documents-list, .incoming-documents-detail) { padding: 12px; }
+  body .app-provider .telegram-access-view.workspace-queue .telegram-access-overview { gap: 8px; }
+  body .app-provider .telegram-access-view.workspace-queue .telegram-access-overview > span { padding: 12px; }
+  body .app-provider .telegram-access-view.workspace-queue .telegram-access-row { padding: 12px; }
+  body .app-provider .survey-analytics.workspace-queue .survey-layout { gap: 8px; }
+  body .app-provider .survey-analytics.workspace-queue .survey-panel { padding: 12px; }
+}
+@media (max-width: 700px) {
+  body .app-provider .incoming-documents.workspace-queue .incoming-documents-controls { align-items: end; }
+  body .app-provider .incoming-documents.workspace-queue .incoming-documents-controls label:first-child { flex-basis: 100%; max-width: none; }
+  body .app-provider .incoming-documents.workspace-queue .incoming-documents-list { max-height: 320px; }
+  body .app-provider .incoming-documents.workspace-queue .incoming-documents-detail { min-height: 180px; }
+  body .app-provider .telegram-access-view.workspace-queue .telegram-access-overview > span { min-height: 88px; padding: 12px 8px; }
+  body .app-provider .telegram-access-view.workspace-queue .telegram-access-overview strong { font-size: 24px; }
+  body .app-provider .telegram-access-view.workspace-queue .telegram-access-guide { padding: 12px; }
+  body .app-provider .telegram-access-view.workspace-queue .telegram-access-guide summary { min-height: 24px; }
+  body .app-provider .telegram-access-view.workspace-queue .telegram-access-controls > * { flex-basis: 100%; }
+  body .app-provider .telegram-access-view.workspace-queue .telegram-access-list { max-height: none; }
+  body .app-provider .survey-analytics.workspace-queue :is(.survey-import-options, .survey-start-steps) { grid-template-columns: minmax(0, 1fr); }
+}

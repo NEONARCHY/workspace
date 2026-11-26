@@ -1,3 +1,4 @@
+import { formatRussianDateTime } from "./date-time-format";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Button, DialogSurface } from "@fluentui/react-components";
 import { Add20Regular, ArrowClockwise20Regular, Calendar24Regular, Chat20Regular, Dismiss24Regular, Edit20Regular, Settings20Regular } from "@fluentui/react-icons";
@@ -66,7 +67,7 @@ function localDate(value: string) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}T${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 function readableDate(value: string) {
-  return new Date(value).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" });
+  return formatRussianDateTime(new Date(value), { dateStyle: "short", timeStyle: "short" });
 }
 
 export function GrantsView({ token, currentUser, people, departments, canCreate, canAdmin,

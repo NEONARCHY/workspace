@@ -1,3 +1,4 @@
+import { formatRussianTime } from "./date-time-format";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { LoadingSkeleton } from "./LoadingSkeleton";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type DragEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
@@ -896,7 +897,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
               onContextMenu={(event) => onMessageContextMenu(event, item)}
               onKeyDown={(event) => onMessageKeyDown(event, item)}>
               <div className="assistant-message-meta"><span>{item.role === "user" ? "Вы" : "Yuksalish"}</span>
-                <time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</time></div>
+                <time dateTime={item.createdAt}>{formatRussianTime(new Date(item.createdAt), { hour: "2-digit", minute: "2-digit" })}</time></div>
               {item.role === "assistant" ? <>
                 <GeneratedReply content={item.content} animate={item.id === animatedReplyId} reducedMotion={reducedMotion} />
                 {item.references?.length ? <div className="assistant-references" aria-label="Открыть записи в Workspace">

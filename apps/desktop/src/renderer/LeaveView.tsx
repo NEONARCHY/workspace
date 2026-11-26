@@ -1,3 +1,4 @@
+import { formatRussianDateTime } from "./date-time-format";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LeaveDecision, LeaveHrDecisionInput, LeaveRequest, LeaveTenureRule, WorkspacePerson } from "@yuksalish/contracts";
 import { Button, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input, Textarea } from "@fluentui/react-components";
@@ -396,7 +397,7 @@ export function LeaveView({ token, people, currentUserId, canCreate, focusReques
           </div> : null}
           {selected.hasOrder ? <div className="leave-actions"><Button appearance="primary" icon={<DocumentPdf20Regular />} onClick={() => setDocument({ requestId: selected.id, kind: "order" })}>Открыть подписанный приказ</Button></div> : null}
           {selected.canWithdraw ? <div className="leave-actions"><Button disabled={busy} onClick={() => void mutate(() => withdrawWorkspaceLeave(token, selected.id))}>Отозвать заявление</Button></div> : null}
-          <div className="leave-history"><h3>История решений</h3>{selected.actions.map((entry) => <p key={entry.id}><strong>{entry.toStatus === "approved" ? "Утверждено" : entry.toStatus === "pending_deputy" ? "Проверено кадрами" : entry.action === "created" ? "Заявление подано" : entry.action === "hr_corrected" ? "Исправлено кадровиком" : entry.toStatus === "needs_revision" ? "Возвращено на дополнение" : entry.toStatus === "rejected" ? "Отклонено" : entry.action === "revised" ? "Дополнено" : "Обновлено"}</strong> · {new Date(entry.createdAt).toLocaleString("ru-RU")}{entry.comment ? ` — ${entry.comment}` : ""}</p>)}</div>
+          <div className="leave-history"><h3>История решений</h3>{selected.actions.map((entry) => <p key={entry.id}><strong>{entry.toStatus === "approved" ? "Утверждено" : entry.toStatus === "pending_deputy" ? "Проверено кадрами" : entry.action === "created" ? "Заявление подано" : entry.action === "hr_corrected" ? "Исправлено кадровиком" : entry.toStatus === "needs_revision" ? "Возвращено на дополнение" : entry.toStatus === "rejected" ? "Отклонено" : entry.action === "revised" ? "Дополнено" : "Обновлено"}</strong> · {formatRussianDateTime(new Date(entry.createdAt))}{entry.comment ? ` — ${entry.comment}` : ""}</p>)}</div>
         </div> : <div className="leave-empty leave-placeholder">Выберите заявление или создайте новое.</div>}
       </div>
     </div>}

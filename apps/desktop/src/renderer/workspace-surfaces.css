@@ -25,7 +25,10 @@ html:root body .app-provider :is(
   .project-hub-index, .project-hub-canvas, .project-hub-funding-list, .project-hub-funding-detail,
   .telegram-access-overview, .telegram-access-guide, .telegram-access-row, .telegram-access-bot,
   .edo-incoming-list, .edo-incoming-detail, .edo-incoming-summary > span, .edo-access-card,
-  .ai-incoming-register .ai-referent-summary > button, .survey-panel, .survey-settings, .survey-group-grid article
+  .incoming-document-row, .incoming-status, .incoming-result, .incoming-responsibility > div,
+  .incoming-assignment-team, .edo-incoming-row,
+  .ai-incoming-register .ai-referent-summary > button, .survey-panel, .survey-settings, .survey-group-grid article,
+  .survey-file-drop, .survey-analysis-item
 ):not(.is-lifted):not(.is-target) {
   --ws-satin-sheen: none;
   --ws-satin-edge: none;
@@ -48,4 +51,9 @@ html:root body .app-provider :is(.fui-DialogSurface, .fui-PopoverSurface, .fui-M
 html:root body .app-provider :is(.absence-summary > button, .leave-list-item, .zoom-row):focus-visible {
   outline: 2px solid var(--ws-link);
   outline-offset: 2px;
+}
+@media (forced-colors: active) {
+  html:root body .app-provider :is(.incoming-document-row, .leave-list-item, .zoom-row)[aria-pressed="true"],
+  html:root body .app-provider .edo-incoming-row.is-selected,
+  html:root body .app-provider .survey-analysis-item[aria-pressed="true"] { outline: 2px solid Highlight; outline-offset: -2px; }
 }
