@@ -6,6 +6,7 @@ import type { FeedPost } from "@yuksalish/contracts";
 import { FeedView } from "./FeedView";
 import { initialChats, people } from "./test-fixtures/demo-data";
 import { EmployeeProfileProvider } from "./EmployeeProfileLink";
+import * as dateFormatters from "./date-time-format";
 
 const birthday: FeedPost = {
   id: "birthday-1", authorUserId: null, systemKind: "birthday", birthdayUserId: "colleague-1",
@@ -38,7 +39,43 @@ describe("birthday greeting access", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Опубликовать" }));
     await waitFor(() => expect(create).toHaveBeenCalledTimes(2));
   });
-  afterEach(cleanup);
+  afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+
+  it("keeps typing in comment/publication drafts from reformatting every post", () => {
+    const format = vi.spyOn(dateFormatters, "russianDateTimeFormatter");
+    const posts = [birthday, { ...birthday, id: "another-post", title: "Другая публикация" }];
+    render(<FluentProvider theme={webLightTheme}><FeedView posts={posts} people={[]} token="token" currentUserId="employee-1"
+      onCreate={vi.fn()} onComment={vi.fn()} onReact={vi.fn()} onDeleteComment={vi.fn()} onPin={vi.fn()} onDelete={vi.fn()} /></FluentProvider>);
+    format.mockClear();
+    fireEvent.change(screen.getByLabelText(`Комментарий к публикации ${birthday.title}`), { target: { value: "Черновик" } });
+    expect(format).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Новое объявление" }));
+    format.mockClear();
+    fireEvent.change(screen.getByLabelText("Заголовок публикации"), { target: { value: "Заголовок" } });
+    fireEvent.change(screen.getByLabelText("Текст публикации"), { target: { value: "Текст" } });
+    expect(format).not.toHaveBeenCalled();
+  });
+
+  it("preserves a failed comment, retries once and does not erase text edited during sending", async () => {
+    let finish: (post: FeedPost) => void = () => {};
+    const post: FeedPost = { ...birthday, comments: [{ id: "next-reply", authorUserId: "colleague-1", body: "Ответ коллеги", createdAt: birthday.createdAt }] };
+    const onComment = vi.fn().mockResolvedValueOnce(undefined).mockImplementationOnce(() => new Promise<FeedPost>(resolve => { finish = resolve; }));
+    render(<FluentProvider theme={webLightTheme}><FeedView posts={[post]} people={[]} token="token" currentUserId="employee-1"
+      onCreate={vi.fn()} onComment={onComment} onReact={vi.fn()} onDeleteComment={vi.fn()} onPin={vi.fn()} onDelete={vi.fn()} /></FluentProvider>);
+    const field = screen.getByLabelText(`Комментарий к публикации ${birthday.title}`);
+    fireEvent.change(field, { target: { value: "Первый текст" } });
+    fireEvent.keyDown(field, { key: "Enter" });
+    expect(await screen.findByRole("alert")).toHaveTextContent("Черновик сохранён");
+    expect(field).toHaveValue("Первый текст");
+    fireEvent.keyDown(field, { key: "Enter" }); fireEvent.keyDown(field, { key: "Enter" });
+    expect(onComment).toHaveBeenCalledTimes(2);
+    fireEvent.change(field, { target: { value: "Следующий текст" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ответить", exact: true }));
+    finish(birthday);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Отправить комментарий" })).toBeEnabled());
+    expect(field).toHaveValue("Следующий текст");
+    expect(screen.getByRole("button", { name: "Отменить ответ" })).toBeInTheDocument();
+  });
 
   it("forwards a publication by its real ID instead of copying its text", async () => {
     const forward = vi.fn().mockResolvedValue({ id: "sent" });

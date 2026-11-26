@@ -1,3 +1,4 @@
+import { russianDateTimeFormatter } from "./date-time-format";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { LoadingSkeleton, SkeletonBlock } from "./LoadingSkeleton";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
@@ -192,7 +193,7 @@ function addressRoute(address: string): LetterForm["route"] | undefined {
 }
 
 function dateTime(value: string): string {
-  return new Intl.DateTimeFormat("ru-RU", {
+  return russianDateTimeFormatter({
     day: "2-digit",
     month: "short",
     year: "numeric",

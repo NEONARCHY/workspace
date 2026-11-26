@@ -1,6 +1,6 @@
 /* Shared queue composition. Opt in page by page; embedded record dialogs keep
    their own geometry. Next visual iterations should reuse these same tokens. */
-.workspace-view.workspace-queue:not([data-dialog-only]) {
+:is(.workspace-view, .team-dashboard).workspace-queue:not([data-dialog-only]) {
   --ws-view-edge: 0px;
   --ws-queue-space: 12px;
   --ws-queue-control: 44px;
@@ -11,10 +11,11 @@
   --ws2-process-section-gap: var(--ws-queue-space);
   padding-inline: 0;
 }
-html:root body .app-provider .workspace-view.workspace-queue:not([data-dialog-only]) .ws-section-header {
+html:root body .app-provider :is(.workspace-view, .team-dashboard).workspace-queue:not([data-dialog-only]) .ws-section-header {
   gap: 12px 24px;
   margin-block-end: 0;
   padding-inline: 24px;
+  border: 1px solid rgb(var(--ws-theme-line-rgb, 41 58 85) / .12);
 }
 body .app-provider .workspace-queue .ws-section-header :is(h1, h2) {
   margin: 0 0 4px;
@@ -22,7 +23,8 @@ body .app-provider .workspace-queue .ws-section-header :is(h1, h2) {
   line-height: 1.2;
   font-weight: 600;
 }
-html:root body .app-provider .workspace-view.workspace-queue .ws-section-header .view-kicker { display: none; }
+body .app-provider .workspace-queue .ws-section-header p { margin: 0; font-size: 13px; line-height: 1.5; }
+html:root body .app-provider :is(.workspace-view, .team-dashboard).workspace-queue .ws-section-header :is(.view-kicker, .notification-kicker, .team-dash-hero-copy > span) { display: none; }
 body .app-provider .workspace-queue .ws-section-header :is(.task-toolbar-actions, .toolbar-actions, .trip-header-actions) { gap: 8px; }
 body .app-provider .workspace-queue .ws-section-header :is(.view-switch, .approval-mode-switch, .process-view-tabs) {
   min-width: 0;
@@ -137,14 +139,14 @@ body .app-provider .workspace-queue .record-table-frame.task-records { margin-in
   body .app-provider .workspace-queue .workspace-queue-toolbar > .ws2-segmented:not(.workspace-queue-filters) { width: max-content; }
 }
 @media (max-width: 1023px), (max-width: 1366px) and (any-pointer: coarse) {
-  .web-platform .workspace-view.workspace-queue:not([data-dialog-only]) {
+  .web-platform :is(.workspace-view, .team-dashboard).workspace-queue:not([data-dialog-only]) {
     --ws-section-header-padding: 12px;
     --ws-section-header-height: 0px;
     --ws-queue-button: 44px;
     --ws-queue-control: 52px;
     --ws-queue-space: 8px;
   }
-  html.web-platform:root body .app-provider .workspace-view.workspace-queue:not([data-dialog-only]) .ws-section-header { padding: 12px; gap: 8px 12px; }
+  html.web-platform:root body .app-provider :is(.workspace-view, .team-dashboard).workspace-queue:not([data-dialog-only]) .ws-section-header { padding: 12px; gap: 8px 12px; }
   body .app-provider .workspace-queue .ws-section-header :is(h1, h2) { font-size: 22px; }
   body .app-provider .workspace-queue .task-workbench-summary { gap: 8px; padding-top: 8px; }
   body .app-provider .workspace-queue .task-focus-object { min-height: 60px; padding: 8px; }
@@ -165,4 +167,112 @@ body .app-provider .workspace-queue .record-table-frame.task-records { margin-in
   body .app-provider .workspace-queue .task-focus-object > span { min-height: 32px; line-height: 16px; }
   body .app-provider .workspace-queue .task-focus-object > strong { font-size: 24px; line-height: 28px; }
   body .app-provider .workspace-queue .task-focus-object > small { display: none; }
+}
+
+/* Iteration 2: the same section rhythm, with a bounded reading column in Feed. */
+body .app-provider .workspace-queue .ws-section-header .fui-Button { min-height: var(--ws-queue-control); }
+body .app-provider .app-content > .tasks-view.dashboard-mode:has(> .team-dashboard.workspace-queue) { padding: 0; }
+body .app-provider .team-dashboard.workspace-queue { padding: 0; background: transparent; }
+body .app-provider .team-dashboard.workspace-queue .team-dash-hero-summary {
+  gap: 12px; padding: 8px 12px; border: 0; border-radius: 12px;
+  color: var(--ws-text); background: var(--ws-theme-surface-soft);
+}
+body .app-provider .team-dashboard.workspace-queue .team-dash-hero-summary strong { font-size: 28px; }
+body .app-provider .team-dashboard.workspace-queue .team-dash-hero-summary span { font-size: 12px; }
+body .app-provider .team-dashboard.workspace-queue .team-dash-hero-summary > div { display: flex; align-items: center; gap: 12px; }
+body .app-provider .team-dashboard.workspace-queue .team-dash-hero-summary > div > span { max-width: 112px; line-height: 18px; }
+body .app-provider .team-dashboard.workspace-queue .team-dash-metrics { gap: 12px; margin: 12px 0 0; }
+body .app-provider .team-dashboard.workspace-queue .team-dash-metric {
+  grid-template-columns: 24px minmax(0, 1fr) auto; gap: 12px;
+  min-height: 76px; padding: 16px; border-radius: 16px;
+}
+body .app-provider .team-dashboard.workspace-queue .team-dash-metric-icon { width: 24px; height: 24px; border-radius: 0; background: transparent; }
+body .app-provider .team-dashboard.workspace-queue .team-dash-metric-copy { gap: 4px; text-align: start; }
+body .app-provider .team-dashboard.workspace-queue .team-dash-metric-copy span { font-size: 13px; line-height: 1.4; }
+body .app-provider .team-dashboard.workspace-queue .team-dash-metric-copy small { font-size: 12px; line-height: 1.4; }
+body .app-provider .team-dashboard.workspace-queue .team-dash-metric > strong { font-size: 28px; font-variant-numeric: tabular-nums; }
+body .app-provider .team-dashboard.workspace-queue .team-dash-grant-metric { border-radius: 16px; }
+body .app-provider .team-dashboard.workspace-queue .team-dash-main-grid { gap: 12px; margin-top: 12px; }
+body .app-provider .team-dashboard.workspace-queue :is(.team-dash-panel, .team-presence-panel) { padding: 16px; border-radius: 16px; }
+body .app-provider .team-dashboard.workspace-queue > :is(.team-presence-panel, .team-dash-workload) { margin-top: 12px; }
+body .app-provider .team-dashboard.workspace-queue .team-dash-panel-heading { gap: 12px; margin-bottom: 12px; }
+body .app-provider .team-dashboard.workspace-queue .team-dash-task { padding: 12px; }
+body .app-provider .team-dashboard.workspace-queue .team-dash-person { padding: 12px 16px; }
+
+body .app-provider .notifications-view.workspace-queue {
+  grid-template-rows: auto auto auto minmax(0, 1fr); gap: 0;
+  height: 100%; margin: 0; padding: 0; border-radius: 0;
+}
+body .app-provider .notifications-view.workspace-queue .notification-metrics { gap: 12px; padding: 12px 0 0; }
+body .app-provider .notifications-view.workspace-queue :is(.notification-metrics > button, .notification-progress-card) { gap: 12px; min-height: 76px; padding: 16px; border-radius: 16px; }
+body .app-provider .notifications-view.workspace-queue .notification-metrics strong { font-size: 28px; font-variant-numeric: tabular-nums; }
+body .app-provider .notifications-view.workspace-queue .notification-metrics small { font-size: 12px; }
+body .app-provider .notifications-view.workspace-queue .notification-head-actions > .fui-Button { min-height: var(--ws-queue-control); justify-self: start; }
+body .app-provider .notifications-view.workspace-queue .notification-layout { gap: 12px; }
+body .app-provider .notifications-view.workspace-queue :is(.notification-stream-shell, .notification-settings) { border-radius: 16px; }
+body .app-provider .notifications-view.workspace-queue :is(.notification-stream-toolbar, .notification-settings) { padding: 16px; }
+body .app-provider .notifications-view.workspace-queue .notification-stream { padding: 12px; }
+body .app-provider .notifications-view.workspace-queue .notification-row { grid-template-columns: 40px minmax(0, 1fr) auto; gap: 12px; min-height: 96px; padding: 16px; border-radius: 12px; }
+body .app-provider .notifications-view.workspace-queue .notification-row-meta > strong { font-size: 12px; text-transform: none; letter-spacing: normal; }
+body .app-provider .workspace-queue :is(.notification-kind-filters, .team-dash-filters) {
+  display: flex; flex-wrap: nowrap; gap: 4px; min-height: var(--ws-queue-control);
+  max-width: 100%; padding: 4px; overflow-x: auto; border: 0; border-radius: 12px;
+}
+body .app-provider .workspace-queue :is(.notification-kind-filters, .team-dash-filters) > button {
+  flex: none; gap: 8px; height: var(--ws-queue-button); min-height: var(--ws-queue-button);
+  padding: 8px 12px; border-radius: 8px; font-size: 12px; line-height: 20px; white-space: nowrap;
+}
+
+body .app-provider .feed-view.workspace-queue { grid-template-columns: minmax(0, 1fr); grid-auto-rows: max-content; gap: 12px; width: 100%; max-width: none; margin: 0; padding: 0; }
+.feed-layout { display: grid; grid-template-columns: minmax(0, 1fr) 272px; align-items: start; gap: 12px; width: 100%; max-width: 1084px; margin-inline: auto; }
+body .app-provider .feed-view.workspace-queue > .feed-layout { margin-inline: auto; }
+body .app-provider .feed-view.workspace-queue .ws-section-header .feed-create-button { flex: none; width: auto; }
+body .app-provider .feed-view.workspace-queue .feed-list { gap: 12px; margin: 0; }
+body .app-provider .feed-view.workspace-queue .feed-card { padding: 20px; border-radius: 16px; }
+body .app-provider .feed-view.workspace-queue .feed-card > header { gap: 12px; }
+body .app-provider .feed-view.workspace-queue .feed-card h2 { margin: 12px 0 8px; font-size: 20px; line-height: 1.3; }
+body .app-provider .feed-view.workspace-queue .feed-side { grid-row: auto; gap: 12px; margin: 0; padding: 0; }
+body .app-provider .feed-view.workspace-queue .feed-context-card { margin: 0; padding: 16px; border-radius: 16px; }
+body .app-provider .feed-view.workspace-queue .feed-comments { margin-top: 12px; gap: 8px; }
+body .app-provider .feed-view.workspace-queue .feed-comment-composer { margin-top: 12px; gap: 8px; }
+body .app-provider .feed-view.workspace-queue .feed-comment-composer > :is(.fui-Input, .fui-Button) { min-height: 44px; }
+
+@container workspace (max-width: 800px) {
+  .feed-layout { grid-template-columns: minmax(0, 1fr); }
+}
+@container workspace (max-width: 600px) {
+  /* Keep the two deadline explanations in their own text stack. The previous
+     display:contents rule assigned both small elements to the same grid cell. */
+  body .app-provider .team-dashboard.workspace-queue .team-dash-task { grid-template-columns: 4px minmax(0, 1fr) 20px; gap: 8px 12px; }
+  body .app-provider .team-dashboard.workspace-queue .team-dash-task-signal { grid-column: 1; grid-row: 1 / 3; height: 100%; }
+  body .app-provider .team-dashboard.workspace-queue .team-dash-task-copy { display: grid; grid-column: 2; grid-row: 1; gap: 4px; }
+  body .app-provider .team-dashboard.workspace-queue .team-dash-task-copy :is(strong, small) { grid-column: auto; grid-row: auto; white-space: normal; line-height: 1.4; }
+  body .app-provider .team-dashboard.workspace-queue .team-dash-task-copy strong { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+  body .app-provider .team-dashboard.workspace-queue .team-dash-task-copy small { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+  body .app-provider .team-dashboard.workspace-queue .team-dash-task-person { grid-column: 2; grid-row: 2; }
+  body .app-provider .team-dashboard.workspace-queue .team-dash-task > svg { grid-column: 3; grid-row: 1 / 3; }
+}
+@media (max-width: 1023px), (max-width: 1366px) and (any-pointer: coarse) {
+  body .app-provider .team-dashboard.workspace-queue .team-dash-metrics,
+  body .app-provider .notifications-view.workspace-queue .notification-metrics { gap: 8px; margin: 0; padding-top: 8px; }
+  body .app-provider .team-dashboard.workspace-queue .team-dash-metric { grid-template-columns: minmax(0, 1fr) auto; gap: 8px; padding: 12px; }
+  body .app-provider .team-dashboard.workspace-queue .team-dash-metric-icon { display: none; }
+  body .app-provider .team-dashboard.workspace-queue .team-dash-metric-copy small { display: none; }
+  body .app-provider .team-dashboard.workspace-queue .team-dash-main-grid { margin-top: 8px; gap: 8px; }
+  body .app-provider .team-dashboard.workspace-queue > :is(.team-presence-panel, .team-dash-workload) { margin-top: 8px; }
+  body .app-provider .feed-view.workspace-queue { gap: 8px; }
+  .feed-layout { gap: 8px; }
+  body .app-provider .feed-view.workspace-queue .feed-card { padding: 12px; }
+  body .app-provider .notifications-view.workspace-queue .notification-row { padding: 12px; }
+}
+@container workspace (max-width: 480px) {
+  body .app-provider .notifications-view.workspace-queue :is(.notification-metrics > button, .notification-progress-card) {
+    position: relative; grid-template-columns: minmax(0, 1fr); grid-template-rows: 32px auto;
+    align-content: start; gap: 4px; min-height: 112px; padding: 12px; text-align: start;
+  }
+  body .app-provider .notifications-view.workspace-queue .notification-metrics strong { grid-column: 1; grid-row: 1; line-height: 32px; }
+  body .app-provider .notifications-view.workspace-queue .notification-metrics :is(button > span, .notification-progress-card > span) { grid-column: 1; grid-row: 2; }
+  body .app-provider .notifications-view.workspace-queue .notification-metrics b { line-height: 18px; }
+  body .app-provider .notifications-view.workspace-queue .notification-metrics small { display: none; }
+  body .app-provider .notifications-view.workspace-queue .notification-progress-card > i { position: absolute; inset: auto 12px 8px; height: 4px; }
 }

@@ -1,3 +1,4 @@
+import { russianDateTimeFormatter } from "./date-time-format";
 import { useMemo, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
@@ -31,7 +32,7 @@ export function TaskCalendarView({ tasks, onSelect, actions, toolbarTarget }: Ta
   });
   const todayKey = localDateKey(new Date());
   const [selectedDay, setSelectedDay] = useState(() => new Date());
-  const monthLabel = new Intl.DateTimeFormat("ru-RU", {
+  const monthLabel = russianDateTimeFormatter({
     month: "long",
     year: "numeric",
   }).format(month);

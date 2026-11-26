@@ -1,3 +1,4 @@
+import { russianDateTimeFormatter } from "./date-time-format";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { LoadingSkeleton } from "./LoadingSkeleton";
 import { CalendarAudienceActions } from "./CalendarAudienceActions";
@@ -122,7 +123,7 @@ function isPastDay(value: Date): boolean {
 }
 
 function dateLabel(value: Date, weekday = true): string {
-  return new Intl.DateTimeFormat("ru-RU", {
+  return russianDateTimeFormatter({
     weekday: weekday ? "long" : undefined,
     day: "numeric",
     month: "long",
@@ -132,7 +133,7 @@ function dateLabel(value: Date, weekday = true): string {
 
 function eventTime(event: CalendarEvent): string {
   if (event.allDay) return "Весь день";
-  const format = new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit" });
+  const format = russianDateTimeFormatter({ hour: "2-digit", minute: "2-digit" });
   return `${format.format(new Date(event.startsAt))}–${format.format(new Date(event.endsAt))}`;
 }
 
@@ -298,7 +299,7 @@ export function CalendarView({
     observer.observe(frame);
     return () => observer.disconnect();
   }, []);
-  const monthLabel = new Intl.DateTimeFormat("ru-RU", { month: "long", year: "numeric" }).format(month);
+  const monthLabel = russianDateTimeFormatter({ month: "long", year: "numeric" }).format(month);
   const selectedFromEvents = events.find((item) => item.id === selectedState?.id);
   const selected = selectedState && selectedFromEvents
     ? Date.parse(selectedFromEvents.updatedAt) > Date.parse(selectedState.updatedAt)

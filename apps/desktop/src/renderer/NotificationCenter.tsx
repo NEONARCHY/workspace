@@ -189,59 +189,24 @@ export function NotificationCenter({
   ];
 
   return (
-    <section className="workspace-view notifications-view" aria-label="Центр уведомлений">
+    <section className="workspace-view workspace-queue notifications-view" aria-label="Центр уведомлений">
       <WorkspaceSectionHeader motif="notifications" className="notification-header">
         <div>
           <span className="notification-kicker">Центр внимания</span>
           <h1>Требует моего внимания</h1>
           <p>Одна спокойная очередь для решений, сроков и важных обновлений.</p>
         </div>
-        <div className="notification-head-actions" data-satin-excluded="true">
-          <Input
-            aria-label="Поиск уведомлений"
-            contentBefore={<Search24Regular />}
-            placeholder="Найти уведомление"
-            value={query}
-            onChange={(_, data) => setQuery(data.value)}
-          />
-          <Button
-            appearance="subtle"
-            disabled={unreadCount === 0}
-            icon={<CheckmarkCircle24Regular />}
-            onClick={() => void onMarkAllRead()}
-          >
-            Прочитать все
-          </Button>
-        </div>
       </WorkspaceSectionHeader>
 
       <div className="notification-metrics" aria-label="Сводка уведомлений">
-        <button
-          className={filter === "unread" ? "active" : ""}
-          aria-pressed={filter === "unread"}
-          type="button"
-          onClick={() => setFilter("unread")}
-        >
-          <strong>{unreadCount}</strong>
-          <span><b>Новые уведомления</b><small>Ещё не просмотрены</small></span>
+        <button className={filter === "unread" ? "active" : ""} aria-pressed={filter === "unread"} type="button" onClick={() => setFilter("unread")}>
+          <strong>{unreadCount}</strong><span><b>Новые уведомления</b><small>Ещё не просмотрены</small></span>
         </button>
-        <button
-          className={filter === "attention" ? "active" : ""}
-          aria-pressed={filter === "attention"}
-          type="button"
-          onClick={() => setFilter("attention")}
-        >
-          <strong>{attentionCount}</strong>
-          <span><b>Нужно решить</b><small>Рабочие действия</small></span>
+        <button className={filter === "attention" ? "active" : ""} aria-pressed={filter === "attention"} type="button" onClick={() => setFilter("attention")}>
+          <strong>{attentionCount}</strong><span><b>Нужно решить</b><small>Рабочие действия</small></span>
         </button>
-        <button
-          className={filter === "all" ? "active" : ""}
-          aria-pressed={filter === "all"}
-          type="button"
-          onClick={() => setFilter("all")}
-        >
-          <strong>{available.length}</strong>
-          <span><b>Вся история</b><small>Доступные события</small></span>
+        <button className={filter === "all" ? "active" : ""} aria-pressed={filter === "all"} type="button" onClick={() => setFilter("all")}>
+          <strong>{available.length}</strong><span><b>Вся история</b><small>Доступные события</small></span>
         </button>
         <div className="notification-progress-card" role="group" aria-label="Прочтение уведомлений">
           <span><b>Прочитано уведомлений</b><small>{available.length === 0 ? "Пока нет уведомлений" : `${readCount} из ${available.length} просмотрены`}</small></span>
@@ -249,6 +214,17 @@ export function NotificationCenter({
           <i role="progressbar" aria-label="Доля прочитанных уведомлений" aria-valuemin={0} aria-valuemax={100} aria-valuenow={readPercent} aria-valuetext={available.length === 0 ? "Пока нет уведомлений" : `${readCount} из ${available.length} прочитаны`}><span style={{ width: `${readPercent}%` }} /></i>
         </div>
       </div>
+
+        <div className="notification-head-actions workspace-queue-toolbar" data-satin-excluded="true">
+          <Button appearance="subtle" disabled={unreadCount === 0} icon={<CheckmarkCircle24Regular />} onClick={() => void onMarkAllRead()}>Прочитать все</Button>
+          <Input
+            aria-label="Поиск уведомлений"
+            contentBefore={<Search24Regular />}
+            placeholder="Найти уведомление"
+            value={query}
+            onChange={(_, data) => setQuery(data.value)}
+          />
+        </div>
 
       <div className="notification-layout">
         <div className="notification-stream-shell">

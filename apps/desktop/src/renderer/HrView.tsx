@@ -1,3 +1,4 @@
+import { russianDateTimeFormatter } from "./date-time-format";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import type { DossierContext } from "@yuksalish/contracts";
 import { DossiersWorkspace } from "./DossiersWorkspace";
@@ -20,7 +21,7 @@ type TabKey = "staff" | "tenure" | "registers" | "hiring" | "dossiers" | "photos
 const today = () => new Date().toISOString().slice(0, 10);
 const month = () => new Date().toISOString().slice(0, 7);
 const tenure = (item: Pick<HrProfile, "serviceYears" | "serviceMonths" | "serviceDays">) => `${item.serviceYears} г. ${item.serviceMonths} мес. ${item.serviceDays} дн.`;
-const calculationDate = (value?: string) => value ? new Intl.DateTimeFormat("ru-RU", { dateStyle: "long" }).format(new Date(`${value}T00:00:00`)) : "…";
+const calculationDate = (value?: string) => value ? russianDateTimeFormatter({ dateStyle: "long" }).format(new Date(`${value}T00:00:00`)) : "…";
 const statusLabel: Record<string, string> = { draft: "Черновик HR", pending_chair: "На подписи председателя", approved: "Передан бухгалтеру", returned: "Возвращён HR", closed: "Закрыт" };
 
 interface Props { readonly token: string; readonly people: readonly WorkspacePerson[]; readonly departments?: readonly WorkspaceDepartment[]; readonly currentUser: WorkspacePerson; }

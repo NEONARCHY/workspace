@@ -5,10 +5,13 @@ const path = require("node:path");
 const assert = require("node:assert/strict");
 const phase = process.argv.includes("--before") ? "before" : "after";
 const galleryOnly = process.argv.includes("--gallery-only");
+const attentionSuite = process.argv.includes("--attention");
 const origin = process.env.UI_QA_ORIGIN || "http://127.0.0.1:5186";
 assert(["127.0.0.1", "localhost"].includes(new URL(origin).hostname));
-const output = path.resolve(process.env.UI_QA_OUTPUT || "tmp/ui-consistency-iteration-1");
-const sections = [{ id: "tasks", label: "Задачи", root: ".tasks-view" }, { id: "payments", label: "Заявки на оплату", root: ".approvals-view" }, { id: "trips", label: "Поездки", root: ".trips-view" }];
+const output = path.resolve(process.env.UI_QA_OUTPUT || `tmp/ui-consistency-iteration-${attentionSuite ? "2" : "1"}`);
+const sections = attentionSuite
+  ? [{ id: "overview", label: "Обзор команды", root: ".team-dashboard" }, { id: "notifications", label: "Уведомления", root: ".notifications-view" }, { id: "feed", label: "Лента", root: ".feed-view" }]
+  : [{ id: "tasks", label: "Задачи", root: ".tasks-view" }, { id: "payments", label: "Заявки на оплату", root: ".approvals-view" }, { id: "trips", label: "Поездки", root: ".trips-view" }];
 const settle = async page => page.evaluate(async () => {
   await document.fonts.ready;
   await Promise.race([Promise.all(document.getAnimations().filter(a => Number(a.effect?.getComputedTiming().endTime) < 2000).map(a => a.finished.catch(() => undefined))), new Promise(r => setTimeout(r, 900))]);
@@ -35,15 +38,28 @@ function fixtures(demo) {
     createdAt: "2026-11-24T10:00:00Z", updatedAt: "2026-11-25T10:00:00Z", revision: 1, versions: [], actions: [] }));
   const tripStages = ["launch", "deputy_approval", "manager_approval", "hr"];
   const tripRequests = Array.from({ length: 12 }, (_, i) => ({ id: `trip-${i}`, number: `TR-${231 + i}`, requesterUserId: people[i % people.length].id, purpose: ["Рабочая встреча с региональной командой", "Проверка хода реализации проекта", "Подготовка совместной программы"][i % 3], destination: ["Самарканд", "Бухара", "Ташкент"][i % 3], startDate: "2026-12-04", endDate: "2026-12-06", employeeIds: [people[i % people.length].id], stage: tripStages[i % 4], stageLabel: ["Запуск", "Согласование заместителя", "Утверждение председателем", "Кадровая служба"][i % 4], status: "running", statusLabel: "На согласовании", canEdit: false, allowedActions: [], actions: [], createdAt: "2026-11-24T09:00:00Z", updatedAt: "2026-11-25T09:00:00Z" }));
-  return { user, people, tasks, requests, tripRequests, workflow };
+  const feedPosts = Array.from({ length: 6 }, (_, i) => ({ id: `post-${i}`, authorUserId: people[i % people.length].id,
+    title: ["План региональных встреч на декабрь", "Материалы к рабочему совещанию", "Итоги совместной работы команды"][i % 3],
+    body: "Коллеги, подготовлены материалы для следующего этапа работы.\n\nПожалуйста, проверьте задачи своего подразделения и добавьте результаты до согласованного срока. Все документы и обсуждения доступны в карточках проектов.",
+    isPinned: i === 0, likedByCurrentUser: false, likeCount: 0, reactions: [], canEdit: true, canDelete: true, canPin: true,
+    comments: [{ id: `comment-${i}`, authorUserId: user.id, body: "Материалы проверены, дополнения переданы команде.", reactions: [], canDelete: true, createdAt: "2026-11-26T07:30:00Z" }],
+    createdAt: "2026-11-26T07:00:00Z", updatedAt: "2026-11-26T07:00:00Z" }));
+  const notifications = Array.from({ length: 300 }, (_, i) => ({ id: `notice-${i}`, kind: ["approval", "task", "calendar", "message"][i % 4],
+    section: ["payment_requests", "tasks", "calendar", "messenger"][i % 4], priority: i % 4 === 0 ? "high" : "normal",
+    title: ["Нужно решение по заявке", "Задача передана на проверку", "Приглашение на рабочую встречу", "Новое сообщение в рабочем чате"][i % 4],
+    body: ["Оборудование для региональной встречи · Утверждение руководителем", "План работы подразделения · Результат готов к проверке", "Подготовка совместной программы · Встреча команды", "Обсуждение материалов декабрьского совещания"][i % 4],
+    entityId: null, requiresAction: i % 4 === 0, isReminder: false, occurredAt: "2026-11-26T07:00:00Z", readAt: i % 9 === 8 ? "2026-11-26T07:10:00Z" : null, resolvedAt: null }));
+  return { user, people, tasks, requests, tripRequests, workflow, feedPosts, notifications };
 }
 async function measure(page, selector) {
   return page.locator(selector).evaluate(root => {
     const rect = node => { const r = node?.getBoundingClientRect(); return r ? { x: r.x, y: r.y, width: r.width, height: r.height, bottom: r.bottom, right: r.right } : null; };
-    const hero = root.querySelector(".ws-section-header"), toolbar = root.querySelector(".ws2-process-toolbar, .task-filters"), search = root.querySelector(".workspace-search");
+    const hero = root.querySelector(".ws-section-header"), toolbar = root.querySelector(".ws2-process-toolbar, .task-filters, .notification-head-actions"), search = root.querySelector(".workspace-search");
     return { hero: rect(hero), toolbar: rect(toolbar), search: rect(search), root: rect(root),
       pageOverflow: document.documentElement.scrollWidth - innerWidth,
       filters: rect(root.querySelector(".workspace-queue-filters")),
+      metrics: rect(root.querySelector(".team-dash-metrics, .notification-metrics")),
+      feed: rect(root.querySelector(".feed-layout")),
       controls: toolbar ? [...toolbar.children].filter(n => n.getBoundingClientRect().width).map(n => ({ class: n.className, ...rect(n) })) : [],
       rows: root.querySelectorAll("tbody tr, .approval-board-card, .kanban-card").length };
   });
@@ -68,7 +84,11 @@ async function measure(page, selector) {
         const send = json => route.fulfill({ json });
         if (/\/auth\/(web\/)?login$/.test(endpoint)) return send({ accessToken: "qa-token", expiresIn: 3600, user: data.user });
         if (!["GET", "HEAD"].includes(request.method())) return route.fulfill({ status: 403, json: { detail: "Synthetic QA: no writes" } });
-        if (endpoint === "/workspace/bootstrap") return send({ currentUser: data.user, people: data.people, tasks: data.tasks, requests: data.requests, tripRequests: data.tripRequests, workflow: data.workflow, projectWorkflow: null, tripWorkflow: null, requestWorkflows: {}, projects: [], chats: [], messages: [], departments: [], positions: [], attachments: [], feedPosts: [], calendarEvents: [], notifications: [], canCreatePaymentRequests: true, notificationPreferences: { desktopEnabled: false } });
+        if (endpoint === "/workspace/bootstrap") return send({ currentUser: data.user, people: data.people, tasks: data.tasks, requests: data.requests, tripRequests: data.tripRequests, workflow: data.workflow, projectWorkflow: null, tripWorkflow: null, requestWorkflows: {}, projects: [], chats: [], messages: [], departments: [], positions: [], attachments: [], feedPosts: attentionSuite ? data.feedPosts : [], calendarEvents: [], notifications: attentionSuite ? data.notifications : [], canCreatePaymentRequests: true, notificationPreferences: { desktopEnabled: false, soundEnabled: false, messagesEnabled: true, tasksEnabled: true, approvalsEnabled: true, calendarEnabled: true, tripsEnabled: true, remindersEnabled: true } });
+        if (endpoint === "/efficiency") return send({ period: "2026-11", timezone: "Asia/Tashkent", methodologyVersion: "EFF-1", trackingStartedAt: "2026-09-01T00:00:00Z", currentUserId: data.user.id, employees: [] });
+        if (endpoint === "/workday/team") return send({ asOf: "2026-11-26T07:00:00Z", members: [], workingCount: 0 });
+        if (endpoint === "/grants") return send([]);
+        if (endpoint === "/ai-referent/signature-inbox") return send({ items: [], totalCount: 0, offset: 0 });
         if (endpoint === "/personal-preferences/release-history") return send({ readEntryIds: releaseIds });
         if (endpoint === "/workday/me") return send({ status: "not_started", schedule: { startsAt: "09:00", endsAt: "18:00" }, session: null });
         if (endpoint === "/support-requests") return send({ mode: "inbox", requests: [], unreadResponseCount: 0, indicator: null });
@@ -92,7 +112,7 @@ async function measure(page, selector) {
       for (const section of sections) {
         // Isolate responsive content geometry from the separately tested rail drawer.
         await page.setViewportSize({ width: 1440, height: 960 }); await settle(page);
-        const nav = page.locator(`.rail-action[aria-label="${section.label}"]`);
+        const nav = section.id === "notifications" ? page.locator(".notification-bell") : page.locator(`.rail-action[aria-label="${section.label}"]`);
         if (!await nav.isVisible()) {
           const menu = page.getByRole("button", { name: "Открыть меню", exact: true });
           if (await menu.count()) await menu.click();
@@ -108,12 +128,13 @@ async function measure(page, selector) {
         }
         await page.setViewportSize({ width, height });
         await settle(page);
+        await page.locator("#workspace-content").focus();
         await page.mouse.move(width - 1, 0);
         const file = `${section.id}-${theme}-${width}.png`;
         await page.screenshot({ path: path.join(output, phase, file) });
         const geometry = await measure(page, section.root);
         results.push({ section: section.id, width, height, theme, ...geometry });
-        if (phase === "after") {
+        if (phase === "after" && !attentionSuite) {
           assert(geometry.pageOverflow <= 1, `${file}: page overflow`);
           assert(Math.abs(geometry.search.height - geometry.filters.height) <= 1, `${file}: search/filter height`);
           for (const [name, rect] of Object.entries({ toolbar: geometry.toolbar, filters: geometry.filters })) {
@@ -130,6 +151,50 @@ async function measure(page, selector) {
           await field.fill(""); await field.blur();
           await page.waitForFunction(({ selector, count }) => document.querySelectorAll(`${selector} .record-row, ${selector} .approval-board-card`).length === count, { selector: section.root, count });
         }
+        if (phase === "after" && attentionSuite) {
+          assert(geometry.pageOverflow <= 1, `${file}: page overflow`);
+          const clippedHeader = await page.locator(`${section.root} .ws-section-header`).evaluate(header => {
+            const bounds = header.getBoundingClientRect();
+            return [...header.children].filter(node => !node.classList.contains("ws-section-header-art")).some(node => {
+              const rect = node.getBoundingClientRect();
+              return rect.width > 0 && rect.height > 0 && (rect.top < bounds.top - 1 || rect.bottom > bounds.bottom + 1);
+            });
+          });
+          assert(!clippedHeader, `${file}: clipped header content`);
+          for (const rect of [geometry.toolbar, geometry.metrics].filter(Boolean)) {
+            assert(Math.abs(rect.x - geometry.hero.x) <= 1 && Math.abs(rect.right - geometry.hero.right) <= 1, `${file}: shared edges`);
+          }
+          if (section.id === "notifications") {
+            const rows = page.locator(".notification-row");
+            assert.equal(await rows.count(), 15, `${file}: first batch`);
+            const field = page.getByRole("textbox", { name: "Поиск уведомлений" });
+            await field.fill("несуществующий-qa-результат"); await page.waitForFunction(() => !document.querySelector(".notification-row"));
+            await field.fill(""); await field.blur(); await page.waitForFunction(() => document.querySelectorAll(".notification-row").length === 15);
+            await rows.last().scrollIntoViewIfNeeded();
+            await page.waitForFunction(() => document.querySelectorAll(".notification-row").length === 30);
+            await page.setViewportSize({ width: 1440, height: 960 }); await settle(page);
+            await page.locator('.rail-action[aria-label="Лента"]').click(); await page.locator(".feed-view").waitFor();
+            assert.equal(await rows.count(), 0, `${file}: released on leave`);
+            await page.locator(".notification-bell").click(); await rows.first().waitFor();
+            assert.equal(await rows.count(), 15, `${file}: reset on return`);
+          }
+          if (section.id === "feed") {
+            assert(Math.abs((geometry.feed.x - geometry.hero.x) - (geometry.hero.right - geometry.feed.right)) <= 1, `${file}: centered feed`);
+            const draft = page.locator(".feed-comment-composer input").first();
+            await draft.fill("Черновик комментария"); assert.equal(await draft.inputValue(), "Черновик комментария"); await draft.fill("");
+            await page.getByRole("button", { name: "Новое объявление", exact: true }).click();
+            await page.locator(".feed-composer-dialog").waitFor(); await page.getByRole("button", { name: "Отмена", exact: true }).click();
+          }
+          if (section.id === "overview") {
+            const overlaps = await page.locator(".team-dash-task-copy").evaluateAll(copies => copies.some(copy => {
+              const rects = [...copy.children].map(node => node.getBoundingClientRect()).filter(rect => rect.height > 0);
+              return rects.some((rect, i) => i > 0 && rect.top < rects[i - 1].bottom - 1);
+            }));
+            assert(!overlaps, `${file}: overlapping task explanations`);
+            await page.locator(".team-dash-metric").first().click(); await page.locator(".team-dash-dialog").waitFor();
+            await page.locator(".team-dash-dialog").getByRole("button", { name: "Закрыть", exact: true }).click();
+          }
+        }
         console.log(`${phase} ${file}`);
       }
       await context.close();
@@ -138,7 +203,7 @@ async function measure(page, selector) {
     assert.deepEqual(errors, []);
     await fs.writeFile(path.join(output, "index.html"), `<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Yuksalish — сравнение интерфейса</title>
       <style>*{box-sizing:border-box}body{margin:0;padding:24px;background:#111318;color:#eceef4;font:15px/1.5 system-ui}main{max-width:1600px;margin:auto}h1{font-size:28px}p,figcaption{color:#bfc6d3}select{margin:0 0 24px;padding:12px;border-radius:8px;background:#252a33;color:inherit}section{margin:0 0 32px}h2{font-size:20px}article{display:grid;grid-template-columns:1fr 1fr;gap:16px}figure{margin:0;min-width:0}img{display:block;width:100%;height:auto;border-radius:12px}figcaption{margin-bottom:8px}@media(max-width:700px){article{grid-template-columns:1fr}body{padding:12px}}</style>
-      <main><h1>Итерация 1 · Общая сетка рабочих разделов</h1><p>Реальные компоненты приложения, одинаковые синтетические данные до и после. Нажмите на снимок для исходного размера.</p><select id="size" aria-label="Размер и тема"><option value="dark-1440">1440 × 960 · тёмная</option><option value="light-1440">1440 × 960 · светлая</option><option value="dark-1024">1024 × 768 · тёмная</option><option value="dark-390">390 × 844 · тёмная</option></select>
+      <main><h1>Итерация ${attentionSuite ? "2" : "1"} · Общая сетка рабочих разделов</h1><p>Реальные компоненты приложения, одинаковые синтетические данные до и после. Нажмите на снимок для исходного размера.</p><select id="size" aria-label="Размер и тема"><option value="dark-1440">1440 × 960 · тёмная</option><option value="light-1440">1440 × 960 · светлая</option><option value="dark-1024">1024 × 768 · тёмная</option><option value="dark-390">390 × 844 · тёмная</option></select>
       ${sections.map(section => `<section data-section="${section.id}"><h2>${section.label}</h2><article>${["before", "after"].map((state, i) => `<figure><figcaption>${i ? "После" : "До"}</figcaption><a data-state="${state}" href="${state}/${section.id}-dark-1440.png"><img loading="lazy" src="${state}/${section.id}-dark-1440.png" alt="${section.label} — ${i ? "после" : "до"}"></a></figure>`).join("")}</article></section>`).join("")}
       <p>Подход: <a href="https://github.com/heydamir/unslop" style="color:#90d5df">unslop · Damir Sokolovsky · CC BY 4.0</a>. Цвета статусов, права и рабочие процессы сохранены.</p></main><script>document.querySelector('#size').addEventListener('change',event=>{document.querySelectorAll('section').forEach(section=>section.querySelectorAll('[data-state]').forEach(link=>{const src=link.dataset.state+'/'+section.dataset.section+'-'+event.target.value+'.png';link.href=src;link.querySelector('img').src=src}))})</script></html>`);
   } finally { await browser.close(); }

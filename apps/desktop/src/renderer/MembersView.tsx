@@ -1,3 +1,4 @@
+import { russianDateTimeFormatter } from "./date-time-format";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { LoadingSkeleton, SkeletonBlock, SkeletonTableRows } from "./LoadingSkeleton";
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
@@ -22,7 +23,7 @@ interface MembersViewProps {
 const genderLabel: Record<string, string> = { male: "Мужской", female: "Женский" };
 const displayName = (member: MemberDirectoryItem) =>
   [member.firstName, member.lastName].filter(Boolean).join(" ") || member.username || `Член №${member.id}`;
-const dateText = (value?: string | null) => value ? new Intl.DateTimeFormat("ru-RU", { dateStyle: "medium" }).format(new Date(value)) : "—";
+const dateText = (value?: string | null) => value ? russianDateTimeFormatter({ dateStyle: "medium" }).format(new Date(value)) : "—";
 
 function recentMembersStart(generatedAt?: string | null) {
   const reference = generatedAt ? new Date(generatedAt) : new Date();

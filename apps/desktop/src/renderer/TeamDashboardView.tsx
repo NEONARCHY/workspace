@@ -1,6 +1,6 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import type {
@@ -87,6 +87,7 @@ const shortDayFormatter = new Intl.DateTimeFormat("ru-RU", { weekday: "short" })
 const dateFormatter = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short" });
 const timeFormatter = new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit" });
 const fullDayFormatter = new Intl.DateTimeFormat("ru-RU", { weekday: "long", day: "numeric", month: "long" });
+const workloadMonthFormatter = new Intl.DateTimeFormat("ru-RU", { month: "long", year: "numeric", timeZone: "UTC" });
 
 const taskStatusLabels: Readonly<Record<WorkspaceTask["status"], string>> = {
   new: "Новая",
@@ -255,6 +256,16 @@ export function TeamDashboardView({
   const currentUser = people.find((person) => person.id === currentUserId);
   const visiblePeople = people;
   const activeTasks = tasks.filter((task) => activeStatuses.has(task.status));
+  const assignedByUser = useMemo(() => {
+    const groups = new Map<string, WorkspaceTask[]>();
+    for (const task of tasks) {
+      if (!activeStatuses.has(task.status)) continue;
+      const assigned = groups.get(task.assigneeId);
+      if (assigned) assigned.push(task);
+      else groups.set(task.assigneeId, [task]);
+    }
+    return groups;
+  }, [tasks]);
   const overdueTasks = activeTasks.filter((task) => isTaskOverdue(task, now));
   const teamReviewTasks = activeTasks.filter((task) => task.status === "awaiting_review");
   const reviewTasks = teamReviewTasks.filter((task) => task.authorId === currentUserId);
@@ -292,7 +303,7 @@ export function TeamDashboardView({
 
   const teamRows = (() => {
     const rows = visiblePeople.map((person) => {
-      const assigned = activeTasks.filter((task) => task.assigneeId === person.id);
+      const assigned = assignedByUser.get(person.id) ?? [];
       const expiredTasks = assigned.filter((task) => isTaskOverdue(task, now));
       const overdue = expiredTasks.length;
       const excludedExpired = expiredTasks.filter((task) => task.efficiencyExcluded).length;
@@ -395,7 +406,7 @@ export function TeamDashboardView({
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [flowSelection]);
 
-  return <div className="team-dashboard">
+  return <div className="team-dashboard workspace-queue">
     <WorkspaceSectionHeader motif="team" className="team-dash-hero" aria-labelledby="team-dashboard-title">
       <div className="team-dash-hero-copy">
         <span>Обзор команды · сегодня</span>
@@ -593,7 +604,7 @@ export function TeamDashboardView({
 
     <section className="team-dash-panel team-dash-workload" aria-labelledby="workload-title">
       <header className="team-dash-panel-heading team-dash-workload-heading">
-        <div><span>Без скрытых оценок</span><h3 id="workload-title">Текущая нагрузка</h3><p>Полоса показывает только количество активных задач относительно команды — не норму и не оценку сотрудника.</p><p>«Истёк срок» — текущие дедлайны. Процент справа — эффективность{efficiency ? ` за ${new Intl.DateTimeFormat("ru-RU", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${efficiency.period}-01T00:00:00Z`))}` : " за месяц"}, а не доля активных задач без просрочки.</p></div>
+        <div><span>Без скрытых оценок</span><h3 id="workload-title">Текущая нагрузка</h3><p>Полоса показывает только количество активных задач относительно команды — не норму и не оценку сотрудника.</p><p>«Истёк срок» — текущие дедлайны. Процент справа — эффективность{efficiency ? ` за ${workloadMonthFormatter.format(new Date(`${efficiency.period}-01T00:00:00Z`))}` : " за месяц"}, а не доля активных задач без просрочки.</p></div>
         <SlidingSegmented className="team-dash-filters" role="group" aria-label="Фильтр нагрузки">
           {([ ["all", "Все"], ["risk", "Истёк срок"], ["review", "На проверке"] ] as const).map(([key, label]) => <button className={teamFilter === key ? "active" : ""} aria-pressed={teamFilter === key} key={key} onClick={() => setTeamFilter(key)} type="button">{label}</button>)}
         </SlidingSegmented>

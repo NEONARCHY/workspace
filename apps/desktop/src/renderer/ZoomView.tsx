@@ -1,3 +1,4 @@
+import { russianDateTimeFormatter } from "./date-time-format";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { LoadingSkeleton, SkeletonBlock } from "./LoadingSkeleton";
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
@@ -116,12 +117,12 @@ function wallParts(value: string, timeZone: string): { date: string; time: strin
 }
 
 function timeText(value: string, timeZone: string): string {
-  return new Intl.DateTimeFormat("ru-RU", { timeZone, hour: "2-digit", minute: "2-digit" })
+  return russianDateTimeFormatter({ timeZone, hour: "2-digit", minute: "2-digit" })
     .format(new Date(value));
 }
 
 function dayText(value: string, timeZone: string): string {
-  return new Intl.DateTimeFormat("ru-RU", { timeZone, day: "numeric", month: "long", weekday: "long" })
+  return russianDateTimeFormatter({ timeZone, day: "numeric", month: "long", weekday: "long" })
     .format(new Date(value));
 }
 
@@ -135,7 +136,7 @@ export function formatMeetingId(value?: string | null): string {
 }
 
 export function invitationText(meeting: ZoomMeeting, timeZone: string): string {
-  const when = new Intl.DateTimeFormat("ru-RU", {
+  const when = russianDateTimeFormatter({
     timeZone, day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
   }).format(new Date(meeting.startsAt));
   return [
