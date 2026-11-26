@@ -92,6 +92,7 @@ import "../src/renderer/workspace-field-borders.css";
 import "../src/renderer/mobile-density.css";
 import "../src/renderer/personal-home.css";
 import "../src/renderer/page-scroll-layout.css";
+import "../src/renderer/workspace-queue.css";
 import "./page-canvas.css";
 
 const nothing = async () => undefined;

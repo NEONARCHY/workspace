@@ -742,8 +742,9 @@ const deadlineEventLabels = {
   escalation: "Эскалация отправлена",
 } as const;
 
+const moneyFormat = new Intl.NumberFormat("ru-RU");
 function formatMoney(amount: number, currency: string): string {
-  return `${new Intl.NumberFormat("ru-RU").format(amount)} ${currency}`;
+  return `${moneyFormat.format(amount)} ${currency}`;
 }
 
 function formatDateTime(value: string | null | undefined): string {
@@ -1603,7 +1604,7 @@ export function ApprovalsView({
   }, [canManage, mode, redoWorkflowChange, undoWorkflowChange]);
 
   return (
-    <section data-dialog-only={dialogOnly || undefined} className="workspace-view approvals-view workflow-process-view" aria-label="Согласования">
+    <section data-dialog-only={dialogOnly || undefined} className="workspace-view workspace-queue approvals-view workflow-process-view" aria-label="Согласования">
 {!dialogOnly && <>
       <WorkspaceSectionHeader motif="payments" className="section-toolbar approvals-toolbar workflow-hero-header">
         <div>
@@ -1711,13 +1712,13 @@ export function ApprovalsView({
       {mode === "requests" ? (
         <div className="approval-workspace">
 {!dialogOnly && <>
-          <div className="approval-view-toolbar ws2-process-toolbar">
+          <div className="approval-view-toolbar ws2-process-toolbar workspace-queue-toolbar">
             <SlidingSegmented className="ws2-segmented" role="group" aria-label="Вид заявок">
               <button type="button" className={presentation === "kanban" ? "active" : ""} aria-pressed={presentation === "kanban"} onClick={() => setPresentation("kanban")}>Канбан</button>
               <button type="button" className={presentation === "list" ? "active" : ""} aria-pressed={presentation === "list"} onClick={() => setPresentation("list")}>Список</button>
             </SlidingSegmented>
             <Input contentBefore={<Search20Regular />} className="approval-search" aria-label="Поиск заявок" placeholder="Номер, название или проект" value={requestQuery} onChange={(_event, data) => setRequestQuery(data.value)} />
-            <SlidingSegmented className="ws2-segmented" role="group" aria-label="Фильтр заявок">
+            <SlidingSegmented className="ws2-segmented workspace-queue-filters" role="group" aria-label="Фильтр заявок">
               {([
                 ["all", "Все", filterCounts.all],
                 ["actionable", "Нужно моё решение", filterCounts.actionable],
