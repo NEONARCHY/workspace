@@ -20,9 +20,15 @@ describe("corporate workspace authentication alpha", () => {
       await import("./TasksView");
     });
     fireEvent.click(await screen.findByRole("button", { name: "Новая задача" }));
-    const composer = within(await screen.findByRole("dialog"));
-    // Fluent's modal focus handoff can briefly hide the mounted dialog from accessibility.
-    changeField(await composer.findByRole("textbox", { name: "Название задачи" }), {
+    const dialog = await screen.findByRole("dialog");
+    const composer = within(dialog);
+    const titleField = await composer.findByRole("textbox", { name: "Название задачи" });
+    // Model entering the form after Tabster registers it, even when the input has autofocus.
+    await act(async () => {
+      dialog.focus();
+      titleField.focus();
+    });
+    changeField(titleField, {
       target: { value: "Проверить новый маршрут оплаты" },
     });
     changeField(composer.getByRole("textbox", { name: "Описание новой задачи" }), {
