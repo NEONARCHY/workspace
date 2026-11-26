@@ -87,6 +87,18 @@ describe("ScoreGauge", () => {
 });
 
 describe("EfficiencyView", () => {
+  it("does not rebuild the unchanged history when searching the employee table", () => {
+    const employee = { ...overview.employees[0]! };
+    const history = vi.fn(() => overview.employees[0]!.history);
+    Object.defineProperty(employee, "history", { get: history });
+    render(<FluentProvider theme={workspaceTheme}><EfficiencyView overview={{ ...overview, employees: [employee, overview.employees[1]!] }} loading={false} onPeriodChange={vi.fn()} /></FluentProvider>);
+    const initialReads = history.mock.calls.length;
+    expect(initialReads).toBeGreaterThan(0);
+    fireEvent.change(screen.getByRole("textbox", { name: "Поиск сотрудников в эффективности" }), { target: { value: "Бахтиёр" } });
+    expect(history).toHaveBeenCalledTimes(initialReads);
+    expect(screen.getByRole("row", { name: "Открыть сводку: Бахтиёр Самугов" })).toBeInTheDocument();
+  });
+
   it("shows the employee photo in both the summary and the aggregate table", async () => {
     const load = vi.spyOn(api, "loadProfileAvatar").mockResolvedValue(new Blob(["photo"], { type: "image/png" }));
     vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:efficiency-avatar");
@@ -142,7 +154,8 @@ describe("EfficiencyView", () => {
 
     expect(css).toMatch(/\.efficiency-view\s*\{[^}]*overflow-y:\s*auto/s);
     expect(css).toMatch(/\.eff-table-scroll\s*\{[^}]*overflow-x:\s*auto/s);
-    expect(css).toMatch(/\.eff-chart-line\s*\{[^}]*filter:\s*url\(#eff-line-glow\)/s);
+    expect(css).not.toContain("filter: url(#eff-line-glow)");
+    expect(css).toMatch(/\.eff-chart-line\s*\{[^}]*stroke-width:\s*3/s);
     expect(css).toMatch(/\.eff-table-scroll:focus-visible/);
     expect(css).toMatch(/@media\s*\(prefers-reduced-motion:\s*reduce\)/);
   });

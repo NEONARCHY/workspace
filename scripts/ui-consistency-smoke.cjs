@@ -10,14 +10,17 @@ const peopleSuite = process.argv.includes("--people");
 const operationsSuite = process.argv.includes("--operations");
 const documentsSuite = process.argv.includes("--documents");
 const topbarSuite = process.argv.includes("--topbar");
+const reportingSuite = process.argv.includes("--reporting");
 const planningSuite = process.argv.includes("--planning") || topbarSuite;
 const onlyWidth = Number(process.env.UI_QA_WIDTH || 0);
 assert([0, 320, 390, 720, 1024, 1440].includes(onlyWidth));
 const origin = process.env.UI_QA_ORIGIN || "http://127.0.0.1:5186";
 assert(["127.0.0.1", "localhost"].includes(new URL(origin).hostname));
-const iteration = topbarSuite ? "7" : planningSuite ? "6" : documentsSuite ? "5" : operationsSuite ? "4" : peopleSuite ? "3" : attentionSuite ? "2" : "1";
+const iteration = reportingSuite ? "8" : topbarSuite ? "7" : planningSuite ? "6" : documentsSuite ? "5" : operationsSuite ? "4" : peopleSuite ? "3" : attentionSuite ? "2" : "1";
 const output = path.resolve(process.env.UI_QA_OUTPUT || `tmp/ui-consistency-iteration-${iteration}`);
-const sections = planningSuite
+const sections = reportingSuite
+  ? [{ id: "hisobot", label: "AI Hisobot", root: ".ai-hisobot-view" }, { id: "monthly", label: "Ойлик ҳисоботлар", root: ".monthly-reports-page" }, { id: "efficiency", label: "Эффективность", navLabel: "Задачи", root: ".tasks-view" }]
+  : planningSuite
   ? [{ id: "home", label: "Главная", root: ".personal-home" }, { id: "calendar", label: "Календарь", root: ".calendar-view" }, { id: "projects", label: "Проекты", root: ".project-hub-view" }]
   : documentsSuite
   ? [{ id: "letters", label: "Входящие письма", root: ".incoming-documents" }, { id: "telegram", label: "Доступ к ботам", root: ".telegram-access-view" }, { id: "survey", label: "Аналитика опросов", root: ".survey-analytics" }]
@@ -91,7 +94,7 @@ function fixtures(demo) {
   hub.items = hub.workstreams.flatMap(w => Array.from({ length: 5 }, (_, i) => ({ id: `${w.id}-item-${i}`, projectId: w.projectId, workstreamId: w.id, kind: i % 2 ? "event" : "task", title: ["Подготовить программу встречи", "Провести встречу команды", "Согласовать материалы"][i % 3], description: "Подготовка материалов и проверка результата.", startsAt: "2026-12-02T07:00:00Z", dueAt: i === 0 ? "2026-11-25T12:00:00Z" : "2026-12-04T12:00:00Z", budget: 1000000, status: ["active", "planned", "completed", "rejected", "active"][i], assigneeUserIds: [user.id], calendarEventId: null, createdByUserId: user.id, createdAt: "2026-11-01T07:00:00Z", updatedAt: "2026-11-26T07:00:00Z", requestCount: 0, approvedRequestCount: 0, actions: [] })));
   const home = demo.home;
   const calendarEvents = Array.from({ length: 15 }, (_, i) => ({ ...home.calendarEvents[0], id: `calendar-${i}`, title: ["Рабочая встреча региональной команды", "Обсуждение материалов программы", "Согласование плана проекта"][i % 3], startsAt: `2026-11-${String(20 + i % 9).padStart(2, "0")}T${String(7 + i % 4).padStart(2, "0")}:00:00Z`, endsAt: `2026-11-${String(20 + i % 9).padStart(2, "0")}T${String(8 + i % 4).padStart(2, "0")}:00:00Z` }));
-  return { user, people, tasks, requests, tripRequests, workflow, feedPosts, notifications, employees, departments, leaves, absenceRequests, presenceSummary, hr, members, zoom, incomingDocuments, telegram, survey, hub, home, calendarEvents, personalEfficiency: demo.personalEfficiency, recognition: demo.recognition, rates: demo.contextRates, weather: demo.contextWeather };
+  return { user, people, tasks, requests, tripRequests, workflow, feedPosts, notifications, employees, departments, leaves, absenceRequests, presenceSummary, hr, members, zoom, incomingDocuments, telegram, survey, hub, home, calendarEvents, personalEfficiency: demo.personalEfficiency, recognition: demo.recognition, rates: demo.contextRates, weather: demo.contextWeather, reporting: require("./ui-reporting-fixtures.cjs")(user, people) };
 }
 async function measure(page, selector) {
   return page.locator(selector).evaluate(root => {
@@ -111,10 +114,10 @@ async function measure(page, selector) {
   const browser = await chromium.launch({ channel: "msedge", headless: true });
   const results = [], errors = [];
   try {
-    for (const [width, height, theme] of galleryOnly ? [] : [[1440, 960, "dark"], [1440, 960, "light"], [1024, 768, "dark"], [390, 844, "dark"], ...((phase === "after" || topbarSuite) && (peopleSuite || operationsSuite || documentsSuite || planningSuite) ? [[320, 800, "dark"]] : []), ...((phase === "after" || topbarSuite) && (documentsSuite || planningSuite) ? [[720, 480, "dark"]] : [])].filter(([width]) => !onlyWidth || width === onlyWidth)) {
+    for (const [width, height, theme] of galleryOnly ? [] : [[1440, 960, "dark"], [1440, 960, "light"], [1024, 768, "dark"], [390, 844, "dark"], ...((phase === "after" || topbarSuite || reportingSuite) && (peopleSuite || operationsSuite || documentsSuite || planningSuite || reportingSuite) ? [[320, 800, "dark"]] : []), ...((phase === "after" || topbarSuite || reportingSuite) && (documentsSuite || planningSuite || reportingSuite) ? [[720, 480, "dark"]] : [])].filter(([width]) => !onlyWidth || width === onlyWidth)) {
       const context = await browser.newContext({ viewport: { width, height }, reducedMotion: "reduce" });
       const page = await context.newPage(); page.setDefaultTimeout(15000);
-      if (planningSuite) await page.clock.setFixedTime(new Date("2026-11-26T09:30:00Z"));
+      if (planningSuite || reportingSuite) await page.clock.setFixedTime(new Date("2026-11-26T09:30:00Z"));
       page.on("pageerror", error => errors.push(error.message));
       await page.addInitScript(theme => localStorage.setItem("yuksalish:color-theme:last", theme), theme);
       let data, releaseIds = [];
@@ -133,7 +136,12 @@ async function measure(page, selector) {
         if (planningSuite && endpoint === "/home/reactions") return send({ totalCount: 7, reactions: [{ emoji: "👍", count: 7 }] });
         if (planningSuite && endpoint === "/ai-referent/incoming") return send({ letters: [], totalCount: 0, filteredCount: 0, registeredCount: 0, attentionCount: 0, withAttachmentsCount: 0, journal: { available: false } });
         if (planningSuite && endpoint === "/incoming-letters") return send({ visibility: "assigned", deadline_timezone_verified: false, meta: { page: 1, limit: 20, total: 0 }, data: [] });
-        if (endpoint === "/efficiency") return send({ period: "2026-11", timezone: "Asia/Tashkent", methodologyVersion: "EFF-1", trackingStartedAt: "2026-09-01T00:00:00Z", currentUserId: data.user.id, employees: [] });
+        if (reportingSuite && endpoint === "/monthly-reports") return send(data.reporting.monthly);
+        if (reportingSuite && endpoint === "/hisobot/me") return send(data.reporting.hisobot.profile);
+        if (reportingSuite && endpoint === "/hisobot/me/history") return send(data.reporting.hisobot.reports.slice(0, 3));
+        if (reportingSuite && endpoint === "/hisobot/reports") return send(data.reporting.hisobot.reports);
+        if (reportingSuite && /\/hisobot\/(me\/unit-history|unit-reports)$/.test(endpoint)) return send([]);
+        if (endpoint === "/efficiency") return send(reportingSuite ? data.reporting.efficiency : { period: "2026-11", timezone: "Asia/Tashkent", methodologyVersion: "EFF-1", trackingStartedAt: "2026-09-01T00:00:00Z", currentUserId: data.user.id, employees: [] });
         if (endpoint === "/hr") return send(data.hr);
         if (endpoint === "/telegram-access") return send(data.telegram);
         if (endpoint === "/survey-analyses") return send([data.survey.analysis]);
@@ -162,8 +170,8 @@ async function measure(page, selector) {
         if (endpoint === "/leave-requests/context") return send({ hrUserId: data.people[0].id, deputyUserId: data.people[1].id, canConfigureSignature: false, signatureReady: true, tenureRules: [], canEditTenureRules: false });
         if (endpoint === "/leave-requests") return send(data.leaves);
         if (endpoint.includes("/directory")) return send({ canTerminateEmployees: true, employees: peopleSuite ? data.employees : data.people, people: data.people, roles: [], positions: [{ id: "qa-position", name: "Координатор региональных программ", isActive: true, sortOrder: 0 }], departments: peopleSuite ? data.departments : [], modules: [], accessRules: [] });
-        if (topbarSuite && endpoint === "/assistant/chats") return send([{ id: "qa-assistant-chat", title: "Рабочие вопросы", isDefault: true, isPinned: false, createdAt: "2026-11-26T08:00:00Z", updatedAt: "2026-11-26T08:00:00Z" }]);
-        if (topbarSuite && endpoint === "/assistant/messages") return send([]);
+        if ((topbarSuite || reportingSuite) && endpoint === "/assistant/chats") return send([{ id: "qa-assistant-chat", title: "Рабочие вопросы", isDefault: true, isPinned: false, createdAt: "2026-11-26T08:00:00Z", updatedAt: "2026-11-26T08:00:00Z" }]);
+        if ((topbarSuite || reportingSuite) && endpoint === "/assistant/messages") return send([]);
         if (topbarSuite && endpoint.includes("/context/exchange")) return send(data.rates);
         if (topbarSuite && endpoint.includes("/weather")) return send(data.weather);
         if (endpoint.includes("/context/exchange")) return send({ rates: [], asOf: "2026-11-26", stale: false });
@@ -180,16 +188,20 @@ async function measure(page, selector) {
       for (const section of sections) {
         // Isolate responsive content geometry from the separately tested rail drawer.
         await page.setViewportSize({ width: 1440, height: 960 }); await settle(page);
-        const nav = section.id === "notifications" ? page.locator(".notification-bell") : page.locator(`.rail-action[aria-label="${section.label}"]`);
+        const nav = section.id === "notifications" ? page.locator(".notification-bell") : reportingSuite ? page.getByRole("button", { name: section.navLabel || section.label, exact: true }) : page.locator(`.rail-action[aria-label="${section.navLabel || section.label}"]`);
         if (!await nav.isVisible()) {
           const menu = page.getByRole("button", { name: "Открыть меню", exact: true });
           if (await menu.count()) await menu.click();
           const more = page.getByRole("button", { name: /^Ещё,/ });
           if (!await nav.isVisible() && await more.count()) await more.click();
         }
+        if (reportingSuite && ["hisobot", "monthly"].includes(section.id) && !await nav.isVisible()) await page.getByRole("button", { name: "ИИ-модули", exact: true }).click();
         // Keyboard activation also works for entries in the overflow portal.
         if (peopleSuite) await nav.click();
         else { await nav.focus(); await nav.press("Enter"); }
+        if (reportingSuite && section.id === "efficiency") { await page.getByRole("button", { name: "Эффективность", exact: true }).click(); await page.locator(".eff-summary .eff-gauge-ring strong").first().waitFor(); }
+        if (reportingSuite && section.id === "hisobot") await page.locator("#hisobot-report-text").waitFor();
+        if (reportingSuite && section.id === "monthly") await page.locator(".monthly-reports-period").waitFor();
         try { await page.locator(section.root).waitFor(); } catch (error) {
           await page.screenshot({ path: path.join(output, `${phase}-failure-${width}.png`) });
           console.log((await page.locator(".workspace").innerText().catch(() => page.locator("body").innerText())).slice(0, 2500));
@@ -201,20 +213,20 @@ async function measure(page, selector) {
         await page.mouse.move(width - 1, 0);
         const file = `${section.id}-${theme}-${width}.png`;
         await capture(page, path.join(output, phase, file));
-        if (topbarSuite && section.id === "home") await capture(page.locator(".global-bar"), path.join(output, phase, `topbar-${theme}-${width}.png`));
+        if (topbarSuite && section.id === "home" || phase === "after" && reportingSuite && section.id === "hisobot") await capture(page.locator(".global-bar"), path.join(output, phase, `topbar-${theme}-${width}.png`));
         const geometry = await measure(page, section.root);
         results.push({ section: section.id, width, height, theme, ...geometry });
-        if (phase === "after" && topbarSuite) {
+        if (phase === "after" && (topbarSuite || reportingSuite)) {
           const toolbar = await page.locator(".global-bar").evaluate(bar => {
             const controls = [...bar.querySelectorAll(".browser-menu-trigger, .section-jump-trigger, .notification-bell, .color-theme-toggle, .assistant-launcher, .workspace-identity-menu, .connection-indicator, .context-trigger, .workday-control-mobile-trigger")].filter(node => node.getBoundingClientRect().height > 0);
             return controls.map(node => { const rect = node.getBoundingClientRect(), style = getComputedStyle(node); return { name: node.className, x: rect.x, y: rect.y, width: rect.width, height: rect.height, fill: style.backgroundColor, image: style.backgroundImage, shadow: style.boxShadow, radius: style.borderRadius, border: style.borderTopWidth }; });
           });
           for (const control of toolbar) {
             assert(Math.abs(control.height - 44) <= 1, `${file}: toolbar height ${control.name}`);
-            assert.equal(control.radius, "12px", `${file}: toolbar corner ${control.name}`);
+            assert.equal(control.radius, "50%", `${file}: toolbar corner ${control.name}`);
             assert.equal(control.border, "0px", `${file}: toolbar without frames ${control.name}`);
             assert.equal(control.fill, toolbar[0].fill, `${file}: shared toolbar fill ${control.name}`);
-            assert.notEqual(control.fill, "rgba(0, 0, 0, 0)", `${file}: visible toolbar fill ${control.name}`);
+            assert.equal(control.fill, "rgba(0, 0, 0, 0)", `${file}: transparent toolbar fill ${control.name}`);
             assert.equal(control.image, "none", `${file}: no gradient frame ${control.name}`);
             assert.equal(control.shadow, "none", `${file}: no inset frame ${control.name}`);
             if (width <= 1023) assert(Math.abs(control.width - 44) <= 1, `${file}: compact toolbar target ${control.name}`);
@@ -226,7 +238,20 @@ async function measure(page, selector) {
             assert(Math.min(...gaps) >= 7, `${file}: toolbar minimum spacing`);
             assert(Math.max(...gaps) - Math.min(...gaps) <= 1, `${file}: equal toolbar spacing`);
           }
-          if (section.id === "home") {
+          if (section.id === "home" || reportingSuite && section.id === "hisobot") {
+            const avatarSize = await page.locator(".workspace-identity-menu .fui-Avatar").boundingBox();
+            const orbSize = await page.locator(".assistant-launcher > .gradient-orb, .assistant-launcher > .gradient-orb-fallback").boundingBox();
+            assert.equal(avatarSize.width, 28); assert.equal(avatarSize.height, 28);
+            assert.equal(orbSize.width, avatarSize.width); assert.equal(orbSize.height, avatarSize.height);
+            await page.locator(".notification-bell").hover(); await settle(page);
+            const hover = await page.locator(".notification-bell").evaluate(node => { const style = getComputedStyle(node, "::before"); return { width: style.width, height: style.height, radius: style.borderRadius, fill: style.backgroundColor }; });
+            assert.deepEqual({ width: hover.width, height: hover.height, radius: hover.radius }, { width: "28px", height: "28px", radius: "50%" });
+            assert.notEqual(hover.fill, "rgba(0, 0, 0, 0)");
+            for (const selector of [".assistant-launcher", ".workspace-identity-menu"]) {
+              await page.locator(selector).hover(); await settle(page);
+              const style = await page.locator(selector).evaluate(node => ({ fill: getComputedStyle(node).backgroundColor, before: getComputedStyle(node, "::before").content }));
+              assert.deepEqual(style, { fill: "rgba(0, 0, 0, 0)", before: "none" }, `${file}: portrait/orb has no hover backing`);
+            }
             const themeButton = page.locator(".color-theme-toggle"), targetTheme = theme === "dark" ? "тёмную" : "светлую";
             await themeButton.scrollIntoViewIfNeeded(); await themeButton.click();
             await page.getByRole("button", { name: `Включить ${targetTheme} тему`, exact: true }).waitFor(); await themeButton.click();
@@ -234,7 +259,8 @@ async function measure(page, selector) {
               await page.locator(trigger).scrollIntoViewIfNeeded(); await page.locator(trigger).click();
               await page.getByRole("dialog", { name: title, exact: true }).waitFor(); await page.keyboard.press("Escape");
               await page.getByRole("dialog", { name: title, exact: true }).waitFor({ state: "hidden" });
-              assert.equal(await page.locator(trigger).evaluate(node => node === document.activeElement), true, `${file}: restore ${trigger} focus`);
+              await settle(page);
+              assert.equal(await page.locator(trigger).evaluate(node => node === document.activeElement), true, `${file}: restore ${trigger} focus; active=${await page.evaluate(() => document.activeElement?.outerHTML.slice(0, 500))}`);
             }
             await page.locator(".workspace-identity-menu").scrollIntoViewIfNeeded(); await page.locator(".workspace-identity-menu").click();
             await page.getByRole("button", { name: "Настройки", exact: true }).waitFor(); await page.keyboard.press("Escape");
@@ -266,6 +292,55 @@ async function measure(page, selector) {
           if (await next.count() && await next.isEnabled()) {
             await next.click();
             await page.getByRole("button", { name: /^Предыдущая страница:/ }).first().click();
+          }
+        }
+        if (phase === "after" && reportingSuite) {
+          const surfaces = await page.locator(section.root).evaluate(root => [...root.querySelectorAll(".hisobot-panel, .hisobot-activity-draft, .hisobot-tabs, .monthly-reports-panel, .monthly-reports-attachments, .eff-summary, .eff-method-card, .eff-coverage-card, .eff-people, .eff-commandbar, .eff-deadline-explanation")].filter(node => {
+            const style = getComputedStyle(node); return parseFloat(style.borderTopWidth) > 0 || style.boxShadow.includes("inset") || style.backgroundImage.includes("conic-gradient");
+          }).map(node => node.className));
+          assert.deepEqual(surfaces, [], `${file}: reporting surfaces without frames`);
+          assert.equal(geometry.pageOverflow, 0, `${file}: no reporting page overflow`);
+          if (section.id === "hisobot") {
+            const field = page.locator("#hisobot-report-text"); await field.fill("Мой черновик для проверки интерфейса");
+            assert(await page.getByRole("button", { name: "Отправить отчёт", exact: true }).isEnabled());
+            await page.getByRole("button", { name: "Моя история", exact: true }).click();
+            assert.equal(await page.locator(".hisobot-report-card").count(), 3);
+            await page.getByRole("button", { name: "Отчёты сотрудников", exact: true }).click();
+            await page.locator(".hisobot-report-card").first().waitFor();
+            assert.equal(await page.locator(".hisobot-report-card").count(), 24);
+            const search = page.getByRole("searchbox", { name: "Поиск отчётов" });
+            await search.fill("НетТакогоОтчета"); await page.getByText("По вашему запросу отчётов нет. Измените поиск или подразделение.", { exact: true }).waitFor();
+            await search.fill("Самарканд"); assert.equal(await page.locator(".hisobot-report-card").count(), 8);
+            await search.fill(""); await page.getByRole("combobox", { name: "Контур отчётности" }).click(); await page.getByRole("option", { name: "Центральный аппарат", exact: true }).click();
+            assert.equal(await page.locator(".hisobot-report-card").count(), 16);
+            await page.getByRole("button", { name: "Сегодня", exact: true }).click(); assert.equal(await field.inputValue(), "Мой черновик для проверки интерфейса");
+            await field.fill(""); await page.getByRole("button", { name: "Правила AI Hisobot", exact: true }).click();
+            await page.getByRole("dialog", { name: "Как учитываются отчёты" }).waitFor(); await page.keyboard.press("Escape");
+            await page.getByRole("dialog", { name: "Как учитываются отчёты" }).waitFor({ state: "hidden" });
+          } else if (section.id === "monthly") {
+            const comment = page.getByRole("textbox", { name: "Комментарий к отчёту (необязательно)" });
+            await comment.fill("Черновик за ноябрь");
+            await page.getByLabel("Файлы отчёта", { exact: true }).setInputFiles({ name: "november.docx", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", buffer: Buffer.from("synthetic visual QA only") });
+            await page.getByRole("combobox", { name: "Отчётный месяц" }).click(); await page.getByRole("option", { name: /октябрь/ }).click();
+            assert.equal(await comment.inputValue(), ""); assert(await page.getByRole("button", { name: "Отправить отчёт", exact: true }).isDisabled());
+            await page.getByRole("combobox", { name: "Отчётный месяц" }).click(); await page.getByRole("option", { name: /ноябрь/ }).click();
+            assert.equal(await comment.inputValue(), "Черновик за ноябрь"); assert(await page.getByText("november.docx · 1 КБ", { exact: true }).isVisible());
+            await page.getByRole("button", { name: "Разрешить начисление заработной платы", exact: true }).click();
+            await page.getByRole("button", { name: /^Подтвердить разрешение за/ }).waitFor();
+            await page.getByRole("button", { name: "Отмена", exact: true }).click();
+            assert.equal(await page.getByRole("button", { name: /^Подтвердить разрешение за/ }).count(), 0);
+          } else {
+            if (width > 760) {
+              const summary = await page.locator(".eff-summary").boundingBox(), method = await page.locator(".eff-method-card").boundingBox();
+              if (Math.abs(summary.x - method.x) > 4) assert(Math.abs(summary.y - method.y) <= 1, `${file}: aligned efficiency columns`);
+            }
+            const search = page.getByLabel("Поиск сотрудников в эффективности", { exact: true });
+            const count = await page.locator(".eff-table tbody tr").count();
+            await search.fill("НетТакогоСотрудника"); assert.equal(await page.locator(".eff-table tbody tr").count(), 0);
+            await search.fill(""); assert.equal(await page.locator(".eff-table tbody tr").count(), count);
+            await page.locator(".eff-table tbody tr").nth(0).focus(); await page.keyboard.press("Enter");
+            assert(await page.locator(".eff-table tbody tr.selected").nth(0).isVisible());
+            assert.equal(await page.locator(".eff-history-chart filter").count(), 0);
           }
         }
         if (phase === "after" && planningSuite) {
@@ -532,7 +607,7 @@ async function measure(page, selector) {
           }
           await page.emulateMedia({ forcedColors: "none" });
         }
-        if (phase === "after" && !attentionSuite && !peopleSuite && !operationsSuite && !documentsSuite && !planningSuite) {
+        if (phase === "after" && !attentionSuite && !peopleSuite && !operationsSuite && !documentsSuite && !planningSuite && !reportingSuite) {
           assert(geometry.pageOverflow <= 1, `${file}: page overflow`);
           assert(Math.abs(geometry.search.height - geometry.filters.height) <= 1, `${file}: search/filter height`);
           for (const [name, rect] of Object.entries({ toolbar: geometry.toolbar, filters: geometry.filters })) {
@@ -593,7 +668,7 @@ async function measure(page, selector) {
             await page.locator(".team-dash-dialog").getByRole("button", { name: "Закрыть", exact: true }).click();
           }
         }
-        if (topbarSuite && section.id === "home" && (phase === "after" || theme === "dark" && [1440, 720].includes(width))) {
+        if ((topbarSuite && section.id === "home" || reportingSuite && section.id === "hisobot") && (phase === "after" || theme === "dark" && [1440, 720].includes(width))) {
           const liveMotion = phase === "after" && theme === "dark" && width === 1440;
           if (liveMotion) { await page.emulateMedia({ reducedMotion: "no-preference" }); await settle(page); }
           const launcher = page.locator(".assistant-launcher"); await launcher.scrollIntoViewIfNeeded();
@@ -639,7 +714,7 @@ async function measure(page, selector) {
     assert.deepEqual(errors, []);
     await fs.writeFile(path.join(output, "index.html"), `<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Yuksalish — сравнение интерфейса</title>
       <style>*{box-sizing:border-box}body{margin:0;padding:24px;background:#111318;color:#eceef4;font:15px/1.5 system-ui}main{max-width:1600px;margin:auto}h1{font-size:28px}p,figcaption{color:#bfc6d3}select{margin:0 0 24px;padding:12px;border-radius:8px;background:#252a33;color:inherit}section{margin:0 0 32px}h2{font-size:20px}article{display:grid;grid-template-columns:1fr 1fr;gap:16px}figure{margin:0;min-width:0}img{display:block;width:100%;height:auto;border-radius:12px}figcaption{margin-bottom:8px}@media(max-width:700px){article{grid-template-columns:1fr}body{padding:12px}}</style>
-      <main><h1>Итерация ${iteration} · Общая сетка рабочих разделов</h1><p>Реальные компоненты приложения, одинаковые синтетические данные до и после. Нажмите на снимок для исходного размера.</p><select id="size" aria-label="Размер и тема"><option value="dark-1440">1440 × 960 · тёмная</option><option value="light-1440">1440 × 960 · светлая</option><option value="dark-1024">1024 × 768 · тёмная</option><option value="dark-390">390 × 844 · тёмная</option>${topbarSuite ? '<option value="dark-320">320 × 800 · тёмная</option><option value="dark-720">720 × 480 · тёмная</option>' : ''}</select>
+      <main><h1>Итерация ${iteration} · Общая сетка рабочих разделов</h1><p>Реальные компоненты приложения, одинаковые синтетические данные до и после. Нажмите на снимок для исходного размера.</p><select id="size" aria-label="Размер и тема"><option value="dark-1440">1440 × 960 · тёмная</option><option value="light-1440">1440 × 960 · светлая</option><option value="dark-1024">1024 × 768 · тёмная</option><option value="dark-390">390 × 844 · тёмная</option>${topbarSuite || reportingSuite ? '<option value="dark-320">320 × 800 · тёмная</option><option value="dark-720">720 × 480 · тёмная</option>' : ''}</select>
       ${(topbarSuite ? [{ id: "topbar", label: "Общая верхняя панель" }, ...sections] : sections).map(section => `<section data-section="${section.id}"><h2>${section.label}</h2><article>${["before", "after"].map((state, i) => `<figure><figcaption>${i ? "После" : "До"}</figcaption><a data-state="${state}" href="${state}/${section.id}-dark-1440.png"><img loading="lazy" src="${state}/${section.id}-dark-1440.png" alt="${section.label} — ${i ? "после" : "до"}"></a></figure>`).join("")}</article></section>`).join("")}
       ${topbarSuite ? [1440, 720].map(width => `<section><h2>Открытый ассистент · ${width} px</h2><article>${["before", "after"].map((state, i) => `<figure><figcaption>${i ? "После: орба остаётся в кнопке" : "До: орба переносится в окно"}</figcaption><a href="${state}/assistant-open-dark-${width}.png"><img loading="lazy" src="${state}/assistant-open-dark-${width}.png" alt="Ассистент — ${i ? "после" : "до"}"></a></figure>`).join("")}</article></section>`).join("") : ''}
       ${documentsSuite ? '<section data-section="admin-menu"><h2>Режим администратора в меню аватара</h2><figure><figcaption>После · переключение прав и возврат к правам своей должности</figcaption><a data-state="after" href="after/admin-menu-dark-1440.png"><img loading="lazy" src="after/admin-menu-dark-1440.png" alt="Переключатель прав в меню профиля"></a></figure></section>' : ''}

@@ -657,3 +657,78 @@ body .app-provider .project-hub-view.workspace-queue .project-hub-workstream-car
   body .app-provider .project-hub-view.workspace-queue .project-hub-metrics strong { font-size: 16px; }
   body .app-provider .project-hub-view.workspace-queue .project-hub-workstream-grid { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Reporting uses the same page edges, controls and panel rhythm as the queues. */
+html:root body .app-provider .app-content > .ai-hisobot-view.workspace-queue {
+  display: grid; align-content: start; gap: var(--ws-queue-space); width: auto; height: auto;
+  min-height: 0; margin: 0; padding: 0; overflow: visible; background: transparent; box-shadow: none;
+}
+html:root body .app-provider .ai-hisobot-view.workspace-queue .ai-hisobot-header {
+  min-height: var(--ws-section-header-height); padding: 20px 24px; overflow: hidden;
+}
+body .app-provider .ai-hisobot-view.workspace-queue .ai-hisobot-header-copy { padding-right: 44px; }
+body .app-provider .ai-hisobot-view.workspace-queue .hisobot-help-button { top: 20px; right: 24px; width: 36px; height: 36px; border: 0; }
+body .app-provider .ai-hisobot-view.workspace-queue :is(.hisobot-today-layout, .hisobot-report-grid) { gap: var(--ws-queue-space); overflow: visible; }
+body .app-provider .ai-hisobot-view.workspace-queue :is(.hisobot-panel, .hisobot-report-card) { min-width: 0; padding: 20px; }
+body .app-provider .ai-hisobot-view.workspace-queue .hisobot-panel-heading { flex-wrap: wrap; gap: 8px 12px; font-size: 16px; font-weight: 600; }
+body .app-provider .ai-hisobot-view.workspace-queue .hisobot-panel-heading > span { min-width: 0; }
+body .app-provider .ai-hisobot-view.workspace-queue .hisobot-panel-description { margin: 8px 0 16px; }
+body .app-provider .ai-hisobot-view.workspace-queue .hisobot-tabs { margin: 0; padding: 4px; min-height: 44px; border: 0; border-radius: 12px; }
+body .app-provider .ai-hisobot-view.workspace-queue .hisobot-tabs button { min-height: 36px; padding: 8px 12px; border-radius: 8px; font-size: 12px; font-weight: 600; box-shadow: none; }
+html:root body .app-provider .ai-hisobot-view.workspace-queue .hisobot-compose textarea { min-height: 220px; border: 0; background: var(--ws-muted-surface); }
+html:root body .app-provider .ai-hisobot-view.workspace-queue .hisobot-compose textarea:focus-visible { outline: 2px solid var(--ws-link); outline-offset: -2px; }
+body .app-provider .ai-hisobot-view.workspace-queue .hisobot-compose-footer { margin-top: 12px; flex-wrap: wrap; }
+body .app-provider .ai-hisobot-view.workspace-queue :is(.hisobot-compose-footer button, .hisobot-filter-search > button, .hisobot-activity-draft > button) { min-height: 44px; border: 0; border-radius: 12px; font-weight: 600; }
+body .app-provider .ai-hisobot-view.workspace-queue .hisobot-activity-draft { margin-bottom: 16px; padding: 16px; border: 0; }
+body .app-provider .ai-hisobot-view.workspace-queue .hisobot-status h2 { margin: 16px 0 8px; font-size: 18px; }
+body .app-provider .ai-hisobot-view.workspace-queue .hisobot-window { gap: 12px; border: 0; }
+body .app-provider .ai-hisobot-view.workspace-queue .hisobot-window strong { flex: none; font-variant-numeric: tabular-nums; }
+body .app-provider .ai-hisobot-view.workspace-queue .hisobot-list-page { overflow: visible; padding: 0; }
+body .app-provider .ai-hisobot-view.workspace-queue .hisobot-list-heading { justify-content: space-between; margin: 0 0 12px; gap: 12px; }
+body .app-provider .ai-hisobot-view.workspace-queue .hisobot-list-heading h2 { font-size: 18px; }
+body .app-provider .ai-hisobot-view.workspace-queue .hisobot-report-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); }
+body .app-provider .ai-hisobot-view.workspace-queue .hisobot-filters { margin-bottom: 12px; }
+body .app-provider .ai-hisobot-view.workspace-queue .hisobot-filters :is(.ws-date-time-trigger, .workspace-select.workspace-select, .workspace-search) { min-height: 44px; --search-height: 44px; }
+html:root body .app-provider .monthly-reports-page.workspace-queue { gap: var(--ws-queue-space); }
+body .app-provider .monthly-reports-page.workspace-queue :is(.monthly-reports-content, .monthly-reports-workspace, .monthly-reports-work) { gap: var(--ws-queue-space); }
+body .app-provider .monthly-reports-page.workspace-queue .monthly-reports-panel { padding: 20px; }
+body .app-provider .monthly-reports-page.workspace-queue :is(.monthly-reports-period, .monthly-reports-review-heading) { gap: 12px 24px; }
+body .app-provider .monthly-reports-page.workspace-queue .monthly-reports-content :is(.fui-Button, .workspace-select) { min-height: 44px; }
+body .app-provider .monthly-reports-page.workspace-queue .monthly-reports-attachments { border: 0; padding: 16px; background: var(--ws-muted-surface); }
+html:root body .app-provider .monthly-reports-page.workspace-queue .monthly-reports-content .fui-Textarea { min-height: 96px; border: 0; border-radius: 12px; background: var(--ws-muted-surface); }
+html:root body .app-provider .monthly-reports-page.workspace-queue .monthly-reports-content .fui-Textarea:focus-within { outline: 2px solid var(--ws-link); outline-offset: -2px; }
+body .app-provider .monthly-reports-page.workspace-queue .monthly-reports-history { margin-top: 12px; padding-top: 12px; }
+body .app-provider .tasks-view.workspace-queue .efficiency-view { display: grid; align-content: start; gap: var(--ws-queue-space); padding: 0 0 12px; overflow: visible; }
+html:root body .app-provider .tasks-view.workspace-queue .eff-commandbar.compact { position: static; display: flex; justify-content: space-between; min-height: 44px; margin: 0; padding: 0; border: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
+body .app-provider .tasks-view.workspace-queue .eff-commandbar :is(.workspace-select.workspace-select, .eff-help-button) { min-height: 44px; }
+body .app-provider .tasks-view.workspace-queue .eff-commandbar .eff-period-control { grid-template-columns: auto minmax(164px, 220px); }
+body .app-provider .tasks-view.workspace-queue .eff-overview-grid { gap: 12px; }
+body .app-provider .tasks-view.workspace-queue .eff-context-stack { padding-top: 0; }
+body .app-provider .tasks-view.workspace-queue :is(.eff-summary, .eff-method-card, .eff-coverage-card, .eff-people) { padding: 20px; min-width: 0; }
+body .app-provider .tasks-view.workspace-queue .eff-summary-heading { gap: 12px; padding-bottom: 12px; }
+body .app-provider .tasks-view.workspace-queue .eff-summary-lead { padding: 16px 0; gap: 20px; }
+body .app-provider .tasks-view.workspace-queue .eff-kicker { font-size: 12px; font-weight: 600; letter-spacing: 0; text-transform: none; }
+body .app-provider .tasks-view.workspace-queue :is(.eff-method-card p, .eff-coverage-card p, .eff-people-heading p, .eff-metric small) { font-size: 12px; }
+body .app-provider .tasks-view.workspace-queue .eff-method-card h2 { text-wrap: auto; }
+body .app-provider .tasks-view.workspace-queue .eff-deadline-explanation { margin: 0; border: 0; background: var(--ws-muted-surface); }
+body .app-provider .tasks-view.workspace-queue .eff-people-heading { gap: 12px; margin-bottom: 12px; }
+body .app-provider .tasks-view.workspace-queue .eff-people-heading .workspace-search { --search-height: 44px; }
+@media (max-width: 760px) {
+  body .app-provider .ai-hisobot-view.workspace-queue .hisobot-today-layout { grid-template-columns: minmax(0, 1fr); }
+  body .app-provider .tasks-view.workspace-queue .eff-overview-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 700px) {
+  html:root body .app-provider .ai-hisobot-view.workspace-queue .ai-hisobot-header { min-height: 0; padding: 16px; }
+  body .app-provider .ai-hisobot-view.workspace-queue .hisobot-help-button { top: 12px; right: 16px; width: 44px; height: 44px; }
+  body .app-provider .ai-hisobot-view.workspace-queue :is(.hisobot-panel, .hisobot-report-card),
+  body .app-provider .monthly-reports-page.workspace-queue .monthly-reports-panel,
+  body .app-provider .tasks-view.workspace-queue :is(.eff-summary, .eff-method-card, .eff-coverage-card, .eff-people) { padding: 16px; }
+  body .app-provider .ai-hisobot-view.workspace-queue .hisobot-tabs button { min-height: 44px; }
+  body .app-provider .ai-hisobot-view.workspace-queue .hisobot-activity-draft > button { margin-left: 0; width: 100%; }
+  body .app-provider .ai-hisobot-view.workspace-queue .hisobot-compose-footer button { margin-left: auto; }
+  body .app-provider .tasks-view.workspace-queue .eff-commandbar .eff-period-control { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  body .app-provider .tasks-view.workspace-queue .eff-summary-lead { grid-template-columns: minmax(0, 1fr); justify-items: center; gap: 16px; }
+  body .app-provider .tasks-view.workspace-queue .eff-summary-copy { width: 100%; }
+  body .app-provider .tasks-view.workspace-queue .eff-people-heading { flex-wrap: wrap; }
+  body .app-provider .tasks-view.workspace-queue .eff-people-heading .workspace-search { --search-width: 100%; --search-growth: 0px; }
+}

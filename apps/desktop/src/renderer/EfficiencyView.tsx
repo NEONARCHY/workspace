@@ -1,7 +1,7 @@
 import { formatRussianDate } from "./date-time-format";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { LoadingSkeleton, SkeletonBlock, SkeletonTableRows } from "./LoadingSkeleton";
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 
 import type { EfficiencyOverview, EmployeeEfficiency } from "@yuksalish/contracts";
 import { Button } from "@fluentui/react-components";
@@ -75,7 +75,7 @@ export function ScoreGauge({ employee }: { readonly employee: EmployeeEfficiency
   </div>;
 }
 
-export function HistoryChart({ employee }: { readonly employee: EmployeeEfficiency }) {
+export const HistoryChart = memo(function HistoryChart({ employee }: { readonly employee: EmployeeEfficiency }) {
   const points = employee.history.filter((point) => point.percentage != null);
   if (points.length < 2) return <div className="eff-history-empty">
     <div className="eff-empty-chart" aria-hidden="true"><i /><i /><i /><i /><i /></div>
@@ -95,11 +95,9 @@ export function HistoryChart({ employee }: { readonly employee: EmployeeEfficien
   return <>
     <div className="eff-history-chart" role="img" aria-label={`Динамика выполнения в срок: ${points.map((point) => `${monthLabel(point.period)} — ${point.percentage}%`).join("; ")}`}>
       <svg viewBox="0 0 640 210" aria-hidden="true">
-        <defs><filter id="eff-line-glow" x="-10%" y="-30%" width="120%" height="160%"><feGaussianBlur stdDeviation="4" result="line-blur" /><feMerge><feMergeNode in="line-blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter></defs>
         {[100, 75, 50, 25, 0].map((tick) => { const y = bottom - tick / 100 * (bottom - top); return <g key={tick}><line className="eff-chart-grid" x1={left} x2={right} y1={y} y2={y} /><text className="eff-chart-axis" x="4" y={y + 4}>{tick}%</text></g>; })}
         <path className="eff-chart-line" d={path} />
         {chartPoints.filter((point) => point.percentage != null).map((point) => <g key={point.period}>
-          <circle className="eff-chart-dot-glow" cx={point.x} cy={point.y} r="8" />
           <circle className="eff-chart-dot" cx={point.x} cy={point.y} r="4" />
           <text className="eff-chart-value" x={point.x} y={Math.max(12, point.y - 12)} textAnchor="middle">{point.percentage}%</text>
           <text className="eff-chart-month" x={point.x} y="193" textAnchor="middle">{monthLabel(point.period).split(" ")[0]}</text>
@@ -108,9 +106,9 @@ export function HistoryChart({ employee }: { readonly employee: EmployeeEfficien
     </div>
     <ul className="eff-history-text">{points.map((point) => <li key={point.period}><span>{monthLabel(point.period)}</span><strong>{point.percentage}% · {point.onTimeCount} из {point.eligibleCount}</strong></li>)}</ul>
   </>;
-}
+});
 
-function EmployeeSummary({ employee, title, token }: { readonly employee: EmployeeEfficiency; readonly title: string; readonly token?: string }) {
+const EmployeeSummary = memo(function EmployeeSummary({ employee, title, token }: { readonly employee: EmployeeEfficiency; readonly title: string; readonly token?: string }) {
   const metrics = [
     { label: "Выполнено вовремя", value: employee.onTimeCount, tone: "success" as const },
     { label: "Просрочки в расчёте", value: employee.overdueCount, note: "учтены за выбранный месяц", tone: "danger" as const },
@@ -149,9 +147,9 @@ function EmployeeSummary({ employee, title, token }: { readonly employee: Employ
     </section>
     <p className="eff-caution">Показатель отражает только соблюдение сроков зарегистрированных задач и не является общей оценкой сотрудника.</p>
   </article>;
-}
+});
 
-function DataCoverageCard({ overview }: { readonly overview: EfficiencyOverview }) {
+const DataCoverageCard = memo(function DataCoverageCard({ overview }: { readonly overview: EfficiencyOverview }) {
   const withData = overview.employees.filter((employee) => employee.percentage != null).length;
   const partial = overview.employees.filter((employee) => employee.historyCompleteness === "partial").length;
   const coverage = overview.employees.length ? withData / overview.employees.length * 100 : 0;
@@ -161,7 +159,7 @@ function DataCoverageCard({ overview }: { readonly overview: EfficiencyOverview 
     <div className="eff-coverage-scale" aria-label={`Данные доступны для ${withData} из ${overview.employees.length} сотрудников`}><span style={{ width: `${coverage}%` }} /></div>
     <dl><div><dt>С расчётным процентом</dt><dd>{withData}</dd></div><div><dt>Неполная история месяца</dt><dd>{partial}</dd></div><div><dt>Без расчётных данных</dt><dd>{overview.employees.length - withData}</dd></div></dl>
   </aside>;
-}
+});
 
 export function EfficiencyView({ token, overview, loading, error, onPeriodChange }: EfficiencyViewProps) {
   const [query, setQuery] = useState("");
@@ -175,10 +173,11 @@ export function EfficiencyView({ token, overview, loading, error, onPeriodChange
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [helpOpen]);
+  const employeeIndex = useMemo(() => overview?.employees.map(employee => ({ employee, text: `${employee.name} ${employee.jobTitle}`.toLocaleLowerCase("ru") })) ?? [], [overview?.employees]);
   const visibleEmployees = useMemo(() => {
     const search = query.trim().toLocaleLowerCase("ru");
-    return overview?.employees.filter((employee) => !search || `${employee.name} ${employee.jobTitle}`.toLocaleLowerCase("ru").includes(search)) ?? [];
-  }, [overview, query]);
+    return employeeIndex.filter(item => !search || item.text.includes(search)).map(item => item.employee);
+  }, [employeeIndex, query]);
   const mine = overview?.employees.find((employee) => employee.userId === overview.currentUserId);
   const selected = overview?.employees.find((employee) => employee.userId === selectedUserId) ?? mine;
 
@@ -214,7 +213,7 @@ export function EfficiencyView({ token, overview, loading, error, onPeriodChange
       <EmployeeSummary employee={activeEmployee} title={activeTitle} token={token} />
       <div className="eff-context-stack">
         {activeEmployee.userId !== mine.userId ? <Button className="eff-back-to-mine" appearance="secondary" onClick={() => setSelectedUserId(mine.userId)}>Вернуться к моей сводке</Button> : null}
-        <aside className="eff-method-card"><span className="eff-kicker">Методика {overview.methodologyVersion}</span><h2>Один показатель — один понятный смысл</h2><p>Все учитываемые задачи имеют одинаковый вес. Возвраты, комментарии и субъективные оценки не меняют процент.</p><dl><div><dt>Начало достоверного учёта</dt><dd>{formatRussianDate(new Date(overview.trackingStartedAt))}</dd></div><div><dt>Часовой пояс</dt><dd>{overview.timezone}</dd></div><div><dt>Формула</dt><dd>Вовремя ÷ учтено</dd></div></dl><Button appearance="subtle" onClick={() => setHelpOpen(true)}>Открыть правила расчёта</Button></aside>
+        <aside className="eff-method-card"><span className="eff-kicker">Методика {overview.methodologyVersion}</span><h2>Выполнение задач в срок</h2><p>Все учитываемые задачи имеют одинаковый вес. Возврат на доработку отменяет зачёт до повторной сдачи. Комментарии и субъективные оценки не влияют на процент.</p><dl><div><dt>Начало достоверного учёта</dt><dd>{formatRussianDate(new Date(overview.trackingStartedAt))}</dd></div><div><dt>Часовой пояс</dt><dd>{overview.timezone}</dd></div><div><dt>Формула</dt><dd>Вовремя ÷ учтено</dd></div></dl><Button appearance="subtle" onClick={() => setHelpOpen(true)}>Открыть правила расчёта</Button></aside>
         <DataCoverageCard overview={overview} />
       </div>
     </div>

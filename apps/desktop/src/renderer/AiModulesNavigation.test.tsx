@@ -95,6 +95,17 @@ describe("AI module sidebar group", () => {
     expect(trigger).toHaveFocus();
   });
 
+  it("leaves Escape and focus with a foreground dialog while the inline group is open", () => {
+    render(<><AiModulesNavigation inline modules={[items[1]!, items[3]!]} activeKey="tasks" onSelect={vi.fn()} />
+      <div role="dialog" aria-label="Курсы валют"><button type="button">Закрыть курсы</button></div></>);
+    const trigger = screen.getByRole("button", { name: "ИИ-модули" });
+    fireEvent.click(trigger);
+    const close = screen.getByRole("button", { name: "Закрыть курсы" }); close.focus();
+    fireEvent.keyDown(close, { key: "Escape" });
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+    expect(close).toHaveFocus();
+  });
+
   it("updates a collapsed-sidebar popover to the chosen palette", () => {
     const props = { modules: [items[1]!, items[3]!], activeKey: "tasks" as const, onSelect: vi.fn() };
     const view = render(<AiModulesNavigation {...props} sidebarTheme="navy" />);

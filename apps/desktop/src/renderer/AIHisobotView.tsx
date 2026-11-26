@@ -2,7 +2,7 @@ import { formatRussianTime } from "./date-time-format";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { LoadingSkeleton, SkeletonBlock } from "./LoadingSkeleton";
 import { Input } from "./WorkspaceInput";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { WorkspaceSelect } from "./WorkspaceSelect";
 import { employeeDisplayName } from "./employee-display-name";
 
@@ -26,7 +26,7 @@ import type { HisobotDraftHandoff } from "./HisobotDraftPrompt";
 const dateLabel = (value: string) => value.split("-").reverse().join(".");
 const errorText = (error: unknown) => error instanceof Error ? error.message : "Не удалось загрузить AI Hisobot.";
 
-function ReportCard({ report }: { readonly report: HisobotReport }) {
+const ReportCard = memo(function ReportCard({ report }: { readonly report: HisobotReport }) {
   return <article className="hisobot-report-card">
     <div className="hisobot-report-topline">
       <span className="hisobot-report-date"><CalendarLtr24Regular /> {dateLabel(report.reportDate)}</span>
@@ -37,9 +37,9 @@ function ReportCard({ report }: { readonly report: HisobotReport }) {
     <p className="hisobot-report-content">{report.content}</p>
     <div className="hisobot-report-foot">Отправлено {formatRussianTime(new Date(report.submittedAt), { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Tashkent" })}{report.isLate ? " · опоздавший (после 18:30)" : ""}</div>
   </article>;
-}
+});
 
-function UnitReportCard({ report }: { readonly report: HisobotUnitReport }) {
+const UnitReportCard = memo(function UnitReportCard({ report }: { readonly report: HisobotUnitReport }) {
   return <article className="hisobot-report-card">
     <div className="hisobot-report-topline"><span className="hisobot-report-date"><CalendarLtr24Regular /> {dateLabel(report.reportDate)}</span><span className="hisobot-source">Отчёт отдела</span></div>
     <h3>{report.departmentName}</h3>
@@ -47,7 +47,7 @@ function UnitReportCard({ report }: { readonly report: HisobotUnitReport }) {
     <p className="hisobot-report-content">{report.content}</p>
     <div className="hisobot-report-foot">Отправлено {formatRussianTime(new Date(report.submittedAt), { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Tashkent" })}{report.isLate ? " · опоздавший (после 18:30)" : ""}</div>
   </article>;
-}
+});
 
 export function AIHisobotView({ token, incomingDraft, onDraftHandled }: {
   readonly token: string;
@@ -60,6 +60,8 @@ export function AIHisobotView({ token, incomingDraft, onDraftHandled }: {
   const [historyFullyLoaded, setHistoryFullyLoaded] = useState(false);
   const [teamReports, setTeamReports] = useState<readonly HisobotReport[]>([]);
   const [teamUnitReports, setTeamUnitReports] = useState<readonly HisobotUnitReport[]>([]);
+  const [teamLoading, setTeamLoading] = useState(false);
+  const [teamPeriod, setTeamPeriod] = useState("");
   const [tab, setTab] = useState<"today" | "history" | "team">("today");
   const [scope, setScope] = useState<"all" | "central" | "hudud">("all");
   const [query, setQuery] = useState("");
@@ -77,6 +79,11 @@ export function AIHisobotView({ token, incomingDraft, onDraftHandled }: {
   const reportTextRef = useRef<HTMLTextAreaElement>(null);
   const helpButtonRef = useRef<HTMLButtonElement>(null);
   const helpCloseRef = useRef<HTMLButtonElement>(null);
+  const editing = useRef({ personal: false, unit: false });
+  const reads = useRef<{ profile?: AbortController; team?: AbortController; older?: AbortController }>({});
+  const saving = useRef(false);
+  const markDirty = useCallback((value: boolean) => { editing.current.personal = value; setDirty(value); }, []);
+  const markUnitDirty = useCallback((value: boolean) => { editing.current.unit = value; setUnitDirty(value); }, []);
   const [startDate, setStartDate] = useState(() => {
     const day = new Date(); day.setDate(day.getDate() - 6);
     return day.toLocaleDateString("sv-SE");
@@ -90,7 +97,7 @@ export function AIHisobotView({ token, incomingDraft, onDraftHandled }: {
       if (incomingDraft.reportDate !== profile.today) {
         setError("Черновик относится к другому дню. Ваш текст сохранён; проверьте дату отчёта.");
       } else if (!dirty && !content.trim() && !profile.todayReport) {
-        setContent(incomingDraft.content); setDirty(Boolean(incomingDraft.content.trim()));
+        setContent(incomingDraft.content); markDirty(Boolean(incomingDraft.content.trim()));
         setTab("today"); reportTextRef.current?.focus();
       } else {
         setPendingDraftText(incomingDraft.content);
@@ -99,23 +106,30 @@ export function AIHisobotView({ token, incomingDraft, onDraftHandled }: {
       onDraftHandled?.();
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [profile, incomingDraft, onDraftHandled, dirty, content]);
+  }, [profile, incomingDraft, onDraftHandled, dirty, content, markDirty]);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (force = false) => {
+    if (reads.current.profile && !force) return;
+    reads.current.profile?.abort();
+    const controller = new AbortController(); reads.current.profile = controller;
+    try {
     const [nextProfile, nextHistory, nextUnitHistory] = await Promise.all([
-      loadHisobotProfile(token), loadHisobotHistory(token), loadHisobotUnitHistory(token),
+      loadHisobotProfile(token, controller.signal), loadHisobotHistory(token, undefined, controller.signal), loadHisobotUnitHistory(token, undefined, controller.signal),
     ]);
+    if (controller.signal.aborted) return;
     setProfile(nextProfile);
     setHistory((current) => [...new Map([...current, ...nextHistory].map((item) => [item.id, item])).values()]
       .sort((left, right) => right.reportDate.localeCompare(left.reportDate)));
     setUnitHistory(nextUnitHistory);
     if (nextHistory.length < 100) setHistoryFullyLoaded(true);
-    setContent((existing) => dirty ? existing : nextProfile.todayReport?.content ?? "");
-    setUnitContent((existing) => unitDirty ? existing : (
+    setContent((existing) => editing.current.personal ? existing : nextProfile.todayReport?.content ?? "");
+    setUnitContent((existing) => editing.current.unit ? existing : (
       nextProfile.todayUnitReport?.reporterTelegramId === nextProfile.telegramId
         ? nextProfile.todayUnitReport.content : ""
     ));
-  }, [token, dirty, unitDirty]);
+    } catch (caught) { if (!controller.signal.aborted) { controller.abort(); throw caught; } }
+    finally { if (reads.current.profile === controller) reads.current.profile = undefined; }
+  }, [token]);
 
   useEffect(() => {
     if (!helpOpen) return undefined;
@@ -135,47 +149,58 @@ export function AIHisobotView({ token, incomingDraft, onDraftHandled }: {
         if (active) setError(errorText(caught));
       }).finally(() => { if (active) setLoading(false); });
     }, 0);
-    const timer = window.setInterval(() => {
-      if (active) void refresh().catch(() => undefined);
-    }, 30_000);
-    return () => { active = false; window.clearTimeout(initial); window.clearInterval(timer); };
+    const visible = () => { if (active && document.visibilityState !== "hidden") void refresh().catch(() => undefined); };
+    const timer = window.setInterval(visible, 30_000);
+    document.addEventListener("visibilitychange", visible);
+    const pending = reads.current;
+    return () => { active = false; window.clearTimeout(initial); window.clearInterval(timer); document.removeEventListener("visibilitychange", visible);
+      pending.profile?.abort(); pending.team?.abort(); pending.older?.abort(); pending.profile = undefined; };
   }, [refresh]);
 
   const loadTeam = useCallback(async () => {
+    reads.current.team?.abort();
+    const controller = new AbortController(); reads.current.team = controller;
+    const periodKey = `${startDate}:${endDate}`;
     setError("");
+    setTeamLoading(true);
     try {
+      if (startDate > endDate) throw new Error("Начало периода должно быть не позже конца периода.");
       const [reports, units] = await Promise.all([
-        loadHisobotReports(token, startDate, endDate),
-        loadHisobotUnitReports(token, startDate, endDate),
+        loadHisobotReports(token, startDate, endDate, controller.signal),
+        loadHisobotUnitReports(token, startDate, endDate, controller.signal),
       ]);
-      setTeamReports(reports); setTeamUnitReports(units);
+      if (!controller.signal.aborted) { setTeamReports(reports); setTeamUnitReports(units); }
     }
-    catch (caught) { setError(errorText(caught)); }
+    catch (caught) { if (!controller.signal.aborted) { setTeamReports([]); setTeamUnitReports([]); setError(errorText(caught)); } }
+    finally { if (!controller.signal.aborted) { setTeamLoading(false); setTeamPeriod(periodKey); } }
   }, [token, startDate, endDate]);
 
   useEffect(() => {
     if (tab !== "team" || !profile?.managementAccess) return;
+    const pending = reads.current;
     const initial = window.setTimeout(() => { void loadTeam(); }, 0);
-    return () => window.clearTimeout(initial);
+    return () => { window.clearTimeout(initial); pending.team?.abort(); };
   }, [tab, profile?.managementAccess, loadTeam]);
 
-  const visibleTeam = useMemo(() => teamReports.filter((report) =>
+  const reportIndex = useMemo(() => teamReports.map(report => ({ report, text: `${report.fullName} ${report.regionName ?? ""} ${report.position} ${report.content}`.toLocaleLowerCase("ru-RU") })), [teamReports]);
+  const unitIndex = useMemo(() => teamUnitReports.map(report => ({ report, text: `${report.departmentName} ${report.reporterName} ${report.content}`.toLocaleLowerCase("ru-RU") })), [teamUnitReports]);
+  const search = query.trim().toLocaleLowerCase("ru-RU");
+  const visibleTeam = useMemo(() => reportIndex.filter(({ report, text }) =>
     (scope === "all" || report.reportScope === scope) &&
-    `${report.fullName} ${report.regionName ?? ""} ${report.position} ${report.content}`
-      .toLocaleLowerCase("ru-RU").includes(query.toLocaleLowerCase("ru-RU")),
-  ), [teamReports, scope, query]);
-  const visibleTeamUnits = useMemo(() => teamUnitReports.filter((report) =>
+    text.includes(search),
+  ).map(item => item.report), [reportIndex, scope, search]);
+  const visibleTeamUnits = useMemo(() => unitIndex.filter(({ report, text }) =>
     (scope === "all" || report.reportScope === scope) &&
-    `${report.departmentName} ${report.reporterName} ${report.content}`
-      .toLocaleLowerCase("ru-RU").includes(query.toLocaleLowerCase("ru-RU")),
-  ), [teamUnitReports, scope, query]);
+    text.includes(search),
+  ).map(item => item.report), [unitIndex, scope, search]);
+  const teamPending = teamLoading || teamPeriod !== `${startDate}:${endDate}`;
   const ownUnitReport = profile && profile.todayUnitReport?.reporterTelegramId === profile.telegramId
     ? profile.todayUnitReport : null;
   const offeredDraft = pendingDraftText ?? profile?.activityDraft?.content;
   const useActivityDraft = () => {
     if (!offeredDraft) return;
     setContent(existing => existing.trim() ? `${existing.trimEnd()}\n\n${offeredDraft}` : offeredDraft);
-    setDirty(true); setPendingDraftText(undefined);
+    markDirty(true); setPendingDraftText(undefined);
     setNotice("Черновик добавлен. Проверьте текст перед отправкой.");
     if (profile?.activityDraft) void acknowledgeHisobotActivityDraft(token, profile.today).catch(() => {
       setError("Текст добавлен, но отметка о просмотре не сохранена. Предложение может появиться снова.");
@@ -184,40 +209,45 @@ export function AIHisobotView({ token, incomingDraft, onDraftHandled }: {
   };
 
   const save = async () => {
+    if (saving.current) return; saving.current = true;
     setBusy(true); setError(""); setNotice("");
     try {
       await saveHisobotReport(token, content.trim());
-      setDirty(false);
-      await refresh();
+      markDirty(false);
+      await refresh(true);
       setNotice("Отчёт принят. Напоминания в Telegram и Workspace прекращены.");
     } catch (caught) { setError(errorText(caught)); }
-    finally { setBusy(false); }
+    finally { saving.current = false; setBusy(false); }
   };
 
   const saveUnit = async () => {
+    if (saving.current) return; saving.current = true;
     setBusy(true); setError(""); setNotice("");
     try {
       await saveHisobotUnitReport(token, unitContent.trim());
-      setUnitDirty(false);
-      await refresh();
+      markUnitDirty(false);
+      await refresh(true);
       setNotice("Отчёт отдела принят. У сотрудников, включённых в него, напоминания прекращены.");
     } catch (caught) { setError(errorText(caught)); }
-    finally { setBusy(false); }
+    finally { saving.current = false; setBusy(false); }
   };
 
   const loadOlder = async () => {
     const last = history.at(-1);
-    if (!last) return;
+    if (!last || saving.current) return;
+    saving.current = true;
+    const controller = new AbortController(); reads.current.older = controller;
     setBusy(true); setError("");
     try {
-      const older = await loadHisobotHistory(token, last.reportDate);
-      setHistory((current) => [...current, ...older]);
+      const older = await loadHisobotHistory(token, last.reportDate, controller.signal);
+      if (controller.signal.aborted) return;
+      setHistory((current) => [...new Map([...current, ...older].map(item => [item.id, item])).values()]);
       if (older.length < 100) setHistoryFullyLoaded(true);
-    } catch (caught) { setError(errorText(caught)); }
-    finally { setBusy(false); }
+    } catch (caught) { if (!controller.signal.aborted) setError(errorText(caught)); }
+    finally { saving.current = false; if (!controller.signal.aborted) setBusy(false); }
   };
 
-  return <section className="workspace-view ai-hisobot-view" aria-label="AI Hisobot">
+  return <section className="workspace-view workspace-queue ai-hisobot-view" aria-label="AI Hisobot">
     <header className="ai-hisobot-header ws-illustrated-header ws-section-header">
       <div className="ai-hisobot-header-copy ws-illustrated-header-copy">
         <span className="view-kicker">Единая отчётность</span>
@@ -250,7 +280,10 @@ export function AIHisobotView({ token, incomingDraft, onDraftHandled }: {
         </aside>
       </div>
     </LoadingSkeleton> : null}
-    {error ? <WorkspaceNotice tone="error" className="hisobot-error" role="alert">{error}</WorkspaceNotice> : null}
+    {error ? <WorkspaceNotice tone="error" className="hisobot-error" role="alert" actions={!profile ? <button type="button" onClick={() => {
+      setLoading(true); setError("");
+      void refresh(true).catch(caught => setError(errorText(caught))).finally(() => setLoading(false));
+    }}>Повторить загрузку</button> : undefined}>{error}</WorkspaceNotice> : null}
     {profile ? <>
       <SlidingSegmented as="nav" className="hisobot-tabs" aria-label="Разделы AI Hisobot">
         <button type="button" aria-pressed={tab === "today"} className={tab === "today" ? "active" : ""} onClick={() => setTab("today")}>Сегодня</button>
@@ -274,7 +307,7 @@ export function AIHisobotView({ token, incomingDraft, onDraftHandled }: {
               <button type="button" onClick={useActivityDraft} disabled={!offeredDraft || !profile.canSubmit || busy || content.includes(offeredDraft)}>{content.trim() ? "Добавить к моему тексту" : "Использовать черновик"}</button>
             </section>}
             <label htmlFor="hisobot-report-text">{profile.todayReport ? "Чтобы исправить или дополнить, измените полный текст отчёта:" : "Опишите выполненные задачи одним текстовым сообщением:"}</label>
-            <textarea ref={reportTextRef} id="hisobot-report-text" value={content} onChange={(event) => { setContent(event.target.value); setDirty(true); }} disabled={!profile.canSubmit || busy} placeholder={"1. Текст первой выполненной задачи.\n2. Текст второй выполненной задачи.\n3. Текст третьей выполненной задачи."} />
+            <textarea ref={reportTextRef} id="hisobot-report-text" data-satin-excluded value={content} onChange={(event) => { setContent(event.target.value); markDirty(true); }} disabled={!profile.canSubmit || busy} placeholder={"1. Текст первой выполненной задачи.\n2. Текст второй выполненной задачи.\n3. Текст третьей выполненной задачи."} />
             <div className="hisobot-compose-footer"><span>{content.trim().length} символов</span><button type="button" onClick={() => void save()} disabled={!profile.canSubmit || busy || content.trim().length < 3 || content.length > 20_000 || !dirty}>{busy ? "Сохраняем…" : profile.todayReport ? "Сохранить изменения" : "Отправить отчёт"}</button></div>
             {notice ? <p className="hisobot-success" role="status">{notice}</p> : null}
           </> : !profile.reportRequired && !ownUnitReport ? <p className="hisobot-exempt">Для вас сдача ежедневного отчёта не обязательна. История и доступные сводки остаются в меню.</p> : null}
@@ -282,7 +315,7 @@ export function AIHisobotView({ token, incomingDraft, onDraftHandled }: {
             <div className="hisobot-panel-heading"><span><DocumentBulletList24Regular /> {profile.reportScope === "hudud" ? "Отчёт от лица подразделения" : "Отчёт от лица отдела"}</span><strong>{ownUnitReport ? "Получен" : "Ожидается"}</strong></div>
             <p className="hisobot-panel-description">{profile.unit.name} · это ваш единственный отчёт за день, он засчитывается всей команде.</p>
             <label htmlFor="hisobot-unit-report-text">{ownUnitReport ? "Чтобы исправить отчёт команды, измените его полный текст:" : "Опишите выполненные командой задачи:"}</label>
-            <textarea id="hisobot-unit-report-text" value={unitContent} onChange={(event) => { setUnitContent(event.target.value); setUnitDirty(true); }} disabled={!profile.canSubmitUnit || busy} placeholder={"1. Первая выполненная задача команды.\n2. Вторая выполненная задача команды."} />
+            <textarea id="hisobot-unit-report-text" data-satin-excluded value={unitContent} onChange={(event) => { setUnitContent(event.target.value); markUnitDirty(true); }} disabled={!profile.canSubmitUnit || busy} placeholder={"1. Первая выполненная задача команды.\n2. Вторая выполненная задача команды."} />
             <div className="hisobot-compose-footer"><span>{unitContent.trim().length} символов</span><button type="button" onClick={() => void saveUnit()} disabled={!profile.canSubmitUnit || busy || unitContent.trim().length < 3 || unitContent.length > 20_000 || !unitDirty}>{busy ? "Сохраняем…" : ownUnitReport ? "Сохранить отчёт команды" : profile.reportScope === "hudud" ? "Отправить отчёт от лица подразделения" : "Отправить отчёт от лица отдела"}</button></div>
           </section> : null}
         </div>
@@ -303,7 +336,7 @@ export function AIHisobotView({ token, incomingDraft, onDraftHandled }: {
       </div> : null}
 
       {tab === "team" && profile.managementAccess ? <div className="hisobot-list-page">
-        <div className="hisobot-list-heading"><h2>Отчёты сотрудников</h2><span>{visibleTeam.length + visibleTeamUnits.length} записей</span></div>
+        <div className="hisobot-list-heading"><h2>Отчёты сотрудников</h2><span>{teamPending ? "Загрузка…" : `${visibleTeam.length + visibleTeamUnits.length} записей`}</span></div>
         <div className="hisobot-filters">
           <label><span>С даты</span><WorkspaceDateTimePicker mode="date" ariaLabel="Начало периода" value={startDate} onChange={setStartDate} /></label>
           <label><span>По дату</span><WorkspaceDateTimePicker mode="date" ariaLabel="Конец периода" value={endDate} min={startDate} onChange={setEndDate} /></label>
@@ -313,7 +346,7 @@ export function AIHisobotView({ token, incomingDraft, onDraftHandled }: {
           <button type="button" onClick={() => void loadTeam()}>Обновить</button>
           </div>
         </div>
-        {visibleTeam.length || visibleTeamUnits.length ? <div className="hisobot-report-grid">{visibleTeam.map((report) => <ReportCard key={report.id} report={report} />)}{visibleTeamUnits.map((report) => <UnitReportCard key={report.id} report={report} />)}</div> : <p className="hisobot-empty">За выбранный период отчётов нет.</p>}
+        {teamPending ? <LoadingSkeleton layout="table" label="Загружаем отчёты сотрудников…" /> : visibleTeam.length || visibleTeamUnits.length ? <div className="hisobot-report-grid">{visibleTeam.map((report) => <ReportCard key={report.id} report={report} />)}{visibleTeamUnits.map((report) => <UnitReportCard key={report.id} report={report} />)}</div> : <p className="hisobot-empty">{query.trim() ? "По вашему запросу отчётов нет. Измените поиск или подразделение." : "За выбранный период отчётов нет."}</p>}
       </div> : null}
     </> : null}
     {helpOpen ? <div className="hisobot-help-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) { setHelpOpen(false); helpButtonRef.current?.focus(); } }}>

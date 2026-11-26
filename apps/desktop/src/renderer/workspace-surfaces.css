@@ -31,7 +31,9 @@ html:root body .app-provider :is(
   .survey-file-drop, .survey-analysis-item,
   .home-overview > button, .home-row, .home-priority-update, .home-reactions li,
   .calendar-day, .calendar-view-bar, .calendar-event-pill, .calendar-agenda-card,
-  .project-hub-project, .project-hub-metrics > div, .project-hub-workstream-card, .project-hub-funding-card
+  .project-hub-project, .project-hub-metrics > div, .project-hub-workstream-card, .project-hub-funding-card,
+  .hisobot-tabs, .hisobot-window, .hisobot-activity-draft > button,
+  .monthly-reports-attachments, .eff-commandbar, .eff-deadline-explanation
 ):not(.is-lifted):not(.is-target) {
   --ws-satin-sheen: none;
   --ws-satin-edge: none;

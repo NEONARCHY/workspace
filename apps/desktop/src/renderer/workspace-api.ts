@@ -619,8 +619,8 @@ export function saveTelegramAccess(
   );
 }
 
-export function loadHisobotProfile(token: string): Promise<HisobotProfile> {
-  return apiRequest<HisobotProfile>("/hisobot/me", {}, token);
+export function loadHisobotProfile(token: string, signal?: AbortSignal): Promise<HisobotProfile> {
+  return apiRequest<HisobotProfile>("/hisobot/me", { signal }, token);
 }
 
 export function loadHisobotActivityDraft(token: string): Promise<HisobotActivityDraft | null> {
@@ -645,24 +645,24 @@ export function saveHisobotUnitReport(token: string, content: string): Promise<H
   );
 }
 
-export function loadHisobotHistory(token: string, beforeDate?: string): Promise<readonly HisobotReport[]> {
+export function loadHisobotHistory(token: string, beforeDate?: string, signal?: AbortSignal): Promise<readonly HisobotReport[]> {
   const suffix = beforeDate ? `?before_date=${encodeURIComponent(beforeDate)}` : "";
-  return apiRequest<readonly HisobotReport[]>(`/hisobot/me/history${suffix}`, {}, token);
+  return apiRequest<readonly HisobotReport[]>(`/hisobot/me/history${suffix}`, { signal }, token);
 }
 
-export function loadHisobotUnitHistory(token: string, beforeDate?: string): Promise<readonly HisobotUnitReport[]> {
+export function loadHisobotUnitHistory(token: string, beforeDate?: string, signal?: AbortSignal): Promise<readonly HisobotUnitReport[]> {
   const suffix = beforeDate ? `?before_date=${encodeURIComponent(beforeDate)}` : "";
-  return apiRequest<readonly HisobotUnitReport[]>(`/hisobot/me/unit-history${suffix}`, {}, token);
+  return apiRequest<readonly HisobotUnitReport[]>(`/hisobot/me/unit-history${suffix}`, { signal }, token);
 }
 
-export function loadHisobotReports(token: string, startDate: string, endDate: string): Promise<readonly HisobotReport[]> {
+export function loadHisobotReports(token: string, startDate: string, endDate: string, signal?: AbortSignal): Promise<readonly HisobotReport[]> {
   const params = new URLSearchParams({ start_date: startDate, end_date: endDate });
-  return apiRequest<readonly HisobotReport[]>(`/hisobot/reports?${params}`, {}, token);
+  return apiRequest<readonly HisobotReport[]>(`/hisobot/reports?${params}`, { signal }, token);
 }
 
-export function loadHisobotUnitReports(token: string, startDate: string, endDate: string): Promise<readonly HisobotUnitReport[]> {
+export function loadHisobotUnitReports(token: string, startDate: string, endDate: string, signal?: AbortSignal): Promise<readonly HisobotUnitReport[]> {
   const params = new URLSearchParams({ start_date: startDate, end_date: endDate });
-  return apiRequest<readonly HisobotUnitReport[]>(`/hisobot/unit-reports?${params}`, {}, token);
+  return apiRequest<readonly HisobotUnitReport[]>(`/hisobot/unit-reports?${params}`, { signal }, token);
 }
 
 export function loadHrOverview(token: string, signal?: AbortSignal): Promise<HrOverview> {
@@ -2970,8 +2970,8 @@ export const loadMonthlyReportFile = (token: string, reportId: string, fileId: s
   apiRequest<Blob>(`/monthly-reports/${encodeURIComponent(reportId)}/files/${encodeURIComponent(fileId)}`, {}, token, 60_000, response => response.blob());
 export const authorizeMonthlyPayroll = (token: string, month: string, comment: string) =>
   apiRequest<MonthlyCycle>(`/monthly-reports/${encodeURIComponent(month)}/authorize`, { method: "POST", body: JSON.stringify({ comment }) }, token);
-export const loadMonthlyCalendar = (token: string) =>
-  apiRequest<readonly MonthlyCalendarDay[]>("/monthly-reports/calendar/days", {}, token);
+export const loadMonthlyCalendar = (token: string, signal?: AbortSignal) =>
+  apiRequest<readonly MonthlyCalendarDay[]>("/monthly-reports/calendar/days", { signal }, token);
 export const saveMonthlyCalendar = (token: string, payload: MonthlyCalendarDay) =>
   apiRequest<void>("/monthly-reports/calendar/days", { method: "PUT", body: JSON.stringify(payload) }, token);
 export async function submitMonthlyReport(token: string, payload: { readonly id: string; readonly month: string; readonly comment: string }, files: readonly File[]) {

@@ -72,6 +72,13 @@ export function AiModulesNavigation({ modules, activeKey, inOverflow = false, in
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
+      const target = event.target instanceof Element ? event.target : document.activeElement;
+      // A foreground menu/dialog owns Escape, even when this sidebar group is open.
+      if (target?.closest('[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"], .fui-PopoverSurface')
+        && !panelRef.current?.contains(target)) return;
+      if (!triggerRef.current?.contains(target) && !panelRef.current?.contains(target)
+        && [...document.querySelectorAll<HTMLElement>('[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"], .fui-PopoverSurface')]
+          .some(surface => !surface.contains(panelRef.current) && !panelRef.current?.contains(surface) && surface.getClientRects().length > 0)) return;
       event.stopPropagation();
       setOpen(false);
       triggerRef.current?.focus();

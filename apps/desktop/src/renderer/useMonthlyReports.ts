@@ -4,28 +4,31 @@ import { loadMonthlyReports } from "./workspace-api";
 
 export function useMonthlyReports(token: string | undefined, enabled: boolean) {
   const [state, setState] = useState<{ token: string; data?: MonthlyOverview; error?: string }>();
-  const requests = useRef({ generation: 0 });
+  const requests = useRef<{ generation: number; controller?: AbortController }>({ generation: 0 });
   const refresh = useCallback(async () => {
     if (!token || !enabled) return;
+    requests.current.controller?.abort();
+    const controller = new AbortController();
+    requests.current.controller = controller;
     const current = ++requests.current.generation;
     try {
-      const data = await loadMonthlyReports(token);
-      if (requests.current.generation === current) setState({ token, data });
+      const data = await loadMonthlyReports(token, controller.signal);
+      if (!controller.signal.aborted && requests.current.generation === current) setState({ token, data });
     } catch (error) {
-      if (requests.current.generation === current) setState(previous => ({ token,
+      if (!controller.signal.aborted && requests.current.generation === current) setState(previous => ({ token,
         data: previous?.token === token ? previous.data : undefined,
         error: error instanceof Error ? error.message : "Не удалось загрузить отчёты" }));
-    }
+    } finally { if (requests.current.controller === controller) requests.current.controller = undefined; }
   }, [token, enabled]);
   useEffect(() => {
     if (!enabled || !token) return;
     const pending = requests.current;
-    const visible = () => { if (document.visibilityState !== "hidden") void refresh(); };
+    const visible = () => { if (document.visibilityState !== "hidden" && !pending.controller) void refresh(); };
     visible();
     const timer = window.setInterval(visible, 30_000);
     window.addEventListener("focus", visible);
     document.addEventListener("visibilitychange", visible);
-    return () => { ++pending.generation; window.clearInterval(timer); window.removeEventListener("focus", visible); document.removeEventListener("visibilitychange", visible); };
+    return () => { ++pending.generation; pending.controller?.abort(); pending.controller = undefined; window.clearInterval(timer); window.removeEventListener("focus", visible); document.removeEventListener("visibilitychange", visible); };
   }, [token, enabled, refresh]);
   const current = enabled && state?.token === token ? state : undefined;
   return { data: current?.data, error: current?.error, loading: enabled && !current, refresh };

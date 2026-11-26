@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { HisobotProfile, HisobotReport, HisobotUnitReport } from "@yuksalish/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -54,11 +54,21 @@ describe("AI Hisobot", () => {
     vi.mocked(saveHisobotReport).mockResolvedValue(report);
     vi.mocked(saveHisobotUnitReport).mockResolvedValue(unitReport);
   });
-  afterEach(cleanup);
+  afterEach(() => { cleanup(); vi.useRealTimers(); });
 
   it("shows a varied report illustration in the header", () => {
     const { container } = render(<AIHisobotView token="token" />);
     expect(container.querySelectorAll(".ai-hisobot-header-art svg")).toHaveLength(7);
+  });
+
+  it("retries an initial read failure without submitting or waiting for the next poll", async () => {
+    vi.mocked(loadHisobotProfile).mockRejectedValueOnce(new Error("Нет соединения"));
+    render(<AIHisobotView token="token" />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Нет соединения");
+    fireEvent.click(screen.getByRole("button", { name: "Повторить загрузку" }));
+    expect(await screen.findByRole("textbox", { name: /Опишите выполненные задачи/ })).toBeInTheDocument();
+    expect(loadHisobotProfile).toHaveBeenCalledTimes(2);
+    expect(saveHisobotReport).not.toHaveBeenCalled();
   });
 
   it("inserts a handed-off draft into an empty editor but never submits automatically", async () => {
@@ -100,8 +110,47 @@ describe("AI Hisobot", () => {
     const field = screen.getByRole("textbox", { name: /Опишите выполненные задачи/ });
     expect(field).toHaveValue("Системные факты");
     fireEvent.change(field, { target: { value: "Системные факты плюс мой текст" } });
-    await waitFor(() => expect(loadHisobotProfile).toHaveBeenCalledTimes(2));
+    expect(loadHisobotProfile).toHaveBeenCalledOnce();
     expect(field).toHaveValue("Системные факты плюс мой текст");
+  });
+
+  it("keeps edits made while a periodic refresh is in flight and aborts reads on exit", async () => {
+    vi.useFakeTimers();
+    let resolve!: (value: HisobotProfile) => void;
+    const pending = new Promise<HisobotProfile>(done => { resolve = done; });
+    const view = render(<AIHisobotView token="token" />);
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    const field = screen.getByRole("textbox", { name: /Опишите выполненные задачи/ });
+    vi.mocked(loadHisobotProfile).mockReturnValueOnce(pending);
+    await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
+    expect(loadHisobotProfile).toHaveBeenCalledTimes(2);
+    fireEvent.change(field, { target: { value: "Мой текст во время загрузки" } });
+    expect(loadHisobotProfile).toHaveBeenCalledTimes(2);
+    await act(async () => { resolve({ ...profile, todayReport: report }); });
+    expect(field).toHaveValue("Мой текст во время загрузки");
+    vi.mocked(loadHisobotProfile).mockReturnValueOnce(new Promise(() => undefined));
+    await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
+    const signal = vi.mocked(loadHisobotProfile).mock.calls.at(-1)![1]!;
+    view.unmount();
+    expect(signal.aborted).toBe(true);
+  });
+
+  it("shows loading rather than an empty result and rejects an older team response", async () => {
+    vi.mocked(loadHisobotProfile).mockResolvedValue({ ...profile, managementAccess: true });
+    let resolve!: (value: readonly HisobotReport[]) => void;
+    vi.mocked(loadHisobotReports).mockReturnValueOnce(new Promise(done => { resolve = done; }))
+      .mockResolvedValueOnce([{ ...report, content: "Актуальная сводка" }]);
+    render(<AIHisobotView token="token" />);
+    fireEvent.click(await screen.findByRole("button", { name: "Отчёты сотрудников" }));
+    await waitFor(() => expect(loadHisobotReports).toHaveBeenCalledOnce());
+    expect(screen.getByLabelText("Загружаем отчёты сотрудников…")).toBeInTheDocument();
+    expect(screen.queryByText("За выбранный период отчётов нет.")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Обновить" }));
+    expect(await screen.findByText("Актуальная сводка")).toBeInTheDocument();
+    expect(vi.mocked(loadHisobotReports).mock.calls[0]![3]!.aborted).toBe(true);
+    await act(async () => { resolve([{ ...report, content: "Устаревшая сводка" }]); });
+    expect(screen.queryByText("Устаревшая сводка")).not.toBeInTheDocument();
+    expect(screen.getByText("Актуальная сводка")).toBeInTheDocument();
   });
 
   it("allows a voluntary report during confirmed sick leave", async () => {
