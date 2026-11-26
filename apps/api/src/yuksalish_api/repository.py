@@ -26,6 +26,14 @@ from .efficiency_service import METHODOLOGY_VERSION, record_task_event
 from .employee_availability import ensure_trip_available
 from .errors import WorkspaceRepositoryError as WorkspaceRepositoryError
 from .incoming_document_tables import incoming_document_executions
+from .payment_routes import (
+    ROUTE_ACTORS,
+    ROUTE_STEP,
+    is_payment_deputy,
+    payment_route_actor,
+    payment_route_actors,
+    payment_route_step,
+)
 from .personal_preferences import get_preferences as get_personal_preferences
 from .position_policy import is_executive_leader
 from .tables import (
@@ -115,6 +123,7 @@ from .workspace_schemas import (
     NotificationPreferencesUpdate,
     NotificationResponse,
     PaymentRequestDetails,
+    PaymentRouteApprover,
     PersonResponse,
     PinFeedPostRequest,
     ProjectResponse,
@@ -474,6 +483,11 @@ def _approval_request(
             SUBSIDY_ROUTE_VARIANT
             if payload.get("payment_route_variant") == SUBSIDY_ROUTE_VARIANT else None
         ),
+        payment_approval_route=(
+            [PaymentRouteApprover(**actor) for actor in payment_route_actors(payload) or []]
+            if payment_route_actors(payload) is not None else None
+        ),
+        payment_approval_step=payment_route_step(payload),
         active_node_keys=list(row["active_node_keys"] or []),
         active_stages=list(active_stages),
         stage_label=(
@@ -620,7 +634,7 @@ def _approval_deadline_control(
 def _is_ordinary_payment_deputy_stage(request_row: Record, node_key: str) -> bool:
     return node_key == PAYMENT_DEPUTY_APPROVAL_NODE and (
         (request_row.get("payload") or {}).get("payment_route_variant") != SUBSIDY_ROUTE_VARIANT
-    )
+    ) and payment_route_actors(request_row.get("payload") or {}) is None
 
 
 def _can_act_from_config(
@@ -629,6 +643,11 @@ def _can_act_from_config(
     node_key: str,
     config: Mapping[str, Any],
 ) -> bool:
+    request_payload = request_row.get("payload") or {}
+    if (node_key == PAYMENT_DEPUTY_APPROVAL_NODE
+            and payment_route_actors(request_payload) is not None):
+        actor = payment_route_actor(request_payload)
+        return actor is not None and str(current_user.id) == actor["user_id"]
     if _is_ordinary_payment_deputy_stage(request_row, node_key):
         return current_user.username.casefold() == PAYMENT_DEPUTY_USERNAME
     if current_user.role in {"admin", "superadmin"}:
@@ -1230,6 +1249,10 @@ async def _active_stages_for_requests(
                 ApprovalStageResponse(
                     key=node["node_key"],
                     label=(
+                        f"Согласование: {actor['name']}"
+                        if key == PAYMENT_DEPUTY_APPROVAL_NODE
+                        and (actor := payment_route_actor(request_row.get("payload") or {}))
+                        else
                         SUBSIDY_APPROVAL_LABEL
                         if key == PAYMENT_DEPUTY_APPROVAL_NODE
                         and (request_row.get("payload") or {}).get("payment_route_variant")
@@ -1293,6 +1316,10 @@ async def _visible_approval_requests(
     return [
         row for row in request_rows
         if row["requester_user_id"] == current_user.id
+        or any(
+            actor["user_id"] == str(current_user.id)
+            for actor in payment_route_actors(row.get("payload") or {}) or []
+        )
         or any(
             _can_act_from_config(current_user, row, node["node_key"], node["config"] or {})
             for node in nodes_by_template.get(row["template_id"], [])
@@ -6698,7 +6725,35 @@ async def _payment_route_variant_payload(
     template_id: UUID,
     project_id: str | None,
     project_name: str,
-) -> dict[str, str]:
+) -> dict[str, Any]:
+    if project_id:
+        configured = await connection.scalar(
+            select(project_hub_projects.c.payment_approver_user_ids)
+            .where(project_hub_projects.c.id == UUID(project_id))
+            .with_for_update(read=True)
+        )
+        if configured is not None:
+            node = await connection.scalar(select(approval_nodes.c.node_key).where(
+                approval_nodes.c.template_id == template_id,
+                approval_nodes.c.node_key == PAYMENT_DEPUTY_APPROVAL_NODE,
+                approval_nodes.c.kind == "approval",
+            ))
+            if node is None:
+                raise WorkspaceRepositoryError(409, "Маршрут не содержит этап заместителей")
+            candidates = (await connection.execute(select(
+                users.c.id, users.c.full_name, users.c.job_title,
+            ).where(users.c.id.in_([UUID(value) for value in configured]),
+                    users.c.status == "active"))).mappings().all() if configured else []
+            by_id = {str(person["id"]): person for person in candidates}
+            if len(by_id) != len(configured) or not all(
+                is_payment_deputy(person["job_title"]) for person in candidates
+            ):
+                raise WorkspaceRepositoryError(
+                    409, "Проверьте активных заместителей в маршруте оплаты проекта",
+                )
+            return {ROUTE_ACTORS: [
+                {"user_id": value, "name": by_id[value]["full_name"]} for value in configured
+            ]}
     if not project_id or project_name.strip().casefold() != "субсидия":
         return {}
     subsidy_node = await connection.scalar(
@@ -7061,25 +7116,12 @@ async def update_approval_request(
         connection, submitted_details["budget_article_id"], project_id,
     )
     previous_route_payload = row["payload"] or {}
-    route_variant_payload = (
-        {
-            key: previous_route_payload[key]
-            for key in ("payment_route_variant", "subsidy_approver_user_id")
-            if key in previous_route_payload
-        }
-        if project_id and project_id == previous_route_payload.get("project_id")
-        else await _payment_route_variant_payload(
-            connection, row["template_id"], project_id, project_name,
-        )
-    )
-    if row["status"] == "running" and route_variant_payload != {
+    # Once submitted, route identity is immutable even after a project change or resubmission.
+    route_variant_payload = {
         key: previous_route_payload[key]
-        for key in ("payment_route_variant", "subsidy_approver_user_id")
+        for key in ("payment_route_variant", "subsidy_approver_user_id", ROUTE_ACTORS)
         if key in previous_route_payload
-    }:
-        raise WorkspaceRepositoryError(
-            409, "Return this request for revision before changing its approval route",
-        )
+    }
     calendar_event_id = await _validated_payment_event_id(
         connection, current_user, submitted_details["calendar_event_id"],
         submitted_details["payment_purpose"], project_id,
@@ -7100,7 +7142,7 @@ async def update_approval_request(
         "responsible_user_id": str(responsible_id),
         "employee_ids": employee_ids,
     }
-    for key in ("payment_route_variant", "subsidy_approver_user_id"):
+    for key in ("payment_route_variant", "subsidy_approver_user_id", ROUTE_ACTORS):
         updated_payload.pop(key, None)
     updated_payload.update(route_variant_payload)
     title = payload.title.strip()
@@ -8455,6 +8497,11 @@ async def _resolve_workflow_targets(
         if target_row is None:
             continue
         target_kind = target_row["kind"]
+        if target == PAYMENT_DEPUTY_APPROVAL_NODE and payment_route_actors(request_payload) == []:
+            resolved.extend(await _resolve_workflow_targets(
+                connection, template_id, target, "approve", request_payload, seen,
+            ))
+            continue
         if target_kind == "condition":
             condition_edges = (
                 (
@@ -8505,6 +8552,8 @@ async def _resolve_workflow_targets(
                 .mappings()
                 .all()
             )
+            skipped_targets: list[tuple[str, str]] = []
+            remaining_branches: list[str] = []
             for branch in branch_edges:
                 branch_target = branch["target_node_key"]
                 branch_kind = await connection.scalar(
@@ -8514,7 +8563,25 @@ async def _resolve_workflow_targets(
                     )
                 )
                 if branch_kind is not None:
-                    resolved.append((branch_target, str(branch_kind)))
+                    if (branch_target == PAYMENT_DEPUTY_APPROVAL_NODE
+                            and payment_route_actors(request_payload) == []):
+                        skipped_targets.extend(await _resolve_workflow_targets(
+                            connection, template_id, branch_target, "approve",
+                            request_payload, seen,
+                        ))
+                    else:
+                        remaining_branches.append(branch_target)
+                        resolved.append((branch_target, str(branch_kind)))
+            if skipped_targets:
+                # A skipped deputy must not open a shared join before another branch approves.
+                pending_joins = set((await connection.execute(select(
+                    approval_edges.c.target_node_key,
+                ).where(
+                    approval_edges.c.template_id == template_id,
+                    approval_edges.c.source_node_key.in_(remaining_branches),
+                    approval_edges.c.outcome == "approve",
+                ))).scalars().all()) if remaining_branches else set()
+                resolved.extend(item for item in skipped_targets if item[0] not in pending_joins)
             continue
         if target_kind == "start":
             resolved.extend(
@@ -8623,7 +8690,14 @@ async def act_on_request(
         )
         if target is None or target["kind"] not in {"approval", "correction"}:
             raise WorkspaceRepositoryError(422, "The destination is not a movable workflow stage")
+        if (payload.node_key == PAYMENT_DEPUTY_APPROVAL_NODE
+                and payment_route_actors(row["payload"] or {}) == []):
+            raise WorkspaceRepositoryError(409, "Этап заместителей пропущен в этой заявке")
         is_administrator = current_user.role in {"admin", "superadmin"}
+        if (payment_route_actors(row["payload"] or {}) is not None and not is_administrator):
+            raise WorkspaceRepositoryError(
+                403, "Используйте решение этапа: маршрут заявки закреплён при подаче",
+            )
         move_active_nodes: Sequence[str] = row["active_node_keys"] or []
         can_move_current = any(
             [
@@ -8655,6 +8729,7 @@ async def act_on_request(
             .values(
                 status="needs_revision" if target["kind"] == "correction" else "running",
                 active_node_keys=[payload.node_key],
+                payload={**(row["payload"] or {}), ROUTE_STEP: 0},
                 actor_overrides={},
                 updated_at=now,
                 finished_at=None,
@@ -8702,6 +8777,9 @@ async def act_on_request(
         raise WorkspaceRepositoryError(403, "This user cannot decide on the selected stage")
     delegated_to_user_id = None
     if payload.action == "delegate":
+        if (active_node == PAYMENT_DEPUTY_APPROVAL_NODE
+                and payment_route_actors(row["payload"] or {}) is not None):
+            raise WorkspaceRepositoryError(403, "Состав согласующих закреплён в заявке")
         if _is_ordinary_payment_deputy_stage(row, active_node):
             raise WorkspaceRepositoryError(
                 403, "Решение заместителя принимает Умид Ражабов."
@@ -8726,6 +8804,9 @@ async def act_on_request(
     finished_at = None
     next_nodes = list(active_nodes)
     actor_overrides = dict(row.get("actor_overrides") or {})
+    request_payload = dict(row["payload"] or {})
+    route = payment_route_actors(request_payload)
+    route_step = payment_route_step(request_payload)
     if payload.action == "delegate":
         actor_overrides[active_node] = str(delegated_to_user_id)
     elif payload.action == "cancel":
@@ -8738,7 +8819,13 @@ async def act_on_request(
         finished_at = now
     elif payload.action in {"clarify", "delegate"}:
         pass
+    elif (payload.action == "approve" and active_node == PAYMENT_DEPUTY_APPROVAL_NODE
+          and route and route_step + 1 < len(route)):
+        request_payload[ROUTE_STEP] = route_step + 1
+        actor_overrides.pop(active_node, None)
     else:
+        if payload.action in {"return", "resubmit"} and route is not None:
+            request_payload[ROUTE_STEP] = 0
         outcome = (
             "resubmit"
             if payload.action == "resubmit"
@@ -8751,8 +8838,11 @@ async def act_on_request(
             row["template_id"],
             active_node,
             outcome,
-            row["payload"] or {},
+            request_payload,
         )
+        if (route is not None and active_node != PAYMENT_DEPUTY_APPROVAL_NODE
+                and any(key == PAYMENT_DEPUTY_APPROVAL_NODE for key, _ in targets)):
+            request_payload[ROUTE_STEP] = 0
         if not targets:
             raise WorkspaceRepositoryError(409, f"No route for action {payload.action}")
         next_nodes = [node for node in active_nodes if node != active_node]
@@ -8811,6 +8901,7 @@ async def act_on_request(
         .where(approval_requests.c.id == request_id)
         .values(
             status=status,
+            payload=request_payload,
             active_node_keys=next_nodes,
             actor_overrides=actor_overrides,
             updated_at=now,

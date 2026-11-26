@@ -2252,6 +2252,8 @@ export interface ProjectHubProject {
   readonly managerUserId: string;
   readonly responsibleUserIds: readonly string[];
   readonly approverUserIds: readonly string[];
+  /** null/omitted: legacy route; []: chairman directly; otherwise sequential deputies. */
+  readonly paymentApproverUserIds?: readonly string[] | null;
   readonly startDate?: string | null;
   readonly endDate?: string | null;
   readonly budget: number;
@@ -2268,7 +2270,7 @@ export interface ProjectHubProject {
 export type ProjectHubProjectInput = Pick<ProjectHubProject,
   "code" | "title" | "description" | "managerUserId" | "responsibleUserIds" |
   "approverUserIds" | "startDate" | "endDate" | "budget" | "currency" |
-  "accessStatus" | "lifecycleStatus"> & { readonly chatIconKey?: ChatAvatarIconKey | null };
+  "accessStatus" | "lifecycleStatus" | "paymentApproverUserIds"> & { readonly chatIconKey?: ChatAvatarIconKey | null };
 
 export interface ProjectHubWorkstream {
   readonly id: string;
@@ -2549,7 +2551,8 @@ export interface PaymentRequestDetails {
 
 export interface PaymentProjectTargets {
   readonly budgetArticles?: readonly ProjectBudgetArticle[];
-  readonly projects: readonly { readonly id: string; readonly code: string; readonly title: string }[];
+  readonly projects: readonly { readonly id: string; readonly code: string; readonly title: string;
+    readonly paymentApproverUserIds?: readonly string[] | null }[];
   readonly workstreams: readonly { readonly id: string; readonly projectId: string; readonly title: string }[];
   readonly items: readonly { readonly id: string; readonly projectId: string; readonly workstreamId: string;
     readonly kind: "task" | "event"; readonly title: string }[];
@@ -2565,6 +2568,8 @@ export interface ApprovalRequestSummary {
   readonly status: ApprovalStatus;
   readonly statusLabel: string;
   readonly routeVariant?: "subsidy" | null;
+  readonly paymentApprovalRoute?: readonly { readonly userId: string; readonly name: string }[] | null;
+  readonly paymentApprovalStep?: number;
   readonly activeNodeKeys: readonly string[];
   readonly activeStages: readonly ApprovalStage[];
   readonly stageLabel: string;

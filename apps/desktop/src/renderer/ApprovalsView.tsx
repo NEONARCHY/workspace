@@ -314,7 +314,8 @@ interface PaymentFormState {
 
 function isSubsidyProjectSelection(projectId: string, targets: PaymentProjectTargets): boolean {
   return !!projectId && targets.projects.some((project) =>
-    project.id === projectId && project.title.trim().toLocaleLowerCase("ru-RU") === "субсидия");
+    project.id === projectId && project.paymentApproverUserIds == null
+    && project.title.trim().toLocaleLowerCase("ru-RU") === "субсидия");
 }
 
 export function emptyPaymentForm(currentUserId: string): PaymentFormState {
@@ -713,7 +714,13 @@ function approvalAdvancePlan(
     && !activeStage.canAct
   ) return undefined;
   const action = request.status === "needs_revision" ? "resubmit" : "approve";
-  const targetKeys = resolveVisibleTargets(workflow, request, activeStage.key, action);
+  if (activeStage.key === "deputy_chair" && request.paymentApprovalRoute
+    && (request.paymentApprovalStep ?? 0) + 1 < request.paymentApprovalRoute.length) return undefined;
+  const targets = resolveVisibleTargets(workflow, request, activeStage.key, action);
+  const waitingJoins = new Set(workflow.edges.filter((edge) => edge.outcome === "approve"
+    && edge.source !== "deputy_chair" && targets.includes(edge.source)).map((edge) => edge.target));
+  const targetKeys = targets.flatMap((key) => key === "deputy_chair" && request.paymentApprovalRoute?.length === 0
+    ? resolveVisibleTargets(workflow, request, key, "approve").filter((target) => !waitingJoins.has(target)) : [key]);
   return targetKeys.length === 0 ? undefined : { nodeKey: activeStage.key, action, targetKeys };
 }
 
@@ -828,7 +835,9 @@ export function PaymentFields({ form, targets, calendarEvents, people, departmen
         {form.budgetArticleId && projectBudgetArticles.some((article) => article.id === form.budgetArticleId && article.currency !== form.currency) ? (
           <p className="payment-currency-hint">Валюта оплаты отличается от валюты плана статьи. Расход сохранится в выбранной валюте; автоматического пересчёта и уменьшения остатка плана не будет.</p>
         ) : null}
-        {isSubsidyProjectSelection(form.projectId, targets) ? (
+        {revision ? <p>Маршрут согласования сохранён при подаче заявки и не меняется вместе с настройками проекта.</p> : targets.projects.find((project) => project.id === form.projectId)?.paymentApproverUserIds != null ? (
+          <p>После главбуха: {(targets.projects.find((project) => project.id === form.projectId)?.paymentApproverUserIds ?? []).map((id) => people.find((person) => person.id === id)?.name ?? "Выбранный заместитель").concat("Председатель").join(" → ")}. Остальные этапы сохраняются.</p>
+        ) : isSubsidyProjectSelection(form.projectId, targets) ? (
           <p className="payment-subsidy-route-hint">Для проекта «Субсидия» этап руководства согласует первый заместитель председателя Аскар Маматханов.</p>
         ) : null}
       </section>
@@ -1536,7 +1545,8 @@ export function ApprovalsView({
     const target = boardColumns.find(column => column.key === columnKey);
     const targetNode = workflow?.nodes?.find((node) => node.id === columnKey);
     const canManuallyMove = !!request && !!targetNode && ["approval", "correction"].includes(targetNode.kind)
-      && (canManage || request.activeStages.some((stage) => stage.canAct));
+      && (canManage || request.paymentApprovalRoute == null && request.activeStages.some((stage) => stage.canAct))
+      && !(columnKey === "deputy_chair" && request.paymentApprovalRoute?.length === 0);
     const canAdvance = !!plan?.targetKeys.includes(columnKey);
     if (!request || (!canAdvance && !canManuallyMove) || !target) return;
     setMovingRequestId(request.id);
@@ -1746,7 +1756,8 @@ export function ApprovalsView({
             const canAdvance = plan?.targetKeys.includes(target) ?? false;
             const node = workflow?.nodes?.find((item) => item.id === target);
             const canManuallyMove = !!node && ["approval", "correction"].includes(node.kind)
-              && (canManage || request.activeStages.some((stage) => stage.canAct));
+              && (canManage || request.paymentApprovalRoute == null && request.activeStages.some((stage) => stage.canAct))
+              && !(target === "deputy_chair" && request.paymentApprovalRoute?.length === 0);
             return canAdvance || canManuallyMove;
           }} onMove={moveRequest}>
           <div ref={boardScrollRef} className="approval-kanban" role="region" tabIndex={0} aria-label="Доска заявок по стадиям">
@@ -1917,8 +1928,10 @@ export function ApprovalsView({
                   hint="После отправки заявку увидит исполнитель первой стадии."
                   stages={<div className="record-stages" tabIndex={0} role="region" aria-label="Стадии процесса оплаты">{boardColumns.map((column) => {
                     const subsidy = isSubsidyProjectSelection(requestDetails.projectId, paymentTargets);
+                    const deputies = paymentTargets.projects.find((project) => project.id === requestDetails.projectId)?.paymentApproverUserIds;
+                    if (column.key === "deputy_chair" && deputies?.length === 0) return null;
                     return <span key={column.key} style={{ "--record-stage-color": subsidy && column.key === "deputy_chair" ? "#b78a53" : approvalStagePalette(column).background } as CSSProperties}>
-                      {subsidy && column.key === "deputy_chair" ? "Утверждение первым заместителем председателя" : column.label}
+                      {column.key === "deputy_chair" && deputies ? deputies.map((id) => people.find((person) => person.id === id)?.name ?? "Выбранный заместитель").join(" → ") : subsidy && column.key === "deputy_chair" ? "Утверждение первым заместителем председателя" : column.label}
                     </span>;
                   })}</div>}
                   aside={<>
@@ -2054,7 +2067,7 @@ export function ApprovalsView({
                 </SlidingSegmented>
 
                 {detailTab === "route" ? <div ref={stageRibbonRef} className="approval-stage-ribbon detail-route" role="region" tabIndex={0} aria-label="Стадии заявки">
-                  {boardColumns.map((column, index) => (
+                  {boardColumns.map((column, index) => column.key === "deputy_chair" && selectedRequest.paymentApprovalRoute?.length === 0 ? null : (
                     <span
                       key={column.key}
                       className={
@@ -2065,7 +2078,9 @@ export function ApprovalsView({
                             : ""
                       }
                     >
-                      {selectedRequest.routeVariant === "subsidy" && column.key === "deputy_chair" ? "Утверждение первым заместителем председателя" : column.label}
+                      {column.key === "deputy_chair" && selectedRequest.paymentApprovalRoute
+                        ? selectedRequest.paymentApprovalRoute.map((actor) => actor.name).join(" → ")
+                        : selectedRequest.routeVariant === "subsidy" && column.key === "deputy_chair" ? "Утверждение первым заместителем председателя" : column.label}
                     </span>
                   ))}
                 </div> : null}

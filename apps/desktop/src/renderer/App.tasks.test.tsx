@@ -4,6 +4,7 @@ import { App } from "./App";
 import { initialTasks, people } from "./test-fixtures/demo-data";
 import { changeField } from "./test-fixtures/rich-editor";
 import { render, mockServer, loginToWorkspace } from "./app-test-harness";
+import { focusWorkspaceDialog } from "./WorkspaceDialog";
 
 // Compile only the real workflows covered by this isolated suite.
 import "./TasksView";
@@ -20,8 +21,14 @@ describe("corporate workspace authentication alpha", () => {
       await import("./TasksView");
     });
     fireEvent.click(await screen.findByRole("button", { name: "Новая задача" }));
-    const composer = within(await screen.findByRole("dialog"));
-    changeField(composer.getByRole("textbox", { name: "Название задачи" }), {
+    const dialog = await screen.findByRole("dialog");
+    // Activate the lazy modal before querying its controls; jsdom has no Tabster layout.
+    await act(async () => {
+      dialog.focus();
+      focusWorkspaceDialog(dialog);
+    });
+    const composer = within(dialog);
+    changeField(await composer.findByRole("textbox", { name: "Название задачи" }), {
       target: { value: "Проверить новый маршрут оплаты" },
     });
     changeField(composer.getByRole("textbox", { name: "Описание новой задачи" }), {
