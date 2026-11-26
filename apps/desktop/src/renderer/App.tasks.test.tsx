@@ -21,7 +21,8 @@ describe("corporate workspace authentication alpha", () => {
     });
     fireEvent.click(await screen.findByRole("button", { name: "Новая задача" }));
     const composer = within(await screen.findByRole("dialog"));
-    changeField(composer.getByRole("textbox", { name: "Название задачи" }), {
+    // Fluent's modal focus handoff can briefly hide the mounted dialog from accessibility.
+    changeField(await composer.findByRole("textbox", { name: "Название задачи" }), {
       target: { value: "Проверить новый маршрут оплаты" },
     });
     changeField(composer.getByRole("textbox", { name: "Описание новой задачи" }), {
