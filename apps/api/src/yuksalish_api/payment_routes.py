@@ -3,14 +3,14 @@
 from collections.abc import Mapping
 from typing import Any
 
-from .position_policy import is_executive_leader, is_task_chat_leader
+from .position_policy import is_calendar_chairman, is_task_chat_leader
 
 ROUTE_ACTORS = "payment_route_approvers"
 ROUTE_STEP = "payment_route_step"
 
 
 def is_payment_deputy(job_title: str | None) -> bool:
-    return is_task_chat_leader(job_title) and not is_executive_leader(job_title)
+    return is_task_chat_leader(job_title) and not is_calendar_chairman(job_title)
 
 
 def payment_route_actors(payload: Mapping[str, Any]) -> list[dict[str, str]] | None:

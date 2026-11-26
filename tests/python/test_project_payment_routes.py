@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 from yuksalish_api.auth import AuthenticatedUser, load_authenticated_user
 from yuksalish_api.payment_routes import ROUTE_ACTORS, ROUTE_STEP, is_payment_deputy
+from yuksalish_api.position_policy import EXECUTIVE_LEADER_POSITION_NAME
 from yuksalish_api.project_hub_schemas import ProjectHubWrite, ProjectWorkstreamWrite
 from yuksalish_api.project_hub_service import save_project, save_workstream
 from yuksalish_api.repository import (
@@ -42,6 +43,8 @@ from yuksalish_api.workspace_schemas import (
     ("Rais o‘rinbosari — ijrochi direktor", True),
     ("Rais o‘rinbosari yordamchisi", False),
     ("Bosh hisobchi", False),
+    (EXECUTIVE_LEADER_POSITION_NAME.replace("'", "‘"), False),
+    (EXECUTIVE_LEADER_POSITION_NAME.replace(" ", "  "), False),
     (None, False),
 ])
 def test_only_deputies_are_payment_choices(title: str | None, expected: bool) -> None:
