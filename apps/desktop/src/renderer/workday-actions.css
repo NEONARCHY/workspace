@@ -1,0 +1,62 @@
+/* Workday is the daily primary action: quiet material, one glint per interaction. */
+.app-provider .workday-action { --workday-action-fill: #006779; }
+html:root body .app-provider :is(.workday-control, .workday-control-popover) .workday-action.fui-Button {
+  position: relative; isolation: isolate; overflow: hidden; box-sizing: border-box;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 48px; min-width: 160px; padding: 12px 18px; border: 0; border-radius: 14px;
+  background: linear-gradient(180deg, rgb(255 255 255 / 4%), transparent 60%, rgb(0 0 0 / 5%)) var(--workday-action-fill);
+  color: #fff; font: 600 14px/20px var(--ws-font, Inter, sans-serif); letter-spacing: 0;
+  box-shadow: 0 6px 16px -12px rgb(0 0 0 / 45%);
+  cursor: pointer; transition: transform 160ms var(--ws-ease, ease-out);
+}
+html:root body .app-provider .workday-action[data-action="finish"] { --workday-action-fill: var(--ws-button-surface, var(--ws-navy, #293a55)); }
+html:root body .app-provider .workday-action.fui-Button > :is(.fui-Button__icon, .workday-control-label, .workday-control-mobile-label) { position: relative; z-index: 1; }
+html:root body .app-provider .workday-action.fui-Button > .fui-Button__icon { width: 20px; height: 20px; font-size: 20px; margin: 0; color: inherit; }
+html:root body .app-provider .workday-action :is(.workday-action-glint, .workday-action-impact) { position: absolute; z-index: 0; pointer-events: none; }
+html:root body .app-provider .workday-action .workday-action-glint {
+  top: -45%; left: -45%; width: 40%; height: 190%; opacity: 0;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 10%) 48%, transparent);
+  transform: translateX(-160%) skewX(-18deg); transition: opacity 160ms ease-out;
+}
+html:root body .app-provider .workday-action .workday-action-impact {
+  inset: 0; opacity: 0; background: radial-gradient(ellipse at center, rgb(255 255 255 / 12%), transparent 75%);
+  transform: scale(.7); transition: opacity 240ms ease-out, transform 240ms ease-out;
+}
+@media (hover: hover) {
+  html:root body .app-provider .workday-action:hover:not(:disabled) .workday-action-glint {
+    opacity: 1; transform: translateX(430%) skewX(-18deg);
+    transition: transform 680ms var(--ws-ease, ease-out), opacity 120ms ease-out;
+  }
+}
+html:root body .app-provider .workday-action:active:not(:disabled) { transform: translateY(1px); transition-duration: 80ms; }
+html:root body .app-provider .workday-action:active:not(:disabled) .workday-action-glint { opacity: 0; transition-duration: 80ms; }
+html:root body .app-provider .workday-action:active:not(:disabled) .workday-action-impact { opacity: 1; transform: scale(1.1); transition-duration: 80ms; }
+html:root body .app-provider .workday-action:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 3px; }
+html:root body .app-provider .workday-action:disabled { opacity: .55; cursor: wait; transform: none; }
+html:root body .app-provider .workday-action:disabled :is(.workday-action-glint, .workday-action-impact) { opacity: 0; }
+.app-provider .workday-control-popover-actions .workday-action { width: 100%; }
+
+/* A filled play/stop disc makes the former text action recognisable in the icon bar. */
+.app-provider .workspace-topbar .workday-control-glyph {
+  display: grid; place-items: center; flex: none; width: 28px; height: 28px; border-radius: 50%;
+  background: #006779; color: #fff; transition: background-color 160ms ease-out;
+}
+.app-provider .workspace-topbar .workday-control-glyph > svg { width: 16px; height: 16px; }
+.app-provider .workspace-topbar [data-action="finish"] > .workday-control-glyph { background: var(--ws-button-surface, var(--ws-navy, #293a55)); }
+.app-provider .workspace-topbar :is([data-action="away"], [data-action="loading"]) > .workday-control-glyph { background: var(--ws-muted-surface); color: var(--ws-muted); }
+@media (hover: hover) {
+  .app-provider .workspace-topbar .workday-control-mobile-trigger:hover > .workday-control-glyph { background: #08798a; }
+  .app-provider .workspace-topbar .workday-control-mobile-trigger[data-action="finish"]:hover > .workday-control-glyph { background: var(--ws-button-hover, #3a4b66); }
+}
+@media (prefers-reduced-motion: reduce) {
+  html:root body .app-provider .workday-action.fui-Button,
+  .app-provider .workspace-topbar .workday-control-glyph { transition: none; }
+  html:root body .app-provider .workday-action :is(.workday-action-glint, .workday-action-impact) { display: none; }
+  html:root body .app-provider .workday-action:active:not(:disabled) { transform: none; background-image: linear-gradient(rgb(255 255 255 / 7%), rgb(255 255 255 / 7%)); }
+}
+@media (forced-colors: active) {
+  html:root body .app-provider .workday-action.fui-Button { color: ButtonText; background: ButtonFace; border: 1px solid ButtonText; box-shadow: none; }
+  html:root body .app-provider .workday-action :is(.workday-action-glint, .workday-action-impact) { display: none; }
+  html:root body .app-provider .workday-action:focus-visible { outline-color: Highlight; }
+  .app-provider .workspace-topbar .workday-control-glyph { color: HighlightText; background: Highlight; }
+}

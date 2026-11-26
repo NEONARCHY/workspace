@@ -9,7 +9,7 @@ html:not([data-color-theme="dark"]) .app-provider :is(
   [role="menuitem"],
   [role="tab"],
   [tabindex="0"]
-):not(.workspace-topbar *, .sidebar-palette *, .sidebar-theme-choice, .approval-view-toolbar *, .approval-metric-actionable, .calendar-agenda-drawer *, .calendar-ux .calendar-day, .calendar-ux .browser-calendar-agenda, .calendar-ux .calendar-filter-toggle):is(:focus, :focus-visible) {
+):not(.workday-action, .workspace-topbar *, .sidebar-palette *, .sidebar-theme-choice, .approval-view-toolbar *, .approval-metric-actionable, .calendar-agenda-drawer *, .calendar-ux .calendar-day, .calendar-ux .browser-calendar-agenda, .calendar-ux .calendar-filter-toggle):is(:focus, :focus-visible) {
   outline: 0 !important;
   outline-offset: 0 !important;
 }

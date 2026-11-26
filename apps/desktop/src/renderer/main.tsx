@@ -86,6 +86,7 @@ import "./mobile-density.css";
 import "./page-scroll-layout.css";
 import "./workspace-queue.css";
 import "./workspace-topbar.css";
+import "./workday-actions.css";
 import "./workspace-surfaces.css";
 import { initializeColorTheme } from "./color-theme";
 import { observePopupInputMode } from "./popup-input-mode";

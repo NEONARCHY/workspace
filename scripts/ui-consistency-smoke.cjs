@@ -9,16 +9,17 @@ const attentionSuite = process.argv.includes("--attention");
 const peopleSuite = process.argv.includes("--people");
 const operationsSuite = process.argv.includes("--operations");
 const documentsSuite = process.argv.includes("--documents");
-const topbarSuite = process.argv.includes("--topbar");
+const workdaySuite = process.argv.includes("--workday");
+const topbarSuite = process.argv.includes("--topbar") || workdaySuite;
 const reportingSuite = process.argv.includes("--reporting");
 const planningSuite = process.argv.includes("--planning") || topbarSuite;
 const onlyWidth = Number(process.env.UI_QA_WIDTH || 0);
 assert([0, 320, 390, 720, 1024, 1440].includes(onlyWidth));
 const origin = process.env.UI_QA_ORIGIN || "http://127.0.0.1:5186";
 assert(["127.0.0.1", "localhost"].includes(new URL(origin).hostname));
-const iteration = reportingSuite ? "8" : topbarSuite ? "7" : planningSuite ? "6" : documentsSuite ? "5" : operationsSuite ? "4" : peopleSuite ? "3" : attentionSuite ? "2" : "1";
+const iteration = workdaySuite ? "9" : reportingSuite ? "8" : topbarSuite ? "7" : planningSuite ? "6" : documentsSuite ? "5" : operationsSuite ? "4" : peopleSuite ? "3" : attentionSuite ? "2" : "1";
 const output = path.resolve(process.env.UI_QA_OUTPUT || `tmp/ui-consistency-iteration-${iteration}`);
-const sections = reportingSuite
+const sections = workdaySuite ? [{ id: "home", label: "Главная", root: ".personal-home" }] : reportingSuite
   ? [{ id: "hisobot", label: "AI Hisobot", root: ".ai-hisobot-view" }, { id: "monthly", label: "Ойлик ҳисоботлар", root: ".monthly-reports-page" }, { id: "efficiency", label: "Эффективность", navLabel: "Задачи", root: ".tasks-view" }]
   : planningSuite
   ? [{ id: "home", label: "Главная", root: ".personal-home" }, { id: "calendar", label: "Календарь", root: ".calendar-view" }, { id: "projects", label: "Проекты", root: ".project-hub-view" }]
@@ -120,7 +121,7 @@ async function measure(page, selector) {
       if (planningSuite || reportingSuite) await page.clock.setFixedTime(new Date("2026-11-26T09:30:00Z"));
       page.on("pageerror", error => errors.push(error.message));
       await page.addInitScript(theme => localStorage.setItem("yuksalish:color-theme:last", theme), theme);
-      let data, releaseIds = [];
+      let data, releaseIds = [], workdayWorking = false, workdayWrites = 0;
       await page.routeWebSocket("**/api/v1/events", socket => socket.onMessage(message => {
         const value = JSON.parse(String(message));
         socket.send(JSON.stringify({ type: value.type === "ping" ? "pong" : "authenticated" }));
@@ -129,7 +130,7 @@ async function measure(page, selector) {
         const request = route.request(), endpoint = new URL(request.url()).pathname.replace("/api/v1", "");
         const send = json => route.fulfill({ json });
         if (/\/auth\/(web\/)?login$/.test(endpoint)) return send({ accessToken: "qa-token", expiresIn: 3600, user: data.user });
-        if (!["GET", "HEAD"].includes(request.method())) return route.fulfill({ status: 403, json: { detail: "Synthetic QA: no writes" } });
+        if (!["GET", "HEAD"].includes(request.method())) { if (endpoint.startsWith("/workday/")) workdayWrites++; return route.fulfill({ status: 403, json: { detail: "Synthetic QA: no writes" } }); }
         if (endpoint === "/workspace/bootstrap") return send({ currentUser: { ...data.user, ...(planningSuite ? { departmentId: "qa-dept" } : {}) }, people: planningSuite ? data.people.map(p => ({ ...p, departmentId: "qa-dept" })) : data.people, tasks: planningSuite ? data.home.tasks : data.tasks, requests: data.requests, tripRequests: data.tripRequests, workflow: data.workflow, projectWorkflow: null, tripWorkflow: null, requestWorkflows: {}, projects: [], chats: planningSuite ? data.home.chats : [], messages: planningSuite ? data.home.messages : [], departments: planningSuite ? [{ ...data.departments[0], assignedUsersCount: data.people.length }] : [], positions: [], attachments: [], feedPosts: attentionSuite || planningSuite ? data.feedPosts : [], calendarEvents: planningSuite ? data.calendarEvents : [], notifications: attentionSuite ? data.notifications : planningSuite ? data.home.notifications : [], absenceRequests: peopleSuite ? data.absenceRequests : [], presenceSummary: peopleSuite ? data.presenceSummary : [], canCreatePaymentRequests: true, notificationPreferences: { desktopEnabled: false, soundEnabled: false, messagesEnabled: true, tasksEnabled: true, approvalsEnabled: true, calendarEnabled: true, tripsEnabled: true, remindersEnabled: true } });
         if (planningSuite && endpoint === "/profile/me/efficiency") return send(data.personalEfficiency);
         if (planningSuite && endpoint.startsWith("/recognition/profiles/")) return send(data.recognition);
@@ -160,7 +161,7 @@ async function measure(page, selector) {
         if (endpoint === "/grants") return send([]);
         if (endpoint === "/ai-referent/signature-inbox") return send({ items: [], totalCount: 0, offset: 0 });
         if (endpoint === "/personal-preferences/release-history") return send({ readEntryIds: releaseIds });
-        if (endpoint === "/workday/me") return send({ status: "not_started", schedule: { startsAt: "09:00", endsAt: "18:00" }, session: null });
+        if (endpoint === "/workday/me") return send({ status: workdayWorking ? "working" : "not_started", schedule: { startsAt: "09:00", endsAt: "18:00" }, session: null });
         if (endpoint === "/support-requests") return send({ mode: "inbox", requests: [], unreadResponseCount: 0, indicator: null });
         if (endpoint === "/updates/policy") return send({ mandatory: false, minimumVersion: null, publishedVersion: null });
         if (endpoint.includes("/approval-inbox/")) return send({ enabled: false, items: [] });
@@ -216,7 +217,58 @@ async function measure(page, selector) {
         if (topbarSuite && section.id === "home" || phase === "after" && reportingSuite && section.id === "hisobot") await capture(page.locator(".global-bar"), path.join(output, phase, `topbar-${theme}-${width}.png`));
         const geometry = await measure(page, section.root);
         results.push({ section: section.id, width, height, theme, ...geometry });
-        if (phase === "after" && (topbarSuite || reportingSuite)) {
+        if (workdaySuite) {
+          let startFill;
+          for (const working of [false, true]) {
+            workdayWorking = working;
+            await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+            const trigger = page.getByRole("button", { name: working ? "Рабочий день: Сейчас в работе" : "Рабочий день: Работа не начата", exact: true });
+            if (phase === "after") {
+              await page.locator(".global-bar").evaluate(bar => { bar.scrollLeft = 0; }); await settle(page);
+              const bounds = await trigger.boundingBox(); assert(bounds.x >= 0 && bounds.x + bounds.width <= width, "workday action is visible without scrolling");
+              assert.equal(await trigger.getAttribute("data-action"), working ? "finish" : "start");
+              assert.notEqual(await trigger.locator(".workday-control-glyph").evaluate(node => getComputedStyle(node).backgroundColor), "rgba(0, 0, 0, 0)");
+            }
+            await trigger.waitFor(); await trigger.scrollIntoViewIfNeeded(); await trigger.click();
+            const panel = page.getByRole("dialog", { name: "Рабочий день", exact: true }); await panel.waitFor(); await settle(page);
+            const action = panel.getByRole("button", { name: working ? "Завершить работу" : "Начать работу", exact: true });
+            const name = working ? "workday-finish" : "workday-start";
+            await page.mouse.move(0, 0); await capture(panel, path.join(output, phase, `${name}-${theme}-${width}.png`));
+            if (phase === "after") {
+              const fill = await action.evaluate(node => getComputedStyle(node).backgroundColor);
+              if (!working) startFill = fill; else assert.notEqual(fill, startFill, "start and finish have distinct materials");
+              await page.emulateMedia({ reducedMotion: "no-preference" });
+              await action.hover();
+              await action.evaluate(async node => {
+                await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+                for (const animation of node.getAnimations({ subtree: true })) { animation.pause(); animation.currentTime = Math.min(210, Number(animation.effect.getTiming().duration) / 2); }
+              });
+              assert(Number(await action.locator(".workday-action-glint").evaluate(node => getComputedStyle(node).opacity)) > 0, "hover glint is visible");
+              await capture(panel, path.join(output, phase, `${name}-hover-${theme}-${width}.png`));
+              await action.evaluate(node => node.getAnimations({ subtree: true }).forEach(animation => animation.finish()));
+              await page.mouse.down();
+              await action.evaluate(async node => {
+                await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+                for (const animation of node.getAnimations({ subtree: true })) { animation.pause(); animation.currentTime = Number(animation.effect.getTiming().duration); }
+              });
+              assert.equal(await action.locator(".workday-action-impact").evaluate(node => getComputedStyle(node).opacity), "1", "pressed highlight is visible");
+              await capture(panel, path.join(output, phase, `${name}-pressed-${theme}-${width}.png`));
+              await page.mouse.move(0, 0); await page.mouse.up();
+              const bounds = await action.boundingBox(); assert(bounds.height >= 44 && bounds.width >= 44);
+              assert.equal(await action.evaluate(node => getComputedStyle(node).borderTopWidth), "0px");
+              await page.emulateMedia({ reducedMotion: "reduce" });
+              await action.hover(); await settle(page);
+              assert.equal(await action.evaluate(node => node.getAnimations({ subtree: true }).length), 0, "reduced motion: no workday animation");
+              await page.emulateMedia({ forcedColors: "active" }); await action.focus(); await page.keyboard.press("Shift+Tab"); await page.keyboard.press("Tab"); await settle(page);
+              assert.equal(await action.evaluate(node => getComputedStyle(node).outlineStyle), "solid", "high contrast keyboard focus");
+              assert.equal(await action.locator(".workday-action-glint").evaluate(node => getComputedStyle(node).display), "none");
+              await page.emulateMedia({ forcedColors: "none" });
+            }
+            await page.keyboard.press("Escape"); await panel.waitFor({ state: "hidden" });
+          }
+          assert.equal(workdayWrites, 0, "visual QA never changes attendance");
+        }
+        if (phase === "after" && !workdaySuite && (topbarSuite || reportingSuite)) {
           const toolbar = await page.locator(".global-bar").evaluate(bar => {
             const controls = [...bar.querySelectorAll(".browser-menu-trigger, .section-jump-trigger, .notification-bell, .color-theme-toggle, .assistant-launcher, .workspace-identity-menu, .connection-indicator, .context-trigger, .workday-control-mobile-trigger")].filter(node => node.getBoundingClientRect().height > 0);
             return controls.map(node => { const rect = node.getBoundingClientRect(), style = getComputedStyle(node); return { name: node.className, x: rect.x, y: rect.y, width: rect.width, height: rect.height, fill: style.backgroundColor, image: style.backgroundImage, shadow: style.boxShadow, radius: style.borderRadius, border: style.borderTopWidth }; });
@@ -343,7 +395,7 @@ async function measure(page, selector) {
             assert.equal(await page.locator(".eff-history-chart filter").count(), 0);
           }
         }
-        if (phase === "after" && planningSuite) {
+        if (phase === "after" && planningSuite && !workdaySuite) {
           const framed = await page.locator(section.root).evaluate(root => [...root.querySelectorAll(".home-panel, .home-overview > button, .home-row, .calendar-day, .calendar-view-bar, .calendar-agenda-card, .project-hub-project, .project-hub-metrics > div, .project-hub-workstream-card")].filter(node => {
             const style = getComputedStyle(node);
             return [style.borderTopWidth, style.borderRightWidth, style.borderBottomWidth, style.borderLeftWidth].some(value => parseFloat(value) > 0) || style.boxShadow.includes("inset");
@@ -668,7 +720,7 @@ async function measure(page, selector) {
             await page.locator(".team-dash-dialog").getByRole("button", { name: "Закрыть", exact: true }).click();
           }
         }
-        if ((topbarSuite && section.id === "home" || reportingSuite && section.id === "hisobot") && (phase === "after" || theme === "dark" && [1440, 720].includes(width))) {
+        if (!workdaySuite && (topbarSuite && section.id === "home" || reportingSuite && section.id === "hisobot") && (phase === "after" || theme === "dark" && [1440, 720].includes(width))) {
           const liveMotion = phase === "after" && theme === "dark" && width === 1440;
           if (liveMotion) { await page.emulateMedia({ reducedMotion: "no-preference" }); await settle(page); }
           const launcher = page.locator(".assistant-launcher"); await launcher.scrollIntoViewIfNeeded();
@@ -715,9 +767,10 @@ async function measure(page, selector) {
     await fs.writeFile(path.join(output, "index.html"), `<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Yuksalish — сравнение интерфейса</title>
       <style>*{box-sizing:border-box}body{margin:0;padding:24px;background:#111318;color:#eceef4;font:15px/1.5 system-ui}main{max-width:1600px;margin:auto}h1{font-size:28px}p,figcaption{color:#bfc6d3}select{margin:0 0 24px;padding:12px;border-radius:8px;background:#252a33;color:inherit}section{margin:0 0 32px}h2{font-size:20px}article{display:grid;grid-template-columns:1fr 1fr;gap:16px}figure{margin:0;min-width:0}img{display:block;width:100%;height:auto;border-radius:12px}figcaption{margin-bottom:8px}@media(max-width:700px){article{grid-template-columns:1fr}body{padding:12px}}</style>
       <main><h1>Итерация ${iteration} · Общая сетка рабочих разделов</h1><p>Реальные компоненты приложения, одинаковые синтетические данные до и после. Нажмите на снимок для исходного размера.</p><select id="size" aria-label="Размер и тема"><option value="dark-1440">1440 × 960 · тёмная</option><option value="light-1440">1440 × 960 · светлая</option><option value="dark-1024">1024 × 768 · тёмная</option><option value="dark-390">390 × 844 · тёмная</option>${topbarSuite || reportingSuite ? '<option value="dark-320">320 × 800 · тёмная</option><option value="dark-720">720 × 480 · тёмная</option>' : ''}</select>
-      ${(topbarSuite ? [{ id: "topbar", label: "Общая верхняя панель" }, ...sections] : sections).map(section => `<section data-section="${section.id}"><h2>${section.label}</h2><article>${["before", "after"].map((state, i) => `<figure><figcaption>${i ? "После" : "До"}</figcaption><a data-state="${state}" href="${state}/${section.id}-dark-1440.png"><img loading="lazy" src="${state}/${section.id}-dark-1440.png" alt="${section.label} — ${i ? "после" : "до"}"></a></figure>`).join("")}</article></section>`).join("")}
-      ${topbarSuite ? [1440, 720].map(width => `<section><h2>Открытый ассистент · ${width} px</h2><article>${["before", "after"].map((state, i) => `<figure><figcaption>${i ? "После: орба остаётся в кнопке" : "До: орба переносится в окно"}</figcaption><a href="${state}/assistant-open-dark-${width}.png"><img loading="lazy" src="${state}/assistant-open-dark-${width}.png" alt="Ассистент — ${i ? "после" : "до"}"></a></figure>`).join("")}</article></section>`).join("") : ''}
+      ${workdaySuite ? '<select id="interaction" aria-label="Состояние кнопки"><option value="">Обычное состояние</option><option value="hover">Наведение</option><option value="pressed">Нажатие</option></select>' : ''}
+      ${(workdaySuite ? [{ id: "workday-start", label: "Начать работу" }, { id: "workday-finish", label: "Завершить работу" }, { id: "topbar", label: "Заметная иконка рабочего дня" }] : topbarSuite ? [{ id: "topbar", label: "Общая верхняя панель" }, ...sections] : sections).map(section => `<section data-section="${section.id}"><h2>${section.label}</h2><article>${["before", "after"].map((state, i) => `<figure><figcaption>${i ? "После" : "До"}</figcaption><a data-state="${state}" href="${state}/${section.id}-dark-1440.png"><img loading="lazy" ${workdaySuite && section.id !== "topbar" ? 'style="max-width:360px"' : ''} src="${state}/${section.id}-dark-1440.png" alt="${section.label} — ${i ? "после" : "до"}"></a></figure>`).join("")}</article></section>`).join("")}
+      ${topbarSuite && !workdaySuite ? [1440, 720].map(width => `<section><h2>Открытый ассистент · ${width} px</h2><article>${["before", "after"].map((state, i) => `<figure><figcaption>${i ? "После: орба остаётся в кнопке" : "До: орба переносится в окно"}</figcaption><a href="${state}/assistant-open-dark-${width}.png"><img loading="lazy" src="${state}/assistant-open-dark-${width}.png" alt="Ассистент — ${i ? "после" : "до"}"></a></figure>`).join("")}</article></section>`).join("") : ''}
       ${documentsSuite ? '<section data-section="admin-menu"><h2>Режим администратора в меню аватара</h2><figure><figcaption>После · переключение прав и возврат к правам своей должности</figcaption><a data-state="after" href="after/admin-menu-dark-1440.png"><img loading="lazy" src="after/admin-menu-dark-1440.png" alt="Переключатель прав в меню профиля"></a></figure></section>' : ''}
-      <p>Подход: <a href="https://github.com/heydamir/unslop" style="color:#90d5df">unslop · Damir Sokolovsky · CC BY 4.0</a>. Цвета статусов, права и рабочие процессы сохранены.</p></main><script>document.querySelector('#size').addEventListener('change',event=>{document.querySelectorAll('section[data-section]').forEach(section=>section.querySelectorAll('[data-state]').forEach(link=>{const src=link.dataset.state+'/'+section.dataset.section+'-'+event.target.value+'.png';link.href=src;link.querySelector('img').src=src}))})</script></html>`);
+      <p>Подход: <a href="https://github.com/heydamir/unslop" style="color:#90d5df">unslop · Damir Sokolovsky · CC BY 4.0</a>. Цвета статусов, права и рабочие процессы сохранены.</p></main><script>const update=()=>document.querySelectorAll('section[data-section]').forEach(section=>section.querySelectorAll('[data-state]').forEach(link=>{const interaction=link.dataset.state==='after'&&section.dataset.section!=='topbar'?(document.querySelector('#interaction')?.value||''):'';const src=link.dataset.state+'/'+section.dataset.section+(interaction?'-'+interaction:'')+'-'+document.querySelector('#size').value+'.png';link.href=src;link.querySelector('img').src=src}));document.querySelector('#size').addEventListener('change',update);document.querySelector('#interaction')?.addEventListener('change',update)</script></html>`);
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
