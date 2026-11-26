@@ -6,6 +6,7 @@
 .tasks-view .task-filters { flex: none; align-items: center; padding: 12px var(--ws-view-edge) 16px; }
 .tasks-view .task-search { flex: 1 1 260px; min-width: 160px; max-width: none; margin-left: auto; }
 .task-role-filter { min-height: 36px; padding: 7px 10px; color: var(--ws-text); border: 1px solid var(--ws-control-line); border-radius: 10px; background: var(--ws-theme-surface, white); font-size: 13px; }
+.record-compact-tools { display: none; }
 .record-list-controls { display: flex; flex: none; flex-wrap: wrap; align-items: end; gap: 12px; padding: 4px var(--ws-view-edge) 18px; }
 .employees-view > .record-list-controls { padding-inline: var(--employee-view-inset); }
 .record-list-controls .employee-search { flex: 1 1 280px; width: auto; margin: 0; }

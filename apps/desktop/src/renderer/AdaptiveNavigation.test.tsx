@@ -63,6 +63,16 @@ describe("AdaptiveNavigation overflow", () => {
     expect(more).toHaveAttribute("aria-expanded", "false");
   });
 
+  it("runs the selected overflow action before closing its portal", () => {
+    const selected = vi.fn();
+    render(<AdaptiveNavigation items={items} renderItem={item => <button key={item.key} className="rail-action" type="button" onClick={() => selected(item.key)}>{item.label}</button>} />);
+    const more = screen.getByRole("button", { name: "Ещё, 2 разделов" });
+    fireEvent.click(more);
+    fireEvent.click(within(screen.getByRole("complementary", { name: "Другие разделы" })).getByRole("button", { name: "Второй" }));
+    expect(selected).toHaveBeenCalledExactlyOnceWith("two");
+    expect(more).toHaveAttribute("aria-expanded", "false");
+  });
+
   it("keeps every permitted entry in a scrollable mobile menu instead of More", () => {
     const entries = [...items, { key: "last", label: "Последний раздел" }];
     const view = render(<AdaptiveNavigation scrollable items={entries} renderItem={(item) => <button key={item.key} className="rail-action">{item.label}</button>} />);

@@ -6,10 +6,14 @@ const assert = require("node:assert/strict");
 const phase = process.argv.includes("--before") ? "before" : "after";
 const galleryOnly = process.argv.includes("--gallery-only");
 const attentionSuite = process.argv.includes("--attention");
+const peopleSuite = process.argv.includes("--people");
 const origin = process.env.UI_QA_ORIGIN || "http://127.0.0.1:5186";
 assert(["127.0.0.1", "localhost"].includes(new URL(origin).hostname));
-const output = path.resolve(process.env.UI_QA_OUTPUT || `tmp/ui-consistency-iteration-${attentionSuite ? "2" : "1"}`);
-const sections = attentionSuite
+const iteration = peopleSuite ? "3" : attentionSuite ? "2" : "1";
+const output = path.resolve(process.env.UI_QA_OUTPUT || `tmp/ui-consistency-iteration-${iteration}`);
+const sections = peopleSuite
+  ? [{ id: "employees", label: "Сотрудники", root: ".employees-view" }, { id: "leaves", label: "Отпуска", root: ".leave-view" }, { id: "absences", label: "Отсутствия", root: ".absences-view" }]
+  : attentionSuite
   ? [{ id: "overview", label: "Обзор команды", root: ".team-dashboard" }, { id: "notifications", label: "Уведомления", root: ".notifications-view" }, { id: "feed", label: "Лента", root: ".feed-view" }]
   : [{ id: "tasks", label: "Задачи", root: ".tasks-view" }, { id: "payments", label: "Заявки на оплату", root: ".approvals-view" }, { id: "trips", label: "Поездки", root: ".trips-view" }];
 const settle = async page => page.evaluate(async () => {
@@ -49,12 +53,17 @@ function fixtures(demo) {
     title: ["Нужно решение по заявке", "Задача передана на проверку", "Приглашение на рабочую встречу", "Новое сообщение в рабочем чате"][i % 4],
     body: ["Оборудование для региональной встречи · Утверждение руководителем", "План работы подразделения · Результат готов к проверке", "Подготовка совместной программы · Встреча команды", "Обсуждение материалов декабрьского совещания"][i % 4],
     entityId: null, requiresAction: i % 4 === 0, isReminder: false, occurredAt: "2026-11-26T07:00:00Z", readAt: i % 9 === 8 ? "2026-11-26T07:10:00Z" : null, resolvedAt: null }));
-  return { user, people, tasks, requests, tripRequests, workflow, feedPosts, notifications };
+  const departments = [{ id: "qa-dept", name: "Региональные программы", kind: "department", isActive: true, sortOrder: 0 }];
+  const employees = Array.from({ length: 48 }, (_, i) => ({ ...people[i % people.length], id: `employee-${i}`, username: `employee.${i + 1}`, name: `${people[i % people.length].name} ${i + 1}`, role: "employee", status: i % 8 === 7 ? "invited" : "active", departmentId: "qa-dept", positionId: "qa-position", jobTitle: "Координатор региональных программ" }));
+  const leaves = Array.from({ length: 12 }, (_, i) => ({ id: `leave-${i}`, requesterUserId: i % 2 ? user.id : people[i % people.length].id, applicationText: "Менга йиллик меҳнат таътили беришингизни сўрайман.", requestedStartsOn: "2026-12-04", requestedEndsOn: "2026-12-17", startsOn: null, endsOn: null, workYearStartsOn: null, workYearEndsOn: null, calendarDays: null, paidDays: null, tenureAdditionalDays: null, organizationEmploymentDate: null, returnOn: null, accountingOfficer: null, orderEmployeeName: null, orderJobTitle: null, orderSignerName: null, orderClause1: null, orderClause2: null, orderClause3: null, status: i % 3 === 2 ? "approved" : "pending_hr", statusLabel: i % 3 === 2 ? "Утверждено" : "Проверка кадров", orderNumber: null, orderYear: null, signedByUserId: null, approvedAt: null, canRevise: i % 2 === 1, canReviewHr: false, canReviewDeputy: false, canWithdraw: false, hasOrder: false, actions: [], createdAt: "2026-11-26T07:00:00Z", updatedAt: "2026-11-26T07:00:00Z" }));
+  const absenceRequests = Array.from({ length: 8 }, (_, i) => ({ id: `absence-${i}`, requesterUserId: i % 2 ? user.id : people.find(p => p.id !== user.id).id, directManagerUserId: i % 2 ? people.find(p => p.id !== user.id).id : user.id, kind: ["personal_time", "late_arrival", "sick_leave", "business_event"][i % 4], reason: ["Посещение государственного учреждения", "Задержка транспорта по пути на работу", "Амбулаторное лечение по назначению врача", "Участие в региональном рабочем совещании"][i % 4], startsAt: "2026-11-26T07:00:00Z", endsAt: "2026-11-26T10:00:00Z", status: "pending", statusLabel: "Ждёт решения", documentStatus: "not_required", canEdit: false, allowedActions: [], actions: [], createdAt: "2026-11-26T06:00:00Z", updatedAt: "2026-11-26T06:00:00Z" }));
+  const presenceSummary = people.map(person => ({ userId: person.id, status: "working" }));
+  return { user, people, tasks, requests, tripRequests, workflow, feedPosts, notifications, employees, departments, leaves, absenceRequests, presenceSummary };
 }
 async function measure(page, selector) {
   return page.locator(selector).evaluate(root => {
     const rect = node => { const r = node?.getBoundingClientRect(); return r ? { x: r.x, y: r.y, width: r.width, height: r.height, bottom: r.bottom, right: r.right } : null; };
-    const hero = root.querySelector(".ws-section-header"), toolbar = root.querySelector(".ws2-process-toolbar, .task-filters, .notification-head-actions"), search = root.querySelector(".workspace-search");
+    const hero = root.querySelector(".ws-section-header"), toolbar = root.querySelector(".ws2-process-toolbar, .task-filters, .notification-head-actions, .record-list-controls, .leave-filters, .absence-summary"), search = root.querySelector(".workspace-search, .employee-search");
     return { hero: rect(hero), toolbar: rect(toolbar), search: rect(search), root: rect(root),
       pageOverflow: document.documentElement.scrollWidth - innerWidth,
       filters: rect(root.querySelector(".workspace-queue-filters")),
@@ -69,7 +78,7 @@ async function measure(page, selector) {
   const browser = await chromium.launch({ channel: "msedge", headless: true });
   const results = [], errors = [];
   try {
-    for (const [width, height, theme] of galleryOnly ? [] : [[1440, 960, "dark"], [1440, 960, "light"], [1024, 768, "dark"], [390, 844, "dark"]]) {
+    for (const [width, height, theme] of galleryOnly ? [] : [[1440, 960, "dark"], [1440, 960, "light"], [1024, 768, "dark"], [390, 844, "dark"], ...(phase === "after" && peopleSuite ? [[320, 800, "dark"]] : [])]) {
       const context = await browser.newContext({ viewport: { width, height }, reducedMotion: "reduce" });
       const page = await context.newPage(); page.setDefaultTimeout(15000);
       page.on("pageerror", error => errors.push(error.message));
@@ -84,7 +93,7 @@ async function measure(page, selector) {
         const send = json => route.fulfill({ json });
         if (/\/auth\/(web\/)?login$/.test(endpoint)) return send({ accessToken: "qa-token", expiresIn: 3600, user: data.user });
         if (!["GET", "HEAD"].includes(request.method())) return route.fulfill({ status: 403, json: { detail: "Synthetic QA: no writes" } });
-        if (endpoint === "/workspace/bootstrap") return send({ currentUser: data.user, people: data.people, tasks: data.tasks, requests: data.requests, tripRequests: data.tripRequests, workflow: data.workflow, projectWorkflow: null, tripWorkflow: null, requestWorkflows: {}, projects: [], chats: [], messages: [], departments: [], positions: [], attachments: [], feedPosts: attentionSuite ? data.feedPosts : [], calendarEvents: [], notifications: attentionSuite ? data.notifications : [], canCreatePaymentRequests: true, notificationPreferences: { desktopEnabled: false, soundEnabled: false, messagesEnabled: true, tasksEnabled: true, approvalsEnabled: true, calendarEnabled: true, tripsEnabled: true, remindersEnabled: true } });
+        if (endpoint === "/workspace/bootstrap") return send({ currentUser: data.user, people: data.people, tasks: data.tasks, requests: data.requests, tripRequests: data.tripRequests, workflow: data.workflow, projectWorkflow: null, tripWorkflow: null, requestWorkflows: {}, projects: [], chats: [], messages: [], departments: [], positions: [], attachments: [], feedPosts: attentionSuite ? data.feedPosts : [], calendarEvents: [], notifications: attentionSuite ? data.notifications : [], absenceRequests: peopleSuite ? data.absenceRequests : [], presenceSummary: peopleSuite ? data.presenceSummary : [], canCreatePaymentRequests: true, notificationPreferences: { desktopEnabled: false, soundEnabled: false, messagesEnabled: true, tasksEnabled: true, approvalsEnabled: true, calendarEnabled: true, tripsEnabled: true, remindersEnabled: true } });
         if (endpoint === "/efficiency") return send({ period: "2026-11", timezone: "Asia/Tashkent", methodologyVersion: "EFF-1", trackingStartedAt: "2026-09-01T00:00:00Z", currentUserId: data.user.id, employees: [] });
         if (endpoint === "/workday/team") return send({ asOf: "2026-11-26T07:00:00Z", members: [], workingCount: 0 });
         if (endpoint === "/grants") return send([]);
@@ -97,7 +106,9 @@ async function measure(page, selector) {
         if (endpoint === "/project-hub" || endpoint.includes("/targets")) return send({ projects: [], workstreams: [], items: [], requests: [] });
         if (endpoint.includes("/task-plans") || endpoint.includes("/task-proposals")) return send([]);
         if (endpoint.includes("/dossier/reminder")) return send({ period: "2026-11", dueDate: "2026-11-25", due: false, status: "no_changes", respondedAt: null });
-        if (endpoint.includes("/directory")) return send({ employees: data?.people ?? [], people: data?.people ?? [], roles: [], positions: [], departments: [], modules: [], accessRules: [] });
+        if (endpoint === "/leave-requests/context") return send({ hrUserId: data.people[0].id, deputyUserId: data.people[1].id, canConfigureSignature: false, signatureReady: true, tenureRules: [], canEditTenureRules: false });
+        if (endpoint === "/leave-requests") return send(data.leaves);
+        if (endpoint.includes("/directory")) return send({ canTerminateEmployees: true, employees: peopleSuite ? data.employees : data.people, people: data.people, roles: [], positions: [{ id: "qa-position", name: "Координатор региональных программ", isActive: true, sortOrder: 0 }], departments: peopleSuite ? data.departments : [], modules: [], accessRules: [] });
         if (endpoint.includes("/context/exchange")) return send({ rates: [], asOf: "2026-11-26", stale: false });
         if (endpoint.includes("/weather")) return send({ regions: [], places: [], asOf: "2026-11-26", stale: false });
         return route.fulfill({ status: 204, body: "" });
@@ -120,7 +131,8 @@ async function measure(page, selector) {
           if (!await nav.isVisible() && await more.count()) await more.click();
         }
         // Keyboard activation also works for entries in the overflow portal.
-        await nav.focus(); await nav.press("Enter");
+        if (peopleSuite) await nav.click();
+        else { await nav.focus(); await nav.press("Enter"); }
         try { await page.locator(section.root).waitFor(); } catch (error) {
           await page.screenshot({ path: path.join(output, `${phase}-failure-${width}.png`) });
           console.log((await page.locator(".workspace").innerText().catch(() => page.locator("body").innerText())).slice(0, 2500));
@@ -134,7 +146,87 @@ async function measure(page, selector) {
         await page.screenshot({ path: path.join(output, phase, file) });
         const geometry = await measure(page, section.root);
         results.push({ section: section.id, width, height, theme, ...geometry });
-        if (phase === "after" && !attentionSuite) {
+        if (phase === "after" && peopleSuite) {
+          assert(geometry.pageOverflow <= 1, `${file}: page overflow`);
+          assert(Math.abs(geometry.toolbar.x - geometry.hero.x) <= 1 && geometry.toolbar.right <= geometry.hero.right + 1, `${file}: toolbar edges`);
+          const clipped = await page.locator(`${section.root} .ws-section-header`).evaluate(header => {
+            const r = header.getBoundingClientRect();
+            return [...header.children].filter(node => !node.classList.contains("ws-section-header-art")).some(node => {
+              const c = node.getBoundingClientRect();
+              return c.width > 0 && c.height > 0 && (c.top < r.top - 1 || c.bottom > r.bottom + 1 || c.right > r.right + 1);
+            });
+          });
+          assert(!clipped, `${file}: clipped header`);
+          await page.locator("#rail-more-drawer").waitFor({ state: "hidden" });
+          if (section.id === "employees") {
+            if (width <= 700) {
+              const tools = page.getByRole("group", { name: "Управление сотрудниками", exact: true });
+              assert(!await tools.isVisible(), `${file}: compact management starts collapsed`);
+              const trigger = page.getByRole("button", { name: "Управление каталогом", exact: true });
+              assert((await trigger.boundingBox()).height >= 44, `${file}: management touch target`);
+              await trigger.click(); assert(await tools.isVisible(), `${file}: management remains accessible`);
+              await trigger.click();
+            }
+            const field = page.getByRole("textbox", { name: "Поиск сотрудников", exact: true });
+            const rows = page.locator(".employee-row");
+            assert.equal(await rows.count(), 25, `${file}: bounded employee page`);
+            const height = await field.evaluate(input => input.closest(".workspace-search-field").getBoundingClientRect().height);
+            assert(Math.abs(height - geometry.search.height) <= 1, `${file}: painted search height`);
+            await field.fill("несуществующий-qa-результат"); await page.waitForFunction(() => !document.querySelector(".employee-row"));
+            await field.fill(""); await field.blur(); await page.waitForFunction(() => document.querySelectorAll(".employee-row").length === 25);
+            const status = page.getByRole("combobox", { name: "Фильтр состояния сотрудников" });
+            await status.click(); await page.getByRole("option", { name: "Приглашённые", exact: true }).click();
+            assert.equal(await rows.count(), 6, `${file}: employee status filter`);
+            await status.click(); await page.getByRole("option", { name: "Все сотрудники", exact: true }).click();
+            if (width <= 700) {
+              await page.getByRole("button", { name: "Сортировка: сотрудники", exact: true }).click();
+              assert.equal(await page.getByRole("menuitem").count(), 6, `${file}: every sort column retained`);
+              await page.getByRole("menuitem", { name: "Должность", exact: true }).click();
+              await page.getByRole("checkbox", { name: "Выбрать видимую страницу сотрудников", exact: true }).check();
+            } else {
+              await page.getByRole("checkbox", { name: "Выбрать сотрудников на странице", exact: true }).check();
+            }
+            assert.equal(await page.locator('.employee-row[aria-selected="true"]').count(), 25, `${file}: select visible page`);
+          }
+          if (section.id === "leaves") {
+            const rows = page.locator(".leave-list-item");
+            assert.equal(await rows.count(), 12, `${file}: populated leave list`);
+            const filters = page.locator(".leave-filters");
+            await filters.getByRole("button", { name: "Мои", exact: true }).click();
+            assert.equal(await rows.count(), 6, `${file}: own leave filter`);
+            await filters.getByRole("button", { name: "Утверждены", exact: true }).click();
+            assert.equal(await rows.count(), 4, `${file}: approved leave filter`);
+            await filters.getByRole("button", { name: "Все", exact: true }).click();
+            await rows.first().click(); await page.locator(".leave-card h2").waitFor();
+            await page.getByRole("button", { name: "Новое заявление", exact: true }).click();
+            const field = page.getByRole("textbox", { name: "Текст заявления", exact: true });
+            await field.fill("Черновик заявления для проверки интерфейса");
+            assert.equal(await field.inputValue(), "Черновик заявления для проверки интерфейса");
+            await page.getByRole("button", { name: "Отмена", exact: true }).click();
+          }
+          if (section.id === "absences") {
+            assert.equal(await page.locator(".absence-summary > button").count(), 7, `${file}: all presence statuses retained`);
+            assert.equal(await page.locator(".absence-card").count(), 8, `${file}: populated absence queues`);
+            // Exercise real scrollbar widths rather than mocked offset/client sizes.
+            for (const scrollbar of [14, 8]) {
+              const style = await page.addStyleTag({ content: `.absences-view{height:400px!important;overflow-y:scroll!important;scrollbar-width:auto!important}.absences-view::-webkit-scrollbar{width:${scrollbar}px}` });
+              const edges = await page.locator(section.root).evaluate(root => [".ws-section-header", ".absence-summary", ".absence-canvas"].map(selector => {
+                const rect = root.querySelector(selector).getBoundingClientRect(); return { x: rect.x, right: rect.right };
+              }));
+              assert(edges.every(rect => Math.abs(rect.x - edges[0].x) <= 1 && Math.abs(rect.right - edges[0].right) <= 1), `${file}: shared edges with ${scrollbar}px scrollbar`);
+              await style.evaluate(node => node.remove());
+            }
+            await page.locator('.absence-summary [data-presence-status="working"]').click();
+            const dialog = page.getByRole("dialog"); await dialog.waitFor();
+            await page.keyboard.press("Escape"); await dialog.waitFor({ state: "hidden" });
+            await page.locator(".absence-card").first().click(); await page.locator(".absence-drawer").waitFor();
+            await page.keyboard.press("Escape"); await page.locator(".absence-drawer").waitFor({ state: "hidden" });
+            await page.getByRole("button", { name: "Сообщить об отсутствии", exact: true }).click();
+            await page.getByRole("textbox", { name: "Причина", exact: true }).fill("Проверка сохранения текста");
+            await page.getByRole("button", { name: "Отмена", exact: true }).click();
+          }
+        }
+        if (phase === "after" && !attentionSuite && !peopleSuite) {
           assert(geometry.pageOverflow <= 1, `${file}: page overflow`);
           assert(Math.abs(geometry.search.height - geometry.filters.height) <= 1, `${file}: search/filter height`);
           for (const [name, rect] of Object.entries({ toolbar: geometry.toolbar, filters: geometry.filters })) {
@@ -203,7 +295,7 @@ async function measure(page, selector) {
     assert.deepEqual(errors, []);
     await fs.writeFile(path.join(output, "index.html"), `<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Yuksalish — сравнение интерфейса</title>
       <style>*{box-sizing:border-box}body{margin:0;padding:24px;background:#111318;color:#eceef4;font:15px/1.5 system-ui}main{max-width:1600px;margin:auto}h1{font-size:28px}p,figcaption{color:#bfc6d3}select{margin:0 0 24px;padding:12px;border-radius:8px;background:#252a33;color:inherit}section{margin:0 0 32px}h2{font-size:20px}article{display:grid;grid-template-columns:1fr 1fr;gap:16px}figure{margin:0;min-width:0}img{display:block;width:100%;height:auto;border-radius:12px}figcaption{margin-bottom:8px}@media(max-width:700px){article{grid-template-columns:1fr}body{padding:12px}}</style>
-      <main><h1>Итерация ${attentionSuite ? "2" : "1"} · Общая сетка рабочих разделов</h1><p>Реальные компоненты приложения, одинаковые синтетические данные до и после. Нажмите на снимок для исходного размера.</p><select id="size" aria-label="Размер и тема"><option value="dark-1440">1440 × 960 · тёмная</option><option value="light-1440">1440 × 960 · светлая</option><option value="dark-1024">1024 × 768 · тёмная</option><option value="dark-390">390 × 844 · тёмная</option></select>
+      <main><h1>Итерация ${iteration} · Общая сетка рабочих разделов</h1><p>Реальные компоненты приложения, одинаковые синтетические данные до и после. Нажмите на снимок для исходного размера.</p><select id="size" aria-label="Размер и тема"><option value="dark-1440">1440 × 960 · тёмная</option><option value="light-1440">1440 × 960 · светлая</option><option value="dark-1024">1024 × 768 · тёмная</option><option value="dark-390">390 × 844 · тёмная</option></select>
       ${sections.map(section => `<section data-section="${section.id}"><h2>${section.label}</h2><article>${["before", "after"].map((state, i) => `<figure><figcaption>${i ? "После" : "До"}</figcaption><a data-state="${state}" href="${state}/${section.id}-dark-1440.png"><img loading="lazy" src="${state}/${section.id}-dark-1440.png" alt="${section.label} — ${i ? "после" : "до"}"></a></figure>`).join("")}</article></section>`).join("")}
       <p>Подход: <a href="https://github.com/heydamir/unslop" style="color:#90d5df">unslop · Damir Sokolovsky · CC BY 4.0</a>. Цвета статусов, права и рабочие процессы сохранены.</p></main><script>document.querySelector('#size').addEventListener('change',event=>{document.querySelectorAll('section').forEach(section=>section.querySelectorAll('[data-state]').forEach(link=>{const src=link.dataset.state+'/'+section.dataset.section+'-'+event.target.value+'.png';link.href=src;link.querySelector('img').src=src}))})</script></html>`);
   } finally { await browser.close(); }

@@ -1,4 +1,5 @@
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import type { AbsenceRequest } from "@yuksalish/contracts";
 import { FluentProvider } from "@fluentui/react-components";
 import { afterEach, expect, it, vi } from "vitest";
 import { AbsencesView } from "./AbsencesView";
@@ -34,26 +35,15 @@ it("keeps the organization summary hidden without administration rights", () => 
   view(false);
   expect(screen.queryByRole("region", { name: "Сводка присутствия" })).not.toBeInTheDocument();
 });
-it("includes the actual scrollbar in the requested absence edge and releases its observer", () => {
-  let clientWidth = 996;
-  vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(1000);
-  vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(() => clientWidth);
-  let measure = () => {};
-  const disconnect = vi.fn();
-  vi.stubGlobal("ResizeObserver", class {
-    constructor(callback: () => void) { measure = callback; }
-    observe() {}
-    disconnect = disconnect;
-  });
-  const result = view(true);
-  const frame = screen.getByRole("region", { name: "Отсутствия" });
-  expect(frame.style.getPropertyValue("--ws-absence-scrollbar-inset")).toBe("4px");
-  clientWidth = 992;
-  act(measure);
-  expect(frame.style.getPropertyValue("--ws-absence-scrollbar-inset")).toBe("8px");
-  clientWidth = 1000;
-  act(measure);
-  expect(frame.style.getPropertyValue("--ws-absence-scrollbar-inset")).toBe("0px");
-  result.unmount();
-  expect(disconnect).toHaveBeenCalled();
+it("keeps request dates readable and tolerates an invalid server date in cards and details", () => {
+  const request: AbsenceRequest = { id: "absence", requesterUserId: "self", directManagerUserId: "manager", kind: "personal_time",
+    reason: "Посещение учреждения", startsAt: "2026-11-26T07:00:00Z", endsAt: "invalid", status: "pending", statusLabel: "Ждёт решения",
+    documentStatus: "not_required", canEdit: false, allowedActions: [], actions: [], createdAt: "2026-11-26T06:00:00Z", updatedAt: "2026-11-26T06:00:00Z" };
+  render(<FluentProvider theme={workspaceTheme}><AbsencesView currentUserId="self" people={[]} requests={[request]} summary={[]} canAdmin={false}
+    onCreate={vi.fn()} onAction={vi.fn()} onUploadDocument={vi.fn()} /></FluentProvider>);
+  expect(screen.getByText(/26\.11\.2026, .* — Invalid Date/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: /Посещение учреждения/ }));
+  const dialog = screen.getByRole("dialog");
+  expect(within(dialog).getByText("Invalid Date")).toBeInTheDocument();
+  expect(within(dialog).getByText(/26\.11\.2026,/)).toBeInTheDocument();
 });

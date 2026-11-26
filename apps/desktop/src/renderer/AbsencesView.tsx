@@ -2,7 +2,8 @@ import { WorkspaceNotice } from "./WorkspaceNotice";
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
 import { useModalFocus } from "./useModalFocus";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { russianDateTimeFormatter } from "./date-time-format";
 
 import type { AbsenceAction, AbsenceKind, AbsenceRequest, AbsenceRequestInput, AssistantActionDraft, PresenceSummaryItem, WorkspacePerson } from "@yuksalish/contracts";
 import { Button, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Portal, Textarea, useRestoreFocusTarget } from "@fluentui/react-components";
@@ -28,6 +29,12 @@ interface Props {
 }
 
 function toInputDate(value: Date): string { return value.toISOString().slice(0, 16); }
+function absenceDate(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "Invalid Date" : russianDateTimeFormatter({
+    year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit",
+  }).format(date);
+}
 function assistantInputDate(value: string | undefined, defaultTime: string): string {
   if (!value) return "";
   return value.length === 10 ? `${value}T${defaultTime}` : value.slice(0, 16);
@@ -37,23 +44,6 @@ export function AbsencesView({ currentUserId, people, requests, summary, canAdmi
   const [presenceStatus, setPresenceStatus] = useState<PresenceSummaryItem["status"]>("working");
   const [presenceOpen, setPresenceOpen] = useState(false);
   const summaryFocusTarget = useRestoreFocusTarget();
-  const frameRef = useRef<HTMLElement>(null);
-  useLayoutEffect(() => {
-    const frame = frameRef.current;
-    if (!frame) return;
-    const measure = () => {
-      const style = getComputedStyle(frame);
-      const borders = (Number.parseFloat(style.borderLeftWidth) || 0) + (Number.parseFloat(style.borderRightWidth) || 0);
-      const inset = `${Math.max(0, frame.offsetWidth - frame.clientWidth - borders)}px`;
-      if (frame.style.getPropertyValue("--ws-absence-scrollbar-inset") !== inset) {
-        frame.style.setProperty("--ws-absence-scrollbar-inset", inset);
-      }
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(frame);
-    return () => observer.disconnect();
-  }, []);
   const [open, setOpen] = useState(assistantDraft?.kind === "absence");
   const [kind, setKind] = useState<AbsenceKind>(
     assistantDraft?.kind === "absence"
@@ -75,8 +65,9 @@ export function AbsencesView({ currentUserId, people, requests, summary, canAdmi
   const [selected, setSelected] = useState<AbsenceRequest>();
   const drawerRef = useRef<HTMLElement>(null);
   useModalFocus(drawerRef, Boolean(selected), () => setSelected(undefined));
-  const own = requests.filter(item => item.requesterUserId === currentUserId);
-  const team = requests.filter(item => item.directManagerUserId === currentUserId && item.requesterUserId !== currentUserId);
+  const own = useMemo(() => requests.filter(item => item.requesterUserId === currentUserId), [requests, currentUserId]);
+  const team = useMemo(() => requests.filter(item => item.directManagerUserId === currentUserId && item.requesterUserId !== currentUserId), [requests, currentUserId]);
+  const names = useMemo(() => new Map(people.map(person => [person.id, person.name])), [people]);
   const counts = useMemo(() => summary.reduce<Record<string, number>>((total, item) => ({ ...total, [item.status]: (total[item.status] ?? 0) + 1 }), {}), [summary]);
   const save = async () => {
     if (busy || kind === "vacation" || !reason.trim() || !startsAt || !endsAt) return;
@@ -88,21 +79,21 @@ export function AbsencesView({ currentUserId, people, requests, summary, canAdmi
     setBusy(true);
     try { if (await onAction(decision.request, decision.action, comment)) { setDecision(undefined); setComment(""); } else setError("Действие не подтверждено. Попробуйте снова."); } catch (failure) { setError(failure instanceof Error ? failure.message : "Не удалось подтвердить действие."); } finally { setBusy(false); }
   };
-  const name = (id: string) => people.find(person => person.id === id)?.name ?? "Сотрудник";
-  return <section ref={frameRef} className="workspace-view absences-view" aria-label="Отсутствия">
-    <WorkspaceSectionHeader motif="absences" className="record-header"><div><span className="record-kicker">Рабочий статус</span><h1>Отсутствия</h1><p>Заявите об отсутствии, опоздании или больничном — руководитель сразу получит уведомление.</p></div><Button className="ws-section-header-primary" appearance="primary" icon={<Add24Regular />} onClick={() => setOpen(true)}>Сообщить об отсутствии</Button></WorkspaceSectionHeader>
+  const name = (id: string) => names.get(id) ?? "Сотрудник";
+  return <section className="workspace-view workspace-queue absences-view" aria-label="Отсутствия">
+    <WorkspaceSectionHeader motif="absences" className="record-header"><div><span className="record-kicker">Рабочий статус</span><h1>Отсутствия</h1><p>Отсутствия, опоздания и больничные с уведомлением руководителя.</p></div><Button className="ws-section-header-primary" appearance="primary" icon={<Add24Regular />} onClick={() => setOpen(true)}>Сообщить об отсутствии</Button></WorkspaceSectionHeader>
     {canAdmin ? <section className="absence-summary" aria-label="Сводка присутствия">{(Object.keys(statusLabels) as PresenceSummaryItem["status"][]).map(key => <button type="button" key={key} {...summaryFocusTarget} data-presence-status={key} aria-label={`${statusLabels[key]}: ${counts[key] ?? 0}. Открыть список сотрудников`} aria-haspopup="dialog" aria-expanded={presenceOpen && presenceStatus === key} onClick={() => { setPresenceStatus(key); setPresenceOpen(true); }}><strong>{counts[key] ?? 0}</strong><span>{statusLabels[key]}</span></button>)}</section> : null}
     {canAdmin ? <PresenceSummaryDialog open={presenceOpen} status={presenceStatus} summary={summary} requests={requests} people={people} token={token} onClose={() => setPresenceOpen(false)} /> : null}
     <div className="absence-canvas"><section className="absence-column"><header><span>Личный контур</span><h2>Мои заявки</h2></header>{own.length ? own.map(item => <AbsenceCard key={item.id} item={item} personId={item.directManagerUserId} name={name(item.directManagerUserId)} onSelect={() => setSelected(item)} />) : <div className="absence-empty"><CalendarLtr24Regular /><p>Заявок пока нет</p><span>Новое отсутствие появится здесь после отправки.</span></div>}</section>
       <section className="absence-column"><header><span>Команда</span><h2>Требуют решения</h2></header>{team.length ? team.map(item => <AbsenceCard key={item.id} item={item} personId={item.requesterUserId} name={name(item.requesterUserId)} onSelect={() => setSelected(item)} />) : <div className="absence-empty"><Checkmark24Regular /><p>Очередь свободна</p><span>Новых решений от команды сейчас нет.</span></div>}</section>
       {canAdmin && summary.length ? <section className="absence-column absence-presence"><header><span>Организация</span><h2>Сегодня</h2></header>{summary.map(item => <button type="button" key={item.userId}><span className={`absence-presence-dot is-${item.status}`} /><EmployeeProfileLink userId={item.userId} personName={name(item.userId)}><strong>{name(item.userId)}</strong></EmployeeProfileLink><small>{statusLabels[item.status] ?? item.status}</small></button>)}</section> : null}
     </div>
-    {selected ? <Portal><div className="absence-drawer-scrim" role="presentation" onMouseDown={() => setSelected(undefined)}><aside ref={drawerRef} tabIndex={-1} className="absence-drawer" role="dialog" aria-modal="true" aria-label={`Заявка: ${labels[selected.kind]}`} onMouseDown={(event) => event.stopPropagation()}><header><div><span>Заявка на отсутствие</span><h2>{labels[selected.kind]}</h2></div><Button appearance="subtle" icon={<Dismiss24Regular />} aria-label="Закрыть" onClick={() => setSelected(undefined)} /></header><div className="absence-drawer-status"><strong>{selected.statusLabel}</strong><EmployeeProfileLink userId={selected.requesterUserId} personName={name(selected.requesterUserId)}>{name(selected.requesterUserId)}</EmployeeProfileLink></div><dl><div><dt>Начало</dt><dd>{new Date(selected.startsAt).toLocaleString("ru-RU")}</dd></div><div><dt>Окончание</dt><dd>{new Date(selected.endsAt).toLocaleString("ru-RU")}</dd></div><div><dt>Причина</dt><dd>{selected.reason}</dd></div></dl><footer>{selected.kind === "sick_leave" && selected.documentStatus !== "uploaded" ? <label className="fui-Button">Прикрепить заключение<input hidden type="file" accept="application/pdf,image/*" onChange={event => { const file = event.target.files?.[0]; if (file) void onUploadDocument(selected.id, file); }} /></label> : null}{selected.allowedActions.map(action => <Button key={action} appearance={action === "reject" ? "secondary" : action === "cancel" ? "subtle" : "primary"} onClick={() => setDecision({ request: selected, action })}>{action === "approve" ? "Согласовать" : action === "acknowledge" ? "Подтвердить" : action === "reject" ? "Отклонить" : "Отменить заявку"}</Button>)}</footer></aside></div></Portal> : null}
+    {selected ? <Portal><div className="absence-drawer-scrim" role="presentation" onMouseDown={() => setSelected(undefined)}><aside ref={drawerRef} tabIndex={-1} className="absence-drawer" role="dialog" aria-modal="true" aria-label={`Заявка: ${labels[selected.kind]}`} onMouseDown={(event) => event.stopPropagation()}><header><div><span>Заявка на отсутствие</span><h2>{labels[selected.kind]}</h2></div><Button appearance="subtle" icon={<Dismiss24Regular />} aria-label="Закрыть" onClick={() => setSelected(undefined)} /></header><div className="absence-drawer-status"><strong>{selected.statusLabel}</strong><EmployeeProfileLink userId={selected.requesterUserId} personName={name(selected.requesterUserId)}>{name(selected.requesterUserId)}</EmployeeProfileLink></div><dl><div><dt>Начало</dt><dd>{absenceDate(selected.startsAt)}</dd></div><div><dt>Окончание</dt><dd>{absenceDate(selected.endsAt)}</dd></div><div><dt>Причина</dt><dd>{selected.reason}</dd></div></dl><footer>{selected.kind === "sick_leave" && selected.documentStatus !== "uploaded" ? <label className="fui-Button">Прикрепить заключение<input hidden type="file" accept="application/pdf,image/*" onChange={event => { const file = event.target.files?.[0]; if (file) void onUploadDocument(selected.id, file); }} /></label> : null}{selected.allowedActions.map(action => <Button key={action} appearance={action === "reject" ? "secondary" : action === "cancel" ? "subtle" : "primary"} onClick={() => setDecision({ request: selected, action })}>{action === "approve" ? "Согласовать" : action === "acknowledge" ? "Подтвердить" : action === "reject" ? "Отклонить" : "Отменить заявку"}</Button>)}</footer></aside></div></Portal> : null}
     <Dialog open={open} onOpenChange={(_, data) => { if (!busy) setOpen(data.open); }}><DialogSurface className="absence-form-dialog"><DialogBody><DialogTitle>Новое отсутствие</DialogTitle><DialogContent>{error ? <WorkspaceNotice tone="error" role="alert">{error}</WorkspaceNotice> : null}{kind === "vacation" ? <WorkspaceNotice tone="info">Для отпуска откройте отдельный раздел «Отпуска». Черновик помощника не был отправлен как другое отсутствие.</WorkspaceNotice> : null}<Field label="Тип"><WorkspaceSelect value={kind} onChange={event => setKind(event.target.value as AbsenceKind)}>{Object.entries(labels).filter(([key]) => key !== "vacation" || kind === "vacation").map(([key, label]) => <option key={key} value={key}>{label}</option>)}</WorkspaceSelect></Field><Field label="Причина" required><Textarea value={reason} onChange={(_, data) => setReason(data.value)} /></Field><Field label="Начало"><WorkspaceDateTimePicker ariaLabel="Начало отсутствия" value={startsAt} onChange={setStartsAt} /></Field><Field label="Окончание"><WorkspaceDateTimePicker ariaLabel="Окончание отсутствия" value={endsAt} min={startsAt} onChange={setEndsAt} /></Field></DialogContent><DialogActions><Button disabled={busy} onClick={() => setOpen(false)}>Отмена</Button><Button appearance="primary" disabled={busy || kind === "vacation" || !reason.trim()} onClick={() => void save()}>Отправить руководителю</Button></DialogActions></DialogBody></DialogSurface></Dialog>
     <Dialog open={decision !== undefined} onOpenChange={(_, data) => { if (!busy && !data.open) setDecision(undefined); }}><DialogSurface className="absence-decision-dialog"><DialogBody><DialogTitle>{decision?.action === "reject" ? "Отклонить заявку" : "Подтвердить действие"}</DialogTitle><DialogContent>{error ? <WorkspaceNotice tone="error" role="alert">{error}</WorkspaceNotice> : null}<Field label={decision?.action === "reject" ? "Причина отказа" : "Комментарий"} required={decision?.action === "reject"}><Textarea value={comment} onChange={(_, data) => setComment(data.value)} /></Field></DialogContent><DialogActions><Button disabled={busy} onClick={() => setDecision(undefined)}>Отмена</Button><Button appearance={decision?.action === "reject" ? "secondary" : "primary"} disabled={busy || (decision?.action === "reject" && !comment.trim())} onClick={() => void decide()}>Подтвердить</Button></DialogActions></DialogBody></DialogSurface></Dialog>
   </section>;
 }
 
 function AbsenceCard({ item, personId, name, onSelect }: { readonly item: AbsenceRequest; readonly personId: string; readonly name: string; readonly onSelect: () => void }) {
-  return <button type="button" className="absence-card" onClick={onSelect}><span className={`absence-kind-mark is-${item.kind}`} /><span className="absence-card-main"><span><strong>{labels[item.kind]}</strong><small>{item.statusLabel}</small></span><p>{item.reason}</p><time>{new Date(item.startsAt).toLocaleString("ru-RU")} — {new Date(item.endsAt).toLocaleString("ru-RU")}</time><EmployeeProfileLink userId={personId} personName={name}><em>{name}</em></EmployeeProfileLink>{item.documentStatus === "overdue" ? <b>Нужно заключение</b> : null}</span></button>;
+  return <button type="button" className="absence-card" onClick={onSelect}><span className={`absence-kind-mark is-${item.kind}`} /><span className="absence-card-main"><span><strong>{labels[item.kind]}</strong><small>{item.statusLabel}</small></span><p>{item.reason}</p><time>{absenceDate(item.startsAt)} — {absenceDate(item.endsAt)}</time><EmployeeProfileLink userId={personId} personName={name}><em>{name}</em></EmployeeProfileLink>{item.documentStatus === "overdue" ? <b>Нужно заключение</b> : null}</span></button>;
 }

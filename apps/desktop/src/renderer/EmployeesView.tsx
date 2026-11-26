@@ -1,7 +1,7 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { LoadingSkeleton } from "./LoadingSkeleton";
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
 
 import type {
   ChatSummary,
@@ -150,6 +150,10 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [recognitionSettings, setRecognitionSettings] = useState<RecognitionSettings>();
   const [recognitionSettingsBusy, setRecognitionSettingsBusy] = useState(false);
+  const [managementOpen, setManagementOpen] = useState(false);
+  const managementId = useId();
+  const managementTrigger = <Button className="employees-management-trigger" icon={<MoreHorizontal20Regular />} aria-expanded={managementOpen}
+    aria-controls={managementId} onClick={() => setManagementOpen(value => !value)}>Управление каталогом</Button>;
   const canManage = allowAdministration ?? ["admin", "superadmin"].includes(currentUser.role);
   const canTerminate = Boolean(directory?.canTerminateEmployees ?? canManage);
   const canManageSidebar = canManage && ["admin", "superadmin"].includes(currentUser.role);
@@ -157,6 +161,26 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
     || currentUser.role === "manager"
     || (currentUser.jobTitle ?? "").toLocaleLowerCase("uz").includes("kadr")
     || (currentUser.jobTitle ?? "").includes("Yuksalish");
+
+  const employees = directory?.employees;
+  const departments = directory?.departments;
+  const employeeIndex = useMemo(() => {
+    const departmentNames = new Map(departments?.map(item => [item.id, item.name]));
+    return (employees ?? []).map(employee => ({
+      employee,
+      scope: employeeScope(employee.departmentId, departments ?? []),
+      searchText: `${employee.name} ${employee.username} ${employee.jobTitle ?? ""} ${departmentNames.get(employee.departmentId ?? "") ?? ""}`.toLocaleLowerCase("ru"),
+    }));
+  }, [employees, departments]);
+  const search = employeeQuery.trim().toLocaleLowerCase("ru");
+  const visibleEmployees = useMemo(() => employeeIndex.filter(({ employee, scope, searchText }) =>
+    (showDismissed && canTerminate ? employee.status === "archived" : employee.status !== "archived")
+      && scope === employeeScopeFilter && searchText.includes(search)
+      && (roleFilter === "all" || employee.role === roleFilter)
+      && (statusFilter === "all" || statusFilter === "active" && employee.status === "active"
+        || statusFilter === "invited" && ["pending", "invited"].includes(employee.status)
+        || statusFilter === "inactive" && !["active", "pending", "invited"].includes(employee.status)))
+    .map(({ employee }) => employee), [employeeIndex, search, showDismissed, canTerminate, employeeScopeFilter, roleFilter, statusFilter]);
 
   useEffect(() => {
     if (!canManage) return;
@@ -432,17 +456,20 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
 
   if (directory === undefined) {
     return (
-      <section className="workspace-view employees-view" aria-label="Сотрудники">
+      <section className="workspace-view workspace-queue employees-view" aria-label="Сотрудники">
         <WorkspaceSectionHeader motif="employees" className="section-toolbar"><div><h1>Сотрудники</h1><LoadingSkeleton layout="lines" rows={1} /></div>
           {canManage && onInvite && <Button className="ws-section-header-primary" appearance="primary" icon={<Add24Regular />} onClick={onInvite}>Пригласить сотрудника</Button>}
         </WorkspaceSectionHeader>
-        <div className="employees-header-tools" role="group" aria-label="Управление сотрудниками">
+        <div className="employees-management" data-open={managementOpen}>
+        {managementTrigger}
+        <div id={managementId} className="employees-header-tools" role="group" aria-label="Управление сотрудниками">
           {canManage && recognitionSettings ? <Switch checked={recognitionSettings.activeTaskCountVisible} disabled label="Активные задачи в профилях" title="Управляет видимостью количества активных задач для всех сотрудников" /> : null}
           {canManageDepartments && <Button disabled>Отделы и подразделения</Button>}
           {canManage && <Button disabled>Права модулей</Button>}
           {canManageSidebar && <Button disabled>Меню сотрудника</Button>}
           {allowChatAdministration && <Button disabled>Контроль чатов</Button>}
           <Button icon={<PeopleTeam24Regular />} disabled>Должности</Button>
+        </div>
         </div>
         <div className="record-list-controls">
           {canTerminate && <Button disabled>Уволенные</Button>}
@@ -458,15 +485,6 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
     );
   }
 
-  const search = employeeQuery.trim().toLocaleLowerCase("ru");
-  const visibleEmployees = directory.employees.filter((employee) =>
-    (showDismissed && canTerminate ? employee.status === "archived" : employee.status !== "archived")
-      && employeeScope(employee.departmentId, directory.departments) === employeeScopeFilter
-      && `${employee.name} ${employee.username} ${employee.jobTitle ?? ""} ${directory.departments.find((department) => department.id === employee.departmentId)?.name ?? ""}`.toLocaleLowerCase("ru").includes(search)
-      && (roleFilter === "all" || employee.role === roleFilter)
-      && (statusFilter === "all" || statusFilter === "active" && employee.status === "active"
-        || statusFilter === "invited" && ["pending", "invited"].includes(employee.status)
-        || statusFilter === "inactive" && !["active", "pending", "invited"].includes(employee.status)));
   const selectedVisibleCount = visibleEmployees.filter((employee) => selectedEmployeeIds.has(employee.id)).length;
   const visibleSelection = selectedVisibleCount === 0 ? false : selectedVisibleCount === visibleEmployees.length ? true : "mixed";
 
@@ -488,7 +506,7 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
   };
 
   return (
-    <section className={`workspace-view employees-view${selectedEmployeeIds.size ? " has-selection" : ""}`} aria-label="Сотрудники">
+    <section className={`workspace-view workspace-queue employees-view${selectedEmployeeIds.size ? " has-selection" : ""}`} aria-label="Сотрудники">
       <WorkspaceSectionHeader motif="employees" className="section-toolbar">
         <div>
           <h1>{showDismissed ? "Уволенные сотрудники" : "Сотрудники"}</h1>
@@ -498,7 +516,9 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
         </div>
         {canManage && onInvite && !showDismissed && <Button className="ws-section-header-primary" appearance="primary" icon={<Add24Regular />} onClick={onInvite}>Пригласить сотрудника</Button>}
       </WorkspaceSectionHeader>
-        <div className="employees-header-tools" role="group" aria-label="Управление сотрудниками">
+        <div className="employees-management" data-open={managementOpen}>
+        {managementTrigger}
+        <div id={managementId} className="employees-header-tools" role="group" aria-label="Управление сотрудниками">
           {canManage && recognitionSettings ? <Switch
             checked={recognitionSettings.activeTaskCountVisible}
             disabled={recognitionSettingsBusy}
@@ -518,6 +538,7 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
           {canManageSidebar ? <Button onClick={() => setSidebarOpen(true)}>Меню сотрудника</Button> : null}
           {allowChatAdministration ? <Button onClick={() => setChatControlOpen(true)}>Контроль чатов</Button> : null}
           <Button {...positionFocusTarget} icon={<PeopleTeam24Regular />} onClick={() => setPanel("positions")}>Должности</Button>
+        </div>
         </div>
 
       <div className="record-list-controls">

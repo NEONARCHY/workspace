@@ -14,6 +14,23 @@ export function SortHeading({ column, children, sort, onSort }: {
   </th>;
 }
 
+/** Compact access to every sort column when table rows become cards. */
+export function RecordCompactTools({ columns, sort, onSort, label, children }: {
+  columns: readonly (readonly [string, string])[]; sort: TableSort; onSort: (key: string) => void; label: string; children?: ReactNode;
+}) {
+  const active = columns.find(([key]) => key === sort.key);
+  return <div className="record-compact-tools">
+    {children}
+    <Menu positioning="below-end"><MenuTrigger disableButtonEnhancement>
+      <button type="button" className="record-compact-sort" aria-label={`Сортировка: ${label}`}>
+        {active ? `${active[1]} ${sort.descending ? "↓" : "↑"}` : "Сортировка"}<ChevronDown16Regular aria-hidden="true" />
+      </button>
+    </MenuTrigger><MenuPopover><MenuList>{columns.map(([key, text]) =>
+      <MenuItem key={key} aria-current={sort.key === key ? "true" : undefined} onClick={() => onSort(key)}>{text}{sort.key === key ? sort.descending ? " ↓" : " ↑" : ""}</MenuItem>
+    )}</MenuList></MenuPopover></Menu>
+  </div>;
+}
+
 /** Clamp after removals and reset on changed filters without a state-setting effect. */
 export function useTablePage(total: number, resetKey: string) {
   const [size, setSize] = useState(25);
@@ -56,5 +73,5 @@ export function RecordTablePager({ total, paging, label }: {
 
 /** Labels for the compact layout; native column headings remain available. */
 export function RecordMobileLabel({ children }: { children: ReactNode }) {
-  return <span className="record-mobile-label" aria-hidden="true">{children}</span>;
+  return <span className="record-mobile-label">{children}</span>;
 }

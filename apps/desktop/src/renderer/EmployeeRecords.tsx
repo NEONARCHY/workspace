@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Badge, Checkbox, useRestoreFocusTarget } from "@fluentui/react-components";
 import { Warning16Regular } from "@fluentui/react-icons";
 import type { DirectoryEmployee, WorkspaceDepartment, WorkspaceRole } from "@yuksalish/contracts";
-import { RecordMobileLabel, RecordTablePager, SortHeading, tableCollator, useTablePage, type TableSort } from "./RecordTableTools";
+import { RecordCompactTools, RecordMobileLabel, RecordTablePager, SortHeading, tableCollator, useTablePage, type TableSort } from "./RecordTableTools";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { DepartmentIcon } from "./DepartmentIcon";
@@ -10,6 +10,7 @@ import { SkeletonTableRows } from "./LoadingSkeleton";
 
 export const employeeRoleLabels: Record<WorkspaceRole, string> = { superadmin: "Суперадминистратор", admin: "Администратор", manager: "Руководитель", employee: "Сотрудник" };
 export const employeeStatusLabel = (status: string) => ({ active: "Активен", pending: "Ожидает активации", invited: "Приглашён", disabled: "Отключён", blocked: "Заблокирован", archived: "Уволен" })[status] ?? status;
+const columns = [["name", "Сотрудник"], ["position", "Должность"], ["department", "Подразделение"], ["username", "Логин"], ["role", "Роль"], ["status", "Состояние"]] as const;
 
 export function EmployeeRecords({ token, employees, departments, filterKey, selectedIds, onOpen, onToggle, onTogglePage, loading = false }: {
   readonly loading?: boolean;
@@ -39,6 +40,10 @@ export function EmployeeRecords({ token, employees, departments, filterKey, sele
   const selectedOnPage = pageEmployees.filter((employee) => selectedIds.has(employee.id)).length;
   const pageSelection = selectedOnPage === 0 ? false : selectedOnPage === pageEmployees.length ? true : "mixed";
   return <div className="record-table-frame employee-records">
+    <RecordCompactTools columns={columns} sort={sort} onSort={onSort} label="сотрудники">
+      <Checkbox aria-label="Выбрать видимую страницу сотрудников" checked={pageSelection} disabled={!pageEmployees.length}
+        onChange={(_, data) => onTogglePage(pageEmployees.map(employee => employee.id), data.checked === true)} />
+    </RecordCompactTools>
     <div className="record-table-scroll" role="region" aria-label="Список сотрудников" tabIndex={0} aria-busy={loading}>
       <table role="table" className="record-table employee-record-table" aria-label="Сотрудники">
         <thead role="rowgroup"><tr role="row">
@@ -50,7 +55,7 @@ export function EmployeeRecords({ token, employees, departments, filterKey, sele
               onChange={(_, data) => onTogglePage(pageEmployees.map((employee) => employee.id), data.checked === true)}
             />
           </th>
-          {[["name", "Сотрудник"], ["position", "Должность"], ["department", "Подразделение"], ["username", "Логин"], ["role", "Роль"], ["status", "Состояние"]].map(([column, label]) => <SortHeading key={column} column={column!} sort={sort} onSort={onSort}>{label}</SortHeading>)}
+          {columns.map(([column, label]) => <SortHeading key={column} column={column} sort={sort} onSort={onSort}>{label}</SortHeading>)}
         </tr></thead>
         {loading ? <SkeletonTableRows columns={7} rows={7} label="Загружаем сотрудников и должности" rowClassName="record-row employee-row" selectionColumn={0} personColumn={1} /> : <tbody role="rowgroup">{pageEmployees.map(employee => <tr role="row"
           className={`record-row employee-row${selectedIds.has(employee.id) ? " selected" : ""}`}

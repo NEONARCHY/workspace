@@ -70,7 +70,7 @@ describe("birthday greeting access", () => {
     fireEvent.keyDown(field, { key: "Enter" }); fireEvent.keyDown(field, { key: "Enter" });
     expect(onComment).toHaveBeenCalledTimes(2);
     fireEvent.change(field, { target: { value: "Следующий текст" } });
-    fireEvent.click(screen.getByRole("button", { name: "Ответить", exact: true }));
+    fireEvent.click(screen.getByRole("button", { name: "Ответить" }));
     finish(birthday);
     await waitFor(() => expect(screen.getByRole("button", { name: "Отправить комментарий" })).toBeEnabled());
     expect(field).toHaveValue("Следующий текст");

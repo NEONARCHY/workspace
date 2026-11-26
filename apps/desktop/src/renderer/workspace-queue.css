@@ -276,3 +276,107 @@ body .app-provider .feed-view.workspace-queue .feed-comment-composer > :is(.fui-
   body .app-provider .notifications-view.workspace-queue .notification-metrics small { display: none; }
   body .app-provider .notifications-view.workspace-queue .notification-progress-card > i { position: absolute; inset: auto 12px 8px; height: 4px; }
 }
+
+/* People and leave queues share the same edges, controls and panel rhythm. */
+body .app-provider :is(.employees-view, .leave-view, .absences-view).workspace-queue:not([data-dialog-only]) {
+  gap: var(--ws-queue-space);
+  margin: 0;
+  padding-block: 0;
+  min-width: 0;
+  scrollbar-gutter: auto;
+}
+html:root body .app-provider .absences-view.workspace-queue .record-kicker { display: none; }
+body .app-provider .employees-view.workspace-queue .employees-header-tools {
+  display: flex; flex: none; flex-wrap: wrap; align-items: center;
+  gap: 8px; margin: 0; padding: 12px;
+  border: 1px solid var(--ws-line); border-radius: 16px; background: var(--ws-surface);
+}
+body .app-provider .employees-view.workspace-queue .employees-header-tools .fui-Button { min-height: var(--ws-queue-button); }
+body .app-provider .employees-view.workspace-queue .employees-management { display: contents; }
+body .app-provider .employees-view.workspace-queue .employees-management-trigger { display: none; }
+body .app-provider .employees-view.workspace-queue .record-list-controls {
+  gap: 8px 12px; margin: 0; padding: 0; align-items: end;
+}
+body .app-provider .employees-view.workspace-queue .record-list-controls > label { gap: 4px; }
+body .app-provider .employees-view.workspace-queue .record-list-controls :is(.employee-search, .workspace-select, .fui-Button) {
+  min-height: var(--ws-queue-control); height: var(--ws-queue-control); margin: 0; border-radius: var(--ws-queue-radius);
+}
+body .app-provider .employees-view.workspace-queue .record-list-controls .employee-search { --search-height: var(--ws-queue-control); }
+body .app-provider .employees-view.workspace-queue .record-list-controls > .employee-scope-switch {
+  display: flex; align-items: stretch; gap: 4px; padding: 4px; height: var(--ws-queue-control); max-width: 100%; border-radius: var(--ws-queue-radius);
+}
+body .app-provider .employees-view.workspace-queue .employee-scope-switch > button { min-height: var(--ws-queue-button); padding-inline: 12px; border-radius: 8px; }
+body .app-provider .employees-view.workspace-queue .employee-records { margin: 0; border: 1px solid var(--ws-line); border-radius: 16px; }
+body .app-provider .employees-view.workspace-queue .employee-record-table .employee-row { transform: none; box-shadow: none; transition: none; }
+
+body .app-provider .leave-view.workspace-queue:not([data-dialog-only]) > .leave-filters {
+  display: flex; flex: none; flex-wrap: nowrap; align-items: stretch; gap: 4px;
+  width: max-content; max-width: 100%; min-height: var(--ws-queue-control); margin: 0; padding: 4px;
+  border-radius: var(--ws-queue-radius); background: var(--ws-surface); overflow-x: auto; scrollbar-width: thin;
+}
+body .app-provider .leave-view.workspace-queue:not([data-dialog-only]) > .leave-filters > button {
+  flex: none; min-height: var(--ws-queue-button); padding: 8px 12px; border: 0; border-radius: 8px; font-size: 12px; font-weight: 600; white-space: nowrap;
+}
+body .app-provider .leave-view.workspace-queue:not([data-dialog-only]) .leave-layout { gap: var(--ws-queue-space); }
+body .app-provider .leave-view.workspace-queue:not([data-dialog-only]) :is(.leave-list-area, .leave-detail) {
+  min-width: 0; padding: 16px; border: 1px solid var(--ws-line); border-radius: 16px; background: var(--ws-surface);
+}
+body .app-provider .leave-view.workspace-queue:not([data-dialog-only]) .leave-list { gap: 8px; }
+body .app-provider .leave-view.workspace-queue:not([data-dialog-only]) .leave-list-item { gap: 8px; padding: 16px; border-radius: var(--ws-queue-radius); }
+body .app-provider .leave-view.workspace-queue:not([data-dialog-only]) .leave-card { gap: 16px; max-width: none; padding: 0; background: transparent; }
+body .app-provider .leave-view.workspace-queue:not([data-dialog-only]) .leave-card h2 { font-size: 20px; }
+body .app-provider .leave-view.workspace-queue:not([data-dialog-only]) .leave-paper { padding: 16px; border-radius: var(--ws-queue-radius); }
+.leave-status.status-approved { background: var(--ws-theme-wash-success, #e2f5ec); color: var(--ws-theme-ink-success, #216b4a); }
+
+body .app-provider .absences-view.workspace-queue > :is(.absence-summary, .absence-canvas) { margin: 0; }
+body .app-provider .absences-view.workspace-queue .absence-summary { gap: var(--ws-queue-space); }
+body .app-provider .absences-view.workspace-queue .absence-summary > button {
+  min-height: 80px; padding: 16px; border-radius: 16px; background: var(--ws-surface); box-shadow: none; text-align: start;
+}
+body .app-provider .absences-view.workspace-queue .absence-summary strong { font-size: 28px; }
+body .app-provider .absences-view.workspace-queue .absence-summary span { font-size: 12px; line-height: 1.5; }
+body .app-provider .absences-view.workspace-queue .absence-summary > button:hover { border-color: var(--ws-presence-accent); }
+body .app-provider .absences-view.workspace-queue .absence-canvas { gap: var(--ws-queue-space); }
+body .app-provider .absences-view.workspace-queue .absence-column {
+  gap: 12px; padding: 16px; border-radius: 16px; background: var(--ws-surface); border-color: var(--ws-line);
+}
+body .app-provider .absences-view.workspace-queue .absence-column > header { padding: 0 0 4px; }
+body .app-provider .absences-view.workspace-queue .absence-column > header > span { display: none; }
+body .app-provider .absences-view.workspace-queue .absence-column > header h2 { margin: 0; font-size: 16px; font-weight: 600; line-height: 24px; }
+body .app-provider .absences-view.workspace-queue .absence-card {
+  flex: none; gap: 12px; padding: 12px; border-radius: var(--ws-queue-radius); box-shadow: none; transform: none;
+  transition: border-color 150ms var(--ws-ease);
+}
+body .app-provider .absences-view.workspace-queue .absence-card-main { gap: 8px; min-width: 0; }
+body .app-provider .absences-view.workspace-queue .absence-card-main > span { flex-wrap: wrap; }
+body .app-provider .absences-view.workspace-queue .absence-card-main small { padding: 4px 8px; font-weight: 500; }
+
+@media (max-width: 1023px), (max-width: 1366px) and (any-pointer: coarse) {
+  body .app-provider :is(.employees-view, .leave-view, .absences-view).workspace-queue:not([data-dialog-only]) { gap: 8px; }
+  body .app-provider .employees-view.workspace-queue .employees-header-tools { padding: 8px; }
+  body .app-provider .employees-view.workspace-queue .record-list-controls { gap: 8px; }
+  body .app-provider .employees-view.workspace-queue .record-list-controls .employee-search { flex-basis: 100%; order: -1; }
+  body .app-provider .employees-view.workspace-queue .employee-scope-switch { overflow-x: auto; }
+  body .app-provider .leave-view.workspace-queue:not([data-dialog-only]) .leave-layout { gap: 8px; }
+  body .app-provider .leave-view.workspace-queue:not([data-dialog-only]) :is(.leave-list-area, .leave-detail) { padding: 12px; }
+  body .app-provider .absences-view.workspace-queue .absence-summary { gap: 8px; }
+  body .app-provider .absences-view.workspace-queue .absence-summary > button { min-height: 72px; padding: 12px; }
+  body .app-provider .absences-view.workspace-queue .absence-column { padding: 12px; }
+}
+@media (max-width: 700px) {
+  body .app-provider .employees-view.workspace-queue .employees-management { display: block; border: 1px solid var(--ws-line); border-radius: 16px; background: var(--ws-surface); }
+  body .app-provider .employees-view.workspace-queue .fui-Button.employees-management-trigger { display: flex; justify-content: start; width: 100%; min-height: var(--ws-queue-button); border: 0; background: transparent; }
+  body .app-provider .employees-view.workspace-queue .employees-management .employees-header-tools { border: 0; background: transparent; }
+  body .app-provider .employees-view.workspace-queue .employees-management[data-open="false"] .employees-header-tools { display: none; }
+  html.web-platform:root body .app-provider .leave-view.workspace-queue:not([data-dialog-only]) .leave-header-actions { display: flex; width: 100%; gap: 8px; }
+  html.web-platform:root body .app-provider .leave-view.workspace-queue:not([data-dialog-only]) .leave-header-actions > button { flex: none; width: auto; white-space: nowrap; }
+  body .app-provider .leave-view.workspace-queue:not([data-dialog-only]) .leave-layout { grid-template-rows: auto minmax(180px, 1fr); }
+  body .app-provider .leave-view.workspace-queue:not([data-dialog-only]) .leave-list { max-height: 240px; }
+  body .app-provider .leave-view.workspace-queue:not([data-dialog-only]) .leave-placeholder { min-height: 180px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  body .app-provider .absences-view.workspace-queue .absence-card { transition: none; }
+}
+@media (forced-colors: active) {
+  body .app-provider .absences-view.workspace-queue .absence-summary > button { background: Canvas; border-color: CanvasText; }
+}

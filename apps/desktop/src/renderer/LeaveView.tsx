@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LeaveDecision, LeaveHrDecisionInput, LeaveRequest, LeaveTenureRule, WorkspacePerson } from "@yuksalish/contracts";
 import { Button, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input, Textarea } from "@fluentui/react-components";
 import { WorkspaceDialog, focusWorkspaceDialog } from "./WorkspaceDialog";
@@ -64,6 +64,19 @@ function formatDate(value: string | null): string {
   const [year, month, day] = value.split("-");
   return `${day}.${month}.${year}`;
 }
+
+const LeaveRequestList = memo(function LeaveRequestList({ requests, peopleById, busy, selectedId, onChoose }: {
+  requests: readonly LeaveRequest[]; peopleById: ReadonlyMap<string, WorkspacePerson>; busy: boolean;
+  selectedId: string | undefined; onChoose: (item: LeaveRequest) => void;
+}) {
+  return requests.length ? <div className="leave-list">{requests.map(item =>
+    <button type="button" key={item.id} disabled={busy} className={`leave-list-item ${selectedId === item.id ? "is-selected" : ""}`} onClick={() => onChoose(item)}>
+      <span className="leave-list-top"><strong>{peopleById.get(item.requesterUserId)?.name ?? "Сотрудник"}</strong><span className={`leave-status status-${item.status}`}>{item.statusLabel}</span></span>
+      <span>{formatDate(item.startsOn ?? item.requestedStartsOn)}{item.endsOn ?? item.requestedEndsOn ? ` — ${formatDate(item.endsOn ?? item.requestedEndsOn)}` : " · Дата окончания уточняется"}</span>
+      {item.orderNumber ? <small>Приказ № {item.orderNumber}-сон а/ф</small> : null}
+    </button>
+  )}</div> : <p className="leave-empty">В этом разделе заявлений пока нет.</p>;
+});
 
 function eligibleTenureDays(employmentDate: string | null, startsOn: string, rules: readonly LeaveTenureRule[]): number {
   if (!employmentDate || !startsOn || startsOn < employmentDate) return 0;
@@ -149,18 +162,18 @@ export function LeaveView({ token, people, currentUserId, canCreate, focusReques
     return () => controller.abort();
   }, [refresh]);
 
-  const selected = requests.find((item) => item.id === selectedId);
+  const selected = useMemo(() => requests.find((item) => item.id === selectedId), [requests, selectedId]);
   const tenureRules = ruleDraft ?? context?.tenureRules ?? [];
   const eligibleDays = selected ? eligibleTenureDays(selected.organizationEmploymentDate, hrForm.startsOn, context?.tenureRules ?? []) : 0;
   const peopleById = useMemo(() => new Map(people.map((person) => [person.id, person])), [people]);
   const exampleRequester = peopleById.get(editing && selected ? selected.requesterUserId : currentUserId);
   const exampleDeputy = context?.deputyUserId ? peopleById.get(context.deputyUserId) : undefined;
-  const visible = requests.filter((item) => filter === "all" ||
+  const visible = useMemo(() => requests.filter((item) => filter === "all" ||
     filter === "mine" && item.requesterUserId === currentUserId ||
     filter === "action" && (item.canReviewHr || item.canReviewDeputy || item.status === "needs_revision" && item.requesterUserId === currentUserId) ||
-    filter === "approved" && item.status === "approved");
+    filter === "approved" && item.status === "approved"), [requests, filter, currentUserId]);
 
-  function choose(item: LeaveRequest) {
+  const choose = useCallback((item: LeaveRequest) => {
     setSelectedId(item.id);
     setShowCreate(false);
     setEditing(false);
@@ -171,7 +184,7 @@ export function LeaveView({ token, people, currentUserId, canCreate, focusReques
     setApplicationText(item.applicationText);
     setStartsOn(item.requestedStartsOn);
     setEndsOn(item.requestedEndsOn ?? "");
-  }
+  }, [people, context?.deputyUserId]);
 
   async function mutate(action: () => Promise<LeaveRequest>) {
     if (busy) return;
@@ -280,7 +293,7 @@ export function LeaveView({ token, people, currentUserId, canCreate, focusReques
     contentType: "application/pdf", byteSize: 0,
   } : undefined;
 
-  const content = <section className="workspace-view leave-view" aria-label="Отпуска" data-dialog-only={dialogOnly || undefined}>
+  const content = <section className="workspace-view workspace-queue leave-view" aria-label="Отпуска" data-dialog-only={dialogOnly || undefined}>
     {!dialogOnly && <WorkspaceSectionHeader motif="absences" className="leave-header">
       <div><span className="view-kicker">Сотрудник · Кадровая служба · Первый заместитель</span>
         <h1>Отпуска</h1><p>Заявление, проверка кадров и подписанный приказ — в одном месте.</p></div>
@@ -292,19 +305,13 @@ export function LeaveView({ token, people, currentUserId, canCreate, focusReques
       </div>
     </WorkspaceSectionHeader>}
     {error ? <WorkspaceNotice tone="error" role="alert">{error}</WorkspaceNotice> : null}
-    {loading ? <p className="leave-empty">Загружаем заявления…</p> : <div className="leave-layout">
-      {!dialogOnly && <div className="leave-list-area">
-        <div className="leave-filters" aria-label="Фильтр заявлений">
+    {!dialogOnly && <div className="leave-filters" aria-label="Фильтр заявлений">
           {([ ["all", "Все"], ["mine", "Мои"], ["action", "Ждут решения"], ["approved", "Утверждены"] ] as const).map(([value, label]) =>
             <button key={value} type="button" aria-pressed={filter === value} onClick={() => setFilter(value)}>{label}</button>)}
-        </div>
-        {visible.length ? <div className="leave-list">{visible.map((item) =>
-          <button type="button" key={item.id} disabled={busy} className={`leave-list-item ${selectedId === item.id ? "is-selected" : ""}`}
-            onClick={() => choose(item)}>
-            <span className="leave-list-top"><strong>{peopleById.get(item.requesterUserId)?.name ?? "Сотрудник"}</strong><span className={`leave-status status-${item.status}`}>{item.statusLabel}</span></span>
-            <span>{formatDate(item.startsOn ?? item.requestedStartsOn)}{item.endsOn ?? item.requestedEndsOn ? ` — ${formatDate(item.endsOn ?? item.requestedEndsOn)}` : " · Дата окончания уточняется"}</span>
-            {item.orderNumber ? <small>Приказ № {item.orderNumber}-сон а/ф</small> : null}
-          </button>)}</div> : <p className="leave-empty">В этом разделе заявлений пока нет.</p>}
+    </div>}
+    {loading ? <p className="leave-empty">Загружаем заявления…</p> : <div className="leave-layout">
+      {!dialogOnly && <div className="leave-list-area">
+        <LeaveRequestList requests={visible} peopleById={peopleById} busy={busy} selectedId={selectedId} onChoose={choose} />
       </div>}
       <div className="leave-detail">
         {showCreate || editing && selected?.canRevise ? <div className="leave-card">

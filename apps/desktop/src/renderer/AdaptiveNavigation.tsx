@@ -112,7 +112,7 @@ export function AdaptiveNavigation<T extends AdaptiveNavigationItem>({
     return () => { observer.disconnect(); window.removeEventListener("resize", update); };
   }, [drawerOpen]);
   return <SlidingSegmented as="nav" onContainer={(node) => { containerRef.current = node; }} activeSelector=":scope > .rail-slot .rail-action.active:not(.rail-ai-trigger):not(.rail-more-action), :scope > button.rail-action.active:not(.rail-ai-trigger):not(.rail-more-action), :scope > .rail-slot .rail-ai-disclosure.is-open .rail-ai-link.active" className="rail-nav personal-rail-nav adaptive-rail-nav navigation-sliding"
-    onClickCapture={(event) => {
+    onClick={(event) => {
       if (event.target instanceof Element && event.target.closest(".rail-action:not(.rail-more-action):not(.rail-ai-trigger)")) {
         setOpen(false);
       }
