@@ -44,22 +44,19 @@ export function TaskCalendarView({ tasks, onSelect, actions, toolbarTarget }: Ta
       new Date(month.getFullYear(), month.getMonth(), index - firstWeekday + 1)
     ));
   }, [month]);
-  const tasksByDay = useMemo(() => {
-    const grouped = new Map<string, WorkspaceTask[]>();
+  const { tasksByDay, unscheduled } = useMemo(() => {
+    const grouped = new Map<string, { task: WorkspaceTask; due: number }[]>();
+    const unscheduled: WorkspaceTask[] = [];
     for (const task of tasks) {
       const dueAt = validDate(task.dueAt);
-      if (!dueAt) continue;
+      if (!dueAt) { unscheduled.push(task); continue; }
       const key = localDateKey(dueAt);
-      grouped.set(key, [...(grouped.get(key) ?? []), task]);
+      const entry = { task, due: dueAt.getTime() }, group = grouped.get(key);
+      if (group) group.push(entry); else grouped.set(key, [entry]);
     }
-    for (const values of grouped.values()) {
-      values.sort((left, right) => (
-        new Date(left.dueAt ?? 0).getTime() - new Date(right.dueAt ?? 0).getTime()
-      ));
-    }
-    return grouped;
+    const tasksByDay = new Map([...grouped].map(([key, values]) => [key, values.sort((left, right) => left.due - right.due).map(value => value.task)]));
+    return { tasksByDay, unscheduled };
   }, [tasks]);
-  const unscheduled = tasks.filter((task) => !validDate(task.dueAt));
   const selectedKey = localDateKey(selectedDay);
   const selectedTasks = tasksByDay.get(selectedKey) ?? [];
 

@@ -190,8 +190,8 @@ export { apiConnectionLabel, getApiBaseUrl, initializeApiOrigin, subscribeToApiO
 let pendingMutations = 0;
 export const hasPendingMutation = () => pendingMutations > 0;
 
-export function loadPersonalReactions(token: string): Promise<PersonalReactionSummary> {
-  return apiRequest("/home/reactions", {}, token);
+export function loadPersonalReactions(token: string, signal?: AbortSignal): Promise<PersonalReactionSummary> {
+  return apiRequest("/home/reactions", { signal }, token);
 }
 
 export class ApiHttpError extends Error {
@@ -257,12 +257,13 @@ export function saveEdoAccess(
 export function loadEdoIncomingLetters(
   token: string,
   options: { readonly page?: number; readonly q?: string; readonly status?: EdoIncomingFilter; readonly personal?: boolean } = {},
+  signal?: AbortSignal,
 ): Promise<EdoIncomingPage> {
   const query = new URLSearchParams({ page: String(options.page ?? 1), limit: "20" });
   if (options.q?.trim()) query.set("q", options.q.trim());
   if (options.status) query.set("status", options.status);
   if (options.personal) query.set("personal", "true");
-  return apiRequest<EdoIncomingPage>(`/incoming-letters?${query}`, {}, token);
+  return apiRequest<EdoIncomingPage>(`/incoming-letters?${query}`, { signal }, token);
 }
 
 export function loadEdoIncomingLetter(token: string, id: number): Promise<EdoIncomingDetail> {
@@ -352,10 +353,11 @@ export function previewAIReferentLocalFile(
 export function loadEmployeeRecognitionProfile(
   token: string,
   userId: string,
+  signal?: AbortSignal,
 ): Promise<EmployeeRecognitionProfile> {
   return apiRequest<EmployeeRecognitionProfile>(
     `/recognition/profiles/${encodeURIComponent(userId)}`,
-    {},
+    { signal },
     token,
   );
 }
@@ -482,6 +484,7 @@ export function saveAIReferentConfiguration(
 export function loadAIReferentIncomingRegistry(
   token: string,
   filters: { readonly query?: string; readonly status?: string; readonly offset?: number; readonly category?: string } = {},
+  signal?: AbortSignal,
 ): Promise<AIReferentIncomingRegistry> {
   const query = new URLSearchParams();
   if (filters.query?.trim()) query.set("query", filters.query.trim());
@@ -489,7 +492,7 @@ export function loadAIReferentIncomingRegistry(
   if (filters.offset) query.set("offset", String(filters.offset));
   if (filters.category) query.set("category", filters.category);
   const suffix = query.size > 0 ? `?${query.toString()}` : "";
-  return apiRequest<AIReferentIncomingRegistry>(`/ai-referent/incoming${suffix}`, {}, token);
+  return apiRequest<AIReferentIncomingRegistry>(`/ai-referent/incoming${suffix}`, { signal }, token);
 }
 
 export function downloadAIReferentJournal(token: string): Promise<Blob> {
@@ -1932,9 +1935,9 @@ export function acceptWorkspaceTaskResult(
   );
 }
 
-export function loadPersonalEfficiency(token: string, period?: string): Promise<PersonalEfficiency> {
+export function loadPersonalEfficiency(token: string, period?: string, signal?: AbortSignal): Promise<PersonalEfficiency> {
   const suffix = period ? `?period=${encodeURIComponent(period)}` : "";
-  return apiRequest<PersonalEfficiency>(`/profile/me/efficiency${suffix}`, {}, token);
+  return apiRequest<PersonalEfficiency>(`/profile/me/efficiency${suffix}`, { signal }, token);
 }
 
 export function deleteWorkspaceTaskAttachment(token: string, taskId: string, attachmentId: string): Promise<void> {
@@ -2268,8 +2271,8 @@ export function changeWorkspaceProjectStage(
   );
 }
 
-export function loadProjectHub(token: string): Promise<ProjectHubOverview> {
-  return apiRequest<ProjectHubOverview>("/project-hub", {}, token);
+export function loadProjectHub(token: string, signal?: AbortSignal): Promise<ProjectHubOverview> {
+  return apiRequest<ProjectHubOverview>("/project-hub", { signal }, token);
 }
 
 export function loadMailConnection(token: string): Promise<MailConnection> {
@@ -2517,12 +2520,12 @@ export function loadCalendarProjectTargets(token: string): Promise<PaymentProjec
   return apiRequest<PaymentProjectTargets>("/project-hub/calendar-targets", {}, token);
 }
 
-export function loadProjectHubRequests(token: string): Promise<readonly ProjectHubRequest[]> {
-  return apiRequest<readonly ProjectHubRequest[]>("/project-hub/requests", {}, token);
+export function loadProjectHubRequests(token: string, signal?: AbortSignal): Promise<readonly ProjectHubRequest[]> {
+  return apiRequest<readonly ProjectHubRequest[]>("/project-hub/requests", { signal }, token);
 }
 
-export function loadProjectHubRequestTargets(token: string): Promise<ProjectHubOverview> {
-  return apiRequest<ProjectHubOverview>("/project-hub/request-targets", {}, token);
+export function loadProjectHubRequestTargets(token: string, signal?: AbortSignal): Promise<ProjectHubOverview> {
+  return apiRequest<ProjectHubOverview>("/project-hub/request-targets", { signal }, token);
 }
 
 export function saveProjectHubProject(

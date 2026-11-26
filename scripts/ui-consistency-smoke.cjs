@@ -9,11 +9,16 @@ const attentionSuite = process.argv.includes("--attention");
 const peopleSuite = process.argv.includes("--people");
 const operationsSuite = process.argv.includes("--operations");
 const documentsSuite = process.argv.includes("--documents");
+const planningSuite = process.argv.includes("--planning");
+const onlyWidth = Number(process.env.UI_QA_WIDTH || 0);
+assert([0, 320, 390, 720, 1024, 1440].includes(onlyWidth));
 const origin = process.env.UI_QA_ORIGIN || "http://127.0.0.1:5186";
 assert(["127.0.0.1", "localhost"].includes(new URL(origin).hostname));
-const iteration = documentsSuite ? "5" : operationsSuite ? "4" : peopleSuite ? "3" : attentionSuite ? "2" : "1";
+const iteration = planningSuite ? "6" : documentsSuite ? "5" : operationsSuite ? "4" : peopleSuite ? "3" : attentionSuite ? "2" : "1";
 const output = path.resolve(process.env.UI_QA_OUTPUT || `tmp/ui-consistency-iteration-${iteration}`);
-const sections = documentsSuite
+const sections = planningSuite
+  ? [{ id: "home", label: "Главная", root: ".personal-home" }, { id: "calendar", label: "Календарь", root: ".calendar-view" }, { id: "projects", label: "Проекты", root: ".project-hub-view" }]
+  : documentsSuite
   ? [{ id: "letters", label: "Входящие письма", root: ".incoming-documents" }, { id: "telegram", label: "Доступ к ботам", root: ".telegram-access-view" }, { id: "survey", label: "Аналитика опросов", root: ".survey-analytics" }]
   : operationsSuite
   ? [{ id: "hr", label: "HR", root: ".hr-view" }, { id: "members", label: "Работа с членами", root: ".members-view" }, { id: "zoom", label: "Zoom-конференции", root: ".zoom-view" }]
@@ -75,12 +80,17 @@ function fixtures(demo) {
   const incomingDocuments = Array.from({ length: 36 }, (_, i) => ({ id: `letter-${i}`, revision: 1, number: `26/${151 + i}`, subject: ["Подготовка регионального рабочего совещания", "Материалы совместной программы", "Ответ на обращение подразделения"][i % 3], sender: "Управление региональных программ", receivedAt: "2026-11-25T05:00:00Z", addedAt: "2026-11-26T05:00:00Z", source: "exat", filesExpected: false, execution: null, canAssign: true, canOpenTask: false }));
   const telegram = { bots: [{ key: "ai_referent", label: "AI Referent", connected: true }, { key: "hisobot", label: "AI Hisobot", connected: true }, { key: "workspace_notifications", label: "Уведомления Workspace", connected: true }], people: people.map((p, i) => ({ userId: p.id, username: p.username, fullName: p.name, jobTitle: "Координатор региональных программ", telegramId: i % 2 ? null : String(120000001 + i), verified: i % 2 === 0, verificationSource: i % 2 ? null : "admin", botKeys: i % 2 ? [] : ["ai_referent", "hisobot"], revision: 1, hisobotScope: "central", hisobotRegion: null, hisobotReportRequired: true, hisobotManager: false })) };
   const survey = { analysis: { id: "survey-qa", title: "Опрос региональной команды", fileName: "team-answers.csv", revision: 1, archived: false, createdAt: "2026-11-25T07:00:00Z", updatedAt: "2026-11-26T07:00:00Z", configuration: { sheet: 0, headerRow: 0, types: {}, separator: ";", missingValues: [], query: "", filters: [], savedViews: [] } }, workbook: { warnings: [], sheets: [{ name: "Ответы", rows: [["Подразделение", "Оценка"], ...Array.from({ length: 64 }, (_, i) => [i % 2 ? "Региональная команда" : "Центральный аппарат", String(i % 5 + 1)])] }] } };
-  return { user, people, tasks, requests, tripRequests, workflow, feedPosts, notifications, employees, departments, leaves, absenceRequests, presenceSummary, hr, members, zoom, incomingDocuments, telegram, survey };
+  const hub = { projects: Array.from({ length: 6 }, (_, i) => ({ id: `hub-${i}`, code: `REG-${26 + i}`, title: ["Региональная программа развития", "Поддержка молодёжных инициатив", "Цифровизация рабочих процессов"][i % 3], description: "Работа с региональными командами, проведение встреч и подготовка материалов.", managerUserId: user.id, responsibleUserIds: [people[0].id], approverUserIds: [user.id], startDate: "2026-11-01", endDate: "2026-12-15", budget: 20000000, currency: "UZS", accessStatus: "open", lifecycleStatus: i === 5 ? "completed" : "active", approvedAmount: 4500000, canEdit: true, chatId: null, createdByUserId: user.id, createdAt: "2026-11-01T07:00:00Z", updatedAt: "2026-11-26T07:00:00Z" })), workstreams: [], items: [], requests: [] };
+  hub.workstreams = hub.projects.flatMap(p => Array.from({ length: 3 }, (_, i) => ({ id: `${p.id}-stream-${i}`, projectId: p.id, title: ["Региональные встречи", "Материалы программы", "Координация команды"][i], description: "Планирование и выполнение работ направления.", budget: 5000000, currency: "UZS", responsibleUserIds: [user.id], canEdit: true, createdByUserId: user.id, createdAt: p.createdAt, updatedAt: p.updatedAt })));
+  hub.items = hub.workstreams.flatMap(w => Array.from({ length: 5 }, (_, i) => ({ id: `${w.id}-item-${i}`, projectId: w.projectId, workstreamId: w.id, kind: i % 2 ? "event" : "task", title: ["Подготовить программу встречи", "Провести встречу команды", "Согласовать материалы"][i % 3], description: "Подготовка материалов и проверка результата.", startsAt: "2026-12-02T07:00:00Z", dueAt: i === 0 ? "2026-11-25T12:00:00Z" : "2026-12-04T12:00:00Z", budget: 1000000, status: ["active", "planned", "completed", "rejected", "active"][i], assigneeUserIds: [user.id], calendarEventId: null, createdByUserId: user.id, createdAt: "2026-11-01T07:00:00Z", updatedAt: "2026-11-26T07:00:00Z", requestCount: 0, approvedRequestCount: 0, actions: [] })));
+  const home = demo.home;
+  const calendarEvents = Array.from({ length: 15 }, (_, i) => ({ ...home.calendarEvents[0], id: `calendar-${i}`, title: ["Рабочая встреча региональной команды", "Обсуждение материалов программы", "Согласование плана проекта"][i % 3], startsAt: `2026-11-${String(20 + i % 9).padStart(2, "0")}T${String(7 + i % 4).padStart(2, "0")}:00:00Z`, endsAt: `2026-11-${String(20 + i % 9).padStart(2, "0")}T${String(8 + i % 4).padStart(2, "0")}:00:00Z` }));
+  return { user, people, tasks, requests, tripRequests, workflow, feedPosts, notifications, employees, departments, leaves, absenceRequests, presenceSummary, hr, members, zoom, incomingDocuments, telegram, survey, hub, home, calendarEvents, personalEfficiency: demo.personalEfficiency, recognition: demo.recognition };
 }
 async function measure(page, selector) {
   return page.locator(selector).evaluate(root => {
     const rect = node => { const r = node?.getBoundingClientRect(); return r ? { x: r.x, y: r.y, width: r.width, height: r.height, bottom: r.bottom, right: r.right } : null; };
-    const hero = root.querySelector(".ws-section-header"), toolbar = root.querySelector(".ws2-process-toolbar, .task-filters, .notification-head-actions, .record-list-controls, .leave-filters, .absence-summary, .hr-tabs, .zoom-buckets, .members-search-row, .incoming-documents-controls, .telegram-access-controls, .survey-layout"), search = root.querySelector(".workspace-search, .employee-search");
+    const hero = root.querySelector(".ws-section-header, .calendar-filters"), toolbar = root.querySelector(".ws2-process-toolbar, .task-filters, .notification-head-actions, .record-list-controls, .leave-filters, .absence-summary, .hr-tabs, .zoom-buckets, .members-search-row, .incoming-documents-controls, .telegram-access-controls, .survey-layout, .home-overview, .calendar-view-bar, .project-hub-layout"), search = root.querySelector(".workspace-search, .employee-search");
     return { hero: rect(hero), toolbar: rect(toolbar), search: rect(search), root: rect(root),
       pageOverflow: document.documentElement.scrollWidth - innerWidth,
       filters: rect(root.querySelector(".workspace-queue-filters")),
@@ -95,9 +105,10 @@ async function measure(page, selector) {
   const browser = await chromium.launch({ channel: "msedge", headless: true });
   const results = [], errors = [];
   try {
-    for (const [width, height, theme] of galleryOnly ? [] : [[1440, 960, "dark"], [1440, 960, "light"], [1024, 768, "dark"], [390, 844, "dark"], ...(phase === "after" && (peopleSuite || operationsSuite || documentsSuite) ? [[320, 800, "dark"]] : []), ...(phase === "after" && documentsSuite ? [[720, 480, "dark"]] : [])]) {
+    for (const [width, height, theme] of galleryOnly ? [] : [[1440, 960, "dark"], [1440, 960, "light"], [1024, 768, "dark"], [390, 844, "dark"], ...(phase === "after" && (peopleSuite || operationsSuite || documentsSuite || planningSuite) ? [[320, 800, "dark"]] : []), ...(phase === "after" && (documentsSuite || planningSuite) ? [[720, 480, "dark"]] : [])].filter(([width]) => !onlyWidth || width === onlyWidth)) {
       const context = await browser.newContext({ viewport: { width, height }, reducedMotion: "reduce" });
       const page = await context.newPage(); page.setDefaultTimeout(15000);
+      if (planningSuite) await page.clock.setFixedTime(new Date("2026-11-26T09:30:00Z"));
       page.on("pageerror", error => errors.push(error.message));
       await page.addInitScript(theme => localStorage.setItem("yuksalish:color-theme:last", theme), theme);
       let data, releaseIds = [];
@@ -110,7 +121,12 @@ async function measure(page, selector) {
         const send = json => route.fulfill({ json });
         if (/\/auth\/(web\/)?login$/.test(endpoint)) return send({ accessToken: "qa-token", expiresIn: 3600, user: data.user });
         if (!["GET", "HEAD"].includes(request.method())) return route.fulfill({ status: 403, json: { detail: "Synthetic QA: no writes" } });
-        if (endpoint === "/workspace/bootstrap") return send({ currentUser: data.user, people: data.people, tasks: data.tasks, requests: data.requests, tripRequests: data.tripRequests, workflow: data.workflow, projectWorkflow: null, tripWorkflow: null, requestWorkflows: {}, projects: [], chats: [], messages: [], departments: [], positions: [], attachments: [], feedPosts: attentionSuite ? data.feedPosts : [], calendarEvents: [], notifications: attentionSuite ? data.notifications : [], absenceRequests: peopleSuite ? data.absenceRequests : [], presenceSummary: peopleSuite ? data.presenceSummary : [], canCreatePaymentRequests: true, notificationPreferences: { desktopEnabled: false, soundEnabled: false, messagesEnabled: true, tasksEnabled: true, approvalsEnabled: true, calendarEnabled: true, tripsEnabled: true, remindersEnabled: true } });
+        if (endpoint === "/workspace/bootstrap") return send({ currentUser: { ...data.user, ...(planningSuite ? { departmentId: "qa-dept" } : {}) }, people: planningSuite ? data.people.map(p => ({ ...p, departmentId: "qa-dept" })) : data.people, tasks: planningSuite ? data.home.tasks : data.tasks, requests: data.requests, tripRequests: data.tripRequests, workflow: data.workflow, projectWorkflow: null, tripWorkflow: null, requestWorkflows: {}, projects: [], chats: planningSuite ? data.home.chats : [], messages: planningSuite ? data.home.messages : [], departments: planningSuite ? [{ ...data.departments[0], assignedUsersCount: data.people.length }] : [], positions: [], attachments: [], feedPosts: attentionSuite || planningSuite ? data.feedPosts : [], calendarEvents: planningSuite ? data.calendarEvents : [], notifications: attentionSuite ? data.notifications : planningSuite ? data.home.notifications : [], absenceRequests: peopleSuite ? data.absenceRequests : [], presenceSummary: peopleSuite ? data.presenceSummary : [], canCreatePaymentRequests: true, notificationPreferences: { desktopEnabled: false, soundEnabled: false, messagesEnabled: true, tasksEnabled: true, approvalsEnabled: true, calendarEnabled: true, tripsEnabled: true, remindersEnabled: true } });
+        if (planningSuite && endpoint === "/profile/me/efficiency") return send(data.personalEfficiency);
+        if (planningSuite && endpoint.startsWith("/recognition/profiles/")) return send(data.recognition);
+        if (planningSuite && endpoint === "/home/reactions") return send({ totalCount: 7, reactions: [{ emoji: "👍", count: 7 }] });
+        if (planningSuite && endpoint === "/ai-referent/incoming") return send({ letters: [], totalCount: 0, filteredCount: 0, registeredCount: 0, attentionCount: 0, withAttachmentsCount: 0, journal: { available: false } });
+        if (planningSuite && endpoint === "/incoming-letters") return send({ visibility: "assigned", deadline_timezone_verified: false, meta: { page: 1, limit: 20, total: 0 }, data: [] });
         if (endpoint === "/efficiency") return send({ period: "2026-11", timezone: "Asia/Tashkent", methodologyVersion: "EFF-1", trackingStartedAt: "2026-09-01T00:00:00Z", currentUserId: data.user.id, employees: [] });
         if (endpoint === "/hr") return send(data.hr);
         if (endpoint === "/telegram-access") return send(data.telegram);
@@ -134,7 +150,7 @@ async function measure(page, selector) {
         if (endpoint === "/support-requests") return send({ mode: "inbox", requests: [], unreadResponseCount: 0, indicator: null });
         if (endpoint === "/updates/policy") return send({ mandatory: false, minimumVersion: null, publishedVersion: null });
         if (endpoint.includes("/approval-inbox/")) return send({ enabled: false, items: [] });
-        if (endpoint === "/project-hub" || endpoint.includes("/targets")) return send({ projects: [], workstreams: [], items: [], requests: [] });
+        if (endpoint === "/project-hub" || endpoint.includes("/targets")) return send(planningSuite ? data.hub : { projects: [], workstreams: [], items: [], requests: [] });
         if (endpoint.includes("/task-plans") || endpoint.includes("/task-proposals")) return send([]);
         if (endpoint.includes("/dossier/reminder")) return send({ period: "2026-11", dueDate: "2026-11-25", due: false, status: "no_changes", respondedAt: null });
         if (endpoint === "/leave-requests/context") return send({ hrUserId: data.people[0].id, deputyUserId: data.people[1].id, canConfigureSignature: false, signatureReady: true, tenureRules: [], canEditTenureRules: false });
@@ -145,7 +161,7 @@ async function measure(page, selector) {
         return route.fulfill({ status: 204, body: "" });
       });
       await page.goto(origin);
-      data = fixtures(await page.evaluate(async () => { const d = await import("/src/renderer/test-fixtures/demo-data.ts"); return { people: d.people, initialTasks: d.initialTasks }; }));
+      data = fixtures(await page.evaluate(async () => { const d = await import("/src/renderer/test-fixtures/demo-data.ts"), h = await import("/src/renderer/test-fixtures/personal-home-fixture.ts"); return { people: d.people, initialTasks: d.initialTasks, home: h.homeFixture("malika", Date.parse("2026-11-26T09:30:00Z")), personalEfficiency: h.homeEfficiency("malika"), recognition: h.homeRecognition("malika") }; }));
       releaseIds = await page.evaluate(async () => (await import("/src/renderer/release-history.ts")).bundledReleaseEntries().map(entry => entry.id));
       await page.evaluate(({ id, theme }) => localStorage.setItem(`yuksalish:color-theme:${id}`, theme), { id: data.user.id, theme });
       await page.getByRole("textbox", { name: /Логин/ }).fill("qa-user");
@@ -174,7 +190,11 @@ async function measure(page, selector) {
         await page.locator("#workspace-content").focus();
         await page.mouse.move(width - 1, 0);
         const file = `${section.id}-${theme}-${width}.png`;
-        await page.screenshot({ path: path.join(output, phase, file) });
+        const screenshotPath = path.join(output, phase, file), temporaryPath = screenshotPath + ".tmp";
+        try {
+          await fs.writeFile(temporaryPath, await page.screenshot());
+          await fs.rename(temporaryPath, screenshotPath);
+        } finally { await fs.rm(temporaryPath, { force: true }); }
         const geometry = await measure(page, section.root);
         results.push({ section: section.id, width, height, theme, ...geometry });
         if (phase === "after") {
@@ -191,6 +211,66 @@ async function measure(page, selector) {
             await next.click();
             await page.getByRole("button", { name: /^Предыдущая страница:/ }).first().click();
           }
+        }
+        if (phase === "after" && planningSuite) {
+          const framed = await page.locator(section.root).evaluate(root => [...root.querySelectorAll(".home-panel, .home-overview > button, .home-row, .calendar-day, .calendar-view-bar, .calendar-agenda-card, .project-hub-project, .project-hub-metrics > div, .project-hub-workstream-card")].filter(node => {
+            const style = getComputedStyle(node);
+            return [style.borderTopWidth, style.borderRightWidth, style.borderBottomWidth, style.borderLeftWidth].some(value => parseFloat(value) > 0) || style.boxShadow.includes("inset");
+          }).map(node => node.className));
+          assert.deepEqual(framed, [], `${file}: planning surfaces without frames`);
+          assert(geometry.pageOverflow <= 1, `${file}: page overflow`);
+          assert(Math.abs(geometry.toolbar.x - geometry.hero.x) <= 1 && geometry.toolbar.right <= geometry.hero.right + 1, `${file}: shared edges`);
+          if (section.id === "home") {
+            const summary = page.locator(".home-overview > button");
+            assert.equal(await summary.count(), 4, `${file}: actionable day summary`);
+            assert.match(await summary.first().innerText(), /^3\s+Важные действия/, `${file}: unique attention count`);
+            for (const button of await summary.all()) assert((await button.boundingBox()).height >= 44, `${file}: summary touch target`);
+            await summary.nth(1).click(); await page.locator(".tasks-view").waitFor();
+            await page.setViewportSize({ width: 1440, height: 960 });
+            await page.locator('.rail-action[aria-label="Главная"]').click(); await page.locator(".personal-home").waitFor();
+            await page.setViewportSize({ width, height }); await settle(page);
+          }
+          if (section.id === "calendar") {
+            const count = page.locator(".calendar-view-summary [role=status]");
+            assert.match(await count.innerText(), /Событий: 19/);
+            await page.getByRole("button", { name: "Следующий месяц", exact: true }).click();
+            assert.match(await count.innerText(), /Событий: 6/);
+            await page.getByRole("button", { name: "Предыдущий месяц", exact: true }).click();
+            await page.getByRole("button", { name: "Плитки", exact: true }).click();
+            assert.equal(await page.locator(".calendar-agenda-card").count(), 19, `${file}: complete month list`);
+            await page.getByRole("button", { name: "Месяц", exact: true }).click();
+            await page.getByRole("button", { name: "Фильтры", exact: true }).click();
+            const field = page.getByRole("textbox", { name: "Поиск событий", exact: true });
+            await field.fill("несуществующее-qa-событие"); assert.match(await count.innerText(), /Событий: 0/);
+            await field.fill(""); await field.blur(); assert.match(await count.innerText(), /Событий: 19/);
+            await page.getByRole("button", { name: "Фильтры", exact: true }).click();
+            await page.emulateMedia({ forcedColors: "active" });
+            const outline = await page.locator('.calendar-day[aria-selected="true"]').evaluate(node => getComputedStyle(node).outlineStyle);
+            assert.notEqual(outline, "none", `${file}: high contrast selection`);
+            await page.emulateMedia({ forcedColors: "none" });
+          }
+          if (section.id === "projects") {
+            const index = page.locator(".project-hub-index-body"), trigger = page.locator(".project-hub-index-toggle");
+            if (width <= 700) { assert(!await index.isVisible(), `${file}: compact index collapsed`); await trigger.click(); }
+            const filter = page.getByRole("combobox", { name: "Фильтр проектов", exact: true });
+            await filter.click(); await page.getByRole("option", { name: "Завершённые", exact: true }).click();
+            assert.equal(await page.locator(".project-hub-project").count(), 1);
+            assert.equal(await page.locator(".project-hub-title h2").innerText(), "Цифровизация рабочих процессов");
+            assert.match(await page.locator('.project-hub-project[aria-current="true"]').innerText(), /REG-31/);
+            await filter.click(); await page.getByRole("option", { name: "Все", exact: true }).click(); assert.equal(await page.locator(".project-hub-project").count(), 6);
+            await filter.click(); await page.getByRole("option", { name: "Активные", exact: true }).click(); assert.equal(await page.locator(".project-hub-project").count(), 5);
+            if (width <= 700) { await trigger.click(); await page.locator(".project-hub-tools-toggle").click(); }
+            await page.getByRole("button", { name: "Настроить проект", exact: true }).click();
+            await page.getByRole("textbox", { name: "Название проекта", exact: true }).fill("Черновик без сохранения");
+            await page.getByRole("button", { name: "Отмена", exact: true }).click();
+            await page.getByRole("dialog").waitFor({ state: "hidden" });
+            await page.emulateMedia({ forcedColors: "active" });
+            if (width <= 700) await trigger.click();
+            const outline = await page.locator('.project-hub-project[aria-current="true"]').evaluate(node => getComputedStyle(node).outlineStyle);
+            assert.notEqual(outline, "none", `${file}: high contrast project selection`);
+            await page.emulateMedia({ forcedColors: "none" });
+          }
+          assert((await measure(page, section.root)).pageOverflow <= 1, `${file}: interaction overflow`);
         }
         if (phase === "after" && operationsSuite) {
           assert(geometry.pageOverflow <= 1, `${file}: page overflow`);
@@ -396,7 +476,7 @@ async function measure(page, selector) {
           }
           await page.emulateMedia({ forcedColors: "none" });
         }
-        if (phase === "after" && !attentionSuite && !peopleSuite && !operationsSuite && !documentsSuite) {
+        if (phase === "after" && !attentionSuite && !peopleSuite && !operationsSuite && !documentsSuite && !planningSuite) {
           assert(geometry.pageOverflow <= 1, `${file}: page overflow`);
           assert(Math.abs(geometry.search.height - geometry.filters.height) <= 1, `${file}: search/filter height`);
           for (const [name, rect] of Object.entries({ toolbar: geometry.toolbar, filters: geometry.filters })) {
@@ -461,7 +541,11 @@ async function measure(page, selector) {
       }
       await context.close();
     }
-    if (!galleryOnly) await fs.writeFile(path.join(output, `${phase}.json`), JSON.stringify({ results, errors }, null, 2));
+    if (!galleryOnly) {
+      const resultPath = path.join(output, `${phase}.json`);
+      const previous = onlyWidth ? JSON.parse(await fs.readFile(resultPath, "utf8")).results.filter(result => result.width !== onlyWidth) : [];
+      await fs.writeFile(resultPath, JSON.stringify({ results: [...previous, ...results], errors }, null, 2));
+    }
     assert.deepEqual(errors, []);
     await fs.writeFile(path.join(output, "index.html"), `<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Yuksalish — сравнение интерфейса</title>
       <style>*{box-sizing:border-box}body{margin:0;padding:24px;background:#111318;color:#eceef4;font:15px/1.5 system-ui}main{max-width:1600px;margin:auto}h1{font-size:28px}p,figcaption{color:#bfc6d3}select{margin:0 0 24px;padding:12px;border-radius:8px;background:#252a33;color:inherit}section{margin:0 0 32px}h2{font-size:20px}article{display:grid;grid-template-columns:1fr 1fr;gap:16px}figure{margin:0;min-width:0}img{display:block;width:100%;height:auto;border-radius:12px}figcaption{margin-bottom:8px}@media(max-width:700px){article{grid-template-columns:1fr}body{padding:12px}}</style>

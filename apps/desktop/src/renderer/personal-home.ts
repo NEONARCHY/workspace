@@ -83,7 +83,17 @@ export function buildPersonalHome(workspace: HomeWorkspace, canView: (key: Navig
   const department = workspace.departments.find(d => d.id === workspace.currentUser.departmentId);
   const colleagues = department ? workspace.people.filter(p => p.id !== userId && p.departmentId === department.id && (!p.status || p.status === "active")).sort((a, b) => a.name.localeCompare(b.name, "ru")) : [];
   const feed = canView("feed") ? [...workspace.feedPosts].sort((a, b) => Number(b.isPinned) - Number(a.isPinned) || timestamp(b.createdAt) - timestamp(a.createdAt)) : [];
-  return { tasks, signals: signals.sort((a, b) => b.score - a.score || a.id.localeCompare(b.id)), notifications, chats, schedule, department, colleagues, feed };
+  const attentionTargets = new Set(signals.map(signal => `${signal.section}:${signal.entityId}`));
+  for (const notice of notifications) if (notice.requiresAction && !notice.resolvedAt) {
+    attentionTargets.add(notice.entityId ? `${notice.section}:${notice.entityId}` : `notification:${notice.id}`);
+  }
+  const taskCounts = { new: 0, in_progress: 0, awaiting_review: 0 };
+  for (const task of tasks) {
+    if (task.status === "new") taskCounts.new++;
+    else if (task.status === "in_progress" || task.status === "overdue") taskCounts.in_progress++;
+    else if (task.status === "awaiting_review") taskCounts.awaiting_review++;
+  }
+  return { tasks, taskCounts, attentionCount: attentionTargets.size, signals: signals.sort((a, b) => b.score - a.score || a.id.localeCompare(b.id)), notifications, chats, schedule, department, colleagues, feed };
 }
 export function rankHomePanels(data: ReturnType<typeof buildPersonalHome>, now = Date.now()): HomePanelKey[] {
   const scores: Partial<Record<HomePanelKey, number>> = {

@@ -47,7 +47,7 @@ import { CalendarAgendaDrawer } from "./CalendarAgendaDrawer";
 import { CalendarEventDialog } from "./CalendarEventDialog";
 import { CalendarZoomDetails } from "./CalendarZoomDetails";
 import { SlidingSegmented } from "./SlidingSegmented";
-import { calendarDayInRange, calendarItemsOnDay, emptyCalendarFilters, filterCalendarSchedule, type CalendarFilters as Filters } from "./calendar-filters";
+import { calendarDayInRange, calendarItemsOnDay, emptyCalendarFilters, filterCalendarSchedule, indexCalendarDays, type CalendarFilters as Filters } from "./calendar-filters";
 import "./calendar-ux.css";
 
 interface CalendarViewProps {
@@ -229,7 +229,7 @@ export function CalendarView({
   const [selectedZoomState, setSelectedZoom] = useState<ZoomMeeting>();
   const [draft, setDraft] = useState<CalendarEventInput>();
   const [editAttendeeScope, setEditAttendeeScope] = useState<EmployeeScope>("central");
-  const activePeople = people.filter(person => !person.status || person.status === "active");
+  const activePeople = useMemo(() => people.filter(person => !person.status || person.status === "active"), [people]);
   const selectAudience = (scope: NonNullable<CalendarEventInput["audienceScope"]>) => {
     if (!canInviteCalendarAudience || !draft || busy) return;
     setDraft({ ...draft, audienceScope: scope, attendeeIds: [...new Set([currentUserId,
@@ -313,9 +313,8 @@ export function CalendarView({
   const schedule = useMemo(() => filterCalendarSchedule(events, zoomMeetings ?? [], filters), [events, zoomMeetings, filters]);
   const monthStart = month.getTime();
   const monthEnd = new Date(month.getFullYear(), month.getMonth() + 1, 1).getTime();
-  const monthItems = schedule.filter(item => Date.parse(item.record.startsAt) < monthEnd && Date.parse(item.record.endsAt) > monthStart);
+  const monthItems = useMemo(() => schedule.filter(item => Date.parse(item.record.startsAt) < monthEnd && Date.parse(item.record.endsAt) > monthStart), [schedule, monthStart, monthEnd]);
   const listItems = filters.from || filters.to ? schedule : monthItems;
-  const selectedDayItems = calendarItemsOnDay(schedule, selectedDay, filters);
   const hasFilters = Boolean(filters.employeeId || filters.query.trim() || filters.from || filters.to || !filters.showCancelled);
   const changeFilters = (next: Filters) => {
     setFilters(next); setListLimit(100); setSelected(undefined); setSelectedZoom(undefined); setError("");
@@ -380,6 +379,9 @@ export function CalendarView({
       return new Date(month.getFullYear(), month.getMonth(), day);
     });
   }, [month]);
+
+  const itemsByDay = useMemo(() => indexCalendarDays(schedule, days, filters), [schedule, days, filters]);
+  const selectedDayItems = useMemo(() => itemsByDay.get(dayKey(selectedDay)) ?? calendarItemsOnDay(schedule, selectedDay, filters), [itemsByDay, schedule, selectedDay, filters]);
 
   useEffect(() => {
     if (!createFromChat || createFromChat.key === lastChatDraftKey.current) return;
@@ -700,7 +702,7 @@ export function CalendarView({
     </div>
   </>;
   return (
-    <section ref={frameRef} className={`workspace-view calendar-view calendar-ux ${agendaCompact ? "calendar-agenda-compact" : "calendar-agenda-inline"}${agendaDense ? " calendar-agenda-dense" : ""}${view === "list" ? " calendar-tiles-mode" : ""}`} aria-label="Календарь">
+    <section ref={frameRef} className={`workspace-view workspace-queue calendar-view calendar-ux ${agendaCompact ? "calendar-agenda-compact" : "calendar-agenda-inline"}${agendaDense ? " calendar-agenda-dense" : ""}${view === "list" ? " calendar-tiles-mode" : ""}`} aria-label="Календарь">
       <CalendarFilters value={filters} onChange={changeFilters} onReset={resetFilters}
         people={people} token={token} currentUserId={currentUserId} disabled={Boolean(draft) || busy} actions={<Button
               className="calendar-new-event"
@@ -763,7 +765,7 @@ export function CalendarView({
           >
             {days.map((day) => {
               const key = dayKey(day);
-               const dayItems = calendarItemsOnDay(schedule, day, filters);
+               const dayItems = itemsByDay.get(key) ?? [];
                const dayItemCount = dayItems.length;
               const outside = day.getMonth() !== month.getMonth();
               const today = key === dayKey(new Date());

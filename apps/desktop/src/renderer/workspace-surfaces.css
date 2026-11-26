@@ -28,7 +28,10 @@ html:root body .app-provider :is(
   .incoming-document-row, .incoming-status, .incoming-result, .incoming-responsibility > div,
   .incoming-assignment-team, .edo-incoming-row,
   .ai-incoming-register .ai-referent-summary > button, .survey-panel, .survey-settings, .survey-group-grid article,
-  .survey-file-drop, .survey-analysis-item
+  .survey-file-drop, .survey-analysis-item,
+  .home-overview > button, .home-row, .home-priority-update, .home-reactions li,
+  .calendar-day, .calendar-view-bar, .calendar-event-pill, .calendar-agenda-card,
+  .project-hub-project, .project-hub-metrics > div, .project-hub-workstream-card, .project-hub-funding-card
 ):not(.is-lifted):not(.is-target) {
   --ws-satin-sheen: none;
   --ws-satin-edge: none;
@@ -48,6 +51,7 @@ html:root body .app-provider :is(.fui-DialogSurface, .fui-PopoverSurface, .fui-M
   border: 0 solid transparent;
 }
 /* Selection and keyboard focus still communicate actions; no decorative ring. */
+html:root body .app-provider .calendar-day.selected { background: var(--ws-selected); }
 html:root body .app-provider :is(.absence-summary > button, .leave-list-item, .zoom-row):focus-visible {
   outline: 2px solid var(--ws-link);
   outline-offset: 2px;

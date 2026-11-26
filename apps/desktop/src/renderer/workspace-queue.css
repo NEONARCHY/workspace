@@ -538,3 +538,122 @@ body .app-provider .survey-analytics.workspace-queue :is(.survey-methodology, .s
   body .app-provider .telegram-access-view.workspace-queue .telegram-access-list { max-height: none; }
   body .app-provider .survey-analytics.workspace-queue :is(.survey-import-options, .survey-start-steps) { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Personal start, calendar and project planning use the established rhythm. */
+body .app-provider .personal-home.workspace-queue { gap: 12px; padding: 0; }
+body .app-provider .personal-home.workspace-queue .home-hero { min-height: var(--ws-section-header-height); }
+body .app-provider .personal-home.workspace-queue .home-hero > div > span { display: none; }
+body .app-provider .personal-home :is(.home-ready-content, .home-grid) { gap: 12px; }
+body .app-provider .personal-home .home-overview { gap: 12px; }
+body .app-provider .personal-home .home-overview > button {
+  display: grid; grid-template-columns: minmax(0, 1fr) 20px; gap: 4px 8px; align-content: center; min-width: 0; min-height: 80px;
+  padding: 16px; border: 0; border-radius: 16px; background: var(--ws-surface); color: var(--ws-text); font: inherit; text-align: start; cursor: pointer;
+}
+body .app-provider .personal-home .home-overview > button:not(:disabled):hover { background: var(--ws-muted-surface); }
+body .app-provider .personal-home .home-overview > button:disabled { cursor: default; }
+body .app-provider .personal-home .home-overview > button > strong { grid-column: 1; font-size: 28px; line-height: 32px; font-variant-numeric: tabular-nums; }
+body .app-provider .personal-home .home-overview > button > span { grid-column: 1; font-size: 12px; line-height: 18px; }
+body .app-provider .personal-home .home-overview > button > svg { grid-column: 2; grid-row: 1 / 3; align-self: center; width: 20px; height: 20px; color: var(--ws-muted); }
+body .app-provider .personal-home .home-panel { gap: 12px; padding: 16px; border-radius: 16px; }
+body .app-provider .personal-home .home-panel-heading { gap: 12px; }
+body .app-provider .personal-home .home-panel-heading h3 { font-size: 16px; line-height: 24px; font-weight: 600; }
+body .app-provider .personal-home .home-panel-heading p { margin: 4px 0 0; line-height: 18px; }
+body .app-provider .personal-home .home-panel-icon { width: 20px; height: 20px; background: transparent; color: var(--ws-muted); border-radius: 0; }
+body .app-provider .personal-home .home-panel-icon svg { width: 20px; height: 20px; }
+body .app-provider .personal-home .home-row { min-height: 56px; padding: 8px 12px; gap: 12px; border-radius: 12px; }
+body .app-provider .personal-home .home-row-copy :is(strong, small) { line-height: 18px; }
+body .app-provider .personal-home .home-workload { gap: 8px; padding-top: 0; }
+body .app-provider .personal-home .home-workload > div { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 6px; padding: 8px; border: 0; border-radius: 8px; background: var(--ws-muted-surface); }
+body .app-provider .personal-home .home-workload strong { font-size: 18px; line-height: 24px; }
+body .app-provider .personal-home .home-workload span { line-height: 18px; }
+body .app-provider .personal-home .home-time { max-width: 88px; gap: 4px; }
+body .app-provider .personal-home .home-resource-count { padding: 8px 12px; border-radius: 8px; background: var(--ws-muted-surface); }
+body .app-provider .personal-home .home-reactions li { background: var(--ws-muted-surface); }
+
+body .app-provider .calendar-view.workspace-queue:not(.task-calendar-embedded) { gap: 12px; }
+body .app-provider .calendar-view.workspace-queue .calendar-filters { padding: 4px 12px; border-radius: 12px; }
+body .app-provider .calendar-view.workspace-queue .calendar-filter-heading { gap: 12px; }
+body .app-provider .calendar-view.workspace-queue .calendar-filter-toggle { min-height: 36px; }
+body .app-provider .calendar-view.workspace-queue .calendar-filter-fields { gap: 12px; }
+body .app-provider .calendar-view.workspace-queue .calendar-filter-field { gap: 4px; }
+body .app-provider .calendar-view.workspace-queue .calendar-view-bar { gap: 8px 12px; padding: 12px 16px; border-radius: 16px 16px 0 0; border: 0; }
+body .app-provider .calendar-view.workspace-queue .calendar-view-bar h2 { font-weight: 600; letter-spacing: 0; }
+body .app-provider .calendar-view.workspace-queue .calendar-view-controls { gap: 8px; }
+body .app-provider .calendar-view.workspace-queue .calendar-view-switch { gap: 4px; }
+body .app-provider .calendar-view.workspace-queue .calendar-view-switch > button { min-height: 36px; padding: 8px 12px; border-radius: 8px; }
+body .app-provider .calendar-view.workspace-queue .calendar-board { padding: 8px; border-radius: 0 0 16px 16px; }
+body .app-provider .calendar-view.workspace-queue .calendar-day { padding: 8px; border-radius: 12px; }
+body .app-provider .calendar-view.workspace-queue .calendar-side { padding: 16px; border-radius: 16px; }
+body .app-provider .calendar-view.workspace-queue .calendar-side:has(> .calendar-detail) { padding: 0; }
+body .app-provider .calendar-view.workspace-queue .calendar-day-summary { gap: 8px; min-height: 48px; margin: 12px 0; }
+body .app-provider .calendar-view.workspace-queue .calendar-agenda-card { gap: 8px; padding: 12px; border-radius: 12px; }
+body .app-provider .calendar-view.workspace-queue .calendar-list-view { padding: 16px; border-radius: 0 0 16px 16px; }
+
+body .app-provider .project-hub-view.workspace-queue { display: flex; flex-direction: column; gap: 12px; height: 100%; padding: 0; overflow-y: auto; }
+body .app-provider .project-hub-view.workspace-queue > * { flex-shrink: 0; }
+body .app-provider .project-hub-view.workspace-queue .project-hub-header { margin: 0; }
+body .app-provider .project-hub-view.workspace-queue .project-hub-header-side { display: flex; align-items: center; gap: 12px; }
+body .app-provider .project-hub-view.workspace-queue .project-hub-hero-summary { display: flex; flex-direction: row; align-items: center; gap: 8px; padding: 0; border: 0; background: transparent; box-shadow: none; }
+body .app-provider .project-hub-view.workspace-queue .project-hub-hero-summary strong { font-size: 24px; line-height: 28px; }
+body .app-provider .project-hub-view.workspace-queue .project-hub-hero-summary span { max-width: 100px; font-size: 12px; line-height: 18px; }
+body .app-provider .project-hub-view.is-projects.workspace-queue .project-hub-layout { flex: 1; grid-template-columns: 280px minmax(0, 1fr); gap: 12px; min-height: 320px; overflow: hidden; }
+body .app-provider .project-hub-view.workspace-queue .project-hub-index { display: flex; flex-direction: column; align-self: stretch; padding: 16px; min-height: 0; border-radius: 16px; }
+body .app-provider .project-hub-view.workspace-queue .project-hub-index-body { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+body .app-provider .project-hub-view.workspace-queue .project-hub-index-toggle { display: none; }
+body .app-provider .project-hub-view.workspace-queue .project-hub-index-top { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 0 0 12px; }
+body .app-provider .project-hub-view.workspace-queue .project-hub-index-top > div { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; }
+body .app-provider .project-hub-view.workspace-queue .project-hub-index-top .workspace-select { width: 100%; }
+body .app-provider .project-hub-view.workspace-queue .project-hub-import-action { flex: none; min-height: 36px; margin-bottom: 12px; }
+body .app-provider .project-hub-view.workspace-queue .project-hub-index-list { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: thin; }
+body .app-provider .project-hub-view.workspace-queue .project-hub-project { padding: 12px; gap: 8px; border-radius: 12px; }
+body .app-provider .project-hub-view.workspace-queue .project-hub-project.selected { background: var(--ws-selected); }
+body .app-provider .project-hub-view.workspace-queue .project-hub-canvas { padding: 16px; min-height: 0; overflow-y: auto; border-radius: 16px; scrollbar-width: thin; }
+body .app-provider .project-hub-view.workspace-queue .project-hub-title { gap: 12px; }
+body .app-provider .project-hub-view.workspace-queue .project-hub-title h2 { font-size: 24px; line-height: 32px; font-weight: 600; }
+body .app-provider .project-hub-view.workspace-queue .project-hub-title-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+body .app-provider .project-hub-view.workspace-queue .project-hub-tools-toggle { display: none; }
+body .app-provider .project-hub-view.workspace-queue .project-hub-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 16px 0 12px; }
+body .app-provider .project-hub-view.workspace-queue .project-hub-metrics > div { gap: 4px; padding: 12px; }
+body .app-provider .project-hub-view.workspace-queue .project-hub-metrics > div:not(.attention) { background: var(--ws-muted-surface); }
+body .app-provider .project-hub-view.workspace-queue .project-hub-metrics strong { overflow-wrap: normal; }
+body .app-provider .project-hub-view.workspace-queue .project-hub-context { gap: 8px 16px; padding: 12px 0; }
+body .app-provider .project-hub-view.workspace-queue .project-hub-section-head { gap: 12px; margin-bottom: 12px; }
+body .app-provider .project-hub-view.workspace-queue .project-hub-section-head h3 { font-size: 18px; font-weight: 600; }
+body .app-provider .project-hub-view.workspace-queue .project-hub-section-head .view-kicker { display: none; }
+body .app-provider .project-hub-view.workspace-queue .project-hub-work { margin-top: 12px; padding-top: 12px; border: 0; }
+body .app-provider .project-hub-view.workspace-queue .project-hub-workstream-grid { gap: 12px; }
+body .app-provider .project-hub-view.workspace-queue .project-hub-workstream-card { gap: 8px; padding: 12px; border-radius: 12px; background: var(--ws-muted-surface); }
+body .app-provider .project-hub-view.workspace-queue .project-hub-workstream-card strong { font-size: 16px; font-weight: 600; line-height: 24px; }
+body .app-provider .project-hub-view.workspace-queue .project-hub-workstream-card .view-kicker { text-transform: none; letter-spacing: 0; }
+@container workspace (max-width: 1000px) {
+  body .app-provider .project-hub-view.workspace-queue .project-hub-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 1023px), (max-width: 1366px) and (any-pointer: coarse) {
+  body .app-provider .personal-home.workspace-queue { gap: 8px; }
+  body .app-provider .personal-home.workspace-queue .home-hero { min-height: 0; }
+  body .app-provider .personal-home :is(.home-ready-content, .home-grid, .home-overview) { gap: 8px; }
+  body .app-provider .personal-home .home-panel { padding: 12px; }
+  body .app-provider .calendar-view.workspace-queue:not(.task-calendar-embedded) { gap: 8px; }
+  body .app-provider .project-hub-view.workspace-queue { gap: 8px; }
+  body .app-provider .project-hub-view.workspace-queue :is(.project-hub-index, .project-hub-canvas) { padding: 12px; }
+}
+@media (max-width: 700px) {
+  body .app-provider .personal-home .home-overview > button { min-height: 84px; padding: 12px; }
+  body .app-provider .personal-home .home-overview > button > svg { display: none; }
+  body .app-provider .personal-home .home-overview > button { grid-template-columns: minmax(0, 1fr); }
+  body .app-provider .calendar-view.workspace-queue .calendar-view-controls { width: 100%; }
+  body .app-provider .calendar-view.workspace-queue .calendar-view-bar { padding: 12px; }
+  body .app-provider .calendar-view.workspace-queue .calendar-day { padding: 4px; }
+  body .app-provider .project-hub-view.is-projects.workspace-queue .project-hub-layout { flex: none; grid-template-columns: minmax(0, 1fr); overflow: visible; }
+  body .app-provider .project-hub-view.workspace-queue .project-hub-index-list { max-height: 220px; }
+  body .app-provider .project-hub-view.workspace-queue .project-hub-index-toggle { display: flex; min-height: 44px; justify-content: start; }
+  body .app-provider .project-hub-view.workspace-queue .project-hub-index-body[data-open="false"] { display: none; }
+  body .app-provider .project-hub-view.workspace-queue .project-hub-index-body[data-open="true"] { padding-top: 12px; }
+  body .app-provider .project-hub-view.workspace-queue .project-hub-header-side { flex-wrap: wrap; }
+  body .app-provider .project-hub-view.workspace-queue .project-hub-hero-summary { display: none; }
+  body .app-provider .project-hub-view.workspace-queue .project-hub-tools-toggle { display: flex; min-height: 44px; margin-top: 12px; }
+  body .app-provider .project-hub-view.workspace-queue .project-hub-title-actions[data-open="false"] { display: none; }
+  body .app-provider .project-hub-view.workspace-queue .project-hub-metrics { gap: 8px; }
+  body .app-provider .project-hub-view.workspace-queue .project-hub-metrics strong { font-size: 16px; }
+  body .app-provider .project-hub-view.workspace-queue .project-hub-workstream-grid { grid-template-columns: minmax(0, 1fr); }
+}
