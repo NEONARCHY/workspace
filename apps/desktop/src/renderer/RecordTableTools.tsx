@@ -62,11 +62,11 @@ export function RecordTablePager({ total, paging, label }: {
           <MenuList>{[10, 25, 50].map(value => <MenuItem key={value} aria-current={paging.size === value ? "true" : undefined} onClick={() => paging.setSize(value)}>{value}</MenuItem>)}</MenuList>
         </MenuPopover>
       </Menu></span>
-      {paging.pages > 1 ? <>
+      {paging.pages > 1 ? <div className="record-page-controls">
         <button type="button" className="record-page-nav" aria-label={`Предыдущая страница: ${label}`} disabled={paging.page === 0} onClick={() => paging.setPage(paging.page - 1)}><ChevronLeft20Regular /></button>
         <span className="record-page-position" aria-label={`Страница ${paging.page + 1} из ${paging.pages}`}>Страница {paging.page + 1} из {paging.pages}</span>
         <button type="button" className="record-page-nav" aria-label={`Следующая страница: ${label}`} disabled={paging.page === paging.pages - 1} onClick={() => paging.setPage(paging.page + 1)}><ChevronRight20Regular /></button>
-      </> : null}
+      </div> : null}
     </div>
   </footer>;
 }

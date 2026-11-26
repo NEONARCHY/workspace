@@ -7,11 +7,14 @@ const phase = process.argv.includes("--before") ? "before" : "after";
 const galleryOnly = process.argv.includes("--gallery-only");
 const attentionSuite = process.argv.includes("--attention");
 const peopleSuite = process.argv.includes("--people");
+const operationsSuite = process.argv.includes("--operations");
 const origin = process.env.UI_QA_ORIGIN || "http://127.0.0.1:5186";
 assert(["127.0.0.1", "localhost"].includes(new URL(origin).hostname));
-const iteration = peopleSuite ? "3" : attentionSuite ? "2" : "1";
+const iteration = operationsSuite ? "4" : peopleSuite ? "3" : attentionSuite ? "2" : "1";
 const output = path.resolve(process.env.UI_QA_OUTPUT || `tmp/ui-consistency-iteration-${iteration}`);
-const sections = peopleSuite
+const sections = operationsSuite
+  ? [{ id: "hr", label: "HR", root: ".hr-view" }, { id: "members", label: "Работа с членами", root: ".members-view" }, { id: "zoom", label: "Zoom-конференции", root: ".zoom-view" }]
+  : peopleSuite
   ? [{ id: "employees", label: "Сотрудники", root: ".employees-view" }, { id: "leaves", label: "Отпуска", root: ".leave-view" }, { id: "absences", label: "Отсутствия", root: ".absences-view" }]
   : attentionSuite
   ? [{ id: "overview", label: "Обзор команды", root: ".team-dashboard" }, { id: "notifications", label: "Уведомления", root: ".notifications-view" }, { id: "feed", label: "Лента", root: ".feed-view" }]
@@ -58,12 +61,19 @@ function fixtures(demo) {
   const leaves = Array.from({ length: 12 }, (_, i) => ({ id: `leave-${i}`, requesterUserId: i % 2 ? user.id : people[i % people.length].id, applicationText: "Менга йиллик меҳнат таътили беришингизни сўрайман.", requestedStartsOn: "2026-12-04", requestedEndsOn: "2026-12-17", startsOn: null, endsOn: null, workYearStartsOn: null, workYearEndsOn: null, calendarDays: null, paidDays: null, tenureAdditionalDays: null, organizationEmploymentDate: null, returnOn: null, accountingOfficer: null, orderEmployeeName: null, orderJobTitle: null, orderSignerName: null, orderClause1: null, orderClause2: null, orderClause3: null, status: i % 3 === 2 ? "approved" : "pending_hr", statusLabel: i % 3 === 2 ? "Утверждено" : "Проверка кадров", orderNumber: null, orderYear: null, signedByUserId: null, approvedAt: null, canRevise: i % 2 === 1, canReviewHr: false, canReviewDeputy: false, canWithdraw: false, hasOrder: false, actions: [], createdAt: "2026-11-26T07:00:00Z", updatedAt: "2026-11-26T07:00:00Z" }));
   const absenceRequests = Array.from({ length: 8 }, (_, i) => ({ id: `absence-${i}`, requesterUserId: i % 2 ? user.id : people.find(p => p.id !== user.id).id, directManagerUserId: i % 2 ? people.find(p => p.id !== user.id).id : user.id, kind: ["personal_time", "late_arrival", "sick_leave", "business_event"][i % 4], reason: ["Посещение государственного учреждения", "Задержка транспорта по пути на работу", "Амбулаторное лечение по назначению врача", "Участие в региональном рабочем совещании"][i % 4], startsAt: "2026-11-26T07:00:00Z", endsAt: "2026-11-26T10:00:00Z", status: "pending", statusLabel: "Ждёт решения", documentStatus: "not_required", canEdit: false, allowedActions: [], actions: [], createdAt: "2026-11-26T06:00:00Z", updatedAt: "2026-11-26T06:00:00Z" }));
   const presenceSummary = people.map(person => ({ userId: person.id, status: "working" }));
-  return { user, people, tasks, requests, tripRequests, workflow, feedPosts, notifications, employees, departments, leaves, absenceRequests, presenceSummary };
+  const hr = { calculatedAt: "2026-11-26", settings: { hrUserId: user.id, chairUserId: people[0].id, accountantUserId: people[1].id }, registers: [],
+    profiles: Array.from({ length: 40 }, (_, i) => ({ id: `hr-${i}`, userId: i < people.length ? people[i].id : null, fullName: `${people[i % people.length].name} ${i + 1}`, jobTitle: "Координатор региональных программ", employmentDate: "2023-04-12", serviceAnchorDate: "2026-11-26", serviceYears: 3 + i % 8, serviceMonths: i % 12, serviceDays: i % 28, allowancePercent: i % 3 ? 10 : 0, employmentStatus: i % 10 === 9 ? "terminated" : "active", terminatedOn: i % 10 === 9 ? "2026-11-01" : null, hiddenAfterYear: false, updatedAt: "2026-11-26T07:00:00Z" })) };
+  const regions = ["Ташкент", "Самарканд", "Бухара", "Андижан"].map((nameRu, i) => ({ id: i + 1, nameRu, nameUz: nameRu }));
+  const members = { configured: true, generatedAt: "2026-11-26T07:00:00Z", regions, spheres: [{ id: 1, nameRu: "Образование", nameUz: "Ta’lim" }, { id: 2, nameRu: "Предпринимательство", nameUz: "Tadbirkorlik" }],
+    members: Array.from({ length: 64 }, (_, i) => ({ id: i + 1, username: `member.${i + 1}`, firstName: people[i % people.length].name, lastName: String(i + 1), status: "active", createdAt: "2026-11-20T09:00:00Z", regionId: i % 4 + 1, regionNameRu: regions[i % 4].nameRu, sphereId: i % 2 + 1, sphereNameRu: i % 2 ? "Предпринимательство" : "Образование", gender: i % 2 ? "male" : "female" })) };
+  const zoom = { configured: true, timezone: "Asia/Tashkent", reminderMinutes: 30, bookingHorizonDays: 90, slotMinutes: 15,
+    meetings: Array.from({ length: 10 }, (_, i) => ({ id: `zoom-${i}`, topic: ["Региональное рабочее совещание", "Обсуждение плана совместной программы", "Подведение итогов проекта"][i % 3], description: "Материалы и текущие задачи региональной команды.", startsAt: i < 6 ? `2026-12-0${i + 1}T09:00:00Z` : "2026-11-20T09:00:00Z", endsAt: i < 6 ? `2026-12-0${i + 1}T10:00:00Z` : "2026-11-20T10:00:00Z", durationMinutes: 60, status: "scheduled", source: "workspace", organizerUserId: user.id, organizerName: user.name, participantIds: [user.id], canEdit: true, canCancel: true })) };
+  return { user, people, tasks, requests, tripRequests, workflow, feedPosts, notifications, employees, departments, leaves, absenceRequests, presenceSummary, hr, members, zoom };
 }
 async function measure(page, selector) {
   return page.locator(selector).evaluate(root => {
     const rect = node => { const r = node?.getBoundingClientRect(); return r ? { x: r.x, y: r.y, width: r.width, height: r.height, bottom: r.bottom, right: r.right } : null; };
-    const hero = root.querySelector(".ws-section-header"), toolbar = root.querySelector(".ws2-process-toolbar, .task-filters, .notification-head-actions, .record-list-controls, .leave-filters, .absence-summary"), search = root.querySelector(".workspace-search, .employee-search");
+    const hero = root.querySelector(".ws-section-header"), toolbar = root.querySelector(".ws2-process-toolbar, .task-filters, .notification-head-actions, .record-list-controls, .leave-filters, .absence-summary, .hr-tabs, .zoom-buckets, .members-search-row"), search = root.querySelector(".workspace-search, .employee-search");
     return { hero: rect(hero), toolbar: rect(toolbar), search: rect(search), root: rect(root),
       pageOverflow: document.documentElement.scrollWidth - innerWidth,
       filters: rect(root.querySelector(".workspace-queue-filters")),
@@ -78,7 +88,7 @@ async function measure(page, selector) {
   const browser = await chromium.launch({ channel: "msedge", headless: true });
   const results = [], errors = [];
   try {
-    for (const [width, height, theme] of galleryOnly ? [] : [[1440, 960, "dark"], [1440, 960, "light"], [1024, 768, "dark"], [390, 844, "dark"], ...(phase === "after" && peopleSuite ? [[320, 800, "dark"]] : [])]) {
+    for (const [width, height, theme] of galleryOnly ? [] : [[1440, 960, "dark"], [1440, 960, "light"], [1024, 768, "dark"], [390, 844, "dark"], ...(phase === "after" && (peopleSuite || operationsSuite) ? [[320, 800, "dark"]] : [])]) {
       const context = await browser.newContext({ viewport: { width, height }, reducedMotion: "reduce" });
       const page = await context.newPage(); page.setDefaultTimeout(15000);
       page.on("pageerror", error => errors.push(error.message));
@@ -95,6 +105,11 @@ async function measure(page, selector) {
         if (!["GET", "HEAD"].includes(request.method())) return route.fulfill({ status: 403, json: { detail: "Synthetic QA: no writes" } });
         if (endpoint === "/workspace/bootstrap") return send({ currentUser: data.user, people: data.people, tasks: data.tasks, requests: data.requests, tripRequests: data.tripRequests, workflow: data.workflow, projectWorkflow: null, tripWorkflow: null, requestWorkflows: {}, projects: [], chats: [], messages: [], departments: [], positions: [], attachments: [], feedPosts: attentionSuite ? data.feedPosts : [], calendarEvents: [], notifications: attentionSuite ? data.notifications : [], absenceRequests: peopleSuite ? data.absenceRequests : [], presenceSummary: peopleSuite ? data.presenceSummary : [], canCreatePaymentRequests: true, notificationPreferences: { desktopEnabled: false, soundEnabled: false, messagesEnabled: true, tasksEnabled: true, approvalsEnabled: true, calendarEnabled: true, tripsEnabled: true, remindersEnabled: true } });
         if (endpoint === "/efficiency") return send({ period: "2026-11", timezone: "Asia/Tashkent", methodologyVersion: "EFF-1", trackingStartedAt: "2026-09-01T00:00:00Z", currentUserId: data.user.id, employees: [] });
+        if (endpoint === "/hr") return send(data.hr);
+        if (endpoint === "/members") return send(data.members);
+        if (endpoint === "/personnel-dossiers/context") return send({ canManageAccess: false, canViewPhotoRoster: false });
+        if (endpoint === "/zoom-meetings") return send(data.zoom);
+        if (endpoint === "/zoom-meetings/availability") return send({ configured: true, timezone: "Asia/Tashkent", slotMinutes: 15, hostCalendarSynced: true, intervals: [] });
         if (endpoint === "/workday/team") return send({ asOf: "2026-11-26T07:00:00Z", members: [], workingCount: 0 });
         if (endpoint === "/grants") return send([]);
         if (endpoint === "/ai-referent/signature-inbox") return send({ items: [], totalCount: 0, offset: 0 });
@@ -146,6 +161,77 @@ async function measure(page, selector) {
         await page.screenshot({ path: path.join(output, phase, file) });
         const geometry = await measure(page, section.root);
         results.push({ section: section.id, width, height, theme, ...geometry });
+        if (phase === "after") {
+          const framed = await page.locator(section.root).evaluate(root => [...root.querySelectorAll(".ws-section-header, .record-table-frame, .team-dash-metric, .team-dash-panel, .notification-metrics > button, .notification-progress-card, .feed-card, .feed-context-card, .leave-list-area, .leave-detail, .leave-list-item, .absence-summary > button, .absence-column, .absence-card, .hr-summary > div, .members-summary > div, .members-regional-ranking, .zoom-split, .zoom-row, .zoom-side")].filter(node => {
+            const style = getComputedStyle(node);
+            return [style.borderTopWidth, style.borderRightWidth, style.borderBottomWidth, style.borderLeftWidth].some(value => parseFloat(value) > 0)
+              || style.boxShadow.includes("inset") || style.backgroundImage.includes("conic-gradient");
+          }).map(node => node.className));
+          assert.deepEqual(framed, [], `${file}: decorative surface frames`);
+        }
+        if (phase === "after") {
+          const next = page.getByRole("button", { name: /^Следующая страница:/ }).first();
+          if (await next.count() && await next.isEnabled()) {
+            await next.click();
+            await page.getByRole("button", { name: /^Предыдущая страница:/ }).first().click();
+          }
+        }
+        if (phase === "after" && operationsSuite) {
+          assert(geometry.pageOverflow <= 1, `${file}: page overflow`);
+          assert(Math.abs(geometry.toolbar.x - geometry.hero.x) <= 1 && geometry.toolbar.right <= geometry.hero.right + 1, `${file}: toolbar edges`);
+          const clipped = await page.locator(`${section.root} .ws-section-header`).evaluate(header => {
+            const r = header.getBoundingClientRect();
+            return [...header.children].filter(node => !node.classList.contains("ws-section-header-art")).some(node => {
+              const c = node.getBoundingClientRect();
+              return c.width > 0 && c.height > 0 && (c.top < r.top - 1 || c.bottom > r.bottom + 1 || c.right > r.right + 1);
+            });
+          });
+          assert(!clipped, `${file}: clipped header`);
+          if (section.id === "hr") {
+            const rows = page.locator(".hr-table tbody tr:not(.ws-skeleton-row)");
+            assert.equal(await rows.count(), 25, `${file}: bounded HR page`);
+            await page.getByRole("button", { name: "Следующая страница: кадровые карточки", exact: true }).click();
+            assert.equal(await rows.count(), 15, `${file}: remaining HR records`);
+            const search = page.getByRole("textbox", { name: "Поиск кадровой карточки", exact: true });
+            await search.fill("несуществующий-qa-результат"); await page.waitForFunction(() => !document.querySelector(".hr-table tbody tr"));
+            await search.fill(""); await search.blur(); await page.waitForFunction(() => document.querySelectorAll(".hr-table tbody tr").length === 25);
+            await page.getByRole("button", { name: "Кадровая карточка", exact: true }).click();
+            await page.getByPlaceholder("Фамилия Имя Отчество", { exact: true }).fill("Черновик кадровой карточки");
+            await page.getByRole("button", { name: "Отмена", exact: true }).click();
+          }
+          if (section.id === "members") {
+            const rows = page.locator(".member-row");
+            assert.equal(await rows.count(), 25, `${file}: bounded member page`);
+            const search = page.getByRole("textbox", { name: "Поиск членов", exact: true });
+            await search.fill("несуществующий-qa-результат"); await page.waitForFunction(() => !document.querySelector(".member-row"));
+            await search.fill(""); await search.blur(); await page.waitForFunction(() => document.querySelectorAll(".member-row").length === 25);
+            if (width <= 700) await page.getByRole("button", { name: "Фильтры реестра", exact: true }).click();
+            const region = page.getByRole("combobox", { name: "Фильтр по региону", exact: true });
+            await region.click(); await page.getByRole("option", { name: "Ташкент", exact: true }).click();
+            assert.equal(await rows.count(), 16, `${file}: member region filter`);
+            await region.click(); await page.getByRole("option", { name: "Все регионы", exact: true }).click();
+            if (width <= 700) {
+              await page.getByRole("button", { name: "Фильтры реестра", exact: true }).click();
+              await page.getByRole("button", { name: "Сортировка: члены организации", exact: true }).click();
+              assert.equal(await page.getByRole("menuitem").count(), 6, `${file}: member sorting retained`);
+              await page.getByRole("menuitem", { name: "Член", exact: true }).click();
+            }
+            await page.locator(".member-row .record-open").first().click(); await page.locator(".member-inspector").waitFor();
+            await page.getByRole("button", { name: "Закрыть карточку", exact: true }).click();
+          }
+          if (section.id === "zoom") {
+            const rows = page.locator(".zoom-row"); assert.equal(await rows.count(), 6, `${file}: upcoming meetings`);
+            await page.getByRole("button", { name: "Прошедшие", exact: true }).click(); assert.equal(await rows.count(), 4, `${file}: past meetings`);
+            await page.getByRole("button", { name: "Ближайшие", exact: true }).click();
+            // The organizer name is a separate profile link inside the row.
+            await page.locator(".zoom-row-body > strong").first().click(); await page.locator(".zoom-detail").waitFor();
+            await page.getByRole("button", { name: "Новая конференция", exact: true }).click();
+            const title = page.getByRole("textbox", { name: "Название", exact: true }); await title.fill("Черновик конференции");
+            assert.equal(await rows.count(), 6, `${file}: schedule retained during entry`);
+            await page.getByRole("button", { name: "Закрыть форму", exact: true }).click();
+          }
+          assert((await measure(page, section.root)).pageOverflow <= 1, `${file}: interaction overflow`);
+        }
         if (phase === "after" && peopleSuite) {
           assert(geometry.pageOverflow <= 1, `${file}: page overflow`);
           assert(Math.abs(geometry.toolbar.x - geometry.hero.x) <= 1 && geometry.toolbar.right <= geometry.hero.right + 1, `${file}: toolbar edges`);
@@ -206,6 +292,10 @@ async function measure(page, selector) {
           }
           if (section.id === "absences") {
             assert.equal(await page.locator(".absence-summary > button").count(), 7, `${file}: all presence statuses retained`);
+            const fills = await page.locator(".absence-summary > button").evaluateAll(nodes => nodes.map(node => {
+              const style = getComputedStyle(node); return style.backgroundImage + style.backgroundColor;
+            }));
+            assert.equal(new Set(fills).size, 7, `${file}: semantic presence colors retained`);
             assert.equal(await page.locator(".absence-card").count(), 8, `${file}: populated absence queues`);
             // Exercise real scrollbar widths rather than mocked offset/client sizes.
             for (const scrollbar of [14, 8]) {
@@ -226,7 +316,7 @@ async function measure(page, selector) {
             await page.getByRole("button", { name: "Отмена", exact: true }).click();
           }
         }
-        if (phase === "after" && !attentionSuite && !peopleSuite) {
+        if (phase === "after" && !attentionSuite && !peopleSuite && !operationsSuite) {
           assert(geometry.pageOverflow <= 1, `${file}: page overflow`);
           assert(Math.abs(geometry.search.height - geometry.filters.height) <= 1, `${file}: search/filter height`);
           for (const [name, rect] of Object.entries({ toolbar: geometry.toolbar, filters: geometry.filters })) {

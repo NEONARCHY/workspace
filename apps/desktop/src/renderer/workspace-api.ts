@@ -662,8 +662,8 @@ export function loadHisobotUnitReports(token: string, startDate: string, endDate
   return apiRequest<readonly HisobotUnitReport[]>(`/hisobot/unit-reports?${params}`, {}, token);
 }
 
-export function loadHrOverview(token: string): Promise<HrOverview> {
-  return apiRequest<HrOverview>("/hr", {}, token);
+export function loadHrOverview(token: string, signal?: AbortSignal): Promise<HrOverview> {
+  return apiRequest<HrOverview>("/hr", { signal }, token);
 }
 
 export const loadDossierContext = (token: string) => apiRequest<DossierContext>("/personnel-dossiers/context", {}, token);
@@ -794,8 +794,8 @@ export function loadZoomMeetings(token: string): Promise<ZoomMeetingsRegistry> {
 }
 
 /** `day` is a local calendar date (YYYY-MM-DD) in the organization timezone. */
-export function loadZoomAvailability(token: string, day: string): Promise<ZoomAvailability> {
-  return apiRequest<ZoomAvailability>(`/zoom-meetings/availability?day=${encodeURIComponent(day)}`, {}, token);
+export function loadZoomAvailability(token: string, day: string, signal?: AbortSignal): Promise<ZoomAvailability> {
+  return apiRequest<ZoomAvailability>(`/zoom-meetings/availability?day=${encodeURIComponent(day)}`, { signal }, token);
 }
 
 export function createZoomMeeting(token: string, payload: ZoomMeetingInput): Promise<ZoomMeeting> {

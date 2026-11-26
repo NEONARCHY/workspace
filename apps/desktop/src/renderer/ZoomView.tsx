@@ -4,7 +4,7 @@ import { LoadingSkeleton, SkeletonBlock } from "./LoadingSkeleton";
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
 import { workspacePlatform } from "./platform-adapter";
 import { validatedZoomLink } from "../shared/zoom-link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type {
   WorkspaceDepartment,
@@ -245,6 +245,56 @@ function BusyStrip({ availability, day, timeZone }: {
   );
 }
 
+const ZoomSchedule = memo(function ZoomSchedule({ visible, selectedId, bucket, initialLoading, timeZone, onSelect }: {
+  visible: readonly ZoomMeeting[]; selectedId?: string; bucket: "upcoming" | "past";
+  initialLoading: boolean; timeZone: string; onSelect: (id: string) => void;
+}) {
+  return (
+        <section className="zoom-list" aria-label="Расписание конференций">
+
+          {initialLoading ? <LoadingSkeleton layout="custom" label="Загружаем расписание конференций"><ul className="zoom-rows">
+            {Array.from({ length: 5 }, (_, index) => <li key={index}><div className="zoom-row">
+              <span className="zoom-row-time ws-skeleton-copy"><SkeletonBlock width="55px" /><SkeletonBlock width="75px" height="12px" /></span>
+              <span className="zoom-row-body ws-skeleton-copy"><SkeletonBlock width="70%" /><SkeletonBlock width="50%" height="12px" /></span>
+              <SkeletonBlock width="75px" height="24px" />
+            </div></li>)}
+          </ul></LoadingSkeleton> : visible.length === 0 ? (
+            <p className="zoom-empty">
+              {bucket === "upcoming"
+                ? "Запланированных конференций нет. Создайте первую."
+                : "Прошедших конференций пока нет."}
+            </p>
+          ) : (
+            <ul className="zoom-rows">
+              {visible.map((meeting) => (
+                <li key={meeting.id}>
+                  <button
+                    type="button"
+                    className={`zoom-row${meeting.id === selectedId ? " selected" : ""}`}
+                    aria-pressed={meeting.id === selectedId}
+                    onClick={() => onSelect(meeting.id)}
+                  >
+                    <span className="zoom-row-time">
+                      <b>{timeText(meeting.startsAt, timeZone)}</b>
+                      <small>{dayText(meeting.startsAt, timeZone)}</small>
+                    </span>
+                    <span className="zoom-row-body">
+                      <strong>{meeting.topic}</strong>
+                      <small><EmployeeProfileLink
+                        userId={meeting.organizerUserId ?? undefined}
+                        personName={employeeDisplayName(meeting.organizerName)}
+                      >{employeeDisplayName(meeting.organizerName)}</EmployeeProfileLink> · {meeting.durationMinutes} мин</small>
+                    </span>
+                    <span className={`zoom-status ${meeting.status}`}>{statusLabels[meeting.status]}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+  );
+});
+
 export function ZoomView({
   token, people, departments, currentUserId, registry, loading, error, onRefresh, focusMeetingId,
 }: ZoomViewProps) {
@@ -266,25 +316,23 @@ export function ZoomView({
 
   useEffect(() => {
     if (!draft?.date || registry?.configured !== true) return undefined;
-    let cancelled = false;
-    void loadZoomAvailability(token, draft.date)
-      .then((result) => { if (!cancelled) setAvailability(result); })
+    const controller = new AbortController();
+    void loadZoomAvailability(token, draft.date, controller.signal)
+      .then((result) => { if (!controller.signal.aborted) setAvailability(result); })
       // A missing strip must not block booking; the server checks the slot anyway.
-      .catch(() => { if (!cancelled) setAvailability(undefined); });
-    return () => { cancelled = true; };
+      .catch(() => { if (!controller.signal.aborted) setAvailability(undefined); });
+    return () => controller.abort();
   }, [draft?.date, registry?.configured, token]);
 
-  const meetings = useMemo(() => registry?.meetings ?? [], [registry]);
-  const visible = useMemo(() => meetings
-    .filter((meeting) => meeting.status !== "failed")
-    .filter((meeting) => (bucket === "upcoming"
-      ? new Date(meeting.endsAt).getTime() >= openedAt && meeting.status !== "cancelled"
-      : new Date(meeting.endsAt).getTime() < openedAt || meeting.status === "cancelled"))
-    .sort((left, right) => (bucket === "upcoming"
-      ? new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime()
-      : new Date(right.startsAt).getTime() - new Date(left.startsAt).getTime())),
-  [bucket, meetings, openedAt]);
-  const selected = meetings.find((meeting) => meeting.id === selectedId);
+  const meetings = useMemo(() => registry?.meetings ?? [], [registry?.meetings]);
+  const chronology = useMemo(() => meetings.filter(meeting => meeting.status !== "failed")
+    .map(meeting => ({ meeting, starts: Date.parse(meeting.startsAt), ends: Date.parse(meeting.endsAt) })), [meetings]);
+  const visible = useMemo(() => chronology.filter(({ meeting, ends }) => bucket === "upcoming"
+    ? ends >= openedAt && meeting.status !== "cancelled" : ends < openedAt || meeting.status === "cancelled")
+    .sort((left, right) => bucket === "upcoming" ? left.starts - right.starts : right.starts - left.starts)
+    .map(item => item.meeting), [bucket, chronology, openedAt]);
+  const selected = useMemo(() => meetings.find(meeting => meeting.id === selectedId), [meetings, selectedId]);
+  const chooseMeeting = useCallback((id: string) => { setSelectedId(id); setDraft(undefined); setNotice(""); }, []);
 
   const connect = () => {
     const url = validatedZoomLink(selected?.joinUrl);
@@ -367,7 +415,7 @@ export function ZoomView({
 
   if (registry && !registry.configured) {
     return (
-      <section className="workspace-view zoom-view" aria-label="Zoom-конференции">
+      <section className="workspace-view workspace-queue zoom-view" aria-label="Zoom-конференции">
         <WorkspaceSectionHeader motif="zoom" className="zoom-header"><div><h1>Zoom-конференции</h1><p>Встречи и видеосвязь команды</p></div></WorkspaceSectionHeader>
         <div className="zoom-placeholder zoom-unconfigured">
           <Video24Regular aria-hidden="true" />
@@ -382,13 +430,12 @@ export function ZoomView({
   }
 
   return (
-    <section className="workspace-view zoom-view" aria-label="Zoom-конференции">
+    <section className="workspace-view workspace-queue zoom-view" aria-label="Zoom-конференции">
       <WorkspaceSectionHeader motif="zoom" className="zoom-header">
         <div>
           <h1>Zoom-конференции</h1>
           <p>
-            Общий корпоративный хост: одновременно идёт только одна конференция.
-            Напоминание придёт за {registry?.reminderMinutes ?? 30} минут до начала.
+            Одна конференция одновременно. Напомним за {registry?.reminderMinutes ?? 30} минут.
           </p>
         </div>
         <div className="zoom-header-actions">
@@ -417,8 +464,6 @@ export function ZoomView({
       ) : null}
       {notice ? <p className="zoom-notice" role="status">{notice}</p> : null}
 
-      <div className="zoom-split">
-        <section className="zoom-list" aria-label="Расписание конференций">
           <SlidingSegmented className="view-switch zoom-buckets" role="group" aria-label="Период">
             <button
               type="button"
@@ -437,46 +482,8 @@ export function ZoomView({
               Прошедшие
             </button>
           </SlidingSegmented>
-          {loading && !registry ? <LoadingSkeleton layout="custom" label="Загружаем расписание конференций"><ul className="zoom-rows">
-            {Array.from({ length: 5 }, (_, index) => <li key={index}><div className="zoom-row">
-              <span className="zoom-row-time ws-skeleton-copy"><SkeletonBlock width="55px" /><SkeletonBlock width="75px" height="12px" /></span>
-              <span className="zoom-row-body ws-skeleton-copy"><SkeletonBlock width="70%" /><SkeletonBlock width="50%" height="12px" /></span>
-              <SkeletonBlock width="75px" height="24px" />
-            </div></li>)}
-          </ul></LoadingSkeleton> : visible.length === 0 ? (
-            <p className="zoom-empty">
-              {bucket === "upcoming"
-                ? "Запланированных конференций нет. Создайте первую."
-                : "Прошедших конференций пока нет."}
-            </p>
-          ) : (
-            <ul className="zoom-rows">
-              {visible.map((meeting) => (
-                <li key={meeting.id}>
-                  <button
-                    type="button"
-                    className={`zoom-row${meeting.id === selectedId ? " selected" : ""}`}
-                    aria-pressed={meeting.id === selectedId}
-                    onClick={() => { setSelectedId(meeting.id); setDraft(undefined); setNotice(""); }}
-                  >
-                    <span className="zoom-row-time">
-                      <b>{timeText(meeting.startsAt, timeZone)}</b>
-                      <small>{dayText(meeting.startsAt, timeZone)}</small>
-                    </span>
-                    <span className="zoom-row-body">
-                      <strong>{meeting.topic}</strong>
-                      <small><EmployeeProfileLink
-                        userId={meeting.organizerUserId ?? undefined}
-                        personName={employeeDisplayName(meeting.organizerName)}
-                      >{employeeDisplayName(meeting.organizerName)}</EmployeeProfileLink> · {meeting.durationMinutes} мин</small>
-                    </span>
-                    <span className={`zoom-status ${meeting.status}`}>{statusLabels[meeting.status]}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+      <div className="zoom-split">
+        <ZoomSchedule visible={visible} selectedId={selectedId} bucket={bucket} initialLoading={loading && !registry} timeZone={timeZone} onSelect={chooseMeeting} />
 
         <aside className="zoom-side" ref={sideRef} tabIndex={-1} aria-label="Конференция">
           {draft ? (

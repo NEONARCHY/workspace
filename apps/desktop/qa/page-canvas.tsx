@@ -93,6 +93,7 @@ import "../src/renderer/mobile-density.css";
 import "../src/renderer/personal-home.css";
 import "../src/renderer/page-scroll-layout.css";
 import "../src/renderer/workspace-queue.css";
+import "../src/renderer/workspace-surfaces.css";
 import "./page-canvas.css";
 
 const nothing = async () => undefined;

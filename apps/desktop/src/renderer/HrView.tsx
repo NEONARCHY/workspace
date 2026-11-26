@@ -3,7 +3,8 @@ import { WorkspaceNotice } from "./WorkspaceNotice";
 import type { DossierContext } from "@yuksalish/contracts";
 import { DossiersWorkspace } from "./DossiersWorkspace";
 import { loadDossierContext } from "./workspace-api";
-import { SkeletonBlock, SkeletonTableRows } from "./LoadingSkeleton";
+import { SkeletonBlock } from "./LoadingSkeleton";
+import { HrStaffTable } from "./HrStaffTable";
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useModalFocus } from "./useModalFocus";
@@ -12,7 +13,6 @@ import { Badge, Button, Portal, Tab, TabList } from "@fluentui/react-components"
 import { Input } from "./WorkspaceInput";
 import { Add20Regular, ArrowClockwise20Regular, Checkmark20Regular, Dismiss20Regular, DocumentArrowDown20Regular, DocumentArrowUp20Regular, PersonEdit20Regular } from "@fluentui/react-icons";
 import { actHrRegister, createHrProfile, generateHrRegister, importHrProfiles, loadHrOverview, previewHrWorkbook, saveHrProfile, saveHrSettings, terminateHrProfile } from "./workspace-api";
-import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { PersonPicker } from "./PersonPicker";
 import { HrHiringView } from "./HrHiringView";
 import { employeeDisplayName } from "./employee-display-name";
@@ -20,7 +20,6 @@ import { employeeDisplayName } from "./employee-display-name";
 type TabKey = "staff" | "tenure" | "registers" | "hiring" | "dossiers" | "photos";
 const today = () => new Date().toISOString().slice(0, 10);
 const month = () => new Date().toISOString().slice(0, 7);
-const tenure = (item: Pick<HrProfile, "serviceYears" | "serviceMonths" | "serviceDays">) => `${item.serviceYears} г. ${item.serviceMonths} мес. ${item.serviceDays} дн.`;
 const calculationDate = (value?: string) => value ? russianDateTimeFormatter({ dateStyle: "long" }).format(new Date(`${value}T00:00:00`)) : "…";
 const statusLabel: Record<string, string> = { draft: "Черновик HR", pending_chair: "На подписи председателя", approved: "Передан бухгалтеру", returned: "Возвращён HR", closed: "Закрыт" };
 
@@ -52,16 +51,45 @@ export function HrView({ token, people, departments, currentUser }: Props) {
   const [workbookPreview, setWorkbookPreview] = useState<HrWorkbookPreview>();
   const workbookInput = useRef<HTMLInputElement>(null);
   const [years, setYears] = useState("0"); const [months, setMonths] = useState("0"); const [days, setDays] = useState("0"); const [reason, setReason] = useState("");
-  const load = useCallback(async () => { setBusy(true); setError(undefined); try { setData(await loadHrOverview(token)); } catch (value) { setError(value instanceof Error ? value.message : "Не удалось загрузить HR"); } finally { setBusy(false); } }, [token]);
-  useEffect(() => { queueMicrotask(() => { void load(); }); }, [load]);
+  const active = useRef(false);
+  const pendingLoad = useRef<AbortController | undefined>(undefined);
+  const load = useCallback(async () => {
+    if (!active.current) return;
+    pendingLoad.current?.abort();
+    const controller = new AbortController(); pendingLoad.current = controller;
+    setBusy(true); setError(undefined);
+    try { const next = await loadHrOverview(token, controller.signal); if (!controller.signal.aborted) setData(next); }
+    catch (value) { if (!controller.signal.aborted) setError(value instanceof Error ? value.message : "Не удалось загрузить HR"); }
+    finally { if (!controller.signal.aborted) setBusy(false); }
+  }, [token]);
+  useEffect(() => {
+    let cancelled = false; active.current = true;
+    queueMicrotask(() => { if (!cancelled) void load(); });
+    return () => { cancelled = true; active.current = false; pendingLoad.current?.abort(); };
+  }, [load]);
   const isConfigured = Boolean(data?.settings.hrUserId); const isHr = ["admin", "superadmin"].includes(currentUser.role) || data?.settings.hrUserId === currentUser.id;
   const isChair = ["admin", "superadmin"].includes(currentUser.role) || data?.settings.chairUserId === currentUser.id;
   const isAccountant = ["admin", "superadmin"].includes(currentUser.role) || data?.settings.accountantUserId === currentUser.id;
-  const profiles = useMemo(() => (data?.profiles ?? [])
-    .filter((item) => `${item.fullName} ${item.jobTitle ?? ""}`.toLocaleLowerCase("ru").includes(query.toLocaleLowerCase("ru")))
-    .map((item) => ({ ...item, fullName: employeeDisplayName(item.fullName) })), [data, query]);
-  const profilePeople = people.filter((person) => (!person.status || person.status === "active")
-    && !data?.profiles.some((profile) => profile.userId === person.id && profile.employmentStatus === "terminated"));
+  const profileIndex = useMemo(() => (data?.profiles ?? []).map(item => ({
+    profile: { ...item, fullName: employeeDisplayName(item.fullName) },
+    text: `${item.fullName} ${item.jobTitle ?? ""}`.toLocaleLowerCase("ru"),
+  })), [data?.profiles]);
+  const search = query.toLocaleLowerCase("ru");
+  const profiles = useMemo(() => profileIndex.filter(item => item.text.includes(search)).map(item => item.profile), [profileIndex, search]);
+  const profilePeople = useMemo(() => {
+    const terminated = new Set(data?.profiles.filter(profile => profile.employmentStatus === "terminated").map(profile => profile.userId));
+    return people.filter(person => (!person.status || person.status === "active") && !terminated.has(person.id));
+  }, [people, data?.profiles]);
+  const summary = useMemo(() => (data?.profiles ?? []).reduce((counts, profile) => ({
+    active: counts.active + Number(profile.employmentStatus === "active"),
+    allowance: counts.allowance + Number(profile.allowancePercent > 0),
+    terminated: counts.terminated + Number(profile.employmentStatus === "terminated"),
+  }), { active: 0, allowance: 0, terminated: 0 }), [data?.profiles]);
+  const terminate = useCallback((profile: HrProfile) => {
+    const terminationReason = window.prompt("Основание увольнения (не менее 3 символов):");
+    if (terminationReason && terminationReason.length >= 3) void terminateHrProfile(token, profile.id, { terminatedOn: today(), terminationReason })
+      .then(load).catch((value: unknown) => setError(value instanceof Error ? value.message : "Ошибка"));
+  }, [token, load]);
   const selectProfileUser = (userId: string) => {
     const person = profilePeople.find((item) => item.id === userId);
     const profile = data?.profiles.find((item) => item.userId === userId);
@@ -89,10 +117,10 @@ export function HrView({ token, people, departments, currentUser }: Props) {
   const previewImport = async (file: File) => { setBusy(true); setError(undefined); try { setWorkbookPreview(await previewHrWorkbook(token, file)); } catch (value) { setError(value instanceof Error ? value.message : "Не удалось прочитать файл Excel"); } finally { setBusy(false); } };
   const confirmImport = async () => { if (!workbookPreview) return; setBusy(true); try { const result = await importHrProfiles(token, { sourceLabel: workbookPreview.sourceLabel, rows: workbookPreview.rows }); setWorkbookPreview(undefined); setError(`Импорт завершён: создано ${result.created}, уже было в списке ${result.alreadyImported}.`); await load(); } catch (value) { setError(value instanceof Error ? value.message : "Не удалось импортировать карточки"); setBusy(false); } };
   const action = async (register: HrRegister, type: "submit" | "approve" | "return" | "account") => { const comment = type === "return" ? window.prompt("Причина возврата обязательна:") ?? undefined : undefined; if (type === "return" && !comment) return; setBusy(true); try { await actHrRegister(token, register.id, type, comment); await load(); } catch (value) { setError(value instanceof Error ? value.message : "Не удалось изменить реестр"); setBusy(false); } };
-  return <section className="workspace-view hr-view" aria-label="HR — кадровое пространство">
+  return <section className="workspace-view workspace-queue hr-view" aria-label="HR — кадровое пространство">
     <WorkspaceSectionHeader motif="hr" className="section-toolbar hr-toolbar">
       <div><span className="hr-kicker">ЛЮДИ И КАДРОВЫЕ ПРОЦЕССЫ</span><h1>HR · Кадровое пространство</h1>
-        <p>Сотрудники, приём на работу, стаж и согласования — в одном рабочем пространстве.</p></div>
+        <p>Сотрудники, стаж, приём на работу и согласования.</p></div>
       <div className="toolbar-actions"><Button icon={<ArrowClockwise20Regular />} disabled={busy} onClick={() => void load()}>Обновить</Button></div>
     </WorkspaceSectionHeader>
     <div className={`hr-command-bar${personnelTab ? " dossier-hidden" : ""}`}><span>Расчёт стажа на <strong>{calculationDate(data?.calculatedAt)}</strong></span>
@@ -109,7 +137,7 @@ export function HrView({ token, people, departments, currentUser }: Props) {
     {dossierContextError ? <WorkspaceNotice tone="warning" actions={<Button onClick={() => setDossierRetry((n) => n + 1)}>Повторить проверку прав</Button>}>Не удалось проверить доступ к фотокарточкам.</WorkspaceNotice> : null}
     {personnelTab ? <DossiersWorkspace key={`${currentUser.id}:${tab}`} token={token} people={people} departments={departments} context={dossierContext} mode={tab === "photos" ? "photos" : "dossiers"} /> : null}
     {hiringOpened ? <div hidden={tab !== "hiring"}><HrHiringView key={currentUser.id} token={token} /></div> : null}
-    {tab === "hiring" || personnelTab ? null : tab !== "registers" ? <><div className="hr-summary"><div><strong>{data?.profiles.filter((item) => item.employmentStatus === "active").length ?? <SkeletonBlock width="48px" height="28px" />}</strong><span>активных карточек</span></div><div><strong>{data?.profiles.filter((item) => item.allowancePercent > 0).length ?? <SkeletonBlock width="48px" height="28px" />}</strong><span>с надбавкой</span></div><div><strong>{data?.profiles.filter((item) => item.employmentStatus === "terminated").length ?? <SkeletonBlock width="48px" height="28px" />}</strong><span>уволенных в истории</span></div></div><div className="hr-controls"><Input value={query} onChange={(_, value) => setQuery(value.value)} placeholder="Поиск по сотруднику или должности" aria-label="Поиск кадровой карточки" /></div><div className="hr-table-wrap"><table className="hr-table"><thead><tr><th>Сотрудник</th><th>Должность</th><th>Дата приёма</th><th>Стаж</th><th>Надбавка</th><th>Статус</th><th /></tr></thead>{!data && !error ? <SkeletonTableRows columns={7} rows={7} label="Загружаем HR…" /> : <tbody>{profiles.map((item) => <tr key={item.id}><td><EmployeeProfileLink userId={item.userId ?? undefined} personName={item.fullName}><strong>{item.fullName}</strong></EmployeeProfileLink></td><td>{item.jobTitle ?? "—"}</td><td>{item.employmentDate}</td><td>{tenure(item)}</td><td><Badge color={item.allowancePercent ? "success" : "subtle"}>{item.allowancePercent}%</Badge></td><td>{item.employmentStatus === "active" ? "Активен" : `Уволен ${item.terminatedOn}`}</td><td>{isHr && item.employmentStatus === "active" ? <Button appearance="subtle" onClick={() => { const terminationReason = window.prompt("Основание увольнения (не менее 3 символов):"); if (terminationReason && terminationReason.length >= 3) void terminateHrProfile(token, item.id, { terminatedOn: today(), terminationReason }).then(load).catch((value: unknown) => setError(value instanceof Error ? value.message : "Ошибка")); }}>Уволить</Button> : null}</td></tr>)}</tbody>}</table>{data && !profiles.length ? <p className="hr-empty">Пока нет кадровых карточек. HR добавляет сотрудника и подтверждённый стаж на контрольную дату.</p> : null}</div></> : <section className="hr-registers"><div className="hr-register-actions">{isHr ? <Button appearance="primary" disabled={busy} onClick={() => void generateHrRegister(token, month()).then(load).catch((value: unknown) => setError(value instanceof Error ? value.message : "Ошибка"))}>Создать реестр за {month()}</Button> : null}<span>Черновик создаётся один раз для периода и фиксирует стаж на последний день месяца.</span></div>{data?.registers.map((register) => <article key={register.id} className="hr-register-card"><header><div><h2>{register.period} · версия {register.version}</h2><p>{register.items.length} сотрудников · {statusLabel[register.status] ?? register.status}</p></div><Badge appearance="tint" color={register.status === "closed" ? "success" : register.status === "returned" ? "danger" : "brand"}>{statusLabel[register.status] ?? register.status}</Badge></header>{register.returnComment ? <p className="hr-return">Возврат: {register.returnComment}</p> : null}<div className="hr-register-footer"><Button icon={<DocumentArrowDown20Regular />} onClick={() => exportCsv(register)}>CSV для бухгалтерии</Button>{isHr && ["draft", "returned"].includes(register.status) ? <Button appearance="primary" icon={<Checkmark20Regular />} onClick={() => void action(register, "submit")}>Отправить председателю</Button> : null}{isChair && register.status === "pending_chair" ? <><Button appearance="primary" onClick={() => void action(register, "approve")}>Подписать</Button><Button onClick={() => void action(register, "return")}>Вернуть HR</Button></> : null}{isAccountant && register.status === "approved" ? <Button appearance="primary" onClick={() => void action(register, "account")}>Подтвердить расчёт</Button> : null}</div></article>)}</section>}
+    {tab === "hiring" || personnelTab ? null : tab !== "registers" ? <><div className="hr-summary"><div><strong>{(data ? summary.active : undefined) ?? <SkeletonBlock width="48px" height="28px" />}</strong><span>активных карточек</span></div><div><strong>{(data ? summary.allowance : undefined) ?? <SkeletonBlock width="48px" height="28px" />}</strong><span>с надбавкой</span></div><div><strong>{(data ? summary.terminated : undefined) ?? <SkeletonBlock width="48px" height="28px" />}</strong><span>уволенных в истории</span></div></div><div className="hr-controls"><Input value={query} onChange={(_, value) => setQuery(value.value)} placeholder="Поиск по сотруднику или должности" aria-label="Поиск кадровой карточки" /></div><HrStaffTable profiles={profiles} filterKey={query} loading={!data && !error} loaded={Boolean(data)} canEdit={isHr} onTerminate={terminate} /></> : <section className="hr-registers"><div className="hr-register-actions">{isHr ? <Button appearance="primary" disabled={busy} onClick={() => void generateHrRegister(token, month()).then(load).catch((value: unknown) => setError(value instanceof Error ? value.message : "Ошибка"))}>Создать реестр за {month()}</Button> : null}<span>Черновик создаётся один раз для периода и фиксирует стаж на последний день месяца.</span></div>{data?.registers.map((register) => <article key={register.id} className="hr-register-card"><header><div><h2>{register.period} · версия {register.version}</h2><p>{register.items.length} сотрудников · {statusLabel[register.status] ?? register.status}</p></div><Badge appearance="tint" color={register.status === "closed" ? "success" : register.status === "returned" ? "danger" : "brand"}>{statusLabel[register.status] ?? register.status}</Badge></header>{register.returnComment ? <p className="hr-return">Возврат: {register.returnComment}</p> : null}<div className="hr-register-footer"><Button icon={<DocumentArrowDown20Regular />} onClick={() => exportCsv(register)}>CSV для бухгалтерии</Button>{isHr && ["draft", "returned"].includes(register.status) ? <Button appearance="primary" icon={<Checkmark20Regular />} onClick={() => void action(register, "submit")}>Отправить председателю</Button> : null}{isChair && register.status === "pending_chair" ? <><Button appearance="primary" onClick={() => void action(register, "approve")}>Подписать</Button><Button onClick={() => void action(register, "return")}>Вернуть HR</Button></> : null}{isAccountant && register.status === "approved" ? <Button appearance="primary" onClick={() => void action(register, "account")}>Подтвердить расчёт</Button> : null}</div></article>)}</section>}
     {editorOpen ? <HrEditor label="Кадровая карточка" busy={busy} error={error} onClose={() => setEditorOpen(false)}>
       <div><span className="hr-kicker">КАДРОВЫЕ ДАННЫЕ</span><h2>Кадровая карточка</h2>
         <p>Выберите сотрудника Workspace, чтобы дата приёма учитывалась в отпусках. Его существующая карточка откроется для изменения. Без выбора создаётся отдельная карточка, не связанная с аккаунтом.</p></div>

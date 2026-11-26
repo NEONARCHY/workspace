@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { FluentProvider } from "@fluentui/react-components";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -7,6 +7,15 @@ import { workspaceTheme } from "./workspace-theme";
 
 describe("MembersView", () => {
   afterEach(cleanup);
+  it("keeps all six member sort fields available through the compact menu", () => {
+    render(<FluentProvider theme={workspaceTheme}><MembersView loading={false} onRefresh={vi.fn()} registry={{
+      configured: true, generatedAt: "2026-11-26T07:00:00Z", regions: [], spheres: [], members: [],
+    }} /></FluentProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Сортировка: члены организации" }));
+    expect(screen.getAllByRole("menuitem")).toHaveLength(6);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Член" }));
+    expect(screen.getByRole("columnheader", { name: /Член/ })).toHaveAttribute("aria-sort", "ascending");
+  });
   it("keeps the real ranking, filters and six-column table mounted while records load", () => {
     const view = render(<FluentProvider theme={workspaceTheme}><MembersView loading onRefresh={vi.fn()} /></FluentProvider>);
     const table = screen.getByRole("table", { name: "Члены организации" });
