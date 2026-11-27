@@ -8,6 +8,7 @@ const galleryOnly = process.argv.includes("--gallery-only");
 const chatPaginationSuite = process.argv.includes('--chat-pagination');
 const sidebarSuite = process.argv.includes('--sidebar');
 const referentSurfacesSuite = process.argv.includes('--referent-surfaces');
+const referentInitialSuite = process.argv.includes('--referent-initial');
 const taskSpacingSuite = process.argv.includes('--task-spacing');
 const calendarSurfacesSuite = process.argv.includes('--calendar-surfaces') || taskSpacingSuite;
 const surfaceFollowupSuite = process.argv.includes('--surface-followup');
@@ -22,7 +23,7 @@ const attentionSuite = process.argv.includes("--attention") || shellReviewSuite 
 const peopleSuite = process.argv.includes("--people");
 const operationsSuite = process.argv.includes("--operations");
 const documentsSuite = process.argv.includes("--documents");
-const communicationsSuite = process.argv.includes("--communications") || shellReviewSuite || toolbarSuite || chatPaginationSuite || sidebarSuite || referentSurfacesSuite || pinSuite;
+const communicationsSuite = process.argv.includes("--communications") || shellReviewSuite || toolbarSuite || chatPaginationSuite || sidebarSuite || referentSurfacesSuite || pinSuite || referentInitialSuite;
 const registrySuite = process.argv.includes("--registry") || toolbarSuite || surfaceFollowupSuite || mobileQueuesSuite || personalSuite;
 const workdaySuite = process.argv.includes("--workday");
 const promptSuite = process.argv.includes("--hisobot-prompt");
@@ -53,6 +54,7 @@ if (toolbarSuite) sections.splice(0, sections.length, { id: 'referent', label: '
 if (chatPaginationSuite) sections.splice(0, sections.length, { id: 'messenger', label: 'Мессенджер', root: '.messenger-view' });
 if (sidebarSuite) sections.splice(0, sections.length, { id: 'messenger', label: 'Мессенджер', root: '.messenger-view' });
 if (referentSurfacesSuite) sections.splice(0, sections.length, { id: 'referent', label: 'AI Referent · исходящие письма', root: '.ai-referent-view', navLabel: 'AI Referent' });
+if (referentInitialSuite) sections.splice(0, sections.length, { id: 'referent', label: 'AI Referent', root: '.ai-referent-view' });
 if (calendarSurfacesSuite) sections.splice(0, sections.length, { id: 'tasks', label: 'Задачи', root: '.tasks-view' }, { id: 'calendar', label: 'Календарь', root: '.calendar-view' });
 if (taskSpacingSuite) sections.splice(1);
 if (surfaceFollowupSuite) sections.splice(0, sections.length, { id: 'overview', label: 'Обзор команды', root: '.team-dashboard' }, { id: 'calendar', label: 'Календарь', root: '.calendar-view' }, { id: 'grants', label: 'Гранты', root: '.grants-view' });
@@ -152,12 +154,21 @@ async function measure(page, selector) {
 }
 (async () => {
   await fs.mkdir(path.join(output, phase), { recursive: true });
+  const beforeModule = path.resolve('apps/desktop/src/renderer/AIReferentView.initial-before.tsx');
+  if (referentInitialSuite && phase === 'before') await fs.writeFile(beforeModule, require('node:child_process').execFileSync('git', ['show', '039acd2901209fbd3940f79f1d95baf5358370b5:apps/desktop/src/renderer/AIReferentView.tsx']));
   const browser = await chromium.launch({ channel: "msedge", headless: true });
   const results = [], errors = [];
   try {
     for (const [width, height, theme] of galleryOnly ? [] : (mobileQueuesSuite ? [[1440, 960, "dark"], [1440, 960, "light"], [320, 800, "dark"], [360, 800, "dark"], [390, 844, "dark"], [430, 900, "dark"], [390, 844, "light"], [720, 480, "dark"]] : [[1440, 960, "dark"], [1440, 960, "light"], [1024, 768, "dark"], [390, 844, "dark"], ...((phase === "after" || topbarSuite || reportingSuite || registrySuite || communicationsSuite || calendarSurfacesSuite) && (peopleSuite || operationsSuite || documentsSuite || planningSuite || reportingSuite || registrySuite || communicationsSuite) ? [[320, 800, "dark"]] : []), ...((phase === "after" || topbarSuite || reportingSuite || registrySuite || communicationsSuite || calendarSurfacesSuite) && (documentsSuite || planningSuite || reportingSuite || registrySuite || communicationsSuite) ? [[720, 480, "dark"]] : [])]).filter(([width]) => !onlyWidth || width === onlyWidth)) {
       const context = await browser.newContext({ viewport: { width, height }, reducedMotion: "reduce", hasTouch: mobileQueuesSuite && width <= 430, isMobile: mobileQueuesSuite && width <= 430 });
       const page = await context.newPage(); page.setDefaultTimeout(15000);
+      let releaseVisibility, releaseAuthority;
+      const visibilityGate = referentInitialSuite ? new Promise(resolve => { releaseVisibility = resolve; }) : undefined;
+      const authorityGate = referentInitialSuite ? new Promise(resolve => { releaseAuthority = resolve; }) : undefined;
+      if (referentInitialSuite && phase === 'before') await page.route('**/src/renderer/AIReferentView.tsx*', async route => {
+        const response = await route.fetch({ url: origin + '/src/renderer/AIReferentView.initial-before.tsx' });
+        await route.fulfill({ response });
+      });
       if (sidebarSuite) await page.addInitScript(require('./ui-sidebar-checks.cjs').installProbe);
       if (planningSuite || reportingSuite || registrySuite || communicationsSuite) await page.clock.setFixedTime(new Date(promptSuite ? "2026-11-26T12:39:00Z" : "2026-11-26T09:30:00Z"));
       page.on("pageerror", error => errors.push(error.message));
@@ -195,8 +206,8 @@ async function measure(page, selector) {
         if (!["GET", "HEAD"].includes(request.method())) { if (endpoint.startsWith("/workday/")) workdayWrites++; return route.fulfill({ status: 403, json: { detail: "Synthetic QA: no writes" } }); }
         if (communicationsSuite && endpoint.startsWith('/ai-referent/')) {
           const fixture = data.communication, params = new URL(request.url()).searchParams, q = (params.get('query') || params.get('q') || '').toLocaleLowerCase(), offset = Number(params.get('offset') || 0);
-          if (endpoint.endsWith('/visibility')) return send(fixture.visibility);
-          if (endpoint.endsWith('/authority')) return send(fixture.authority);
+          if (endpoint.endsWith('/visibility')) { if (visibilityGate) await visibilityGate; return send(fixture.visibility); }
+          if (endpoint.endsWith('/authority')) { if (authorityGate) await authorityGate; return send(fixture.authority); }
           if (endpoint.endsWith('/reviewers')) return send(fixture.reviewers);
           if (toolbarSuite && endpoint.endsWith('/archive')) return send({ letters: [], totalCount: 0 });
           if (toolbarSuite && endpoint.endsWith('/journals')) return send({ files: [] });
@@ -259,7 +270,7 @@ async function measure(page, selector) {
         if (endpoint.includes("/directory")) return send({ canTerminateEmployees: true, employees: peopleSuite ? data.employees : data.people, people: data.people, roles: [], positions: [{ id: "qa-position", name: "Координатор региональных программ", isActive: true, sortOrder: 0 }], departments: peopleSuite ? data.departments : [], modules: [], accessRules: [] });
         if ((topbarSuite || reportingSuite) && endpoint === "/assistant/chats") return send([{ id: "qa-assistant-chat", title: "Рабочие вопросы", isDefault: true, isPinned: false, createdAt: "2026-11-26T08:00:00Z", updatedAt: "2026-11-26T08:00:00Z" }]);
         if ((topbarSuite || reportingSuite) && endpoint === "/assistant/messages") return send([]);
-        if (topbarSuite && endpoint.includes("/context/exchange")) return send(data.rates);
+        if ((topbarSuite || referentInitialSuite) && endpoint.includes("/context/exchange")) return send(data.rates);
         if (topbarSuite && endpoint.includes("/weather")) return send(data.weather);
         if (endpoint.includes("/context/exchange")) return send({ rates: [], asOf: "2026-11-26", stale: false });
         if (endpoint.includes("/weather")) return send({ regions: [], places: [], asOf: "2026-11-26", stale: false });
@@ -275,6 +286,7 @@ async function measure(page, selector) {
       releaseIds = await page.evaluate(async () => (await import("/src/renderer/release-history.ts")).bundledReleaseEntries().map(entry => entry.id));
       if (personalSuite) data.personal = require('./ui-personal-fixtures.cjs')(data);
       if (communicationsSuite) { data.communication = require('./ui-communication-fixtures.cjs')(data.people, data.user); data.communication.moduleAccess = await page.evaluate(async () => (await import('/src/renderer/module-catalog.ts')).fallbackModules.map(module => ({ moduleKey: module.key, permissions: { view: true, create: true, edit: true, approve: true, admin: true } }))); }
+      if (referentInitialSuite) data.communication.moduleAccess = data.communication.moduleAccess.map(item => item.moduleKey === 'ai_referent' ? { ...item, permissions: { ...item.permissions, approve: false, admin: false } } : item);
       if (registrySuite) { data.registry = registryFixtures(data.people, data.user); data.registry.moduleAccess = await page.evaluate(async () => (await import('/src/renderer/module-catalog.ts')).fallbackModules.map(module => ({ moduleKey: module.key, permissions: { view: true, create: true, edit: true, approve: true, admin: true } }))); }
       if (mobileQueuesSuite) {
         const titles = ['Ташаббусли бюджет ғолибларини аниқлаш ва тақдирлашнинг ташкилий масалаларини ҳал этиш (Молия вазирлиги билан ҳамкорликда).', 'Подготовить итоговый отчёт региональной программы и согласовать дальнейший план работы', 'Согласовать материалы рабочей встречи'];
@@ -339,7 +351,7 @@ async function measure(page, selector) {
         if (reportingSuite && section.id === "efficiency") { await page.getByRole("button", { name: "Эффективность", exact: true }).click(); await page.locator(".eff-summary .eff-gauge-ring strong").first().waitFor(); }
         if (reportingSuite && section.id === "hisobot") await page.locator("#hisobot-report-text").waitFor();
         if (reportingSuite && section.id === "monthly") await page.locator(".monthly-reports-period").waitFor();
-        if (communicationsSuite && section.id === 'referent') {
+        if (communicationsSuite && section.id === 'referent' && !referentInitialSuite) {
           await page.getByRole('tab', { name: referentSurfacesSuite ? 'Исходящие' : 'Входящие', exact: true }).click();
           await page.locator(referentSurfacesSuite ? '.ai-referent-row' : '.ai-incoming-table tbody tr').first().waitFor();
         }
@@ -367,6 +379,11 @@ async function measure(page, selector) {
         }
         await page.setViewportSize({ width, height });
         await settle(page);
+        if (referentInitialSuite) {
+          const evidence = await require('./ui-referent-initial-checks.cjs')(page, { phase, width, theme, output, releaseVisibility, releaseAuthority });
+          results.push({ section: section.id, width, height, theme, ...evidence });
+          console.log('PASS initial ' + theme + '-' + width); continue;
+        }
         await page.locator("#workspace-content").focus();
         await page.mouse.move(width - 1, 0);
         const file = `${section.id}-${theme}-${width}.png`;
@@ -1025,6 +1042,7 @@ async function measure(page, selector) {
     if (gutterSuite) return;
     if (chatPaginationSuite) return;
     if (pinSuite) return;
+    if (referentInitialSuite) return;
     if (promptSuite) return;
     await fs.writeFile(path.join(output, "index.html"), `<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Yuksalish — сравнение интерфейса</title>
       <style>*{box-sizing:border-box}body{margin:0;padding:24px;background:#111318;color:#eceef4;font:15px/1.5 system-ui}main{max-width:1600px;margin:auto}h1{font-size:28px}p,figcaption{color:#bfc6d3}select{margin:0 0 24px;padding:12px;border-radius:8px;background:#252a33;color:inherit}section{margin:0 0 32px}h2{font-size:20px}article{display:grid;grid-template-columns:1fr 1fr;gap:16px}figure{margin:0;min-width:0}img{display:block;width:100%;height:auto;border-radius:12px}figcaption{margin-bottom:8px}@media(max-width:700px){article{grid-template-columns:1fr}body{padding:12px}}</style>
@@ -1035,5 +1053,5 @@ async function measure(page, selector) {
       ${documentsSuite ? '<section data-section="admin-menu"><h2>Режим администратора в меню аватара</h2><figure><figcaption>После · переключение прав и возврат к правам своей должности</figcaption><a data-state="after" href="after/admin-menu-dark-1440.png"><img loading="lazy" src="after/admin-menu-dark-1440.png" alt="Переключатель прав в меню профиля"></a></figure></section>' : ''}
       ${calendarSurfacesSuite ? `<section><h2>Фильтры и страницы · desktop</h2><article>${['before', 'after'].map(state => `<figure><figcaption>${state === 'after' ? 'После' : 'До'}</figcaption><a href="${state}/task-controls-dark-1440.png"><img src="${state}/task-controls-dark-1440.png" alt="Фильтры и страницы — ${state}"></a></figure>`).join('')}</article></section>` : ''}
       <p>Подход: <a href="https://github.com/heydamir/unslop" style="color:#90d5df">unslop · Damir Sokolovsky · CC BY 4.0</a>. Цвета статусов, права и рабочие процессы сохранены.</p></main><script>const update=()=>document.querySelectorAll('section[data-section]').forEach(section=>section.querySelectorAll('[data-state]').forEach(link=>{const interaction=link.dataset.state==='after'&&section.dataset.section!=='topbar'?(document.querySelector('#interaction')?.value||''):'';const src=link.dataset.state+'/'+section.dataset.section+(interaction?'-'+interaction:'')+'-'+document.querySelector('#size').value+'.png';link.href=src;link.querySelector('img').src=src}));document.querySelector('#size').addEventListener('change',update);document.querySelector('#interaction')?.addEventListener('change',update)</script></html>`);
-  } finally { await browser.close(); }
+  } finally { await browser.close(); if (referentInitialSuite && phase === 'before') await fs.unlink(beforeModule); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

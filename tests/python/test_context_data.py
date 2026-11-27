@@ -71,6 +71,31 @@ async def test_rates_exact_nominal_and_date_and_single_flight() -> None:
 
 
 @pytest.mark.anyio
+async def test_rates_include_real_gbp_row_and_exclude_cny() -> None:
+    request_paths: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        request_paths.append(request.url.path)
+        rows = rates()
+        rows.append({"Ccy": "CNY", "Date": "15.10.2026", "Rate": "99999",
+                     "Nominal": "1", "Diff": "99"})
+        rows[5].update(Rate="15000", Nominal="10", Diff="120")
+        return httpx.Response(200, json=rows)
+
+    service = ContextDataService(httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+                                 clock=lambda: NOW)
+    try:
+        snapshot = await service.exchange_rates()
+        gbp = next(rate for rate in snapshot.rates if rate.code == "GBP")
+        assert request_paths == ["/ru/arkhiv-kursov-valyut/json/all/2026-10-15/"]
+        assert tuple(rate.code for rate in snapshot.rates) == CURRENCIES
+        assert "CNY" not in {rate.code for rate in snapshot.rates}
+        assert gbp.rate_uzs == Decimal("1500") and gbp.change_uzs == Decimal("12")
+    finally:
+        await service.aclose()
+
+
+@pytest.mark.anyio
 @pytest.mark.parametrize("invalid", [[], {"bad": True}, ["invalid-row"],
                                     [{"Ccy": "USD", "Nominal": "0"}]])
 async def test_bad_rates_become_recoverable_unavailable(invalid: object) -> None:

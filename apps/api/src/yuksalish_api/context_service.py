@@ -40,7 +40,7 @@ PLACES = (
     ("fergana", "Ферганская область", "Фергана", 40.38421, 71.78432),
     ("khorezm", "Хорезмская область", "Ургенч", 41.55177, 60.63143),
 )
-CURRENCIES = ("USD", "EUR", "RUB", "KZT", "CHF", "CNY")
+CURRENCIES = ("USD", "EUR", "RUB", "KZT", "CHF", "GBP")
 T = TypeVar("T")
 
 

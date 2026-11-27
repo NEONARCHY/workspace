@@ -7,5 +7,5 @@ export function AIReferentToolbarActions({ target, children }: {
   readonly children: ReactNode;
 }) {
   const actions = <div className="ai-referent-toolbar-actions" role="group" aria-label="Действия реестра">{children}</div>;
-  return target ? createPortal(actions, target) : actions;
+  return target === null ? null : target ? createPortal(actions, target) : actions;
 }

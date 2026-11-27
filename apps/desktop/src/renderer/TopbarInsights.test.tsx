@@ -39,16 +39,20 @@ describe("topbar insights", () => {
     expect(await screen.findByRole("button", { name: /Курсы валют: 1 USD — 12.*000 UZS/ })).toHaveAttribute("aria-expanded", "false");
     expect(await screen.findByRole("button", { name: /Погода в Ташкенте: 13,3 градусов/ })).toBeEnabled();
   });
-  it("converts the selected currency while keeping USD in the bar", async () => {
+  it.each([
+    { code: "EUR", name: /EUR Евро/, converted: /33.*750 UZS/ },
+    { code: "GBP", name: /GBP Фунт стерлингов/, converted: /40.*000 UZS/ },
+  ])("converts $code while keeping USD in the bar", async ({ code, name, converted }) => {
     mount();
     fireEvent.click(await screen.findByRole("button", { name: /Курсы валют: 1 USD — 12.*000 UZS/ }));
     const panel = await screen.findByRole("dialog", { name: "Курсы валют" });
     expect(panel).toHaveStyle({ overflowY: "hidden" });
-    fireEvent.click(within(panel).getByRole("button", { name: /EUR Евро/ }));
-    fireEvent.change(within(panel).getByRole("textbox", { name: "Сумма в EUR" }), { target: { value: "2,5" } });
-    expect(within(panel).getByRole("status")).toHaveTextContent(/33.*750 UZS/);
+    expect(within(panel).queryByRole("button", { name: /CNY|Юань/ })).not.toBeInTheDocument();
+    fireEvent.click(within(panel).getByRole("button", { name }));
+    fireEvent.change(within(panel).getByRole("textbox", { name: `Сумма в ${code}` }), { target: { value: "2,5" } });
+    expect(within(panel).getByRole("status")).toHaveTextContent(converted);
     expect(screen.getByRole("button", { name: /Курсы валют: 1 USD/ })).toBeInTheDocument();
-    fireEvent.change(within(panel).getByRole("textbox", { name: "Сумма в EUR" }), { target: { value: "bad" } });
+    fireEvent.change(within(panel).getByRole("textbox", { name: `Сумма в ${code}` }), { target: { value: "bad" } });
     expect(within(panel).getByRole("textbox")).toHaveAttribute("aria-invalid", "true");
     expect(within(panel).getByRole("status")).toHaveTextContent("Введите сумму");
   });
