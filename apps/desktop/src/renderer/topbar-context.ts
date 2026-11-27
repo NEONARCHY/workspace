@@ -2,7 +2,7 @@ import type { WeatherConditions } from "@yuksalish/contracts";
 
 export const currencyNames: Readonly<Record<string, string>> = {
   USD: "Доллар США", EUR: "Евро", RUB: "Российский рубль", KZT: "Казахстанский тенге",
-  CHF: "Швейцарский франк", CNY: "Китайский юань",
+  CHF: "Швейцарский франк", GBP: "Фунт стерлингов",
 };
 export function contextNumber(value: number | null | undefined, digits = 1): string {
   return value == null || !Number.isFinite(value) ? "—"

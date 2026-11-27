@@ -187,6 +187,25 @@ describe("AIReferentView", () => {
     expect(screen.getByRole("button", { name: "Все", pressed: true })).toBeInTheDocument();
   });
 
+  it("waits for incoming visibility before showing the initial register tabs", async () => {
+    let resolveVisibility!: (value: Awaited<ReturnType<typeof loadAIReferentVisibility>>) => void;
+    let resolveAuthority!: (value: Awaited<ReturnType<typeof loadAIReferentAuthority>>) => void;
+    vi.mocked(loadAIReferentVisibility).mockReturnValue(new Promise(resolve => { resolveVisibility = resolve; }));
+    vi.mocked(loadAIReferentAuthority).mockReturnValue(new Promise(resolve => { resolveAuthority = resolve; }));
+    render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate /></FluentProvider>);
+    expect(screen.queryByRole("tablist", { name: "Реестры корреспонденции" })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Проверяем доступ к входящим")).toBeInTheDocument();
+    expect(loadAIReferentIncomingRegistry).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Новое письмо" })).not.toBeInTheDocument();
+    await act(async () => resolveVisibility({ incomingMode: "all", canViewJournals: true, canManageVisibility: false, revision: 0 }));
+    expect(screen.getByRole("tab", { name: "Входящие", selected: true })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Новое письмо" })).not.toBeInTheDocument();
+    await act(async () => resolveAuthority({ writable: true, mode: "legacy", leaseUntil: null, detail: "" }));
+    expect(screen.getByRole("button", { name: "Новое письмо" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Исходящие" }));
+    expect(screen.getByRole("tab", { name: "Исходящие", selected: true })).toBeInTheDocument();
+  });
+
   it("combines personal scope with search and status and clears stale rows on switch", async () => {
     render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate preferOutgoing /></FluentProvider>);
     await screen.findByRole("button", { name: /Ответ партнёру/ });
@@ -207,7 +226,7 @@ describe("AIReferentView", () => {
     await waitFor(() => expect(screen.getByRole("tab", { name: "Входящие", selected: true })).toBeInTheDocument());
     view.unmount();
     render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate preferOutgoing /></FluentProvider>);
-    fireEvent.click(screen.getByRole("tab", { name: "На подпись" }));
+    fireEvent.click(await screen.findByRole("tab", { name: "На подпись" }));
     await waitFor(() => expect(loadAIReferentRegistry).toHaveBeenLastCalledWith("token", expect.objectContaining({ workflowKind: "sign_only", participation: undefined }), expect.any(AbortSignal)));
     expect(screen.queryByRole("group", { name: "Участие в исходящих письмах" })).not.toBeInTheDocument();
   });
@@ -268,7 +287,7 @@ describe("AIReferentView", () => {
     expect(screen.queryByRole("tab", { name: "Адресная книга" })).not.toBeInTheDocument();
     view.unmount();
     render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate canAdmin /></FluentProvider>);
-    fireEvent.click(screen.getByRole("tab", { name: "Адресная книга" }));
+    fireEvent.click(await screen.findByRole("tab", { name: "Адресная книга" }));
     expect(await screen.findByText("Пока нет добавленных адресов. Справочник робота продолжает работать как прежде.")).toBeInTheDocument();
   });
 
@@ -293,12 +312,17 @@ describe("AIReferentView", () => {
   });
 
   it("does not assume incoming access when the visibility check fails", async () => {
-    vi.mocked(loadAIReferentVisibility).mockRejectedValue(new Error("Не удалось проверить права"));
+    vi.mocked(loadAIReferentVisibility).mockRejectedValueOnce(new Error("Не удалось проверить права"))
+      .mockResolvedValue({ incomingMode: "all", canViewJournals: true, canManageVisibility: false, revision: 0 });
     render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate canAdmin /></FluentProvider>);
     expect(await screen.findByRole("alert")).toHaveTextContent("Не удалось проверить права");
     expect(screen.queryByRole("tab", { name: "Входящие" })).not.toBeInTheDocument();
     expect(loadAIReferentIncomingRegistry).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "Повторить проверку доступа" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Исходящие", selected: true })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Повторить проверку доступа" }));
+    expect(await screen.findByRole("tab", { name: "Входящие" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Исходящие", selected: true })).toBeInTheDocument();
   });
 
   it("searches the shared address book and fills the selected destination", async () => {
@@ -658,7 +682,7 @@ describe("AIReferentView", () => {
       { key: "askar", userId: "askar", username: "askar", fullName: "Аскар", telegramId: null, enabled: true, canApprove: true, suggestedUsername: "askar", label: "Аскар", accountActive: true },
     ] });
     render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate /></FluentProvider>);
-    fireEvent.click(screen.getByRole("tab", { name: "Исходящие" }));
+    fireEvent.click(await screen.findByRole("tab", { name: "Исходящие" }));
     await waitFor(() => expect(loadAIReferentReviewers).toHaveBeenCalled());
     await openComposer();
     const reviewer = screen.getByRole("combobox", { name: "Согласующий" });

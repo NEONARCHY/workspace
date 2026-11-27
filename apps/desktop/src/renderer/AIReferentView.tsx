@@ -229,6 +229,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, pre
       }, reason => {
           setVisibility(undefined);
           setVisibilityError(reason instanceof Error ? reason.message : "Не удалось проверить видимость писем.");
+          setRegisterKind(current => current === "incoming" ? "outgoing" : current);
       }, 15000);
   }, [token, visibilityAttempt]);
   const [reviewerConfig, setReviewerConfig] = useState<AIReferentConfiguration>();
@@ -632,7 +633,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, pre
         {authorityError ? `Режим только для просмотра: ${authorityError}` : authority?.detail || "Проверяем связь с роботом. Пока изменения недоступны."}
       </WorkspaceNotice> : null}
 
-      <div className="ai-referent-register-bar">
+      {(registerKind !== "incoming" || visibility || visibilityError) && <div className="ai-referent-register-bar">
         <SlidingSegmented className="ai-referent-register-tabs" role="tablist" aria-label="Реестры корреспонденции">
           {registerOptions.map(option => <button key={option.key} type="button" role="tab" aria-selected={registerKind === option.key}
             className={registerKind === option.key ? "active" : ""} onClick={() => selectRegister(option.key)}>{option.label}</button>)}
@@ -643,7 +644,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, pre
           }}>{registerOptions.map(option => <option key={option.key} value={option.key}>{option.label}</option>)}</select>
         </label>
         <div ref={setRegisterToolbarTarget} className="ai-referent-register-tools" />
-      </div>
+      </div>}
 
       {visibilityError ? <WorkspaceNotice tone="error" className="ai-referent-feedback" role="alert" actions={<><Button onClick={() => setVisibilityAttempt((value) => value + 1)}>Повторить проверку доступа</Button></>}>{visibilityError} </WorkspaceNotice> : null}
       {registerKind === "settings" && canAdmin ? <AIReferentSettings token={token} people={people} readOnly={readOnly} /> :

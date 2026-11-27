@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { airQuality, contextNumber, contextTime, currencyAmount, windDirection } from "./topbar-context";
+import { airQuality, contextNumber, contextTime, currencyAmount, currencyNames, windDirection }
+  from "./topbar-context";
 
 describe("public context presentation", () => {
+  it("names GBP and no longer presents CNY", () => {
+    expect(currencyNames.GBP).toBe("Фунт стерлингов");
+    expect(currencyNames.CNY).toBeUndefined();
+  });
   it("preserves zero and formats missing values distinctly", () => {
     expect(contextNumber(0)).toBe("0");
     expect(contextNumber(null)).toBe("—");

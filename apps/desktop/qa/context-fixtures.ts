@@ -11,7 +11,7 @@ export const contextRates: ExchangeSnapshot = {
     { code: "RUB", rateUzs: "142.33", changeUzs: "-0.06" },
     { code: "KZT", rateUzs: "26.47", changeUzs: "-0.04" },
     { code: "CHF", rateUzs: "14358.09", changeUzs: "46.04" },
-    { code: "CNY", rateUzs: "1787.47", changeUzs: "7.71" },
+    { code: "GBP", rateUzs: "16000", changeUzs: "80" },
   ],
 };
 const places = [
