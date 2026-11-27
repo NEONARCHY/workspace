@@ -2,6 +2,7 @@ import { formatRussianDateTime } from "./date-time-format";
 import { useEffect, useRef, useState } from "react";
 import type { TaskProposal, WorkspacePerson, WorkspaceTask } from "@yuksalish/contracts";
 import { Button, DialogSurface, Textarea, useRestoreFocusTarget } from "@fluentui/react-components";
+import { ClipboardTask20Regular } from "@fluentui/react-icons";
 import { WorkspaceDialog, focusWorkspaceDialog } from "./WorkspaceDialog";
 import { RecordSection } from "./RecordComposer";
 import { WorkspaceNotice } from "./WorkspaceNotice";
@@ -16,7 +17,7 @@ const labels: Record<TaskProposal["status"], string> = {
 const priorityLabels = { low: "Низкий", normal: "Обычный", high: "Высокий", urgent: "Срочный" };
 const dateLabel = (date?: string | null) => date ? formatRussianDateTime(new Date(date)) : "Без срока";
 
-export function TaskProposals({ token, currentUserId, people, tasks, revision, focusId, compact = false, onRefresh, onOpenTask, dialogOnly = false, onDialogClose }: {
+export function TaskProposals({ token, currentUserId, people, tasks, revision, focusId, compact = false, iconOnly = false, onRefresh, onOpenTask, dialogOnly = false, onDialogClose }: {
   readonly dialogOnly?: boolean;
   readonly onDialogClose?: () => void;
   readonly token: string;
@@ -26,6 +27,7 @@ export function TaskProposals({ token, currentUserId, people, tasks, revision, f
   readonly revision: number;
   readonly focusId?: string;
   readonly compact?: boolean;
+  readonly iconOnly?: boolean;
   readonly onRefresh?: () => Promise<void>;
   readonly onOpenTask: (id: string) => void;
 }) {
@@ -92,7 +94,7 @@ export function TaskProposals({ token, currentUserId, people, tasks, revision, f
   const listError = error ? <WorkspaceNotice tone="error" role="alert" actions={<Button onClick={() => setRetry((value) => value + 1)}>Обновить заявки</Button>}>{error}</WorkspaceNotice> : null;
   return <>
 {!dialogOnly && <>
-    {compact ? <Button {...launcherFocusTarget} onClick={() => setListOpen(true)} aria-haspopup="dialog">Запросы</Button> :
+    {compact ? <Button {...launcherFocusTarget} className="task-proposals-trigger" icon={iconOnly ? <ClipboardTask20Regular /> : undefined} title="Запросы на постановку задач" aria-label="Запросы" onClick={() => setListOpen(true)} aria-haspopup="dialog">{iconOnly ? null : "Запросы"}</Button> :
       <section className="record-section task-proposals" aria-label="Заявки на постановку задач">
         <details open={Boolean(focusId && proposals.some((item) => item.id === focusId))}>
           <summary>Заявки на постановку · {pending.length} ожидают подтверждения</summary>

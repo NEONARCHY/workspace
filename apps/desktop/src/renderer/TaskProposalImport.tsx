@@ -15,6 +15,7 @@ import { importAssignee, importTitleKey, importRowProblems, importTaskPayload, i
 import "./task-proposal-import.css";
 
 type Props = { readonly token: string; readonly people: readonly WorkspacePerson[];
+  readonly compact?: boolean;
   readonly tasks: readonly WorkspaceTask[]; readonly onSubmitted?: () => void;
   readonly initialAliases?: Readonly<Record<string, string>> };
 const problem = (error: unknown) => error instanceof Error ? error.message : "Не удалось выполнить импорт";
@@ -34,7 +35,7 @@ export function TaskProposalImportLauncher(props: Props) {
   return <>
     {error ? <WorkspaceNotice tone="error" actions={<Button onClick={() => setRetry(value => value + 1)}>Повторить</Button>}>{error}</WorkspaceNotice> : null}
     {context?.configurationError ? <WorkspaceNotice tone="warning">{context.configurationError}</WorkspaceNotice> : null}
-    {context?.canImport ? <Button icon={<ArrowUpload20Regular />} onClick={() => setOpen(true)}>Импорт запросов</Button> : null}
+    {context?.canImport ? <Button className="task-import-trigger" aria-label="Импорт запросов" title="Импорт запросов" icon={<ArrowUpload20Regular />} onClick={() => setOpen(true)}>{props.compact ? null : "Импорт запросов"}</Button> : null}
     {open && context?.canImport ? <TaskProposalImportDialog {...props} context={context} onClose={() => setOpen(false)} /> : null}
   </>;
 }

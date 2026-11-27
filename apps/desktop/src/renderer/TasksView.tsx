@@ -1,6 +1,7 @@
 import { formatRussianDateTime } from "./date-time-format";
 import { TaskPersonAvatar } from "./TaskPersonAvatar";
 import { TaskProposalImportLauncher } from "./TaskProposalImport";
+import { useBrowserCompactLayout } from "./browser-layout";
 import { canChangeTaskDeadline, canManageAnyTask } from "./task-permissions";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { LoadingSkeleton } from "./LoadingSkeleton";
@@ -53,6 +54,7 @@ import {
   Dismiss24Regular,
   Edit24Regular,
   Search20Regular,
+  Filter20Regular,
   Attach24Regular,
 } from "@fluentui/react-icons";
 
@@ -170,6 +172,7 @@ function TaskSectionHeading({ title, help, meta }: {
 const kanbanStatuses = ["new", "in_progress", "awaiting_review", "overdue", "completed"] as const;
 type TaskFilter = "active" | "mine" | "review" | "overdue" | "completed" | "extensions";
 type TaskMode = "list" | "kanban" | "calendar" | "efficiency" | "plans";
+const taskModes = [["list", "Список"], ["kanban", "Kanban"], ["calendar", "Календарь"], ["plans", "Планы"], ["efficiency", "Эффективность"]] as const;
 
 const taskFilterLabels: Readonly<Record<TaskFilter, string>> = {
   active: "Активные",
@@ -266,6 +269,14 @@ export function TasksView(props: TasksViewProps) {
   const [section, setSection] = useState<"tasks" | "letters">("tasks");
   const [lettersVisited, setLettersVisited] = useState(false);
   const [openedLetterTask, setOpenedLetterTask] = useState<string>();
+  const domainTabsRef = useRef<HTMLDivElement>(null);
+  const restoreDomainFocus = useRef(false);
+  useLayoutEffect(() => {
+    if (restoreDomainFocus.current) {
+      domainTabsRef.current?.querySelector<HTMLButtonElement>('[role="tab"][aria-selected="true"]')?.focus();
+      restoreDomainFocus.current = false;
+    }
+  }, [section]);
   const personalLetters = useMemo(() => props.tasks.filter(task => isPersonalIncomingTask(task, props.currentUserId)), [props.tasks, props.currentUserId]);
   const refreshKey = useMemo(() => personalLetters.map(task => JSON.stringify([task.id, task.status, task.dueAt, task.assigneeId,
     task.participants, task.resultText, task.description, task.latestReturn])).join("|")
@@ -273,14 +284,15 @@ export function TasksView(props: TasksViewProps) {
   if (props.dialogOnly || !props.token || props.canViewIncomingLetters === false) {
     return <TaskWorkspaceView {...props} />;
   }
-  return <div className="task-domain-workspace">
-    <TabList className="task-domain-tabs" aria-label="Разделы задач" selectedValue={section}
-      onTabSelect={(_, data) => { setSection(data.value === "letters" ? "letters" : "tasks");
+  const domainNavigation = <TabList ref={domainTabsRef} className="task-domain-tabs" aria-label="Разделы задач" selectedValue={section}
+      onTabSelect={(_, data) => { restoreDomainFocus.current = data.value !== section; setSection(data.value === "letters" ? "letters" : "tasks");
         if (data.value === "letters") setLettersVisited(true); }}>
       <Tab value="tasks">Задачи</Tab>
       <Tab value="letters">Мои письма <span className="task-domain-count">{personalLetters.length}</span></Tab>
-    </TabList>
-    <div className="task-domain-panel" hidden={section !== "tasks"}><TaskWorkspaceView {...props} separateLetterTasks /></div>
+    </TabList>;
+  return <div className="task-domain-workspace">
+    {section === "letters" && <div className="task-domain-letter-navigation">{domainNavigation}</div>}
+    <div className="task-domain-panel" hidden={section !== "tasks"}><TaskWorkspaceView {...props} separateLetterTasks domainNavigation={section === "tasks" ? domainNavigation : undefined} /></div>
     {lettersVisited ? <div className="task-domain-panel" hidden={section !== "letters"}>
       <IncomingDocumentsView token={props.token} people={props.people} departments={props.departments} personal refreshKey={refreshKey}
         onOpenTask={async id => { await props.onRefreshTasks?.(); setOpenedLetterTask(id); }} />
@@ -295,7 +307,7 @@ function isPersonalIncomingTask(task: WorkspaceTask, userId: string): boolean {
     || task.participants.some(person => person.userId === userId)));
 }
 
-function TaskWorkspaceView(props: TasksViewProps) {
+function TaskWorkspaceView(props: TasksViewProps & { readonly domainNavigation?: ReactNode }) {
   const {
     tasks, attachments, people, departments, currentUserId, focusTaskId, onCreateTask, onCreateSubtask, onChangeStatus, onUpdateTask, onDeleteTask,
     onSetParticipant, onRemoveParticipant, onAddChecklistItem, onToggleChecklistItem,
@@ -308,6 +320,9 @@ function TaskWorkspaceView(props: TasksViewProps) {
   const { assistantDraft, dialogOnly = false, onDialogClose } = props;
   const decisionSurface = useRef<HTMLDivElement>(null);
   const [mode, setMode] = useState<TaskMode>("list");
+  const phoneLayout = useBrowserCompactLayout(true, "(max-width: 700px)");
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const mobileFiltersId = useId();
   const [settingsTaskId, setSettingsTaskId] = useState("");
   const settingsId = useId();
   const [proposalRevision, setProposalRevision] = useState(0);
@@ -820,34 +835,44 @@ function TaskWorkspaceView(props: TasksViewProps) {
     }
   };
 
+  const changeMode = (next: TaskMode) => {
+    setMode(next);
+    if (next === "plans") setDetailOpen(false);
+    if (next === "efficiency" && efficiency === undefined && !efficiencyLoading) void onLoadEfficiency();
+  };
   const taskViewSwitch = <SlidingSegmented className="view-switch" role="group" aria-label="Представление задач">
-    <button className={mode === "list" ? "active" : ""} aria-pressed={mode === "list"} onClick={() => setMode("list")} type="button">Список</button>
-    <button className={mode === "kanban" ? "active" : ""} aria-pressed={mode === "kanban"} onClick={() => setMode("kanban")} type="button">Kanban</button>
-    <button className={mode === "calendar" ? "active" : ""} aria-pressed={mode === "calendar"} onClick={() => setMode("calendar")} type="button">Календарь</button>
-    <button className={mode === "plans" ? "active" : ""} aria-pressed={mode === "plans"} onClick={() => { setMode("plans"); setDetailOpen(false); }} type="button">Планы</button>
-    <button className={mode === "efficiency" ? "active" : ""} aria-pressed={mode === "efficiency"} onClick={() => { setMode("efficiency"); if (efficiency === undefined && !efficiencyLoading) void onLoadEfficiency(); }} type="button">Эффективность</button>
+    {taskModes.map(([key, label]) => <button key={key} className={mode === key ? "active" : ""} aria-pressed={mode === key} onClick={() => changeMode(key)} type="button">{label}</button>)}
   </SlidingSegmented>;
-  const newTaskButton = <Button {...newTaskFocusTarget} className="ws-section-header-primary" appearance="primary" icon={<Add24Regular />} onClick={() => { setAssistantTaskFields({}); setCreating(true); }}>Новая задача</Button>;
+  const newTaskButton = <Button {...newTaskFocusTarget} className="ws-section-header-primary" appearance="primary" aria-label="Новая задача" title="Новая задача" icon={<Add24Regular />} onClick={() => { setAssistantTaskFields({}); setCreating(true); }}>{phoneLayout ? null : "Новая задача"}</Button>;
   const [calendarToolbarTarget, setCalendarToolbarTarget] = useState<HTMLDivElement | null>(null);
+  const [mobileSortTarget, setMobileSortTarget] = useState<HTMLDivElement | null>(null);
 
   return (
     <section data-dialog-only={dialogOnly || undefined} className={`workspace-view workspace-queue tasks-view bp5-tasks ${mode === "calendar" ? "calendar-mode" : ""} ${mode === "efficiency" ? "efficiency-mode" : ""} ${detailOpen && selectedTask && mode !== "efficiency" && mode !== "plans" ? "detail-open" : ""}`} aria-label="Задачи">
 {!dialogOnly && <>
       <div className="tasks-main">
-        <WorkspaceSectionHeader motif="tasks" className="section-toolbar">
-          <div><h1>Задачи</h1><p>Карточки, команда, сроки и зависимости</p></div>
+        <WorkspaceSectionHeader motif="tasks" className={`section-toolbar${props.domainNavigation ? " task-header-with-domains" : ""}`}>
+          {phoneLayout && props.domainNavigation}
+          <div className="task-header-copy"><h1>Задачи</h1><p>Карточки, команда, сроки и зависимости</p></div>
           <div className="task-toolbar-actions">
-            <div className="task-calendar-navigation-slot" ref={setCalendarToolbarTarget} />
-            {props.token ? <TaskProposals compact key={focusTaskId ?? "proposals"} token={props.token}
+            {!phoneLayout && props.domainNavigation}
+            {!phoneLayout && <div className="task-calendar-navigation-slot" ref={setCalendarToolbarTarget} />}
+            {props.token ? <TaskProposals compact iconOnly={phoneLayout} key={focusTaskId ?? "proposals"} token={props.token}
               currentUserId={currentUserId} people={people} tasks={tasks} revision={proposalRevision}
               focusId={focusTaskId} onRefresh={props.onRefreshTasks}
               onOpenTask={(id) => { setSelectedId(id); setDetailOpen(true); }}
             /> : null}
-            {props.token ? <TaskProposalImportLauncher token={props.token} people={people} tasks={tasks}
+            {props.token ? <TaskProposalImportLauncher compact={phoneLayout} token={props.token} people={people} tasks={tasks}
               onSubmitted={() => setProposalRevision(value => value + 1)} /> : null}
             {newTaskButton}
-            {taskViewSwitch}
+            {!phoneLayout && taskViewSwitch}
           </div>
+          {phoneLayout && <>
+            <WorkspaceSelect className="mobile-queue-select task-mobile-view" aria-label="Вид задач" value={mode} onChange={event => { const next = taskModes.find(([key]) => key === event.target.value); if (next) changeMode(next[0]); }}>
+              {taskModes.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+            </WorkspaceSelect>
+            <div className="task-calendar-navigation-slot" ref={setCalendarToolbarTarget} />
+          </>}
         </WorkspaceSectionHeader>
 
         {!(["calendar", "efficiency", "plans"] as TaskMode[]).includes(mode) ? <div className="task-workbench-summary" aria-label="Сводка задач">
@@ -858,22 +883,27 @@ function TaskWorkspaceView(props: TasksViewProps) {
 
         {!(["calendar", "efficiency", "plans"] as TaskMode[]).includes(mode) ? <div className="task-filters workspace-queue-toolbar">
           <div className="workspace-queue-controls">
-          <div className="workspace-queue-options">
+          {phoneLayout && <WorkspaceSelect className="mobile-queue-select" aria-label="Статус задач" value={filter} onChange={event => { const next = (Object.keys(taskFilterLabels) as TaskFilter[]).find(key => key === event.target.value); if (next) setFilter(next); }}>
+            {(Object.keys(taskFilterLabels) as TaskFilter[]).map(key => <option key={key} value={key}>{taskFilterLabels[key]} · {taskCounts[key]}</option>)}
+          </WorkspaceSelect>}
+          {(!phoneLayout || mobileFiltersOpen) && <div className="workspace-queue-options" id={mobileFiltersId}>
           <WorkspaceSelect className="task-role-filter" aria-label="Моя роль в задаче" value={roleFilter} onChange={event => setRoleFilter(event.target.value)}><option value="all">Все роли</option><option value="author">Я постановщик</option><option value="assignee">Я исполнитель</option><option value="co_assignee">Я соисполнитель</option><option value="observer">Я наблюдатель</option></WorkspaceSelect>
           <WorkspaceSelect className="task-role-filter" aria-label="Фильтр по плану" value={planFilter} onChange={(event) => setPlanFilter(event.target.value)} disabled={plansLoading || Boolean(plansError)}><option value="">Все планы</option>{plans.map((plan) => <option key={plan.id} value={plan.id}>{plan.title}</option>)}</WorkspaceSelect>
-          </div>
-          <SlidingSegmented className="task-filter-tabs workspace-queue-filters" role="group" aria-label="Фильтры задач">
+          </div>}
+          {!phoneLayout && <SlidingSegmented className="task-filter-tabs workspace-queue-filters" role="group" aria-label="Фильтры задач">
           {(Object.keys(taskFilterLabels) as TaskFilter[]).map((key) => (
             <button className={filter === key ? "active" : ""} aria-label={taskFilterLabels[key]} aria-pressed={filter === key} key={key} onClick={() => setFilter(key)} type="button"><span>{taskFilterLabels[key]}</span><b aria-hidden="true">{taskCounts[key]}</b></button>
           ))}
-          </SlidingSegmented>
+          </SlidingSegmented>}
+          {phoneLayout && mode === "list" && <div className="mobile-queue-sort-slot" ref={setMobileSortTarget} />}
           </div>
           <Input className="task-search" aria-label="Поиск задач" contentBefore={<Search20Regular />} placeholder="Название, проект, исполнитель" value={query} onChange={(_, data) => setQuery(data.value)} />
+          {phoneLayout && <Button className="task-mobile-filter-toggle" icon={<Filter20Regular />} aria-label="Фильтры задач" title="Роль и план" aria-expanded={mobileFiltersOpen} aria-controls={mobileFiltersId} data-active={roleFilter !== "all" || Boolean(planFilter) || undefined} onClick={() => setMobileFiltersOpen(open => !open)} />}
         </div> : null}
 
         {mode !== "plans" && plansError ? <WorkspaceNotice tone="error" className="task-plan-error" role="alert" actions={<><Button appearance="secondary" onClick={() => setPlansRevision((revision) => revision + 1)}>Повторить</Button></>}>{plansError} </WorkspaceNotice> : null}
 
-        {mode === "efficiency" ? <EfficiencyView token={props.token} overview={efficiency} loading={efficiencyLoading} error={efficiencyError} onPeriodChange={onLoadEfficiency} /> : mode === "plans" ? <TaskPlansView plans={plans} tasks={tasks} people={people} token={props.token} currentUserId={currentUserId} loading={plansLoading} error={plansError} onRetry={() => setPlansRevision((revision) => revision + 1)} onCreate={createPlan} onUpdate={updatePlan} onStatusChange={changePlanStatus} onImported={async () => { setPlansRevision((revision) => revision + 1); await props.onRefreshTasks?.(); }} onSelect={(planId) => { setPlanFilter(planId); setFilter("active"); setMode("list"); }} /> : mode === "list" ? <TaskRecords tasks={visibleTasks} plans={plans} plansLoading={plansLoading} plansError={plansError} people={people} token={props.token} currentUserId={currentUserId} selectedId={detailOpen ? selectedTask?.id : undefined} filterKey={`${filter}:${query}:${roleFilter}:${planFilter}`} onSelect={setSelectedId} /> : mode === "calendar" ? <TaskCalendarView tasks={visibleTasks} onSelect={setSelectedId} toolbarTarget={calendarToolbarTarget} /> : (
+        {mode === "efficiency" ? <EfficiencyView token={props.token} overview={efficiency} loading={efficiencyLoading} error={efficiencyError} onPeriodChange={onLoadEfficiency} /> : mode === "plans" ? <TaskPlansView plans={plans} tasks={tasks} people={people} token={props.token} currentUserId={currentUserId} loading={plansLoading} error={plansError} onRetry={() => setPlansRevision((revision) => revision + 1)} onCreate={createPlan} onUpdate={updatePlan} onStatusChange={changePlanStatus} onImported={async () => { setPlansRevision((revision) => revision + 1); await props.onRefreshTasks?.(); }} onSelect={(planId) => { setPlanFilter(planId); setFilter("active"); setMode("list"); }} /> : mode === "list" ? <TaskRecords tasks={visibleTasks} plans={plans} plansLoading={plansLoading} plansError={plansError} people={people} token={props.token} currentUserId={currentUserId} selectedId={detailOpen ? selectedTask?.id : undefined} filterKey={`${filter}:${query}:${roleFilter}:${planFilter}`} onSelect={setSelectedId} compact={phoneLayout} compactToolsTarget={mobileSortTarget} /> : mode === "calendar" ? <TaskCalendarView tasks={visibleTasks} onSelect={setSelectedId} toolbarTarget={calendarToolbarTarget} /> : (
           <SpatialBoard canDrop={(id, status) => { const task = visibleTasks.find(item => item.id === id); return !!task && canEditTask(task) && !["awaiting_review", "completed", "cancelled"].includes(task.status) && ["new", "in_progress"].includes(status) && task.status !== status; }} onMove={(id, status) => onChangeStatus(id, status as TaskStatus)}>
           <div className="task-kanban" role="region" tabIndex={0} aria-label="Kanban задач: горизонтальная прокрутка">
             {kanbanStatuses.map((status) => {

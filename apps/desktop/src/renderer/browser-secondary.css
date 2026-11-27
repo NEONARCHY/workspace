@@ -35,7 +35,7 @@
 .hr-editor-body > footer { position: sticky; bottom: -24px; margin: 0 -24px -24px; padding: 16px 24px; background: var(--ws-surface); border-top: 1px solid var(--ws-line); }
 @media (max-width: 1023px), (max-width: 1366px) and (any-pointer: coarse) {
   .web-platform body:has(.app-content > :is(.ai-referent-view, .ai-hisobot-view)) .app-shell.browser-compact {
-    padding-inline: max(12px, env(safe-area-inset-left)) max(12px, env(safe-area-inset-right));
+    padding-inline: var(--ws-compact-page-edge, 12px);
   }
   .web-platform .app-content > :is(.feed-view.workspace-view, .notifications-view, .hr-view, .members-view, .zoom-view, .absences-view, .telegram-access-view, .edo-incoming, .ai-hisobot-view, .employees-view, .tasks-view) {
     min-width: 0; margin-inline: 0; padding-inline: 0; scrollbar-gutter: stable;

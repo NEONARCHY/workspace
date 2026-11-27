@@ -27,6 +27,8 @@ module.exports = async (page, section, { width, geometry }) => {
     await root.locator('.calendar-day.selected').click();
   }
   const stream = page.locator('.calendar-agenda-stream:visible');
+  const heading = page.locator('.calendar-side-heading:visible').first();
+  assert.equal(await heading.evaluate(node => getComputedStyle(node).borderBottomWidth), '0px', 'no divider above the first agenda event');
   const cards = stream.locator('.calendar-agenda-card');
   await page.waitForFunction(() => document.querySelector('.calendar-agenda-stream')?.querySelectorAll('.calendar-agenda-card').length === 10);
   assert.equal(await cards.count(), 10, 'first batch contains ten records');

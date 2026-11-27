@@ -14,6 +14,8 @@ import { createRefreshQueue } from "./refresh-queue";
 import { GrantParticipant } from "./GrantParticipant";
 import { GrantComposer } from "./GrantComposer";
 import { GrantRecords } from "./GrantRecords";
+import { WorkspaceSelect } from "./WorkspaceSelect";
+import { useBrowserCompactLayout } from "./browser-layout";
 import { GrantDeadlinePanel } from "./GrantDeadlinePanel";
 import { WorkspaceFileDropzone } from "./WorkspaceFileDropzone";
 import {
@@ -82,6 +84,8 @@ export function GrantsView({ token, currentUser, people, departments, canCreate,
   const [detailError, setDetailError] = useState("");
   const [actionError, setActionError] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
+  const phoneLayout = useBrowserCompactLayout(true, "(max-width: 700px)");
+  const [mobileSortTarget, setMobileSortTarget] = useState<HTMLDivElement | null>(null);
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string>();
   const decisionSurface = useRef<HTMLDivElement>(null);
@@ -217,21 +221,23 @@ export function GrantsView({ token, currentUser, people, departments, canCreate,
       <div><p className="view-kicker">Подготовка · Проверка · Утверждение</p><h1>Гранты</h1>
         <p>Инициатива сотрудника, разрешение председателя и проверка результата.</p></div>
       <div className="grants-actions">
-        <Button icon={<ArrowClockwise20Regular />} onClick={() => void refresh()} disabled={busy}>Обновить</Button>
-        {canAdmin && <Button icon={<Settings20Regular />} onClick={() => {
+        <Button aria-label="Обновить" title="Обновить" icon={<ArrowClockwise20Regular />} onClick={() => void refresh()} disabled={busy}>{phoneLayout ? null : "Обновить"}</Button>
+        {canAdmin && <Button aria-label="Маршрут согласования" title="Маршрут согласования" icon={<Settings20Regular />} onClick={() => {
           setSettingsTarget(undefined); setSettingsReason("");
           setLeaderId(settings?.leaderUserId ?? ""); setChairId(settings?.chairUserId ?? ""); setActionError(""); setSettingsOpen(true);
-        }} disabled={!settings || busy}>Маршрут согласования</Button>}
-        {canCreate && <Button appearance="primary" icon={<Add20Regular />} onClick={() => openEditor()} disabled={!routeReady || busy}>Новая заявка</Button>}
+        }} disabled={!settings || busy}>{phoneLayout ? null : "Маршрут согласования"}</Button>}
+        {canCreate && <Button className="ws-section-header-primary" aria-label="Новая заявка" title="Новая заявка" appearance="primary" icon={<Add20Regular />} onClick={() => openEditor()} disabled={!routeReady || busy}>{phoneLayout ? null : "Новая заявка"}</Button>}
       </div>
     </WorkspaceSectionHeader>
     {loadError && <WorkspaceNotice tone="error" role="alert" actions={<Button onClick={() => void refresh()}>Повторить</Button>}>{loadError}</WorkspaceNotice>}
     {!loading && settings && !routeReady && <WorkspaceNotice tone="warning">Администратору нужно назначить руководителя и председателя в маршруте согласования.</WorkspaceNotice>}
     <div className="grants-toolbar workspace-queue-toolbar"><div className="workspace-queue-controls">
-      <div className="grants-filters ws2-segmented workspace-queue-filters" role="group" aria-label="Фильтр грантов">
+      {phoneLayout ? <WorkspaceSelect className="mobile-queue-select" aria-label="Статус грантов" value={filter} onChange={event => { const next = filters.find(([key]) => key === event.target.value); if (next) setFilter(next[0]); }}>
+        {filters.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+      </WorkspaceSelect> : <div className="grants-filters ws2-segmented workspace-queue-filters" role="group" aria-label="Фильтр грантов">
       {filters.map(([key, label]) => <Button key={key} aria-pressed={filter === key} appearance={filter === key ? "primary" : "subtle"} onClick={() => setFilter(key)}>{label}</Button>)}
-    </div><span className="grants-count" aria-live="polite">Найдено: {visible.length}</span></div><Input type="search" aria-label="Поиск заявок" value={query} onChange={event => setQuery(event.target.value)} placeholder="Название или сотрудник" /></div>
-    {loading ? <p role="status">Загружаем заявки…</p> : <GrantRecords grants={visible} people={people} token={token} selectedId={selectedId} filterKey={`${filter}:${query}`} statusLabels={grantStatusLabels} now={now} onSelect={openDetail} />}
+    </div>}<span className="grants-count" aria-live="polite">Найдено: {visible.length}</span>{phoneLayout && <div className="mobile-queue-sort-slot" ref={setMobileSortTarget} />}</div><Input type="search" aria-label="Поиск заявок" value={query} onChange={event => setQuery(event.target.value)} placeholder="Название или сотрудник" /></div>
+    {loading ? <p role="status">Загружаем заявки…</p> : <GrantRecords compact={phoneLayout} compactToolsTarget={mobileSortTarget} grants={visible} people={people} token={token} selectedId={selectedId} filterKey={`${filter}:${query}`} statusLabels={grantStatusLabels} now={now} onSelect={openDetail} />}
 
 
 </>}

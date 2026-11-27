@@ -1,0 +1,122 @@
+/* Shared mobile queue geometry. Keep full records in the existing detail dialog. */
+.record-mobile-range, .record-mobile-page-position { display: none; }
+body .app-provider .task-toolbar-actions > .task-domain-tabs { flex: none; align-self: center; width: 300px; margin: 0; padding: 4px; }
+body .app-provider .task-domain-tabs .fui-Tab { white-space: nowrap; }
+.task-domain-letter-navigation { flex: none; }
+@media (forced-colors: none) {
+  html:root body .app-provider :is(.tasks-view, .grants-view) .record-status-badge { outline: none; }
+  html:root body .app-provider :is(.tasks-view, .grants-view) .record-status-badge::after { border: 0; }
+}
+@media (min-width: 701px) {
+  html:root body .app-provider .tasks-view.workspace-queue .ws-section-header.task-header-with-domains { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(0, 780px); }
+  body .app-provider .tasks-view.workspace-queue .task-header-with-domains .task-toolbar-actions { flex-basis: auto; width: 100%; }
+}
+
+@media (max-width: 700px) {
+  html:root body .app-provider :is(.tasks-view, .grants-view).workspace-view.workspace-queue:not([data-dialog-only]) .ws-section-header {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; min-height: 0; padding: 8px;
+    border: 0; border-radius: 16px; background: var(--ws-surface); color: var(--ws-text);
+  }
+  html:root body .app-provider :is(.tasks-view, .grants-view).workspace-queue .ws-section-header::before,
+  html:root body .app-provider :is(.tasks-view, .grants-view).workspace-queue .ws-section-header::after { display: none; }
+  body .app-provider :is(.tasks-view, .grants-view) .ws-section-header-art { display: none; }
+  body .app-provider :is(.tasks-view, .grants-view).workspace-queue .ws-section-header h1 { margin: 0; color: var(--ws-text); font-size: 22px; line-height: 28px; }
+  body .app-provider :is(.tasks-view, .grants-view).workspace-queue .ws-section-header p { display: none; }
+  body .app-provider :is(.tasks-view, .grants-view).workspace-queue .ws-section-header :is(.task-toolbar-actions, .grants-actions) {
+    display: flex; flex-wrap: nowrap; align-items: center; justify-content: flex-end; gap: 4px; min-width: 0; width: auto; margin: 0;
+  }
+  html:root body .app-provider :is(.tasks-view, .grants-view).workspace-queue .ws-section-header .fui-Button {
+    flex: none; width: 44px; min-width: 44px; height: 44px; min-height: 44px; padding: 0; border: 0; border-radius: 12px;
+    background: var(--ws-muted-surface); box-shadow: none; color: var(--ws-text);
+  }
+  html:root body .app-provider :is(.tasks-view, .grants-view).workspace-queue .ws-section-header .fui-Button:hover { background: var(--ws-selected); }
+  html:root body .app-provider :is(.tasks-view, .grants-view).workspace-queue .ws-section-header .ws-section-header-primary { background: #006779; color: white; }
+  html:root body .app-provider :is(.tasks-view, .grants-view).workspace-queue .ws-section-header .ws-section-header-primary:hover { background: #005569; }
+  body .app-provider .tasks-view .task-mobile-view { grid-column: 1 / -1; }
+  body .app-provider .tasks-view .task-calendar-navigation-slot { grid-column: 1 / -1; }
+  body .app-provider .tasks-view .task-calendar-navigation-slot:empty { display: none; }
+  /* The domain switch replaces the redundant heading on phones, leaving one action row. */
+  body .app-provider .tasks-view .task-header-with-domains .task-header-copy { position: absolute; max-width: 1px; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); }
+  body .app-provider .tasks-view .task-header-with-domains .task-toolbar-actions { grid-row: 2; grid-column: 2; }
+  body .app-provider .tasks-view .ws-section-header > .task-domain-tabs { grid-row: 1; grid-column: 1 / -1; width: 100%; margin: 0; padding: 0; background: transparent; }
+  body .app-provider .task-domain-tabs .fui-Tab { min-height: 44px; height: 44px; }
+  body .app-provider .task-domain-tabs .fui-Tab__content { white-space: nowrap; }
+  body .app-provider .tasks-view .task-header-with-domains .task-mobile-view { grid-row: 2; grid-column: 1; }
+  html:root body .app-provider .tasks-view.workspace-view.workspace-queue:not([data-dialog-only]) .ws-section-header.task-header-with-domains { grid-template-columns: minmax(0, 1fr) auto; gap: 4px 8px; }
+  body .app-provider .tasks-view .task-header-with-domains .task-mobile-view { margin-right: 4px; }
+  body .app-provider .task-domain-letter-navigation .task-domain-tabs { width: 100%; margin-bottom: 8px; }
+
+  body .app-provider .tasks-view.workspace-queue .tasks-main { gap: 8px; }
+  body .app-provider .tasks-view.workspace-queue .task-workbench-summary { gap: 8px; padding: 0; }
+  body .app-provider .tasks-view.workspace-queue .task-focus-object { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: 28px 24px; align-items: start; justify-items: start; gap: 4px; min-height: 72px; padding: 8px; border-radius: 12px; }
+  body .app-provider .tasks-view.workspace-queue .task-focus-object > span { grid-row: 1; grid-column: 1; min-height: 0; font-size: 11px; line-height: 14px; }
+  body .app-provider .tasks-view.workspace-queue .task-focus-object > strong { grid-row: 2; grid-column: 1; font-size: 22px; line-height: 24px; white-space: nowrap; }
+  body .app-provider .tasks-view.workspace-queue .task-focus-object small { display: none; }
+  body .app-provider :is(.tasks-view, .grants-view).workspace-queue .workspace-queue-toolbar { display: flex; flex-wrap: wrap; gap: 8px; padding: 0; }
+  body .app-provider .tasks-view.workspace-queue .workspace-queue-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) 44px; }
+  body .app-provider .tasks-view.workspace-queue .workspace-queue-controls { display: flex; flex-wrap: wrap; grid-column: 1 / -1; grid-row: 2; width: 100%; gap: 8px; }
+  body .app-provider :is(.tasks-view, .grants-view).workspace-queue .workspace-queue-controls > .mobile-queue-select { flex: 1 1 0; min-width: 0; width: 0; }
+  body .app-provider .tasks-view.workspace-queue .workspace-queue-options { order: 3; flex: 1 1 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  html:root body .app-provider :is(.tasks-view, .grants-view).workspace-queue .workspace-queue-toolbar > .workspace-search { --search-height: 44px; --search-growth: 0px; order: -1; flex: 1 1 100%; grid-row: 1; width: 100%; min-width: 0; max-width: none; margin: 0; }
+  body .app-provider .tasks-view.workspace-queue .task-mobile-filter-toggle { grid-column: 2; grid-row: 1; width: 44px; min-width: 44px; height: 44px; padding: 0; border: 0; border-radius: 12px; background: var(--ws-surface); color: var(--ws-text); }
+  body .app-provider .tasks-view.workspace-queue .task-mobile-filter-toggle:is([data-active], :hover) { background: var(--ws-selected); }
+  body .app-provider .grants-view.workspace-queue .workspace-queue-controls { width: 100%; flex: 1 1 100%; flex-wrap: nowrap; gap: 8px; }
+  body .app-provider .grants-view.workspace-queue .grants-count { flex: none; margin: 0; font-size: 11px; }
+  html:root body .app-provider :is(.tasks-view, .grants-view).workspace-queue :is(.mobile-queue-select, .workspace-queue-options .workspace-select) {
+    --ws-satin-fill: none; --ws-satin-edge: none; --ws-satin-sheen: none; box-sizing: border-box; min-width: 0; min-height: 44px; height: 44px; padding: 0;
+    margin-block: 0; border: 0; border-radius: 12px; background-color: var(--ws-surface); box-shadow: none; color: var(--ws-text); font-size: 13px;
+  }
+  body .app-provider :is(.tasks-view, .grants-view) .mobile-queue-select .fui-Dropdown__button { min-width: 0; padding-inline: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  body .app-provider :is(.tasks-view, .grants-view) .mobile-queue-sort-slot { flex: none; width: 44px; height: 44px; }
+  body .app-provider :is(.tasks-view, .grants-view) .record-compact-tools { display: flex; padding: 0; border: 0; background: transparent; }
+  body .app-provider :is(.tasks-view, .grants-view) .record-compact-sort { display: grid; place-items: center; width: 44px; min-width: 44px; height: 44px; padding: 0; border: 0; border-radius: 12px; background: var(--ws-surface); color: var(--ws-text); }
+  body .app-provider :is(.tasks-view, .grants-view) .record-compact-sort:is([data-active], :hover) { background: var(--ws-selected); }
+
+  html:root body .app-provider :is(.tasks-view, .grants-view).workspace-queue .record-table-frame { --ws-satin-fill: none; margin: 0; border: 0; border-radius: 0; background: transparent; }
+  html:root body .app-provider :is(.tasks-view, .grants-view) .record-table { display: block; width: 100%; min-width: 0; }
+  html:root body .app-provider :is(.tasks-view, .grants-view) .record-table thead { display: none; }
+  html:root body .app-provider :is(.tasks-view, .grants-view) .record-table tbody { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; width: 100%; padding: 0; }
+  html:root body .app-provider :is(.tasks-view, .grants-view) .record-table .record-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; width: auto; margin: 0; padding: 12px; border: 0; border-radius: 12px; background: var(--ws-surface); box-shadow: none; transform: none; }
+  html:root body .app-provider :is(.tasks-view, .grants-view) .record-table .record-row:is(:hover, .selected, :focus-within) { background: var(--ws-selected); }
+  html:root body .app-provider :is(.tasks-view, .grants-view) .record-table .record-row > td { min-width: 0; padding: 0; border: 0; background: transparent; }
+  html:root body .app-provider :is(.tasks-view, .grants-view) .record-table .record-title { grid-column: 1 / -1; grid-row: 1; }
+  body .app-provider :is(.tasks-view, .grants-view) .record-open { display: flex; align-items: center; width: 100%; min-height: 44px; font-size: 14px; line-height: 20px; text-decoration: none; }
+  body .app-provider :is(.tasks-view, .grants-view) .record-open strong { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+  body .app-provider :is(.tasks-view, .grants-view) .record-secondary { gap: 4px 8px; margin-top: 4px; font-size: 11px; }
+  body .app-provider :is(.tasks-view, .grants-view) .record-mobile-label { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); }
+  html:root body .app-provider :is(.tasks-view, .grants-view) .record-table .record-status-badge { min-height: 22px; padding: 3px 8px; border: 0; font-size: 11px; line-height: 16px; }
+  body .app-provider .tasks-view .record-status { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; grid-column: 1 / -1; grid-row: 2; }
+  body .app-provider .tasks-view .record-priority-indicator { margin: 0; font-size: 11px; }
+  body .app-provider .tasks-view .record-deadline { grid-column: 1; grid-row: 3; font-size: 13px; }
+  body .app-provider .tasks-view .record-participants { grid-column: 2; grid-row: 3; }
+  body .app-provider :is(.tasks-view, .grants-view) .task-participant-group { flex-wrap: nowrap; justify-content: flex-end; gap: 0; min-height: 44px; padding: 0; }
+  body .app-provider :is(.tasks-view, .grants-view) .task-participant-anchor + .task-participant-anchor { margin-left: 0; }
+  body .app-provider :is(.tasks-view, .grants-view) .task-participant-avatar { display: grid; place-items: center; width: 44px; height: 44px; }
+  body .app-provider :is(.tasks-view, .grants-view) .task-participant-avatar .fui-Avatar { width: 28px; height: 28px; }
+  body .app-provider :is(.tasks-view, .grants-view) .record-participant-more { flex: none; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; background: var(--ws-muted-surface); color: var(--ws-muted); font-size: 12px; cursor: pointer; }
+  body .app-provider .grants-view .record-status { grid-column: 1; grid-row: 2; }
+  body .app-provider .grants-view .record-deadline { grid-column: 2; grid-row: 2; font-size: 12px; text-align: right; }
+  body .app-provider .grants-view .record-owners { grid-column: 1; grid-row: 3; }
+  body .app-provider .grants-view .record-participants { grid-column: 2; grid-row: 3; }
+  body .app-provider .grants-view .grant-participant { min-width: 0; min-height: 44px; gap: 6px; }
+  body .app-provider .grants-view .grant-participant > span { min-width: 0; }
+  body .app-provider .grants-view .grant-participant small { font-size: 12px; line-height: 16px; }
+  body .app-provider .grants-view .grant-participant strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; line-height: 16px; }
+  body .app-provider .grants-view :is(.grant-record-decision, .grants-overdue, .grant-record-deadline-request) { margin-top: 3px; font-size: 11px; line-height: 14px; }
+  body .app-provider .grants-view .grant-record-owners { gap: 0; }
+
+  html:root body .app-provider :is(.tasks-view, .grants-view) .record-table-frame .record-table-footer { display: block; min-height: 52px; padding: 4px 64px 4px 8px; border: 0; background: var(--ws-surface); }
+  body .app-provider :is(.tasks-view, .grants-view) .record-table-footer > [role="status"] { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); }
+  body .app-provider :is(.tasks-view, .grants-view) .record-table-paging { display: flex; flex-wrap: nowrap; justify-content: space-between; gap: 4px; width: 100%; }
+  body .app-provider :is(.tasks-view, .grants-view) .record-page-size { min-width: 0; }
+  body .app-provider :is(.tasks-view, .grants-view) :is(.record-page-size-label, .record-page-size-value, .record-page-position-full) { display: none; }
+  body .app-provider :is(.tasks-view, .grants-view) :is(.record-mobile-range, .record-mobile-page-position) { display: inline; }
+  body .app-provider :is(.tasks-view, .grants-view) .record-page-size-trigger { min-width: 0; height: 44px; min-height: 44px; gap: 4px; padding: 0 4px; border: 0; background: transparent; font-size: 12px; white-space: nowrap; }
+  body .app-provider :is(.tasks-view, .grants-view) .record-page-controls { gap: 2px; }
+  body .app-provider :is(.tasks-view, .grants-view) .record-page-position { min-width: 24px; font-size: 11px; }
+  body .app-provider :is(.tasks-view, .grants-view) .record-page-nav { width: 44px; min-width: 44px; height: 44px; border: 0; border-radius: 50%; }
+  html:root body .app-provider :is(.tasks-view, .grants-view) :is(.mobile-queue-select, .task-mobile-filter-toggle, .record-compact-sort, .record-participant-more, .record-open, .record-page-size-trigger):focus-visible { outline: 2px solid var(--ws-link); outline-offset: -2px; }
+}
+@media (max-width: 360px) {
+  body .app-provider :is(.tasks-view, .grants-view) .record-page-position { position: absolute; width: 1px; min-width: 0; height: 1px; overflow: hidden; clip-path: inset(50%); }
+}

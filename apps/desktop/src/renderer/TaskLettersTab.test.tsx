@@ -21,12 +21,17 @@ describe("Tasks personal letters domain", () => {
   it("separates by source identity and opens the personal registry in its own tab", () => {
     render(<FluentProvider theme={workspaceTheme}><TasksView {...props} departments={[{ id: "central", code: "CA", name: "ЦА", scope: "central", assignedUsersCount: 0 }]} /></FluentProvider>);
     expect(screen.getByRole("button", { name: "Открыть задачу: Письмо № обычная задача" })).toBeVisible();
+    const domains = screen.getByRole("tablist", { name: "Разделы задач" });
+    const requests = screen.getByRole("button", { name: "Запросы" });
+    expect(domains.parentElement).toBe(requests.parentElement);
+    expect(domains.compareDocumentPosition(requests) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Открыть задачу: Поручение из письма" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("tab", { name: "Мои письма 1" }));
     expect(screen.getByRole("region", { name: "Личный реестр писем" })).toHaveAttribute("data-personal", "true");
     expect(screen.getByRole("region", { name: "Личный реестр писем" })).toHaveAttribute("data-departments", "1");
     expect(screen.getByRole("region", { name: "Личный реестр писем" })).toHaveAttribute("data-token", "synthetic-only");
     fireEvent.click(screen.getByRole("tab", { name: "Задачи" }));
+    expect(screen.getByRole("tab", { name: "Задачи" })).toHaveFocus();
     expect(screen.getByRole("button", { name: "Открыть задачу: Письмо № обычная задача" })).toBeVisible();
   });
 

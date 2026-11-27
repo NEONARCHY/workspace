@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { Menu, MenuItem, MenuList, MenuPopover, MenuTrigger } from "@fluentui/react-components";
-import { ChevronDown16Regular, ChevronLeft20Regular, ChevronRight20Regular } from "@fluentui/react-icons";
+import { ArrowSort20Regular, ChevronDown16Regular, ChevronLeft20Regular, ChevronRight20Regular } from "@fluentui/react-icons";
 
 export type TableSort = { key: string; descending: boolean };
 export const tableCollator = new Intl.Collator("ru", { numeric: true, sensitivity: "base" });
@@ -15,15 +15,15 @@ export function SortHeading({ column, children, sort, onSort }: {
 }
 
 /** Compact access to every sort column when table rows become cards. */
-export function RecordCompactTools({ columns, sort, onSort, label, children }: {
-  columns: readonly (readonly [string, string])[]; sort: TableSort; onSort: (key: string) => void; label: string; children?: ReactNode;
+export function RecordCompactTools({ columns, sort, onSort, label, children, iconOnly = false }: {
+  columns: readonly (readonly [string, string])[]; sort: TableSort; onSort: (key: string) => void; label: string; children?: ReactNode; iconOnly?: boolean;
 }) {
   const active = columns.find(([key]) => key === sort.key);
   return <div className="record-compact-tools">
     {children}
     <Menu positioning="below-end"><MenuTrigger disableButtonEnhancement>
-      <button type="button" className="record-compact-sort" aria-label={`Сортировка: ${label}`}>
-        {active ? `${active[1]} ${sort.descending ? "↓" : "↑"}` : "Сортировка"}<ChevronDown16Regular aria-hidden="true" />
+      <button type="button" className="record-compact-sort" aria-label={`Сортировка: ${label}`} title={active ? `${active[1]} ${sort.descending ? "↓" : "↑"}` : "Сортировка"} data-active={Boolean(active) || undefined}>
+        {iconOnly ? <ArrowSort20Regular aria-hidden="true" /> : <>{active ? `${active[1]} ${sort.descending ? "↓" : "↑"}` : "Сортировка"}<ChevronDown16Regular aria-hidden="true" /></>}
       </button>
     </MenuTrigger><MenuPopover><MenuList>{columns.map(([key, text]) =>
       <MenuItem key={key} aria-current={sort.key === key ? "true" : undefined} onClick={() => onSort(key)}>{text}{sort.key === key ? sort.descending ? " ↓" : " ↑" : ""}</MenuItem>
@@ -49,13 +49,14 @@ export function useTablePage(total: number, resetKey: string) {
 export function RecordTablePager({ total, paging, label }: {
   total: number; paging: ReturnType<typeof useTablePage>; label: string;
 }) {
+  const start = total ? paging.start + 1 : 0, end = Math.min(total, paging.start + paging.size);
   return <footer className="record-table-footer">
     <span role="status">{total ? `${paging.start + 1}–${Math.min(total, paging.start + paging.size)} из ${total}` : "Найдено: 0"}</span>
     <div className="record-table-paging">
       <span className="record-page-size"><span className="record-page-size-label">Показывать по</span><Menu positioning="above-end">
         <MenuTrigger disableButtonEnhancement>
           <button type="button" className="record-page-size-trigger" aria-label={`Количество строк на странице: ${paging.size}. ${label}`} aria-haspopup="menu">
-            {paging.size}<ChevronDown16Regular aria-hidden="true" />
+            <span className="record-page-size-value">{paging.size}</span><span className="record-mobile-range" aria-hidden="true">{start}–{end} / {total}</span><ChevronDown16Regular aria-hidden="true" />
           </button>
         </MenuTrigger>
         <MenuPopover className="record-page-size-popover">
@@ -64,7 +65,7 @@ export function RecordTablePager({ total, paging, label }: {
       </Menu></span>
       {paging.pages > 1 ? <div className="record-page-controls">
         <button type="button" className="record-page-nav" aria-label={`Предыдущая страница: ${label}`} disabled={paging.page === 0} onClick={() => paging.setPage(paging.page - 1)}><ChevronLeft20Regular /></button>
-        <span className="record-page-position" aria-label={`Страница ${paging.page + 1} из ${paging.pages}`}>Страница {paging.page + 1} из {paging.pages}</span>
+        <span className="record-page-position" aria-label={`Страница ${paging.page + 1} из ${paging.pages}`}><span className="record-page-position-full">Страница {paging.page + 1} из {paging.pages}</span><span className="record-mobile-page-position" aria-hidden="true">{paging.page + 1}/{paging.pages}</span></span>
         <button type="button" className="record-page-nav" aria-label={`Следующая страница: ${label}`} disabled={paging.page === paging.pages - 1} onClick={() => paging.setPage(paging.page + 1)}><ChevronRight20Regular /></button>
       </div> : null}
     </div>

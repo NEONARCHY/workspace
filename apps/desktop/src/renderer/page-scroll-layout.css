@@ -64,8 +64,13 @@ html body .app-provider .app-shell .app-stage > .app-content > div > .survey-ana
 }
 @media (max-width: 1023px), (max-width: 1366px) and (any-pointer: coarse) {
   .web-platform .app-shell.browser-compact {
-    /* The compact shell already reserves 12px outside the scroll owner. */
-    --ws-page-scroll-outer-inset: max(12px, env(safe-area-inset-right));
+    /* The shell owns both exterior gutters; the page rail lives inside the right one. */
+    --ws-compact-page-edge: max(12px, env(safe-area-inset-left), env(safe-area-inset-right));
+    --ws-page-scroll-outer-inset: 0px;
   }
-  .web-platform .app-shell.browser-compact .app-stage > .app-content { --ws-page-scroll-edge: 0px; }
+  .web-platform .app-provider > .app-shell.browser-compact { padding-inline: var(--ws-compact-page-edge); }
+  .web-platform .app-shell.browser-compact .app-stage > .app-content {
+    --ws-page-scroll-edge: 0px;
+    margin-inline-end: calc(-1 * var(--ws-page-scrollbar-width));
+  }
 }
