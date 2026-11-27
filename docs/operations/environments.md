@@ -65,6 +65,15 @@ web image on Linux, including this install step and the final Nginx image. The
 required desktop gate also requires this image check; host-only builds do not
 validate the Docker build context. Building this image does not start or update services.
 
+## Login compatibility
+
+Login verifies an existing password against its stored hash. The 12–128 character
+policy applies when creating or changing a password; login accepts 1–128 characters
+and returns 401 for incorrect credentials. Both web and Electron use this rule.
+The login-validation fix requires updating the API as well as the web client;
+updating only the web client improves validation messages but cannot change the
+server's accepted input. No database migration or password reset is required.
+
 ## Secret handling
 
 The optional assistant key is `YUKSALISH_GEMINI_API_KEY` in the server's local environment file (for the test LAN site, `.env.lan`). Never put it in desktop/Vite variables or commit it. Without a key the assistant and generated greetings show a configuration message; scheduled birthday posts and notifications still work.
