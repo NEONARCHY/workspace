@@ -12,6 +12,8 @@ const taskSpacingSuite = process.argv.includes('--task-spacing');
 const calendarSurfacesSuite = process.argv.includes('--calendar-surfaces') || taskSpacingSuite;
 const surfaceFollowupSuite = process.argv.includes('--surface-followup');
 const grantsSpacingSuite = process.argv.includes('--grants-spacing');
+const personalSuite = process.argv.includes('--personal-space');
+const pinSuite = process.argv.includes('--message-pins');
 const mobileQueuesSuite = process.argv.includes('--mobile-queues') || grantsSpacingSuite;
 const gutterSuite = process.argv.includes('--shell-gutters');
 const toolbarSuite = process.argv.includes('--toolbar-layout');
@@ -20,18 +22,18 @@ const attentionSuite = process.argv.includes("--attention") || shellReviewSuite 
 const peopleSuite = process.argv.includes("--people");
 const operationsSuite = process.argv.includes("--operations");
 const documentsSuite = process.argv.includes("--documents");
-const communicationsSuite = process.argv.includes("--communications") || shellReviewSuite || toolbarSuite || chatPaginationSuite || sidebarSuite || referentSurfacesSuite;
-const registrySuite = process.argv.includes("--registry") || toolbarSuite || surfaceFollowupSuite || mobileQueuesSuite;
+const communicationsSuite = process.argv.includes("--communications") || shellReviewSuite || toolbarSuite || chatPaginationSuite || sidebarSuite || referentSurfacesSuite || pinSuite;
+const registrySuite = process.argv.includes("--registry") || toolbarSuite || surfaceFollowupSuite || mobileQueuesSuite || personalSuite;
 const workdaySuite = process.argv.includes("--workday");
 const promptSuite = process.argv.includes("--hisobot-prompt");
 const topbarSuite = process.argv.includes("--topbar") || workdaySuite;
 const reportingSuite = process.argv.includes("--reporting");
-const planningSuite = process.argv.includes("--planning") || topbarSuite || promptSuite || calendarSurfacesSuite || surfaceFollowupSuite || mobileQueuesSuite;
+const planningSuite = process.argv.includes("--planning") || topbarSuite || promptSuite || calendarSurfacesSuite || surfaceFollowupSuite || mobileQueuesSuite || personalSuite;
 const onlyWidth = Number(process.env.UI_QA_WIDTH || 0);
 assert([0, 320, 360, 390, 430, 720, 1024, 1440].includes(onlyWidth));
 const origin = process.env.UI_QA_ORIGIN || "http://127.0.0.1:5186";
 assert(["127.0.0.1", "localhost"].includes(new URL(origin).hostname));
-const iteration = communicationsSuite ? "12" : registrySuite ? "11" : promptSuite ? "10" : workdaySuite ? "9" : reportingSuite ? "8" : topbarSuite ? "7" : planningSuite ? "6" : documentsSuite ? "5" : operationsSuite ? "4" : peopleSuite ? "3" : attentionSuite ? "2" : "1";
+const iteration = personalSuite ? "13" : communicationsSuite ? "12" : registrySuite ? "11" : promptSuite ? "10" : workdaySuite ? "9" : reportingSuite ? "8" : topbarSuite ? "7" : planningSuite ? "6" : documentsSuite ? "5" : operationsSuite ? "4" : peopleSuite ? "3" : attentionSuite ? "2" : "1";
 const output = path.resolve(process.env.UI_QA_OUTPUT || `tmp/ui-consistency-iteration-${iteration}`);
 const sections = communicationsSuite ? [{ id: "referent", label: "AI Referent", root: ".ai-referent-view" }, { id: "messenger", label: "Мессенджер", root: ".messenger-view" }, { id: "legacy-projects", label: "Список проектов", root: ".projects-view" }] : registrySuite ? [{ id: "grants", label: "Гранты", root: ".grants-view" }, { id: "reference", label: "Справочник", root: ".reference-view" }, { id: "mail", label: "Почта", root: ".mail-view" }] : promptSuite ? [{ id: "home", label: "Главная", root: ".personal-home" }, { id: "tasks", label: "Задачи", root: ".tasks-view" }, { id: "messenger", label: "Мессенджер", root: ".messenger-view" }].filter(section => section.id === (process.env.UI_QA_SECTION || "messenger")) : workdaySuite ? [{ id: "home", label: "Главная", root: ".personal-home" }] : reportingSuite
   ? [{ id: "hisobot", label: "AI Hisobot", root: ".ai-hisobot-view" }, { id: "monthly", label: "Ойлик ҳисоботлар", root: ".monthly-reports-page" }, { id: "efficiency", label: "Эффективность", navLabel: "Задачи", root: ".tasks-view" }]
@@ -56,6 +58,8 @@ if (taskSpacingSuite) sections.splice(1);
 if (surfaceFollowupSuite) sections.splice(0, sections.length, { id: 'overview', label: 'Обзор команды', root: '.team-dashboard' }, { id: 'calendar', label: 'Календарь', root: '.calendar-view' }, { id: 'grants', label: 'Гранты', root: '.grants-view' });
 if (mobileQueuesSuite) sections.splice(0, sections.length, { id: 'tasks', label: 'Задачи', root: '.tasks-view' }, { id: 'grants', label: 'Гранты', root: '.grants-view' });
 if (grantsSpacingSuite) sections.splice(0, 1);
+if (personalSuite) sections.splice(0, sections.length, { id: 'profile', label: 'Профиль сотрудника', root: '.employee-profile-dialog' }, { id: 'settings', label: 'Настройки', root: '.account-panel' }, { id: 'support', label: 'Обращения', root: '.support-dialog' });
+if (pinSuite) sections.splice(0, sections.length, { id: 'messenger', label: 'Мессенджер', root: '.messenger-view' });
 if (gutterSuite) sections.splice(0, sections.length, { id: 'home', label: 'Главная', root: '.personal-home' }, { id: 'tasks', label: 'Задачи', root: '.tasks-view' }, { id: 'grants', label: 'Гранты', root: '.grants-view' }, { id: 'notifications', label: 'Уведомления', root: '.notifications-view' }, { id: 'calendar', label: 'Календарь', root: '.calendar-view' }, { id: 'referent', label: 'AI Referent', root: '.ai-referent-view' }, { id: 'payments', label: 'Заявки на оплату', root: '.approvals-view' });
 const settle = async page => page.evaluate(async () => {
   await document.fonts.ready;
@@ -168,13 +172,26 @@ async function measure(page, selector) {
       }));
       await page.route("**/api/v1/**", async route => {
         const request = route.request(), endpoint = new URL(request.url()).pathname.replace("/api/v1", "");
-        const send = json => route.fulfill({ json: communicationsSuite && endpoint === "/workspace/bootstrap" ? { ...json, moduleAccess: data.communication.moduleAccess, projects: data.communication.projects, chats: data.home.chats, messages: data.home.messages } : registrySuite && endpoint === "/workspace/bootstrap" ? { ...json, moduleAccess: data.registry.moduleAccess } : json });
+        const send = json => route.fulfill({ json: communicationsSuite && endpoint === "/workspace/bootstrap" ? { ...json, moduleAccess: data.communication.moduleAccess, projects: data.communication.projects, chats: data.home.chats, messages: data.home.messages, ...(pinSuite ? { attachments: data.pinAttachments } : {}) } : registrySuite && endpoint === "/workspace/bootstrap" ? { ...json, moduleAccess: data.registry.moduleAccess } : json });
         if (/\/auth\/(web\/)?login$/.test(endpoint)) return send({ accessToken: "qa-token", expiresIn: 3600, user: data.user });
+        if (personalSuite) {
+          if (endpoint.startsWith('/recognition/profiles/')) return send(data.personal.profile);
+          if (endpoint === '/support-requests' && request.method() === 'GET') return send(data.personal.support);
+          if (endpoint === '/auth/totp') return send({ enabled: false });
+          if (endpoint === '/auth/sessions') return send(data.personal.sessions);
+          if (endpoint === '/assistant/birthday') return send({ month: 5, day: 12 });
+        }
         if (shellReviewSuite && request.method() === 'POST' && /^\/workday\/(start|finish)$/.test(endpoint)) {
           workdayWrites++; workdayWorking = endpoint.endsWith('/start');
           return send({ status: workdayWorking ? 'working' : 'finished', schedule: { startsAt: '09:00', endsAt: '18:00' }, session: null });
         }
         if (registrySuite && endpoint === "/mail/messages/search") { const { query } = request.postDataJSON(); return send({ messages: data.registry.messages.filter(item => !query || `${item.subject} ${item.sender}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())), nextPageToken: null }); }
+        if (pinSuite && request.method() === 'PUT' && /^\/messages\/[^/]+\/pin$/.test(endpoint)) {
+          const id = endpoint.split('/')[2], payload = request.postDataJSON();
+          const item = data.home.messages.find(message => message.id === id);
+          Object.assign(item, { isPinned: payload.pinned, pinnedAt: new Date(Date.parse('2026-11-26T09:30:00Z') + ++data.pinWrites * 1000).toISOString() });
+          return send(item);
+        }
         if (!["GET", "HEAD"].includes(request.method())) { if (endpoint.startsWith("/workday/")) workdayWrites++; return route.fulfill({ status: 403, json: { detail: "Synthetic QA: no writes" } }); }
         if (communicationsSuite && endpoint.startsWith('/ai-referent/')) {
           const fixture = data.communication, params = new URL(request.url()).searchParams, q = (params.get('query') || params.get('q') || '').toLocaleLowerCase(), offset = Number(params.get('offset') || 0);
@@ -256,6 +273,7 @@ async function measure(page, selector) {
         data.calendarEvents = Array.from({ length: 35 }, (_, i) => ({ ...data.calendarEvents[0], id: `qa-agenda-${i}`, title: `Региональная встреча ${String(i + 1).padStart(2, '0')}`, startsAt: '2026-11-26T09:00:00Z', endsAt: '2026-11-26T10:00:00Z', status: 'scheduled' }));
       }
       releaseIds = await page.evaluate(async () => (await import("/src/renderer/release-history.ts")).bundledReleaseEntries().map(entry => entry.id));
+      if (personalSuite) data.personal = require('./ui-personal-fixtures.cjs')(data);
       if (communicationsSuite) { data.communication = require('./ui-communication-fixtures.cjs')(data.people, data.user); data.communication.moduleAccess = await page.evaluate(async () => (await import('/src/renderer/module-catalog.ts')).fallbackModules.map(module => ({ moduleKey: module.key, permissions: { view: true, create: true, edit: true, approve: true, admin: true } }))); }
       if (registrySuite) { data.registry = registryFixtures(data.people, data.user); data.registry.moduleAccess = await page.evaluate(async () => (await import('/src/renderer/module-catalog.ts')).fallbackModules.map(module => ({ moduleKey: module.key, permissions: { view: true, create: true, edit: true, approve: true, admin: true } }))); }
       if (mobileQueuesSuite) {
@@ -265,6 +283,18 @@ async function measure(page, selector) {
         data.registry.grants = Array.from({ length: 64 }, (_, i) => ({ ...data.registry.grants[i % data.registry.grants.length], id: `qa-phone-grant-${i}`, title: ['Second Call for Proposals: Supporting Civil Society Participation in Policy-Making and Dialogue in Central Asia', 'People Powered: Climate Democracy Accelerator (CDA)', 'Поддержка региональных образовательных инициатив'][i % 3] + ` · ${i + 1}`, coAssigneeIds: data.people.filter(person => person.id !== data.user.id).map(person => person.id) }));
       }
       if (communicationsSuite) data.home.chats = [...data.home.chats.map(chat => ({ ...chat, unread: 0 })), { ...data.home.chats[0], id: 'qa-legacy-project-chat', title: 'Проект: региональные инициативы', preview: 'План работ и материалы проекта', unread: 0, kind: 'group', contextType: 'project', contextId: 'legacy-project-0' }];
+      if (pinSuite) {
+        data.user = { ...data.user, role: 'employee', adminModeEnabled: false, positionId: 'qa-coordinator' };
+        data.home.chats = data.home.chats.map(chat => chat.id === 'finance' ? { ...chat, permissions: { sendMessages: true, uploadFiles: true, inviteMembers: false, manageMembers: false, editInfo: false } } : chat);
+        data.home.messages = ['old', 'new', 'own', 'foreign'].map((name, i) => ({ id: `qa-pin-${name}`, chatId: 'finance', authorId: i % 2 ? data.user.id : data.people[0].id,
+          body: ['Материалы региональной встречи: просим проверить документы и добавить результаты до конца рабочего дня.', 'План следующей недели согласован.', 'Моё сообщение для закрепления', 'Сообщение коллеги для закрепления'][i],
+          time: '14:20', createdAt: `2026-11-26T09:${20 + i}:00Z`, canPin: true, canDelete: i % 2 === 1, canEdit: i % 2 === 1, isPinned: i < 2,
+          pinnedAt: i < 2 ? `2026-11-26T09:${29 - i}:00Z` : null, canUnpinForAll: true, canUnpinForSelf: true }));
+        data.home.messages[2].authorId = data.user.id; data.home.messages[2].canDelete = true; data.home.messages[2].canEdit = true;
+        data.home.messages[3].authorId = data.people[0].id; data.home.messages[3].canDelete = false; data.home.messages[3].canEdit = false;
+        data.pinWrites = 0;
+        data.pinAttachments = [{ id: 'qa-pin-file', ownerType: 'message', ownerId: 'qa-pin-old', fileName: 'Материалы_встречи.docx', contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', byteSize: 26000, sha256: 'qa-only', uploadedByUserId: data.people[0].id, documentRole: 'general', createdAt: '2026-11-26T09:20:00Z' }];
+      }
       if (chatPaginationSuite) data.home.chats.push(...['group', 'task', 'project', 'trip'].flatMap(kind => Array.from({ length: 100 }, (_, i) => ({
         ...data.home.chats[0], id: `qa-paged-${kind}-${i}`, title: `Переписка ${kind} ${String(i).padStart(3, '0')}`, preview: 'Материалы и рабочее обсуждение', unread: 0,
         kind: kind === 'task' ? 'task' : 'group', contextType: kind === 'group' ? undefined : kind, contextId: undefined,
@@ -276,7 +306,13 @@ async function measure(page, selector) {
       for (const section of sections) {
         // Isolate responsive content geometry from the separately tested rail drawer.
         await page.setViewportSize({ width: 1440, height: 960 }); await settle(page);
-        if (communicationsSuite && section.id === 'legacy-projects') {
+        if (personalSuite) {
+          await page.locator('.workspace-identity-menu').click();
+          await page.getByRole('menuitem', { name: section.label, exact: true }).or(page.locator('.identity-popover-actions').getByRole('button', { name: section.label, exact: true })).click();
+          await page.locator(section.root).waitFor();
+          if (section.id === 'profile') await page.locator('.employee-profile-hero').waitFor();
+          if (section.id === 'support') await page.locator('.support-request-card').first().waitFor();
+        } else if (communicationsSuite && section.id === 'legacy-projects') {
           if (toolbarSuite) {
             const messenger = page.getByRole('button', { name: 'Мессенджер', exact: true }).or(page.getByRole('menuitem', { name: 'Мессенджер', exact: true }));
             if (!await messenger.isVisible()) await page.getByRole('button', { name: /^Ещё,/ }).click();
@@ -309,6 +345,7 @@ async function measure(page, selector) {
         }
         if (communicationsSuite && section.id === 'legacy-projects') await page.locator('.project-card').first().waitFor();
         if (communicationsSuite && section.id === 'messenger') await page.locator('.chat-row').first().waitFor();
+        if (pinSuite) { await page.locator('.chat-list .chat-row').filter({ hasText: 'Финансы и закупки' }).click(); await page.locator('.pinned-message-bar').waitFor(); }
         if (registrySuite && section.id === "grants") await page.locator('.grant-records tbody tr').first().waitFor();
         if (registrySuite && section.id === "reference") { await page.getByRole('button', { name: 'Организации', exact: true }).click(); await page.locator('.reference-record').first().waitFor(); }
         if (registrySuite && section.id === "mail") await page.locator('.mail-row').first().waitFor();
@@ -337,6 +374,8 @@ async function measure(page, selector) {
         if (topbarSuite && section.id === "home" || phase === "after" && reportingSuite && section.id === "hisobot") await capture(page.locator(".global-bar"), path.join(output, phase, `topbar-${theme}-${width}.png`));
         const geometry = await measure(page, section.root);
         results.push({ section: section.id, width, height, theme, ...geometry });
+        if (personalSuite) { results.at(-1).personal = await require('./ui-personal-checks.cjs')(page, section, { phase, width, theme, output, setSupportMode: mode => { data.personal.support.mode = mode; } }); console.log('PASS ' + file); continue; }
+        if (pinSuite) { await require('./ui-message-pin-checks.cjs')(page, { width, height, theme, output, phase }); console.log('PASS pins ' + file); continue; }
         if (gutterSuite) {
           const bounds = await page.locator(section.root).first().boundingBox();
           const insets = { left: bounds.x, right: width - bounds.x - bounds.width };
@@ -985,6 +1024,7 @@ async function measure(page, selector) {
     assert.deepEqual(errors, []);
     if (gutterSuite) return;
     if (chatPaginationSuite) return;
+    if (pinSuite) return;
     if (promptSuite) return;
     await fs.writeFile(path.join(output, "index.html"), `<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Yuksalish — сравнение интерфейса</title>
       <style>*{box-sizing:border-box}body{margin:0;padding:24px;background:#111318;color:#eceef4;font:15px/1.5 system-ui}main{max-width:1600px;margin:auto}h1{font-size:28px}p,figcaption{color:#bfc6d3}select{margin:0 0 24px;padding:12px;border-radius:8px;background:#252a33;color:inherit}section{margin:0 0 32px}h2{font-size:20px}article{display:grid;grid-template-columns:1fr 1fr;gap:16px}figure{margin:0;min-width:0}img{display:block;width:100%;height:auto;border-radius:12px}figcaption{margin-bottom:8px}@media(max-width:700px){article{grid-template-columns:1fr}body{padding:12px}}</style>

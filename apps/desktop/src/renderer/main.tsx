@@ -98,6 +98,7 @@ import "./communications-workspace.css";
 import "./sidebar-workspace.css";
 import "./calendar-refinement.css";
 import "./mobile-queues.css";
+import "./personal-workspace.css";
 import { observeBrowserViewport } from "./browser-layout";
 
 if (workspacePlatform.kind === "web") {

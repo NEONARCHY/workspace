@@ -62,6 +62,7 @@ import {
   Send24Filled,
 } from "@fluentui/react-icons";
 import { AttachmentChips } from "./AttachmentPanel";
+import { AttachmentImage } from "./AttachmentImage";
 import { PendingMessageFiles } from "./PendingMessageFiles";
 import { MessageAttachmentsDialog } from "./MessageAttachmentsDialog";
 import { ChatManagement, type ChatActions } from "./ChatManagement";
@@ -541,8 +542,14 @@ function Conversation({
     return (!departments || employeeScope(person?.departmentId, departments) === mentionScope)
       && (!mentionQuery || `${person?.name ?? ""} ${person?.username ?? ""}`.toLocaleLowerCase("ru").includes(mentionQuery));
   });
-  const pinnedMessages = activeMessages.filter((message) => message.isPinned && !message.pinHiddenForMe && !message.deletedAt);
-  const latestPinned = pinnedMessages.at(-1);
+  const pinnedMessages = useMemo(() => activeMessages.filter((message) => message.isPinned && !message.pinHiddenForMe && !message.deletedAt), [activeMessages]);
+  const latestPinned = useMemo(() => {
+    const pinTime = (message: ChatMessage) => Date.parse(message.pinnedAt || message.createdAt || "") || 0;
+    return pinnedMessages.reduce<ChatMessage | undefined>((latest, message) =>
+      !latest || pinTime(message) > pinTime(latest) || (pinTime(message) === pinTime(latest) && message.id > latest.id)
+        ? message : latest, undefined);
+  }, [pinnedMessages]);
+  const latestPinnedAttachment = latestPinned ? attachmentsByMessage.get(latestPinned.id)?.[0] : undefined;
   const revealMessage = useCallback((messageId: string) => {
     setQuery("");
     setMessageToReveal({ id: messageId });
@@ -943,7 +950,6 @@ function Conversation({
         </div>
         <BrowserChatActions compact={compactBrowser}>
           {compactBrowser ? <Button appearance="subtle" icon={<Search24Regular />} onClick={() => { setSearchOpen((value) => !value); if (searchOpen) setQuery(""); }}>{searchOpen ? "Закрыть поиск" : "Поиск в переписке"}</Button> : null}
-          {compactBrowser && latestPinned && !searchOpen ? <Button appearance="subtle" icon={<Pin24Regular />} onClick={() => setPinnedOpen((value) => !value)}>Закреплено: {pinnedMessages.length}</Button> : null}
           {canRequestDeadline ? <Button appearance="secondary" icon={<CalendarLtr24Regular />} aria-expanded={deadlineOpen} onClick={() => {
             if (!deadlineOpen && taskForChat?.dueAt) {
               const next = new Date(Math.max(Date.now(), new Date(taskForChat.dueAt).getTime()) + 24 * 60 * 60_000);
@@ -992,6 +998,13 @@ function Conversation({
             icon={<Dismiss24Regular />} onClick={() => { paint.stop(); cancelSelection(); }} />
         </div>
       </header>
+      {latestPinned ? <div className="pinned-message-bar">
+            {latestPinnedAttachment && fileViewerKind(latestPinnedAttachment) === "image" ? <AttachmentImage attachment={latestPinnedAttachment} onLoad={onLoadAttachment} onOpen={() => revealMessage(latestPinned.id)} /> : latestPinnedAttachment ? <span className="pinned-message-file" aria-hidden="true"><Attach24Regular /></span> : null}
+            <button type="button" className="pinned-message-preview" onClick={() => revealMessage(latestPinned.id)}>
+              <strong>Закреплённое сообщение</strong><span>{replyPreview(latestPinned, attachments)}</span>
+            </button>
+            <Button className="pinned-message-trigger" appearance="subtle" icon={<Pin24Regular />} aria-label={`Закреплено: ${pinnedMessages.length}`} aria-expanded={pinnedOpen} onClick={() => setPinnedOpen(value => !value)} />
+      </div> : null}
       {deadlineOpen && canRequestDeadline ? <div className="task-deadline-request-popover" role="region" aria-label="Запрос переноса срока">
         <strong>Новый срок задачи</strong>
         <p>Постановщик увидит запрос прямо в чате задачи.</p>
@@ -1012,17 +1025,7 @@ function Conversation({
           value={query}
           onChange={(_, data) => setQuery(data.value)}
         />
-        {latestPinned ? (
-          <Button
-            className="pinned-message-trigger"
-            appearance="subtle"
-            icon={<Pin24Regular />}
-            aria-expanded={pinnedOpen}
-            onClick={() => setPinnedOpen((value) => !value)}
-          >
-            Закреплено: {pinnedMessages.length}
-          </Button>
-        ) : null}
+
       </div>
       {pinnedOpen && latestPinned ? (
         <div className="pinned-message-panel" role="region" aria-label="Закреплённые сообщения">
@@ -1081,7 +1084,7 @@ function Conversation({
         const message = contextMenu.message;
         const own = message.authorId === currentUserId;
         const hasVoice = attachments.some((attachment) => attachment.ownerType === "message" && attachment.ownerId === message.id && attachment.mediaKind === "voice");
-        const mayDelete = message.canDelete ?? (own || message.canPin || ["admin", "superadmin"].includes(currentUserRole));
+        const mayDelete = message.canDelete ?? (own || ["admin", "superadmin"].includes(currentUserRole));
         return <MessageContextMenu x={contextMenu.x} y={contextMenu.y} portalContainer={contextMenu.portalContainer} autoFocus={Boolean(contextMenu.trigger)} onPointerDown={(event) => event.stopPropagation()}
           accessory={<ReactionPicker key={message.id} variant="context" userId={currentUserId} disabled={!canSend || busy} active={(message.reactions ?? []).filter((reaction) => reaction.reactedByCurrentUser).map((reaction) => reaction.emoji)} onSelect={(emoji) => { void run(() => onReactMessage(message, emoji)); setContextMenu(undefined); }} />}>
           <Button disabled={!canSend || (contextMenu.selectedQuote?.text.length ?? 0) > 4096} title={(contextMenu.selectedQuote?.text.length ?? 0) > 4096 ? "Цитата — не более 4096 символов" : undefined} appearance="subtle" icon={<Reply size={20} />} onClick={() => { setReply({ ...message, selectedQuote: contextMenu.selectedQuote }); setContextMenu(undefined); composerInputRef.current?.focus(); }}>{contextMenu.selectedQuote ? "Ответить с цитатой" : "Ответить"}</Button>

@@ -77,6 +77,24 @@ def test_chat_payload_validation() -> None:
         SetChatMemberRequest.model_validate({"role": "owner", "permissions": {}})
 
 
+@pytest.mark.parametrize("kind", ["group", "department", "project", "task", "approval"])
+def test_group_membership_allows_pinning_without_moderation(kind: str) -> None:
+    permissions = ChatPermissions(send_messages=False)
+    assert service.can_pin_messages(kind, permissions, is_member=True)
+    assert not service.can_pin_messages(kind, permissions, is_member=False)
+    assert not service.can_manage_messages(kind, permissions)
+
+
+def test_existing_direct_and_context_moderator_pin_permissions() -> None:
+    assert not service.can_pin_messages(
+        "direct", ChatPermissions(send_messages=False), is_member=True
+    )
+    assert service.can_pin_messages("direct", ChatPermissions(), is_member=True)
+    assert service.can_pin_messages(
+        "task", service.CONTEXT_LEADERSHIP_PERMISSIONS, is_member=False
+    )
+
+
 async def exercise_permissions(url: str) -> None:
     engine = create_async_engine(url)
     try:
@@ -250,6 +268,14 @@ async def exercise_permissions(url: str) -> None:
                 task_message = await service.send_chat_message(
                     connection, peer, task_chat_id, SendMessageRequest(body="Task result")
                 )
+                pin_request = PinMessageRequest(pinned=True)
+                task_pin = await service.set_message_pin(
+                    connection, peer, UUID(task_message.id), pin_request
+                )
+                assert task_pin.is_pinned
+                await service.set_message_pin(
+                    connection, peer, UUID(task_message.id), PinMessageRequest(pinned=False)
+                )
                 task_file = await create_attachment(
                     connection, peer, "message", UUID(task_message.id),
                     file_name="result.docx", byte_size=10, sha256="b" * 64,
@@ -280,7 +306,10 @@ async def exercise_permissions(url: str) -> None:
                     deputy_chat = next(
                         item for item in deputy_workspace.chats if item.id == task.chat_id
                     )
-                    assert task_message.id in {item.id for item in deputy_workspace.messages}
+                    deputy_message = next(
+                        item for item in deputy_workspace.messages if item.id == task_message.id
+                    )
+                    assert not deputy_message.can_pin
                     assert task_file.id in {item.id for item in deputy_workspace.attachments}
                     assert not deputy_chat.permissions.send_messages
                     assert not deputy_chat.permissions.upload_files
@@ -293,6 +322,11 @@ async def exercise_permissions(url: str) -> None:
                             connection, deputy, task_chat_id, SendMessageRequest(body="Denied"),
                         )
                     assert send_denied.value.status_code == 403
+                    with pytest.raises(WorkspaceRepositoryError) as pin_denied:
+                        await service.set_message_pin(
+                            connection, deputy, UUID(task_message.id), pin_request
+                        )
+                    assert pin_denied.value.status_code == 403
                     with pytest.raises(WorkspaceRepositoryError) as deputy_upload_denied:
                         await validate_attachment_owner(
                             connection, deputy, "message", UUID(task_message.id), write=True,
@@ -312,9 +346,18 @@ async def exercise_permissions(url: str) -> None:
                     }
                     with pytest.raises(WorkspaceRepositoryError):
                         await service.chat_access(connection, outsider, task_chat_id)
+                    with pytest.raises(WorkspaceRepositoryError) as task_pin_denied:
+                        await service.set_message_pin(
+                            connection, outsider, UUID(task_message.id), pin_request
+                        )
+                    assert task_pin_denied.value.status_code == 404
                 chairman_message = await service.send_chat_message(
                     connection, chairman, task_chat_id, SendMessageRequest(body="Review comment")
                 )
+                chairman_pin = await service.set_message_pin(
+                    connection, chairman, UUID(chairman_message.id), pin_request
+                )
+                assert chairman_pin.is_pinned and chairman_pin.pin_protected
                 with pytest.raises(WorkspaceRepositoryError) as upload_denied:
                     await validate_attachment_owner(
                         connection, chairman, "message", UUID(chairman_message.id), write=True,
@@ -351,6 +394,9 @@ async def exercise_permissions(url: str) -> None:
                     item.id for item in (await load_workspace(connection, peer)).messages
                 }
                 assert not await search_messages(connection, peer, text)
+                with pytest.raises(WorkspaceRepositoryError) as history_pin_denied:
+                    await service.set_message_pin(connection, peer, message_id, pin_request)
+                assert history_pin_denied.value.status_code == 404
                 with pytest.raises(WorkspaceRepositoryError):
                     await get_attachment(connection, peer, UUID(attachment.id))
                 with pytest.raises(WorkspaceRepositoryError):
@@ -562,23 +608,27 @@ async def exercise_messages(url: str) -> None:
                     str(owner.id),
                     str(peer.id),
                 ]
-                with pytest.raises(WorkspaceRepositoryError):
-                    await service.set_message_pin(
-                        connection,
-                        peer,
-                        UUID(parent.id),
-                        PinMessageRequest(pinned=True),
-                    )
-                pinned = await service.set_message_pin(
+                for original in (parent, reply):
+                    assert (await service.set_message_pin(
+                        connection, peer, UUID(original.id), PinMessageRequest(pinned=True)
+                    )).pinned_by_user_id == str(peer.id)
+                assert (await service.set_message_pin(
                     connection,
                     owner,
                     UUID(parent.id),
                     PinMessageRequest(pinned=True),
-                )
-                assert pinned.is_pinned and pinned.pinned_by_user_id == str(owner.id)
+                )).pinned_by_user_id == str(peer.id)
                 peer_snapshot = await load_workspace(connection, peer)
                 peer_parent = next(item for item in peer_snapshot.messages if item.id == parent.id)
-                assert peer_parent.is_pinned
+                assert (
+                    peer_parent.is_pinned and peer_parent.can_pin and peer_parent.can_unpin_for_all
+                )
+                assert not peer_parent.can_edit and not peer_parent.can_delete
+                assert reply.id in {item.id for item in peer_snapshot.messages if item.is_pinned}
+                found = await search_messages(connection, peer, "Original private text")
+                search_result = next(item for item in found if item.id == parent.id)
+                assert search_result.can_pin and search_result.can_unpin_for_all
+                assert not search_result.can_edit and not search_result.can_delete
                 assert peer_parent.reactions[0].count == 2
                 notifications = (
                     (
@@ -876,8 +926,15 @@ async def exercise_http(url: str) -> None:
         rocket = await client.post(path + "/reactions", headers=headers, json={"emoji": "🚀"})
         assert rocket.status_code == 200
         assert {item["emoji"] for item in rocket.json()["reactions"]} == {"🎉", "🚀"}
-        pinned = await client.put(path + "/pin", headers=headers, json={"pinned": True})
-        assert pinned.status_code == 200 and pinned.json()["isPinned"]
+        pinned = await client.put(path + "/pin", headers=outsider, json={"pinned": True})
+        assert pinned.status_code == 200, pinned.text
+        assert pinned.json()["isPinned"] and pinned.json()["canUnpinForAll"]
+        assert pinned.json()["pinnedByUserId"] == third_id
+        assert not pinned.json()["canDelete"] and not pinned.json()["canEdit"]
+        denied_delete = await client.request(
+            "DELETE", path, headers=outsider, json={"expectedRevision": 1}
+        )
+        assert denied_delete.status_code == 403
         edited = await client.patch(
             path, headers=headers, json={"body": "HTTP edited", "expectedRevision": 1}
         )
@@ -885,6 +942,11 @@ async def exercise_http(url: str) -> None:
         assert (
             await client.patch(path, headers=outsider, json={"body": "No", "expectedRevision": 2})
         ).status_code == 403
+        removal = await client.delete(f"{base}/members/{third_id}", headers=headers)
+        assert removal.status_code == 204
+        for pin in (True, False):
+            denied_pin = await client.put(path + "/pin", headers=outsider, json={"pinned": pin})
+            assert denied_pin.status_code == 404
         deleted = await client.request(
             "DELETE", path, headers=headers, json={"expectedRevision": 2}
         )

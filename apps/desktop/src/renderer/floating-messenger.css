@@ -7,6 +7,11 @@
 }
 .floating-messenger-launcher:hover { background: var(--ws-selected); }
 .floating-messenger-launcher[hidden] { display: none; }
+/* Background chat controls must not cover an active modal or its actions.
+   Keep an opened chat mounted so its draft and scroll position survive. */
+body:has([role="dialog"][aria-modal="true"]:not([aria-hidden="true"])) :is(.floating-messenger-launcher, .floating-messenger-elevation:not(.is-full-page)) {
+  visibility: hidden; pointer-events: none;
+}
 .floating-messenger-launcher[data-dragging] { cursor: grabbing; }
 .floating-messenger-launcher:focus-visible, .floating-messenger-toolbar button:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 3px; }
 .floating-messenger-icon { display: flex; transform-origin: 50% 30%; }
@@ -79,3 +84,9 @@
   .floating-messenger-launcher, .floating-messenger-panel { border: 1px solid ButtonText; background: Canvas; box-shadow: none; }
   .floating-messenger-badge { color: HighlightText; background: Highlight; }
 }
+
+/* Fluent places each Portal in a separate provider at the same default layer.
+   Keep the messenger at its intended application layer so later/earlier
+   tooltip, menu and dialog portals can paint above it regardless of mount order. */
+body > .fui-FluentProvider:has(> .floating-messenger-root) { z-index: 45; }
+body > .fui-FluentProvider:has(> .floating-messenger-root .floating-messenger-elevation.is-full-page:not([hidden])) { z-index: 1; }

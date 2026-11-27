@@ -19,8 +19,17 @@
 
 .conversation-search { display: flex; align-items: center; gap: 8px; }
 .conversation-search > span:first-child { flex: 1; min-width: 0; }
-.pinned-message-trigger { flex: none; max-width: 190px; }
-.pinned-message-panel { position: relative; z-index: 2; flex: none; padding: 10px 20px 12px; border-bottom: 1px solid var(--ws-line); background: var(--ws-theme-surface, #f7fbfc); box-shadow: 0 8px 20px rgb(41 58 85 / 6%); }
+.pinned-message-bar { display: flex; align-items: center; gap: 9px; flex: none; min-width: 0; min-height: 52px; padding: 5px 16px; background: var(--ws-theme-surface, #f7fbfc); }
+.pinned-message-bar::before { content: ""; align-self: stretch; width: 3px; flex: none; border-radius: 3px; background: var(--ws-turquoise); }
+.pinned-message-preview { display: grid; gap: 2px; flex: 1; min-width: 0; padding: 0; border: 0; background: transparent; text-align: left; cursor: pointer; }
+.pinned-message-preview strong, .pinned-message-preview span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; line-height: 16px; }
+.pinned-message-preview strong { color: var(--ws-link); font-weight: 600; }
+.pinned-message-preview span { color: var(--ws-text); }
+.pinned-message-bar .attachment-image-thumb, .pinned-message-file { width: 36px; height: 36px; flex: none; overflow: hidden; padding: 0; border: 0; border-radius: 4px; }
+.pinned-message-bar .attachment-image-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.pinned-message-file { display: grid; place-items: center; color: var(--ws-link); background: var(--ws-theme-surface-soft); }
+.pinned-message-trigger { flex: none; min-width: 44px; min-height: 44px; }
+.pinned-message-panel { position: relative; z-index: 2; flex: none; padding: 10px 20px 12px; background: var(--ws-theme-surface, #f7fbfc); }
 .pinned-message-panel > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; color: var(--ws-text); font-size: 13px; }
 .pinned-message-panel > div { display: grid; max-height: 164px; overflow-y: auto; gap: 4px; }
 .pinned-message-panel .pinned-message-item > button { display: grid; grid-template-columns: minmax(90px, auto) minmax(0, 1fr) auto; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border: 0; border-radius: 9px; color: var(--ws-text); background: transparent; text-align: left; cursor: pointer; }
@@ -28,7 +37,7 @@
 .pinned-message-panel .pinned-message-item > button:focus-visible { outline: 2px solid var(--ws-turquoise); outline-offset: -2px; }
 .pinned-message-panel span, .pinned-message-panel time { color: var(--ws-muted); font-size: 11px; }
 .pinned-message-panel strong { overflow: hidden; font-size: 12px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
-.message-pinned .message-body { box-shadow: 0 0 0 1px rgb(13 164 180 / 14%), 0 4px 14px rgb(13 164 180 / 8%); }
+
 
 .message-reactions { display: flex; flex-wrap: wrap; gap: 4px; max-width: 100%; margin-top: 5px; }
 .message.own .message-reactions { justify-content: flex-end; }

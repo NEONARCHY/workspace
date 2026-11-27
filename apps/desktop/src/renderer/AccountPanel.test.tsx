@@ -51,6 +51,26 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+it("loads directory and update tools only when opened, preserving visited pages", async () => {
+  api.loadDirectory.mockClear(); api.loadDesktopReleases.mockClear();
+  render(<FluentProvider theme={webLightTheme}><AccountPanel token="lazy-token"
+    user={{ id: "admin-1", username: "admin", name: "Администратор", initials: "А", role: "admin", color: "#0091a8" }}
+    onClose={vi.fn()} onLogout={vi.fn()} /></FluentProvider>);
+  await waitFor(() => expect(screen.queryByText("Проверяем защиту…")).not.toBeInTheDocument());
+  expect(api.loadDirectory).not.toHaveBeenCalled();
+  expect(api.loadDesktopReleases).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Пароли сотрудников" }));
+  await waitFor(() => expect(api.loadDirectory).toHaveBeenCalledExactlyOnceWith("lazy-token"));
+  fireEvent.click(screen.getByRole("button", { name: "Личные данные" }));
+  fireEvent.click(screen.getByRole("button", { name: "Пароли сотрудников" }));
+  expect(api.loadDirectory).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByRole("button", { name: "Обновления" }));
+  await waitFor(() => expect(api.loadDesktopReleases).toHaveBeenCalledTimes(1));
+  fireEvent.click(screen.getByRole("button", { name: "Личные данные" }));
+  fireEvent.click(screen.getByRole("button", { name: "Обновления" }));
+  expect(api.loadDesktopReleases).toHaveBeenCalledTimes(1);
+});
+
 it("opens settings as a full profile-sized dialog and closes without a transition", () => {
   const onClose = vi.fn();
   render(

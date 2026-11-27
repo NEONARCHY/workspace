@@ -1,0 +1,163 @@
+/* Iteration 13: one dialog rhythm, the same inner edges and quiet controls. */
+html:root body .fui-DialogSurface:is(.employee-profile-dialog.employee-profile-dialog, .support-dialog.support-dialog) {
+  --personal-edge: 24px; box-sizing: border-box; position: fixed; inset: 0; margin: auto; width: min(1080px, calc(100vw - 48px)); height: min(820px, calc(100dvh - 48px)); max-width: none; max-height: none;
+  padding: var(--personal-edge); border: 0; border-radius: 24px; background: var(--ws-surface); box-shadow: var(--ws-shadow-float);
+}
+html:root body :is(.employee-profile-dialog, .support-dialog) .fui-DialogBody { min-height: 0; gap: 12px; }
+html:root body :is(.employee-profile-dialog, .support-dialog) .fui-DialogTitle { min-height: 44px; padding: 0 56px 0 0; align-items: center; font-size: 22px; line-height: 28px; font-weight: 600; }
+html:root body :is(.employee-profile-dialog, .support-dialog) .fui-DialogTitle__action > .fui-Button { min-width: 44px; width: 44px; min-height: 44px; border: 0; border-radius: 12px; }
+html:root body .employee-profile-dialog .fui-DialogContent { min-width: 0; margin: 0; padding: 0 0 12px; scrollbar-gutter: stable both-edges; }
+html:root body .employee-profile-dialog .employee-profile-shell { gap: 16px; }
+html:root body .employee-profile-dialog .employee-profile-sticky { gap: 12px; padding-bottom: 0; background: var(--ws-surface); }
+html:root body .employee-profile-dialog .employee-profile-hero { min-height: 0; grid-template-columns: 80px minmax(0, 1fr) 148px; gap: 16px; padding: 16px; border: 0; border-radius: 16px; box-shadow: none; }
+html:root body .employee-profile-dialog .employee-profile-hero .fui-Avatar { width: 80px; height: 80px; border: 0; box-shadow: none; }
+html:root body .employee-profile-dialog .employee-profile-hero .fui-Avatar__initials { font-size: 30px; }
+html:root body .employee-profile-dialog .employee-profile-eyebrow { display: none; }
+html:root body .employee-profile-dialog .employee-profile-hero h2 { margin: 0 0 4px; font-size: 24px; line-height: 30px; }
+html:root body .employee-profile-dialog .employee-profile-identity :is(p, small) { font-size: 13px; line-height: 20px; }
+html:root body .employee-profile-dialog .employee-profile-hero-stat { min-width: 0; gap: 4px; padding: 12px; border: 0; border-radius: 12px; box-shadow: none; }
+html:root body .employee-profile-dialog .employee-profile-hero-stat small { margin: 0; padding: 0; border: 0; }
+html:root body .employee-profile-dialog :is(.employee-profile-overview > article, .employee-profile-highlight) { border: 0; border-radius: 12px; box-shadow: none; }
+html:root body .employee-profile-dialog :is(.employee-profile-overview, .achievement-grid, .employee-reward-list) { gap: 12px; }
+html:root body .employee-profile-dialog :is(.recognition-card-surface, .employee-profile-chat-action, .employee-profile-tabs) { --ws-satin-edge: none; --ws-satin-sheen: none; border: 0; box-shadow: none; }
+html:root body .employee-profile-dialog .recognition-card-surface::before { border: 0; box-shadow: none; }
+html:root body .employee-profile-dialog :is(.employee-profile-tabs > button, .employee-profile-chat-action) { min-height: 44px; font-weight: 500; border: 0; box-shadow: none; }
+html:root body .employee-profile-dialog .employee-profile-chat-action { max-width: 100%; margin-top: 8px; white-space: normal; }
+
+html:root body .app-provider .account-settings-redesigned { --personal-edge: 24px; padding: 24px; }
+html:root body .app-provider .account-settings-redesigned .account-panel { width: min(1080px, 100%); height: min(820px, 100%); border: 0; border-radius: 24px; }
+html:root body .app-provider .account-settings-redesigned .account-window-header { min-height: 76px; padding: 16px var(--personal-edge); gap: 12px; }
+html:root body .app-provider .account-settings-redesigned .account-window-header h2 { font-size: 22px; line-height: 28px; font-weight: 600; }
+html:root body .app-provider .account-settings-redesigned .account-window-header > .fui-Button { width: 44px; min-height: 44px; }
+html:root body .app-provider .account-settings-redesigned .account-profile { margin: 0 var(--personal-edge) 12px; padding: 12px; gap: 12px; border: 0; border-radius: 16px; }
+html:root body .app-provider .account-settings-redesigned .account-profile-copy strong { font-size: 18px; font-weight: 600; }
+html:root body .app-provider .account-settings-redesigned .account-settings-layout { border: 0; }
+html:root body .app-provider .account-settings-redesigned .account-settings-content { padding: 16px var(--personal-edge); scrollbar-gutter: stable both-edges; }
+html:root body .app-provider .account-settings-redesigned .account-settings-page { gap: 12px; }
+html:root body .app-provider .account-settings-redesigned .account-section { padding: 16px; border: 0; }
+html:root body .app-provider .account-settings-redesigned .account-section-title { gap: 8px; margin-bottom: 16px; }
+html:root body .app-provider .account-settings-redesigned .account-section-title h3 { margin-bottom: 4px; font-size: 18px; line-height: 24px; }
+html:root body .app-provider .account-settings-redesigned :is(.account-profile-status button, .account-avatar-action, .account-page-heading > svg, .account-section-nav button, .session-list > div) { border: 0; box-shadow: none; }
+html:root body .app-provider .account-settings-redesigned .account-profile-status button { min-height: 36px; }
+html:root body .app-provider .account-settings-redesigned .account-section-nav button { min-height: 44px; padding-inline: 12px; font-weight: 500; }
+html:root body .app-provider .account-settings-redesigned .account-section-nav { border: 0; }
+html:root body .app-provider .account-settings-redesigned .account-birthday-fields { gap: 12px; }
+
+html:root body .support-dialog-content { display: flex; flex-direction: column; gap: 12px; min-width: 0; padding: 0; overflow: hidden; }
+.support-intro { flex: none; margin: 0; color: var(--ws-muted); font-size: 13px; line-height: 20px; }
+html:root body .support-workspace { flex: 1; min-height: 0; grid-template-columns: 280px minmax(0, 1fr); gap: 12px; overflow: hidden; }
+html:root body :is(.support-request-list, .support-main, .support-message, .support-admin-actions, .support-request-card) { border: 0; box-shadow: none; border-radius: 12px; }
+html:root body .support-request-list { gap: 12px; max-height: none; padding: 12px; overflow: hidden; background: var(--ws-muted-surface); }
+.support-request-list > .fui-Input { flex: none; min-height: 44px; border: 0; background: var(--ws-surface); }
+.support-request-stream { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 8px; overflow-y: auto; scrollbar-gutter: stable both-edges; }
+.support-load-more { display: grid; justify-items: center; gap: 8px; padding: 12px 0; color: var(--ws-muted); }
+.support-load-more .fui-Button { min-height: 44px; border: 0; }
+html:root body .support-list-title { padding: 0; font-size: 13px; }
+html:root body .support-request-card { gap: 4px; padding: 12px; background: var(--ws-surface); transition: background-color 140ms var(--ws-ease); }
+html:root body .support-request-card:hover { transform: none; background: var(--ws-selected); box-shadow: none; }
+html:root body .support-request-card.is-selected { background: var(--ws-selected); }
+html:root body .support-request-card :is(small, time) { font-size: 12px; line-height: 16px; }
+html:root body .support-main { padding: 16px; background: var(--ws-muted-surface); scrollbar-gutter: stable both-edges; }
+html:root body .support-thread { gap: 12px; }
+html:root body .support-thread h2 { font-size: 20px; line-height: 26px; font-weight: 600; }
+html:root body .support-thread > header > div > span { font-size: 12px; font-weight: 500; letter-spacing: 0; text-transform: none; }
+html:root body .support-message { padding: 12px; }
+html:root body .support-message > span { grid-template-columns: minmax(0, 1fr) auto; gap: 4px 8px; }
+html:root body .support-message > span small { grid-column: 1; grid-row: 2; }
+html:root body .support-message > span time { grid-column: 2; grid-row: 1 / span 2; }
+html:root body .support-message :is(small, time, p) { font-size: 12px; line-height: 18px; }
+html:root body .support-composer { gap: 12px; padding-bottom: 16px; border: 0; }
+html:root body :is(.support-category-picker, .support-resolution-reasons) { gap: 8px; }
+html:root body :is(.support-category-picker button, .support-resolution-reasons button) { min-height: 44px; border: 0; box-shadow: none; font-size: 12px; }
+html:root body .support-category-picker button { transform: none; }
+html:root body .support-category-picker small { font-size: 12px; }
+html:root body .support-action-row { gap: 8px; }
+html:root body .support-action-row .fui-Button { min-height: 44px; border: 0; box-shadow: none; }
+
+@media (max-width: 700px) {
+  html:root body .fui-DialogSurface:is(.employee-profile-dialog.employee-profile-dialog, .support-dialog.support-dialog) {
+    --personal-edge: 12px; inset: calc(var(--ws-browser-top, 0px) + max(12px, env(safe-area-inset-top))) auto auto max(12px, env(safe-area-inset-left));
+    width: calc(100vw - max(12px, env(safe-area-inset-left)) - max(12px, env(safe-area-inset-right)));
+    height: calc(var(--ws-browser-height, 100dvh) - max(12px, env(safe-area-inset-top)) - max(12px, env(safe-area-inset-bottom)));
+    margin: 0; padding: 12px; border-radius: 20px;
+  }
+  html:root body :is(.employee-profile-dialog, .support-dialog) .fui-DialogBody { gap: 8px; }
+  html:root body :is(.employee-profile-dialog, .support-dialog) .fui-DialogTitle { font-size: 20px; line-height: 24px; }
+  html:root body .employee-profile-dialog .employee-profile-sticky { position: static; gap: 8px; }
+  html:root body .employee-profile-dialog .employee-profile-hero { grid-template-columns: 48px minmax(0, 1fr); align-items: start; gap: 12px; padding: 12px; }
+  html:root body .employee-profile-dialog .employee-profile-hero > .fui-Avatar { width: 48px; height: 48px; }
+  html:root body .employee-profile-dialog .employee-profile-hero .fui-Avatar__initials { font-size: 24px; }
+  html:root body .employee-profile-dialog .employee-profile-hero h2 { font-size: 20px; line-height: 24px; }
+  html:root body .employee-profile-dialog .employee-profile-identity :is(p, small) { font-size: 12px; line-height: 18px; }
+  html:root body .employee-profile-dialog .employee-profile-hero-stat { display: none; }
+  html:root body .employee-profile-dialog .employee-profile-overview { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  html:root body .employee-profile-dialog .employee-profile-overview > article:first-child { grid-column: 1 / -1; }
+  html:root body .employee-profile-dialog :is(.employee-profile-shell, .employee-profile-overview, .achievement-grid) { gap: 8px; }
+  html:root body .employee-profile-dialog .employee-profile-overview > article { min-height: 0; padding: 12px; }
+  html:root body .employee-profile-dialog .employee-profile-highlight { flex-wrap: wrap; gap: 8px; padding: 12px; }
+  html:root body .employee-profile-dialog .employee-profile-tabs > button { min-width: 0; padding: 8px 4px; font-size: 12px; }
+  html:root body .employee-profile-dialog .reward-heading-actions { flex-wrap: wrap; }
+
+  html:root body .app-provider .account-settings-redesigned { --personal-edge: 12px; padding: 12px; }
+  html:root body .app-provider .account-settings-redesigned .account-panel { height: 100%; border-radius: 20px; }
+  html:root body .app-provider .account-settings-redesigned .account-window-header { min-height: 60px; padding: 8px 12px; }
+  html:root body .app-provider .account-settings-redesigned .account-window-header h2 { font-size: 20px; line-height: 24px; }
+  html:root body .app-provider .account-settings-redesigned .account-window-header p { display: none; }
+  html:root body .app-provider .account-settings-redesigned .account-profile { grid-template-columns: 44px minmax(0, 1fr) 44px; margin: 0 12px 8px; padding: 8px; gap: 8px; }
+  html:root body .app-provider .account-settings-redesigned .account-profile-copy strong { font-size: 14px; line-height: 20px; }
+  html:root body .app-provider .account-settings-redesigned .account-profile-copy p { display: none; }
+  html:root body .app-provider .account-settings-redesigned .account-avatar-action { grid-column: 3; grid-row: 1; width: 44px; min-width: 44px; height: 44px; padding: 0; font-size: 0; }
+  html:root body .app-provider .account-settings-redesigned .account-avatar-action .fui-Button__icon { font-size: 24px; }
+  html:root body .app-provider .account-settings-redesigned .account-settings-layout { display: flex; flex-direction: column; }
+  html:root body .app-provider .account-settings-redesigned .account-section-nav { display: none; }
+  html:root body .app-provider .account-settings-redesigned .account-compact-navigation { display: block; padding: 8px 12px; border: 0; }
+  html:root body .app-provider .account-settings-redesigned .account-settings-content { padding: 12px; }
+  html:root body .app-provider .account-settings-redesigned .account-section { padding: 12px; }
+  html:root body .app-provider .account-settings-redesigned .account-page-heading { gap: 8px; }
+  html:root body .app-provider .account-settings-redesigned .account-page-heading h3 { font-size: 18px; }
+  html:root body .app-provider .account-settings-redesigned .account-page-heading p { display: none; }
+  html:root body .app-provider .account-settings-redesigned .account-section-title p { font-size: 13px; line-height: 20px; }
+
+  html:root body .support-workspace { display: flex; flex-direction: column; gap: 8px; }
+  .support-mobile-navigation { display: flex; flex: none; gap: 8px; }
+  .support-mobile-navigation .fui-Button { min-height: 44px; border: 0; }
+  html:root body .support-request-list { flex: 1; padding: 12px; gap: 8px; }
+  html:root body .support-main { flex: 1; min-height: 0; padding: 12px; overflow-y: auto; }
+  .support-workspace[data-mobile-screen="list"] .support-main,
+  .support-workspace:is([data-mobile-screen="thread"], [data-mobile-screen="compose"]) .support-request-list,
+  .support-workspace[data-mobile-screen="thread"] .support-composer,
+  .support-workspace[data-mobile-screen="compose"] .support-thread { display: none; }
+  html:root body .support-thread { padding: 0; }
+  html:root body .support-thread > header { flex-wrap: wrap; gap: 8px; }
+  html:root body .support-message > span { display: flex; flex-wrap: wrap; gap: 4px 8px; }
+  html:root body .support-message time { flex-basis: 100%; }
+  html:root body .support-admin-actions { padding: 12px; }
+}
+@media (forced-colors: none) {
+  html:root body :is(.employee-profile-dialog, .support-dialog, .account-settings-redesigned) :is(.account-profile-status button, .account-avatar-action, .account-section, .account-settings-layout, .account-compact-navigation, .support-resolution-reasons button) { --ws-satin-edge: none; --ws-satin-sheen: none; border: 0; box-shadow: none; }
+}
+html:root body :is(.employee-profile-dialog, .support-dialog, .account-settings-redesigned) :is(button, [role="combobox"]):focus-visible { outline: 2px solid var(--ws-link); outline-offset: -2px; }
+
+/* Settings fields sit on their own quiet surface in both color themes. */
+html:root body .app-provider .account-settings-redesigned :is(.fui-Input, .fui-Dropdown, .birthday-day-trigger):not([aria-invalid="true"]):not(:has([aria-invalid="true"])) {
+  border: 0;
+  background: var(--ws-theme-surface-soft, #e6edf2);
+}
+html:root body .app-provider .account-settings-redesigned :is(.fui-Input, .fui-Dropdown, .birthday-day-trigger):not([aria-invalid="true"]):not(:has([aria-invalid="true"])):hover {
+  background: color-mix(in srgb, var(--ws-theme-surface-soft, #e6edf2) 75%, var(--ws-selected));
+}
+
+/* Satin's background image otherwise paints over the field color; the
+   Dropdown button also has its own image, so set both painted layers. */
+html:root body .app-provider .account-settings-redesigned .fui-Dropdown:not([aria-invalid="true"]):not(:has([aria-invalid="true"])) {
+  background-image: none !important;
+}
+html:root body .app-provider .account-settings-redesigned .fui-Dropdown:not([aria-invalid="true"]):not(:has([aria-invalid="true"])) > .fui-Dropdown__button {
+  border: 0;
+  border-radius: inherit;
+  background-color: var(--ws-theme-surface-soft, #e6edf2) !important;
+  background-image: none !important;
+}
+html:root body .app-provider .account-settings-redesigned .fui-Dropdown:not([aria-invalid="true"]):not(:has([aria-invalid="true"])):hover > .fui-Dropdown__button {
+  background-color: color-mix(in srgb, var(--ws-theme-surface-soft, #e6edf2) 75%, var(--ws-selected)) !important;
+}

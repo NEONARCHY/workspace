@@ -71,7 +71,7 @@ function renderMessenger(
 }
 
 function openMessageMenu(text: string) {
-  const message = screen.getByText(text).closest(".message");
+  const message = screen.getAllByText(text).map(element => element.closest(".message")).find(Boolean);
   if (!message) throw new Error(`Message not found: ${text}`);
   fireEvent.contextMenu(message);
 }
@@ -264,6 +264,36 @@ describe("rich messenger integration", () => {
     fireEvent.click(screen.getByRole("button", { name: "Закреплено: 1" }));
     expect(screen.getByText("Закреп председателя · нельзя снять")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Снять для/ })).not.toBeInTheDocument();
+  });
+  it("allows pinning another participant's message without exposing delete or edit", async () => {
+    const onPinMessage = vi.fn().mockResolvedValue(undefined);
+    const message = { ...quoted, canPin: true, canDelete: undefined, canEdit: false };
+    renderMessenger({ messages: [message], onPinMessage, currentUserRole: "employee" });
+    openMessageMenu(message.body);
+    expect(screen.queryByRole("button", { name: "Удалить" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Изменить" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Закрепить" }));
+    await waitFor(() => expect(onPinMessage).toHaveBeenCalledWith(message, true));
+  });
+  it("shows a compact pinned preview and respects an explicit pin denial", () => {
+    const message = { ...quoted, isPinned: true, canPin: false };
+    renderMessenger({ messages: [message] });
+    const preview = screen.getByRole("button", { name: /Закреплённое сообщение/ });
+    expect(preview).toHaveTextContent(message.body);
+    const pane = screen.getByLabelText("Переписка");
+    pane.scrollTo = vi.fn();
+    fireEvent.click(preview);
+    expect(pane.scrollTo).toHaveBeenCalled();
+    cleanup();
+    renderMessenger({ messages: [{ ...message, isPinned: false }] });
+    openMessageMenu(message.body);
+    expect(screen.queryByRole("button", { name: "Закрепить" })).not.toBeInTheDocument();
+  });
+  it("previews the most recently pinned message even when its message is older", () => {
+    const older = { ...quoted, id: "older", body: "Старое сообщение", createdAt: "2026-01-01T00:00:00Z", isPinned: true, pinnedAt: "2026-03-01T00:00:00Z" };
+    const newer = { ...quoted, id: "newer", body: "Новое сообщение", createdAt: "2026-02-01T00:00:00Z", isPinned: true, pinnedAt: "2026-02-02T00:00:00Z" };
+    renderMessenger({ messages: [older, newer] });
+    expect(screen.getByRole("button", { name: /Закреплённое сообщение/ })).toHaveTextContent("Старое сообщение");
   });
   it("does not count personally hidden pins in the top banner", () => {
     renderMessenger({ messages: [{ ...quoted, isPinned: true, pinHiddenForMe: true }] });

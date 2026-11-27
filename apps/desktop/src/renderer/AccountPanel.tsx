@@ -2,7 +2,6 @@ import { formatRussianDateTime } from "./date-time-format";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { LoadingSkeleton } from "./LoadingSkeleton";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { SlidingSegmented } from "./SlidingSegmented";
 
 import type {
   DirectoryEmployee,
@@ -118,6 +117,9 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
   const [birthdayDay, setBirthdayDay] = useState("");
   const [birthdayBusy, setBirthdayBusy] = useState(false);
   const [activeSection, setActiveSection] = useState<AccountSectionKey>(initialSection === "invite" ? "invite" : "profile");
+  const [visitedSections, setVisitedSections] = useState<ReadonlySet<AccountSectionKey>>(() => new Set([initialSection === "invite" ? "invite" : "profile"]));
+  const directoryLoadedFor = useRef<string | undefined>(undefined);
+  const needsDirectory = ["admin", "superadmin"].includes(user.role) && ["invite", "managed-password", "recovery"].includes(activeSection);
   const contentRef = useContextMotion(activeSection);
   const [securityLoading, setSecurityLoading] = useState(true);
   const [securityError, setSecurityError] = useState("");
@@ -125,6 +127,7 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
   const [sessionToRevoke, setSessionToRevoke] = useState<SessionSummary>();
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const jumpToSection = (sectionKey: AccountSectionKey) => {
+    setVisitedSections(current => current.has(sectionKey) ? current : new Set([...current, sectionKey]));
     setActiveSection(sectionKey);
   };
   useEffect(() => {
@@ -155,8 +158,15 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
         if (active) setSecurityError(error instanceof Error ? error.message : "Не удалось загрузить защиту и устройства.");
       })
       .finally(() => { if (active) setSecurityLoading(false); });
+    return () => { active = false; };
+  }, [token]);
+
+  useEffect(() => {
+    if (!needsDirectory || directoryLoadedFor.current === token) return;
+    let active = true;
     void loadDirectory(token).then((directory) => {
         if (!active) return;
+        directoryLoadedFor.current = token;
         setPositions(directory.positions.filter((position) => position.isActive));
         setEmployees(directory.employees);
         setDepartments(directory.departments);
@@ -169,7 +179,7 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
     return () => {
       active = false;
     };
-  }, [token]);
+  }, [token, needsDirectory]);
 
   useEffect(() => {
     if (initialSection === "invite") return;
@@ -383,7 +393,7 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
 
         <div className={`account-settings-layout${initialSection === "invite" ? " is-invite" : ""}`}>
         {initialSection !== "invite" && <>
-          <SlidingSegmented as="nav" className="account-section-nav navigation-sliding" activeSelector=':scope > div > button[aria-pressed="true"]' aria-label="Разделы настроек">
+          <nav className="account-section-nav" aria-label="Разделы настроек">
             <span className="account-nav-group">Ваш аккаунт</span>
             {navigationItems.map((item, index) => <div key={item.key}>
               {item.admin && !navigationItems[index - 1]?.admin && <span className="account-nav-group">Администрирование</span>}
@@ -395,7 +405,7 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
               aria-controls={`account-page-${item.key}`}
               onClick={() => jumpToSection(item.key)}
             ><span aria-hidden="true">{item.icon}</span>{item.label}</button></div>)}
-          </SlidingSegmented>
+          </nav>
           <div className="account-compact-navigation">
             <Field label="Раздел настроек"><Select value={activeSection} onChange={event => jumpToSection(event.target.value as AccountSectionKey)}>
               {navigationItems.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}
@@ -459,11 +469,11 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
 
         <div id="account-page-appearance" className="account-settings-page" hidden={activeSection !== "appearance"}>
           <div className="account-page-heading"><Color24Regular /><div><h3>Оформление</h3><p>Тема пространства и цвет меню под ваш вкус.</p></div></div>
-          <ColorThemeSettings userId={user.id} />
-          <SidebarAppearanceSettings userId={user.id} />
+          {visitedSections.has("appearance") && <><ColorThemeSettings userId={user.id} />
+          <SidebarAppearanceSettings userId={user.id} /></>}
         </div>
-        <div id="account-page-audio" className="account-settings-page" hidden={activeSection !== "audio"}><AudioDeviceSettings /></div>
-        {["admin", "superadmin"].includes(user.role) && <div id="account-page-updates" className="account-settings-page" hidden={activeSection !== "updates"}><DesktopUpdateSettings token={token} canPublish={user.role === "superadmin"} /></div>}
+        <div id="account-page-audio" className="account-settings-page" hidden={activeSection !== "audio"}>{visitedSections.has("audio") && <AudioDeviceSettings />}</div>
+        {["admin", "superadmin"].includes(user.role) && <div id="account-page-updates" className="account-settings-page" hidden={activeSection !== "updates"}>{visitedSections.has("updates") && <DesktopUpdateSettings token={token} canPublish={user.role === "superadmin"} />}</div>}
 
         <div id="account-page-security" className="account-settings-page" hidden={activeSection !== "security"}>
         <section className="account-section" data-account-section="password">

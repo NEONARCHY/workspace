@@ -108,9 +108,12 @@ def member_permissions(member: Record) -> ChatPermissions:
     return ChatPermissions.model_validate(member["permissions"] or {})
 
 
-def can_manage_messages(chat: Record, member: Record) -> bool:
-    permissions = member_permissions(member)
-    return permissions.manage_messages or (chat["kind"] == "direct" and permissions.send_messages)
+def can_manage_messages(kind: str, permissions: ChatPermissions) -> bool:
+    return permissions.manage_messages or (kind == "direct" and permissions.send_messages)
+
+
+def can_pin_messages(kind: str, permissions: ChatPermissions, *, is_member: bool) -> bool:
+    return (is_member and kind != "direct") or can_manage_messages(kind, permissions)
 
 
 def can_edit_chat_avatar(chat: Record, member: Record, user_id: UUID) -> bool:
@@ -167,6 +170,7 @@ async def chat_access(
             "user_id": user.id,
             "member_role": "member",
             "permissions": permissions.model_dump(),
+            "implicit_membership": True,
         })
     # Workspace-level admins are not implicitly members of a private conversation.
     left_context = (chat is not None and chat["context_type"] is not None
@@ -958,6 +962,7 @@ def message_response(
     *,
     can_send: bool = True,
     can_pin: bool = False,
+    can_delete_others: bool = False,
     reactions: list[MessageReactionResponse] | None = None,
     pin: Record | None = None,
     forwarded: ForwardedContentResponse | None = None,
@@ -1006,7 +1011,7 @@ def message_response(
         and can_send
         and datetime.now(UTC) < row["created_at"] + timedelta(hours=24),
         can_delete=not protected and not deleted and row["system_kind"] is None and (
-            own or user.role in {"admin", "superadmin"} or can_pin
+            own or user.role in {"admin", "superadmin"} or can_delete_others
         ),
         reactions=[] if deleted else (reactions or []),
         is_pinned=not deleted and pin is not None,
@@ -1032,11 +1037,15 @@ async def message_with_details(
     read_ids = await read_message_ids(connection, user, [row["id"]])
     invitations = await invitation_detail_map(connection, user, [row])
     quotes = await reply_quote_map(connection, user, [row])
+    permissions = member_permissions(member)
     return message_response(
         row,
         user,
-        can_send=member_permissions(member).send_messages,
-        can_pin=can_manage_messages(chat, member),
+        can_send=permissions.send_messages,
+        can_pin=can_pin_messages(
+            chat["kind"], permissions, is_member=not member.get("implicit_membership", False)
+        ),
+        can_delete_others=can_manage_messages(chat["kind"], permissions),
         reactions=reactions.get(row["id"]),
         pin=pins.get(row["id"]),
         forwarded=forwards.get(row["id"]),
@@ -1289,6 +1298,10 @@ async def set_message_pin(
     message_id: UUID,
     payload: PinMessageRequest,
 ) -> ChatMessageResponse:
+    chat_id = await connection.scalar(select(messages.c.chat_id).where(messages.c.id == message_id))
+    if chat_id is None:
+        raise WorkspaceRepositoryError(404, "Сообщение не найдено")
+    chat, member = await chat_access(connection, user, chat_id, lock=True)
     row = (
         (await connection.execute(select(messages).where(messages.c.id == message_id)))
         .mappings()
@@ -1296,7 +1309,6 @@ async def set_message_pin(
     )
     if row is None or row["deleted_at"] is not None or row["system_kind"] is not None:
         raise WorkspaceRepositoryError(404, "Сообщение не найдено")
-    chat, member = await chat_access(connection, user, row["chat_id"], lock=True)
     if not message_visible_to_member(row, member):
         raise WorkspaceRepositoryError(404, "Сообщение не найдено")
     _, pins = await message_detail_maps(connection, user, [message_id])
@@ -1319,7 +1331,11 @@ async def set_message_pin(
             )
         )
     else:
-        if not can_manage_messages(chat, member):
+        if not can_pin_messages(
+            chat["kind"],
+            member_permissions(member),
+            is_member=not member.get("implicit_membership", False),
+        ):
             raise WorkspaceRepositoryError(403, "Нет права управлять закрепами для всех")
         if payload.pinned:
             if existing is None:
@@ -1392,8 +1408,11 @@ async def change_message(
     _, pins = await message_detail_maps(connection, user, [message_id])
     if deleting and pins.get(message_id, {}).get("protected"):
         raise WorkspaceRepositoryError(403, "Закреплённое председателем сообщение нельзя удалить")
-    may_moderate = user.role in {"admin", "superadmin"} or can_manage_messages(chat, member)
-    response = message_response(row, user, can_send=member_permissions(member).send_messages)
+    permissions = member_permissions(member)
+    may_moderate = user.role in {"admin", "superadmin"} or can_manage_messages(
+        chat["kind"], permissions
+    )
+    response = message_response(row, user, can_send=permissions.send_messages)
     if (deleting and not (response.own or may_moderate)) or (
         not deleting and not response.can_edit
     ):

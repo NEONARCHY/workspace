@@ -52,7 +52,7 @@ const permissionLabels: Record<keyof ChatPermissions, string> = {
   inviteMembers: "Добавлять сотрудников",
   manageMembers: "Исключать участников",
   editInfo: "Менять название и описание",
-  manageMessages: "Закреплять сообщения",
+  manageMessages: "Удалять чужие сообщения",
 };
 const adminPermissions: ChatPermissions = {
   sendMessages: true,
@@ -180,7 +180,7 @@ function MemberEditor({
       </Field>
       <p className="muted">
         Права действуют только в этой группе. Назначать роли и передавать
-        владение может только владелец.
+        владение может только владелец. Закреплять сообщения могут все участники группы.
       </p>
       {(Object.keys(permissionLabels) as (keyof ChatPermissions)[]).map(
         (key) => (
