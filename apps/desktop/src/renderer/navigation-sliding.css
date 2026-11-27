@@ -1,4 +1,4 @@
-/* One selection surface travels beneath stationary labels in both menus. */
+/* Settings retain their travelling tab surface. Sidebar selection is local. */
 .navigation-sliding.sliding-segmented { position: relative; inset: auto; isolation: isolate; }
 .navigation-sliding > .sliding-segmented-indicator {
   border: 1px solid rgb(var(--ws-theme-line-rgb, 255 255 255) / 0.72);
@@ -11,10 +11,6 @@
 .account-settings-redesigned .navigation-sliding button { background: transparent; border-radius: 14px; }
 .account-settings-redesigned .navigation-sliding button.is-active { color: var(--ws-text); background: transparent; border-color: transparent; }
 .account-settings-redesigned .navigation-sliding button.is-active svg { color: var(--ws-link); }
-body .app-rail .navigation-sliding > .rail-slot > .rail-action.active:not(.rail-more-action)::before { opacity: 0; }
-/* Inline modules share the travelling surface; their labels never paint a second one. */
-body .app-rail .navigation-sliding .rail-ai-disclosure.is-open .rail-ai-link.active { background: transparent; }
-body .app-rail .navigation-sliding > .rail-slot > .rail-action.active { transform: none; }
 @media (prefers-reduced-motion: reduce), (forced-colors: active) {
   .navigation-sliding > .sliding-segmented-indicator { transition: none; }
 }

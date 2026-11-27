@@ -21,10 +21,12 @@ import {
 import { AIReferentFiles } from "./AIReferentFiles";
 import { AIReferentGooeySearch } from "./AIReferentGooeySearch";
 import { AIReferentPagination } from "./AIReferentPagination";
+import { AIReferentToolbarActions } from "./AIReferentToolbarActions";
 
 interface AIReferentIncomingRegisterProps {
   readonly token: string;
   readonly focusLetterId?: string;
+  readonly toolbarTarget?: HTMLElement | null;
 }
 
 type IncomingFilter = "all" | "registered" | "attention" | "attachments";
@@ -64,7 +66,7 @@ function fileCountLabel(count: number): string {
   return `${count} ${!teen && end === 1 ? "файл" : !teen && end >= 2 && end <= 4 ? "файла" : "файлов"}`;
 }
 
-export function AIReferentIncomingRegister({ token, focusLetterId }: AIReferentIncomingRegisterProps) {
+export function AIReferentIncomingRegister({ token, focusLetterId, toolbarTarget }: AIReferentIncomingRegisterProps) {
   const [registry, setRegistry] = useState<AIReferentIncomingRegistry>();
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
@@ -73,6 +75,7 @@ export function AIReferentIncomingRegister({ token, focusLetterId }: AIReferentI
   const [filter, setFilter] = useState<IncomingFilter>("all");
   const [page, setPage] = useState(0);
   const requestSequence = useRef(0);
+  const pendingRead = useRef<{ key: string; controller: AbortController; promise: Promise<void> } | undefined>(undefined);
   const focusedRow = useRef<HTMLTableRowElement>(null);
   const hasFocused = useRef(false);
   useEffect(() => {
@@ -85,11 +88,16 @@ export function AIReferentIncomingRegister({ token, focusLetterId }: AIReferentI
   const selectFilter = (next: IncomingFilter) => { setPage(0); setFilter(next); };
 
   const refresh = useCallback(async (search = "", quiet = false) => {
+    const key = JSON.stringify([token, search, filter, page]);
+    if (quiet && pendingRead.current?.key === key) return pendingRead.current.promise;
+    pendingRead.current?.controller.abort();
+    const controller = new AbortController();
     const sequence = ++requestSequence.current;
+    const entry = { key, controller, promise: Promise.resolve() }; pendingRead.current = entry;
     if (!quiet) { setLoading(true); setError(""); }
-    try {
-      const next = await loadAIReferentIncomingRegistry(token, { query: search, category: filter, offset: page * 100 });
-      if (sequence === requestSequence.current) setRegistry(previous => {
+    entry.promise = (async () => { try {
+      const next = await loadAIReferentIncomingRegistry(token, { query: search, category: filter, offset: page * 100 }, controller.signal);
+      if (sequence === requestSequence.current) { setError(""); setRegistry(previous => {
         // Poll/search responses contain fresh objects even when every row is unchanged.
         // Compare all fields, not only revision: resolved employee names can change too.
         const sameRows = previous?.letters.length === next.letters.length && previous.letters.every((letter, index) => {
@@ -98,20 +106,24 @@ export function AIReferentIncomingRegister({ token, focusLetterId }: AIReferentI
             && Object.entries(letter).every(([key, value]) => Object.is(candidate[key as keyof AIReferentIncomingLetter], value));
         });
         return sameRows ? { ...next, letters: previous.letters } : next;
-      });
+      }); }
     } catch (reason) {
-      if (sequence === requestSequence.current) {
+      if (!controller.signal.aborted && sequence === requestSequence.current) {
         setError(reason instanceof Error ? reason.message : "Не удалось загрузить входящие письма.");
       }
     } finally {
+      if (pendingRead.current === entry) pendingRead.current = undefined;
       if (sequence === requestSequence.current) setLoading(false);
-    }
+    } })();
+    return entry.promise;
   }, [token, filter, page]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => { void refresh(query); }, query ? 250 : 0);
-    const poll = window.setInterval(() => { void refresh(query, true); }, 15000);
-    return () => { window.clearTimeout(timer); window.clearInterval(poll); requestSequence.current += 1; };
+    const poll = window.setInterval(() => { if (!document.hidden) void refresh(query, true); }, 15000);
+    const visibility = () => { if (!document.hidden) void refresh(query, true); else { pendingRead.current?.controller.abort(); pendingRead.current = undefined; requestSequence.current += 1; } };
+    document.addEventListener("visibilitychange", visibility);
+    return () => { window.clearTimeout(timer); window.clearInterval(poll); requestSequence.current += 1; pendingRead.current?.controller.abort(); pendingRead.current = undefined; document.removeEventListener("visibilitychange", visibility); };
   }, [query, refresh]);
 
   const letters = registry?.letters ?? [];
@@ -163,7 +175,7 @@ export function AIReferentIncomingRegister({ token, focusLetterId }: AIReferentI
           value={query}
           onValueChange={(value) => { setPage(0); setQuery(value); }}
         />
-        <div className="ai-referent-toolbar-actions">
+        <AIReferentToolbarActions target={toolbarTarget}>
           <Button
             appearance="secondary"
             icon={<ArrowDownload20Regular />}
@@ -182,7 +194,7 @@ export function AIReferentIncomingRegister({ token, focusLetterId }: AIReferentI
           >
             Обновить
           </Button>
-        </div>
+        </AIReferentToolbarActions>
       </div>
 
       <div className="ai-referent-list-bar">

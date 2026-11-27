@@ -1,0 +1,26 @@
+/* Visible focus is opted into by Tab/Shift+Tab. Keep DOM focus, caret,
+   validation, selected states and keyboard actions unchanged. This final
+   modality gate intentionally overrides legacy focus and Fluent rings. */
+html:not([data-workspace-tab-focus]) body :is(
+  button, a, input, textarea, select, [tabindex], [role="button"],
+  [role="menuitem"], [role="tab"], .fui-Input, .fui-Textarea,
+  .fui-Checkbox, .fui-Radio, .fui-Switch, .workspace-select
+):not([aria-invalid="true"]):not(:has([aria-invalid="true"])):is(:focus, :focus-visible, :focus-within) {
+  outline: none !important;
+  box-shadow: none !important;
+}
+html:not([data-workspace-tab-focus]) body :is(
+  button, a, input, textarea, select, [tabindex], [role="button"],
+  [role="menuitem"], [role="tab"], .fui-Input, .fui-Textarea,
+  .fui-Checkbox, .fui-Radio, .fui-Switch, .workspace-select
+):not([aria-invalid="true"]):not(:has([aria-invalid="true"])):is(:focus, :focus-visible, :focus-within)::after,
+html:not([data-workspace-tab-focus]) body .fui-Checkbox__indicator::after {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Fluent's form underline is a border on the wrapper, not an outline.
+   Portalled controls receive the same modality rule as the main app. */
+html:not([data-workspace-tab-focus]) body :is(.fui-Input, .fui-Textarea, .workspace-select):not([aria-invalid="true"]):not(:has([aria-invalid="true"])):focus-within::after {
+  border-color: transparent !important;
+}

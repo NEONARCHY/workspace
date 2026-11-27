@@ -85,20 +85,20 @@ html[data-color-theme="dark"] .app-provider :is(.fui-DialogSurface, .fui-MenuPop
   box-shadow: var(--ws-shadow-float);
 }
 html[data-color-theme="dark"] .sidebar-palette {
-  --ws-rail-bg: radial-gradient(ellipse 360px 420px at 0 0, rgb(116 102 162 / 15%), transparent 85%), #16171d;
+  --ws-rail-bg: #191a21;
   --ws-rail-text: #dadbe3; --ws-rail-muted: #aeb0bf; --ws-rail-icon: #aeb0bf;
   --ws-rail-line: #3c3e4b; --ws-rail-hover: rgb(255 255 255 / 5%);
   --ws-rail-profile: #22232b; --ws-rail-focus: #c5bdf0;
-  --ws-rail-selected: linear-gradient(115deg, #34333f, #272830);
+  --ws-rail-selected: #30313b;
   --ws-rail-selected-ink: #f0f0f4; --ws-rail-selected-icon: #d8d2ef;
   --ws-rail-count: #30313d; --ws-rail-count-ink: #d9dbe4;
   --ws-rail-badge: #3b2c32; --ws-rail-badge-ink: #f3b4c1;
 }
 html[data-color-theme="dark"] .sidebar-palette[data-sidebar-theme="navy"] {
-  --ws-rail-bg: radial-gradient(ellipse 360px 420px at 0 0, rgb(84 107 151 / 12%), transparent 85%), #16171d;
+  --ws-rail-bg: #1b1d24;
 }
 html[data-color-theme="dark"] .sidebar-palette[data-sidebar-theme="light"] {
-  --ws-rail-bg: #212229;
+  --ws-rail-bg: #23242b;
 }
 html[data-color-theme="dark"] .app-provider :is(.fui-MenuPopover, .fui-PopoverSurface, .fui-Listbox, .fui-Tooltip) {
   background: var(--ws-popup-surface);
@@ -109,8 +109,7 @@ html[data-color-theme="dark"] .app-shell .app-rail.sidebar-palette {
   border-color: var(--ws-rail-line);
   box-shadow: inset 0 1px rgb(255 255 255 / 8%);
 }
-html[data-color-theme="dark"] .sidebar-palette .rail-action.active::before,
-html[data-color-theme="dark"] .sidebar-palette .navigation-sliding > .sliding-segmented-indicator {
+html[data-color-theme="dark"] .sidebar-palette .rail-action.active::before {
   border-color: transparent;
   box-shadow: none;
 }

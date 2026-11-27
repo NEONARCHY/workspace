@@ -253,7 +253,7 @@ export function FloatingMessenger({ messenger, fullPage, pageSlot, onOpenFullPag
           </div>
         </header>
         {notice ? <p className="floating-messenger-notice" role="status">{notice}</p> : null}
-        <MessengerView {...messenger} compact={!fullPage} visible={visible && !blocking && documentVisible}
+        <MessengerView {...messenger} compact={!fullPage} listActive={visible} visible={visible && !blocking && documentVisible}
           layoutReady={!fullPage || Boolean(pageSlot && pageBounds.width && pageBounds.height)} onActiveChatChange={setActiveChatId} />
       </section></div> : null}
     </div>

@@ -40,7 +40,6 @@ import type {
   EmployeeEfficiency,
   WorkspacePerson,
 } from "@yuksalish/contracts";
-import { SlidingSegmented } from "./SlidingSegmented";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { employeeDisplayName } from "./employee-display-name";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
@@ -507,7 +506,7 @@ export function EmployeeProfileDialog({
     if (!open || !profile) return;
     return prewarmRecognitionArtwork([
       ...profile.achievements.filter((item) => item.unlocked).slice(-4).map((item) => item.iconKey),
-      ...profile.rewards.map((item) => item.iconKey), ...profile.achievements.map((item) => item.iconKey),
+      ...profile.rewards.slice(0, 3).map((item) => item.iconKey),
     ]);
   }, [open, profile]);
 
@@ -694,7 +693,7 @@ export function EmployeeProfileDialog({
                 </header>
                 {chatError?.userId === profile.person.id ? <WorkspaceNotice tone="error" className="employee-profile-chat-error" role="alert">{chatError.message}</WorkspaceNotice> : null}
 
-                <SlidingSegmented as="nav" className="employee-profile-tabs employee-scope-switch" aria-label="Навигация по профилю">
+                <nav className="employee-profile-tabs employee-scope-switch" aria-label="Навигация по профилю">
                   {(["overview", "rewards", "achievements"] as const).map((key) => <button
                     type="button"
                     key={key}
@@ -703,7 +702,7 @@ export function EmployeeProfileDialog({
                     aria-controls={`employee-profile-${key}`}
                     onClick={() => navigateTo(key)}
                   >{{ overview: "Обзор", rewards: "Награды", achievements: "Достижения" }[key]}</button>)}
-                </SlidingSegmented>
+                </nav>
               </div>
 
               <section ref={overviewRef} id="employee-profile-overview" className="employee-profile-overview" aria-label="Обзор">

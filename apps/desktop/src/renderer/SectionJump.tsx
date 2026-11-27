@@ -14,9 +14,9 @@ export function SectionJump({ items, onNavigate, commands = [] }: {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [cursor, setCursor] = useState(0);
-  const trigger = useRef<HTMLButtonElement>(null);
+  const trigger = useRef<HTMLInputElement>(null);
   const lastFocused = useRef<HTMLElement | null>(null);
-  const show = () => { lastFocused.current = document.activeElement as HTMLElement; setQuery(""); setCursor(0); setOpen(true); };
+  const show = (initialQuery = "") => { lastFocused.current = document.activeElement as HTMLElement; setQuery(initialQuery); setCursor(0); setOpen(true); };
   const close = () => { setOpen(false); requestAnimationFrame(() => {
     const target = lastFocused.current?.isConnected ? lastFocused.current : trigger.current;
     target?.focus();
@@ -44,10 +44,11 @@ export function SectionJump({ items, onNavigate, commands = [] }: {
   const resultList = useRef<HTMLDivElement>(null);
   useEffect(() => { resultList.current?.querySelector(".command-active")?.scrollIntoView?.({ block: "nearest" }); }, [cursor]);
   return <>
-    <button ref={trigger} className="section-jump-trigger" type="button" onClick={show} aria-label="Перейти в раздел" title="Поиск и быстрый переход · Ctrl+K" aria-haspopup="dialog" aria-expanded={open}>
-      <Search20Regular aria-hidden="true" />
-      <span>Поиск и быстрый переход</span><kbd>Ctrl K</kbd>
-    </button>
+    <Input ref={trigger} expandable={false} className="section-jump-trigger" value="" placeholder="Поиск и быстрый переход"
+      contentBefore={<Search20Regular aria-hidden="true" />} contentAfter={<kbd>Ctrl K</kbd>}
+      onClick={() => show()} onChange={(_, data) => show(data.value)}
+      onKeyDown={event => { if (event.key === "Enter" || event.key === "ArrowDown") { event.preventDefault(); show(); } }}
+      aria-label="Перейти в раздел" title="Поиск и быстрый переход · Ctrl+K" aria-haspopup="dialog" aria-expanded={open} />
     <Dialog open={open} onOpenChange={(_, data) => { if (!data.open) close(); }}>
       <DialogSurface className="section-jump-dialog">
         <DialogBody>

@@ -1,4 +1,5 @@
 import { TeamDecisionFrame } from "./TeamDecisionFrame";
+import { useTabFocusMode } from "./useTabFocusMode";
 import { approvalRequestNeedsAction } from "./approval-board";
 import { MonthlyReportDashboard, MonthlyReportPrompts, MonthlyReportsView } from "./MonthlyReportsView";
 import { useMonthlyReports, useMonthlyReportWindow } from "./useMonthlyReports";
@@ -76,7 +77,6 @@ import {
   BookContacts24Regular,
   Home24Regular,
   CalendarLtr24Regular,
-  Chat24Filled,
   Chat24Regular,
   DocumentBulletList24Regular,
   DocumentBulletList24Filled,
@@ -90,7 +90,6 @@ import {
   PersonAccounts24Regular,
   Settings24Regular,
   Edit16Regular,
-  TaskListSquareLtr24Filled,
   Trophy24Regular,
   TaskListSquareLtr24Regular,
   Video24Regular,
@@ -432,6 +431,7 @@ function emptySupportRegistry(person: WorkspacePerson): SupportRegistry {
 }
 
 export function App() {
+  useTabFocusMode();
   const [previewAttachment, setPreviewAttachment] = useState<WorkspaceAttachment>();
   const [forwardPhoto, setForwardPhoto] = useState<GalleryImage<WorkspaceAttachment>>();
   const [activeSection, setActiveSection] = useState<WorkspaceSection | "notifications">("home");
@@ -2147,7 +2147,7 @@ export function App() {
   }
   const sidebarItems = groupAiNavigation(orderedNavItems);
   const aiModuleGroup = sidebarItems.find((item) => item.key === "ai_modules");
-  const aiModuleExpansionHeight = aiModuleGroup?.key === "ai_modules" ? aiModuleGroup.modules.length * 46 + 9 : 0;
+  const aiModuleExpansionHeight = aiModuleGroup?.key === "ai_modules" ? aiModuleGroup.modules.length * 44 + 4 : 0;
   const activeSectionDenied = activeSection !== "notifications" &&
     !canView(activeSection);
   const fallbackSection = orderedNavItems.find((item) => item.key !== "settings")?.key ?? "notifications";
@@ -2244,7 +2244,11 @@ export function App() {
         <aside className="app-rail sidebar-palette" data-sidebar-theme={sidebarTheme} aria-label="Основная навигация">
           <div className="workspace-logo" aria-label="Yuksalish Workspace">
             <button type="button" className="rail-toggle" disabled={!browserCompact && navigationEditing} aria-label={browserCompact ? "Закрыть меню" : railCollapsed ? "Развернуть меню" : "Свернуть меню"} aria-expanded={browserCompact ? browserMenuOpen : !railCollapsed} onClick={() => browserCompact ? closeBrowserMenu() : setRailPreference(!railCollapsed)}><Navigation24Regular /></button>
-            <CompanyLogo tone={sidebarTheme === "light" ? "color" : "white"} className="rail-brand" />
+            <button type="button" className="rail-home" aria-label="Перейти на Главную" title="Главная"
+              aria-current={displayedSection === "home" ? "page" : undefined} disabled={navigationEditing || !canView("home")}
+              onClick={() => { closeBrowserMenu(); setPreparedAction(undefined); setFocusTarget(undefined); setFocusNotification(undefined); setActiveSection("home"); }}>
+              <CompanyLogo tone={sidebarTheme === "light" ? "color" : "white"} className="rail-brand" />
+            </button>
           </div>
           <div className="rail-customize">
             <span>Меню</span>
@@ -2267,17 +2271,12 @@ export function App() {
             badges={badgeBySection}
             onClose={() => setNavigationEditing(false)}
             onSave={(order, revision) => personalMutation((token) => reorderNavigation(token, order, revision))}
-          /> : <AdaptiveNavigation scrollable={browserCompact} sidebarTheme={sidebarTheme} items={sidebarItems} expandedItem={aiModulesOpen && !railCollapsed ? { key: "ai_modules", height: aiModuleExpansionHeight } : undefined} renderItem={(item, inOverflow) => {
+          /> : <AdaptiveNavigation scrollable={browserCompact} sidebarTheme={sidebarTheme} items={sidebarItems} activeKey={aiModuleGroup?.key === "ai_modules" && aiModuleGroup.modules.some(item => item.key === displayedSection) ? "ai_modules" : displayedSection} expandedItem={aiModulesOpen && !railCollapsed ? { key: "ai_modules", height: aiModuleExpansionHeight } : undefined} renderItem={(item, inOverflow) => {
               if (item.key === "ai_modules") return <div key={item.key} className="rail-slot" data-navigation-key={item.key}>
                 <AiModulesNavigation sidebarTheme={sidebarTheme} modules={item.modules} activeKey={displayedSection} inOverflow={inOverflow} inline={!railCollapsed} open={aiModulesOpen} onOpenChange={setAiModulesOpen}
                   onSelect={(key) => { if (key === "settings") return; closeBrowserMenu(); setPreparedAction(undefined); setFocusTarget(undefined); setActiveSection(key); }} />
               </div>;
               const badge = badgeBySection[item.key];
-              const icon = displayedSection === item.key && item.key === "messenger"
-                ? <Chat24Filled />
-                : displayedSection === item.key && item.key === "tasks"
-                  ? <TaskListSquareLtr24Filled />
-                  : item.icon;
               return (
                 <div key={item.key} className="rail-slot" data-navigation-key={item.key}><button
                   className={`rail-action ${displayedSection === item.key ? "active" : ""}`}
@@ -2295,7 +2294,7 @@ export function App() {
                     setActiveSection(item.key);
                   }}
                 >
-                  <span className="rail-icon">{icon}</span>
+                  <span className="rail-icon">{item.icon}</span>
                   <span className="rail-label">{item.label}</span>
                   {badge ? <span className="rail-badge">{badge > 99 ? "99+" : badge}</span> : null}
                 </button></div>
@@ -2339,10 +2338,10 @@ export function App() {
               </div></div>
           </header>
 
-          <DossierReminderPrompt key={`${session.user.id}:${activeApiOrigin}`} token={session.accessToken}
+          <DossierReminderPrompt key={`dossier:${session.user.id}:${activeApiOrigin}`} token={session.accessToken}
             userId={session.user.id} people={displayPeople}
             paused={accountOpen || Boolean(profileUserId) || supportOpen || Boolean(previewAttachment) || Boolean(forwardPhoto) || switchingNetwork} />
-          <HisobotDraftPrompt key={`${workspace.currentUser.id}:${activeApiOrigin}`} token={session.accessToken}
+          <HisobotDraftPrompt key={`hisobot:${workspace.currentUser.id}:${activeApiOrigin}`} token={session.accessToken}
             userId={workspace.currentUser.id} notifications={workspace.notifications}
             enabled={modulePermissions.ai_hisobot?.view === true}
             editingReport={displayedSection === "ai_hisobot"}

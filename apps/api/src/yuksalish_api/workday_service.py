@@ -198,7 +198,7 @@ async def start_workday(
     connection: AsyncConnection, current_user: AuthenticatedUser, *, now: datetime | None = None
 ) -> WorkdayMeResponse:
     checked_at = now or datetime.now(UTC)
-    await close_overdue_sessions(connection, now=checked_at)
+    await close_overdue_sessions(connection, now=checked_at, user_id=current_user.id)
     # Serialise repeated clicks and two active sessions from different desktop clients.
     await connection.execute(
         select(users.c.id).where(users.c.id == current_user.id).with_for_update()
@@ -240,7 +240,7 @@ async def finish_workday(
     connection: AsyncConnection, current_user: AuthenticatedUser, *, now: datetime | None = None
 ) -> WorkdayMeResponse:
     checked_at = now or datetime.now(UTC)
-    await close_overdue_sessions(connection, now=checked_at)
+    await close_overdue_sessions(connection, now=checked_at, user_id=current_user.id)
     row = (
         (await connection.execute(select(workday_sessions).where(
             workday_sessions.c.user_id == current_user.id,
@@ -261,15 +261,17 @@ async def finish_workday(
 
 
 async def close_overdue_sessions(
-    connection: AsyncConnection, *, now: datetime | None = None
+    connection: AsyncConnection, *, now: datetime | None = None, user_id: UUID | None = None
 ) -> int:
+    """Personal actions clean one employee; the scheduler keeps organization-wide cleanup."""
     checked_at = now or datetime.now(UTC)
-    rows = (
-        (await connection.execute(select(workday_sessions).where(
-            workday_sessions.c.ended_at.is_(None),
-            workday_sessions.c.work_date < local_day(checked_at),
-        ).with_for_update(skip_locked=True))).mappings().all()
+    statement = select(workday_sessions).where(
+        workday_sessions.c.ended_at.is_(None),
+        workday_sessions.c.work_date < local_day(checked_at),
     )
+    if user_id is not None:
+        statement = statement.where(workday_sessions.c.user_id == user_id)
+    rows = (await connection.execute(statement.with_for_update(skip_locked=True))).mappings().all()
     count = 0
     for row in rows:
         if checked_at < automatic_close_due(row["work_date"]):

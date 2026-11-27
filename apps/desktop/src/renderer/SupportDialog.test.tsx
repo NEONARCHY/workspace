@@ -63,6 +63,31 @@ afterEach(() => {
 });
 
 describe("SupportDialog", () => {
+  it("mounts support history in batches and searches beyond the mounted window", () => {
+    const registry = { ...inboxRegistry, requests: Array.from({ length: 45 }, (_, index) => ({ ...request, id: `r-${index}`, subject: `Обращение ${index + 1}` })) };
+    render(<FluentProvider theme={workspaceTheme}><SupportDialog open token="token" registry={registry} onOpenChange={vi.fn()} onRegistryChange={vi.fn()} /></FluentProvider>);
+    expect(document.querySelectorAll('.support-request-card')).toHaveLength(15);
+    fireEvent.click(screen.getByRole("button", { name: "Показать ещё" }));
+    expect(document.querySelectorAll('.support-request-card')).toHaveLength(30);
+    fireEvent.change(screen.getByRole("textbox", { name: "Поиск обращений" }), { target: { value: "Обращение 45" } });
+    expect(document.querySelectorAll('.support-request-card')).toHaveLength(1);
+    expect(screen.getByRole("button", { name: /Обращение 45/ })).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: "Поиск обращений" }), { target: { value: "" } });
+    expect(document.querySelectorAll('.support-request-card')).toHaveLength(15);
+  });
+
+  it("allows leaving a focused request and keeps a separate reply draft for each request", () => {
+    const registry = { ...inboxRegistry, requests: [request, { ...request, id: "request-2", subject: "Второе обращение" }] };
+    render(<FluentProvider theme={workspaceTheme}><SupportDialog open token="token" registry={registry} focusRequestId={request.id} onOpenChange={vi.fn()} onRegistryChange={vi.fn()} /></FluentProvider>);
+    fireEvent.change(screen.getByRole("textbox", { name: "Комментарий сотруднику" }), { target: { value: "Ответ по календарю" } });
+    fireEvent.click(screen.getByRole("button", { name: /Второе обращение/ }));
+    expect(screen.getByRole("heading", { name: "Второе обращение" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Комментарий сотруднику" })).toHaveValue("");
+    fireEvent.change(screen.getByRole("textbox", { name: "Комментарий сотруднику" }), { target: { value: "Ответ по второму вопросу" } });
+    fireEvent.click(screen.getByRole("button", { name: /Не открывается календарь/ }));
+    expect(screen.getByRole("textbox", { name: "Комментарий сотруднику" })).toHaveValue("Ответ по календарю");
+  });
+
   it("lets an employee send feedback and keeps their request history", async () => {
     render(
       <FluentProvider theme={workspaceTheme}>

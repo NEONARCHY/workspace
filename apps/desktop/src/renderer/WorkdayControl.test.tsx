@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { FluentProvider } from "@fluentui/react-components";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -42,6 +42,27 @@ function show(element: ReactNode) {
 describe("workday presence", () => {
   beforeEach(() => vi.clearAllMocks());
   afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+  it("cancels an older poll before changing status and ignores its late snapshot", async () => {
+    let resolveRead!: (value: WorkdayMe) => void, resolveStart!: (value: WorkdayMe) => void;
+    vi.mocked(loadMyWorkday).mockResolvedValueOnce(initial).mockImplementationOnce(() => new Promise(done => { resolveRead = done; })).mockResolvedValue(working);
+    vi.mocked(startMyWorkday).mockImplementationOnce(() => new Promise(done => { resolveStart = done; }));
+    show(<WorkdayControl token="test-token" />); await screen.findByRole("button", { name: "Начать работу" });
+    document.dispatchEvent(new Event("visibilitychange"));
+    await waitFor(() => expect(loadMyWorkday).toHaveBeenCalledTimes(2));
+    const signal = vi.mocked(loadMyWorkday).mock.calls[1]![1]!;
+    const start = screen.getByRole("button", { name: "Начать работу" }); fireEvent.click(start); fireEvent.click(start);
+    expect(signal.aborted).toBe(true); expect(startMyWorkday).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "Сохраняем…" })).toHaveAttribute("aria-disabled", "true");
+    document.dispatchEvent(new Event("visibilitychange")); expect(loadMyWorkday).toHaveBeenCalledTimes(2);
+    await act(async () => resolveStart(working)); await screen.findByRole("button", { name: "Завершить работу" });
+    await act(async () => resolveRead(initial)); expect(screen.getByRole("button", { name: "Завершить работу" })).toBeEnabled();
+  });
+  it("aborts the status request when the control unmounts", async () => {
+    vi.mocked(loadMyWorkday).mockReturnValue(new Promise(() => undefined));
+    const view = show(<WorkdayControl token="test-token" />);
+    await waitFor(() => expect(loadMyWorkday).toHaveBeenCalledTimes(1));
+    const signal = vi.mocked(loadMyWorkday).mock.calls[0]![1]!; view.unmount(); expect(signal.aborted).toBe(true);
+  });
 
   it("loads the team member photo from the version supplied by the team API", async () => {
     vi.mocked(loadProfileAvatar).mockResolvedValue(new Blob(["photo"], { type: "image/png" }));

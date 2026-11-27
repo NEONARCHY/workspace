@@ -62,6 +62,7 @@ import {
   Send24Filled,
 } from "@fluentui/react-icons";
 import { AttachmentChips } from "./AttachmentPanel";
+import { AttachmentImage } from "./AttachmentImage";
 import { PendingMessageFiles } from "./PendingMessageFiles";
 import { MessageAttachmentsDialog } from "./MessageAttachmentsDialog";
 import { ChatManagement, type ChatActions } from "./ChatManagement";
@@ -135,6 +136,8 @@ interface OutgoingDraft {
 export interface MessengerViewProps {
   readonly compact?: boolean;
   readonly visible?: boolean;
+  /** Logical panel visibility: release the list without discarding the conversation draft. */
+  readonly listActive?: boolean;
   /** The floating full-page host has measured its destination bounds. */
   readonly layoutReady?: boolean;
   readonly onActiveChatChange?: (chatId: string | undefined) => void;
@@ -290,7 +293,7 @@ function Conversation({
   const [draft, setDraft, draftEntities, setDraftDocument] = useRichComposer(assistantDraft?.kind === "message" ? assistantDraft.fields.body ?? "" : "", composerRevision);
   const draftKey = `chat:${currentUserId}:${chat.id}`;
   const draftEdited = useRef(assistantDraft?.kind === "message");
-  const draftReady = useRef(assistantDraft?.kind === "message");
+  const persistDraft = useRef(() => {});
   const [reply, setReply] = useComposerState<ReplyTarget | undefined>(undefined, composerRevision);
   const [mentions, setMentions] = useComposerState<readonly string[]>([], composerRevision);
   const [mentionPicker, setMentionPicker] = useState(false);
@@ -362,6 +365,12 @@ function Conversation({
     source: string; style: AssistantRewriteStyle; text: string;
   }>();
   const [pinnedOpen, setPinnedOpen] = useState(false);
+  const pinnedTriggerRef = useRef<HTMLButtonElement>(null);
+  const pinnedBackRef = useRef<HTMLButtonElement>(null);
+  const [pinCursor, setPinCursor] = useState<{ latestKey: string; id: string }>();
+  const ordinaryScrollTop = useRef<number | undefined>(undefined);
+  const [ordinaryQuery, setOrdinaryQuery] = useState("");
+  const focusComposerOnReturn = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const composerInputRef = useRef<HTMLDivElement>(null);
   const rewriteRef = useRef<HTMLDivElement>(null);
@@ -393,18 +402,21 @@ function Conversation({
         const decoded = decodeRichDraft(saved);
         if (assistantDraft?.kind === "message") setDraft(current => decoded.text.trim() ? `${decoded.text.trimEnd()}\n\n${current}` : current);
         else setDraftDocument(decoded.text, decoded.entities);
-        void bridge.clearDraft(draftKey).catch(() => undefined);
       }
-    }).catch(() => undefined).finally(() => { draftReady.current = true; });
+    }).catch(() => undefined);
     return () => { active = false; };
   }, [assistantDraft, draftKey, setDraft, setDraftDocument]);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const bridge = workspacePlatform;
-    if (!draftReady.current || !draftEdited.current) return;
-    const save = () => {
+    persistDraft.current = () => {
+      if (!draftEdited.current) return;
       void (draft ? bridge.saveDraft(draftKey, encodeRichDraft(draft, draftEntities)) : bridge.clearDraft(draftKey))
         .catch(() => undefined);
     };
+  }, [draft, draftKey, draftEntities]);
+  useEffect(() => () => persistDraft.current(), [draftKey]);
+  useEffect(() => {
+    const save = () => persistDraft.current();
     const timer = window.setTimeout(() => {
       save();
     }, 350);
@@ -433,35 +445,46 @@ function Conversation({
     setError("");
     return true;
   }, [fileDropBlocked, setPendingFiles, setError]);
-  const personById = useCallback((id: string) => people.find((person) => person.id === id), [people]);
+  const peopleById = useMemo(() => new Map(people.map(person => [person.id, person])), [people]);
+  const personById = useCallback((id: string) => peopleById.get(id), [peopleById]);
   const personName = useCallback((id: string) => personById(id)?.name ?? "Сотрудник", [personById]);
   const activeMessages = useMemo(() => messages.filter(
     (message) => message.chatId === chat.id && !message.deletedAt,
   ), [messages, chat.id]);
-  const visibleMessages = useMemo(() => activeMessages.filter(
-    (message) => message.id === editing?.id || !query
-      || message.body.toLowerCase().includes(query.toLowerCase()),
-  ), [activeMessages, editing?.id, query]);
+  const activeMessagesById = useMemo(() => new Map(activeMessages.map(message => [message.id, message])), [activeMessages]);
+  const attachmentsByMessage = useMemo(() => {
+    const grouped = new Map<string, WorkspaceAttachment[]>();
+    for (const attachment of attachments) {
+      if (attachment.ownerType !== "message") continue;
+      const group = grouped.get(attachment.ownerId) ?? []; group.push(attachment); grouped.set(attachment.ownerId, group);
+    }
+    return grouped;
+  }, [attachments]);
+  const visibleMessages = useMemo(() => activeMessages.filter((message) =>
+    (!pinnedOpen || (message.isPinned && !message.pinHiddenForMe && !message.deletedAt))
+      && (message.id === editing?.id || !query || message.body.toLowerCase().includes(query.toLowerCase())),
+  ), [activeMessages, editing?.id, query, pinnedOpen]);
   const selectedMessages = activeMessages.filter(message => selectedIds.has(message.id) && !message.systemKind);
   const selectionMode = selectedMessages.length > 0;
   const renderedMessages = useMemo(() => {
     const rows = visibleMessages.filter((message) => message.id !== removingMessage?.message.id);
-    if (removingMessage && removingMessage.phase !== "done") {
+    if (removingMessage && removingMessage.phase !== "done" && !pinnedOpen) {
       rows.splice(Math.min(removingMessage.index, rows.length), 0, removingMessage.message);
     }
     return rows;
-  }, [visibleMessages, removingMessage]);
+  }, [visibleMessages, removingMessage, pinnedOpen]);
   const visibleSelectionIds = useMessageSelectionVisibility(scrollRef, renderedMessages);
   const paint = useMessagePaintSelection({ paneRef: scrollRef, messages: renderedMessages, enabled: !!onForwardContent, onPaint: paintSelection });
+  const stopPaint = paint.stop;
   const isPaintPending = paint.isPending;
   const selection = useMemo(() => ({ active: selectionMode, ids: selectedIds, visibleIds: visibleSelectionIds, toggle: toggleSelection, cancel: cancelSelection }),
     [selectionMode, selectedIds, visibleSelectionIds, toggleSelection, cancelSelection]);
   const { arrivingIds, unreadMessageId, motionDisabled, cancelArrivalMotion, revealMessage: scrollToMessage } = useMessageArrivalMotion({
-    paneRef: scrollRef, messages: renderedMessages, scope: `${chat.id}:${query}`,
-    followLatest, currentUserId, active: visible, opened, ready: layoutReady, unread: chat.unread,
+    paneRef: scrollRef, messages: renderedMessages, scope: `${chat.id}:${pinnedOpen ? ordinaryQuery : query}`,
+    followLatest, currentUserId, active: visible && !pinnedOpen, opened, ready: layoutReady, unread: chat.unread,
   });
   const scrollNavigation = useMessageScrollNavigation({ paneRef: scrollRef, messages: activeMessages,
-    currentUserId, initialUnreadMessageId: unreadMessageId, opened, active: visible && layoutReady && !query });
+    currentUserId, initialUnreadMessageId: unreadMessageId, opened, active: visible && layoutReady && !query && !pinnedOpen });
   useLayoutEffect(() => {
     const pane = scrollRef.current;
     const currentRows = new Map<string, { message: ChatMessage; index: number; height: number }>();
@@ -526,12 +549,54 @@ function Conversation({
     return (!departments || employeeScope(person?.departmentId, departments) === mentionScope)
       && (!mentionQuery || `${person?.name ?? ""} ${person?.username ?? ""}`.toLocaleLowerCase("ru").includes(mentionQuery));
   });
-  const pinnedMessages = activeMessages.filter((message) => message.isPinned && !message.pinHiddenForMe && !message.deletedAt);
-  const latestPinned = pinnedMessages.at(-1);
+  const pinnedMessages = useMemo(() => activeMessages.filter((message) => message.isPinned && !message.pinHiddenForMe && !message.deletedAt), [activeMessages]);
+  const orderedPins = useMemo(() => {
+    const pinTime = (message: ChatMessage) => Date.parse(message.pinnedAt || message.createdAt || "") || 0;
+    return [...pinnedMessages].sort((a, b) => pinTime(b) - pinTime(a) || b.id.localeCompare(a.id));
+  }, [pinnedMessages]);
+  const latestPinKey = orderedPins[0] ? `${orderedPins[0].id}:${orderedPins[0].pinnedAt ?? orderedPins[0].createdAt ?? ""}` : "";
+  const latestPinned = (pinCursor?.latestKey === latestPinKey ? orderedPins.find(message => message.id === pinCursor.id) : undefined) ?? orderedPins[0];
+  const latestPinnedAttachment = latestPinned ? attachmentsByMessage.get(latestPinned.id)?.[0] : undefined;
+  const setPinnedMode = useCallback((open: boolean, focusComposer = false) => {
+    stopPaint();
+    cancelSelection();
+    setContextMenu(undefined);
+    setReactionPreview(false);
+    if (open) {
+      ordinaryScrollTop.current = scrollRef.current?.scrollTop;
+      setOrdinaryQuery(query);
+      setQuery("");
+    } else {
+      setQuery(ordinaryQuery);
+      if (focusComposer) focusComposerOnReturn.current = true;
+    }
+    setPinnedOpen(open);
+  }, [stopPaint, cancelSelection, query, ordinaryQuery]);
+  useLayoutEffect(() => {
+    if (pinnedOpen) { pinnedBackRef.current?.focus({ preventScroll: true }); return; }
+    const returning = ordinaryScrollTop.current !== undefined;
+    if (ordinaryScrollTop.current !== undefined && scrollRef.current) {
+      scrollRef.current.scrollTop = ordinaryScrollTop.current;
+      ordinaryScrollTop.current = undefined;
+    }
+    if (focusComposerOnReturn.current) {
+      focusComposerOnReturn.current = false;
+      composerInputRef.current?.focus();
+    } else if (returning) (pinnedTriggerRef.current ?? composerInputRef.current)?.focus({ preventScroll: true });
+  }, [pinnedOpen]);
   const revealMessage = useCallback((messageId: string) => {
+    const target = activeMessagesById.get(messageId);
+    if (pinnedOpen && (!target?.isPinned || target.pinHiddenForMe)) setPinnedMode(false);
     setQuery("");
     setMessageToReveal({ id: messageId });
-  }, []);
+  }, [activeMessagesById, pinnedOpen, setPinnedMode]);
+  const cyclePinned = () => {
+    if (!latestPinned) return;
+    revealMessage(latestPinned.id);
+    const index = orderedPins.findIndex(message => message.id === latestPinned.id);
+    const next = orderedPins[(index + 1) % orderedPins.length];
+    if (next) setPinCursor({ latestKey: latestPinKey, id: next.id });
+  };
   useLayoutEffect(() => {
     if (messageToReveal) scrollToMessage(messageToReveal.id);
   }, [messageToReveal, scrollToMessage]);
@@ -711,9 +776,7 @@ function Conversation({
   }, [taskForChat, onDecideTaskDeadline, deadlineDecisionId]);
   // Keep typing local: unchanged history must not rebuild rich message subtrees.
   const messageRows = useMemo(() => renderedMessages.map((message, index) => {
-          const parent = activeMessages.find(
-            (item) => item.id === message.replyToMessageId,
-          );
+          const parent = message.replyToMessageId ? activeMessagesById.get(message.replyToMessageId) : undefined;
           const date = message.createdAt
             ? formatRussianDate(new Date(message.createdAt))
             : "История переписки";
@@ -723,7 +786,7 @@ function Conversation({
             : "История переписки";
           const deadlineRequest = message.systemKind === "task_deadline_request"
             ? taskForChat?.deadlineRequests?.find((item) => item.messageId === message.id) : undefined;
-          const unreadDivider = message.id === unreadMessageId
+          const unreadDivider = !pinnedOpen && message.id === unreadMessageId
             ? <div className="message-unread-divider" role="separator" aria-label="Непрочитанные сообщения">Непрочитанные сообщения</div> : null;
           if (message.systemKind) return <div key={message.id} data-message-row-id={message.id}>
             {(index === 0 || date !== previousDate) && <div className="date-separator">{date}</div>}
@@ -748,9 +811,7 @@ function Conversation({
           const groupPosition = groupedWithPrevious
             ? groupedWithNext ? "is-group-middle" : "is-group-last"
             : groupedWithNext ? "is-group-first" : "";
-          const messageAttachments = attachments.filter(
-            (attachment) => attachment.ownerType === "message" && attachment.ownerId === message.id,
-          );
+          const messageAttachments = attachmentsByMessage.get(message.id) ?? [];
           const voiceAttachments = messageAttachments.filter((attachment) => attachment.mediaKind === "voice");
           const mediaOnly = !!onLoadAttachment && !message.deletedAt && !message.forwarded && !message.zoomInvitation
             && messageAttachments.length > 0 && messageAttachments.every(attachment => fileViewerKind(attachment) === "image");
@@ -895,11 +956,11 @@ function Conversation({
               </SelectableMessage>
             </div>
           );
-        }), [renderedMessages, activeMessages, taskForChat, people, canDecideDeadline, onDecideTaskDeadline, deadlineDecisionId, decideDeadline, arrivingIds, unreadMessageId, motionDisabled, currentUserId, query, attachments, onLoadAttachment, removingMessage, personName, personById, token, onOpenFeedPost, onDownloadAttachment, reactionTargetId, canSend, busy, run, onReactMessage, isPaintPending, revealMessage]);
+        }), [renderedMessages, activeMessagesById, attachmentsByMessage, taskForChat, people, canDecideDeadline, onDecideTaskDeadline, deadlineDecisionId, decideDeadline, arrivingIds, unreadMessageId, motionDisabled, currentUserId, query, pinnedOpen, attachments, onLoadAttachment, removingMessage, personName, personById, token, onOpenFeedPost, onDownloadAttachment, reactionTargetId, canSend, busy, run, onReactMessage, isPaintPending, revealMessage]);
   return (
     <MessengerFileDropSurface className={`conversation-pane${embedded ? " embedded-conversation" : ""}${voiceOpen ? " has-voice-draft" : ""}`}
-      title={chat.title} blockedReason={fileDropBlocked} receive={acceptFiles} reject={setError}>
-      <header className={`conversation-header${selectionMode ? " has-message-selection" : ""}`}>
+      title={chat.title} blockedReason={pinnedOpen ? "Вернитесь к переписке, чтобы отправить файлы" : fileDropBlocked} receive={acceptFiles} reject={setError}>
+      <header className={`conversation-header${selectionMode ? " has-message-selection" : ""}`} style={pinnedOpen ? { display: "none" } : undefined}>
         {!embedded ? <Button className="compact-back" data-satin-excluded="true" appearance="subtle" icon={<ChevronLeft20Regular />} onClick={onBack}>К списку чатов</Button> : null}
         <div className="conversation-identity">
           {chat.canEditAvatar && chatActions.setAvatar ? <Dialog open={avatarPickerOpen}
@@ -932,7 +993,6 @@ function Conversation({
         </div>
         <BrowserChatActions compact={compactBrowser}>
           {compactBrowser ? <Button appearance="subtle" icon={<Search24Regular />} onClick={() => { setSearchOpen((value) => !value); if (searchOpen) setQuery(""); }}>{searchOpen ? "Закрыть поиск" : "Поиск в переписке"}</Button> : null}
-          {compactBrowser && latestPinned && !searchOpen ? <Button appearance="subtle" icon={<Pin24Regular />} onClick={() => setPinnedOpen((value) => !value)}>Закреплено: {pinnedMessages.length}</Button> : null}
           {canRequestDeadline ? <Button appearance="secondary" icon={<CalendarLtr24Regular />} aria-expanded={deadlineOpen} onClick={() => {
             if (!deadlineOpen && taskForChat?.dueAt) {
               const next = new Date(Math.max(Date.now(), new Date(taskForChat.dueAt).getTime()) + 24 * 60 * 60_000);
@@ -981,6 +1041,32 @@ function Conversation({
             icon={<Dismiss24Regular />} onClick={() => { paint.stop(); cancelSelection(); }} />
         </div>
       </header>
+      {pinnedOpen ? <header className="pinned-history-header">
+        <Button ref={pinnedBackRef} shape="circular" className="ws-navigation-arrow" appearance="subtle" icon={<ChevronLeft20Regular />} aria-label="Вернуться к переписке" onClick={() => setPinnedMode(false)} />
+        <div><h2>Закреплённые сообщения · {pinnedMessages.length}</h2><small>{chat.title}</small></div>
+        {compactBrowser ? <Button shape="circular" className="ws-navigation-arrow pinned-history-search" appearance="subtle" icon={<Search24Regular />} aria-label={searchOpen ? "Закрыть поиск в закреплённых сообщениях" : "Поиск в закреплённых сообщениях"} aria-expanded={searchOpen} onClick={() => {
+          setSearchOpen(value => !value);
+          if (searchOpen) setQuery("");
+          else requestAnimationFrame(() => scrollRef.current?.closest(".conversation-pane")?.querySelector<HTMLInputElement>(".conversation-search input")?.focus());
+        }} /> : null}
+        {selectionMode ? <div className="message-selection-toolbar" role="region" aria-label="Выделенные сообщения"
+          onKeyDown={event => { if (event.key === "Escape") { event.preventDefault(); paint.stop(); cancelSelection(); } }}>
+          <span role="status">Выбрано: {selectedMessages.length}</span>
+          <Button appearance="primary" aria-label="Переслать выбранные" disabled={!selectedMessages.length} icon={<Forward size={20} />}
+            onClick={() => setForwarding(selectedMessages)}>Переслать</Button>
+          <Button aria-label="Отменить выделение" title="Отменить выделение" className="message-selection-cancel"
+            icon={<Dismiss24Regular />} onClick={() => { paint.stop(); cancelSelection(); }} />
+        </div> : null}
+      </header> : null}
+      {!pinnedOpen && latestPinned ? <div className="pinned-message-bar">
+            {latestPinnedAttachment && fileViewerKind(latestPinnedAttachment) === "image" ? <AttachmentImage attachment={latestPinnedAttachment} onLoad={onLoadAttachment} onOpen={cyclePinned} /> : latestPinnedAttachment ? <span className="pinned-message-file" aria-hidden="true"><Attach24Regular /></span> : null}
+            <button type="button" className="pinned-message-preview" onClick={cyclePinned}>
+              <strong>Закреплённое сообщение</strong><span>{replyPreview(latestPinned, attachments)}</span>
+            </button>
+            <Tooltip content={voiceOpen ? "Завершите голосовую запись перед просмотром закреплённых сообщений" : "Показать закреплённые сообщения"} relationship="description">
+              <Button ref={pinnedTriggerRef} className="pinned-message-trigger" appearance="subtle" icon={<Pin24Regular />} aria-label={`Закреплено: ${pinnedMessages.length}`} aria-expanded={pinnedOpen} aria-disabled={voiceOpen} title={voiceOpen ? "Завершите голосовую запись перед просмотром закреплённых сообщений" : undefined} onClick={() => { if (!voiceOpen) setPinnedMode(true); }} />
+            </Tooltip>
+      </div> : null}
       {deadlineOpen && canRequestDeadline ? <div className="task-deadline-request-popover" role="region" aria-label="Запрос переноса срока">
         <strong>Новый срок задачи</strong>
         <p>Постановщик увидит запрос прямо в чате задачи.</p>
@@ -1001,39 +1087,10 @@ function Conversation({
           value={query}
           onChange={(_, data) => setQuery(data.value)}
         />
-        {latestPinned ? (
-          <Button
-            className="pinned-message-trigger"
-            appearance="subtle"
-            icon={<Pin24Regular />}
-            aria-expanded={pinnedOpen}
-            onClick={() => setPinnedOpen((value) => !value)}
-          >
-            Закреплено: {pinnedMessages.length}
-          </Button>
-        ) : null}
+
       </div>
-      {pinnedOpen && latestPinned ? (
-        <div className="pinned-message-panel" role="region" aria-label="Закреплённые сообщения">
-          <header>
-            <strong>Закреплённые сообщения</strong>
-            <Button size="small" appearance="subtle" onClick={() => setPinnedOpen(false)}>Скрыть</Button>
-          </header>
-          <div>
-            {pinnedMessages.map((message) => (
-              <div key={message.id} className="pinned-message-item">
-                <button type="button" onClick={() => revealMessage(message.id)}><span>{personName(message.authorId)}</span><strong>{message.body.slice(0, 140)}</strong><time>{message.time}</time></button>
-                {message.pinProtected ? <small>Закреп председателя · нельзя снять</small> : <div className="pinned-message-actions">
-                  {message.canUnpinForSelf ? <Button size="small" appearance="subtle" disabled={busy} onClick={() => void run(() => onPinMessage(message, false, "self"))}>Снять для себя</Button> : null}
-                  {(message.canUnpinForAll ?? message.canPin) ? <Button size="small" appearance="subtle" disabled={busy} onClick={() => void run(() => onPinMessage(message, false, "all"))}>Снять для всех</Button> : null}
-                </div>}
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
         <div className="message-history">
-        <div className="message-scroll" data-message-selection={selectionMode ? "" : undefined} data-chat-background={chatBackground} aria-label="Переписка" aria-live="polite" ref={bindScrollPane}
+        <div className="message-scroll" data-pinned-only={pinnedOpen ? "" : undefined} data-message-selection={selectionMode ? "" : undefined} data-chat-background={chatBackground} aria-label="Переписка" aria-live="polite" ref={bindScrollPane}
         tabIndex={-1} onPointerDownCapture={event => {
           window.clearTimeout(reactionHoverTimer.current);
           // Keep secondary click from focusing a row and rebuilding the history
@@ -1047,13 +1104,9 @@ function Conversation({
         onWheel={cancelArrivalMotion} onPointerDown={cancelArrivalMotion}
         onLoadCapture={scrollNavigation.onScroll}
         onScroll={(event) => { const pane = event.currentTarget; followLatest.current = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 80; paint.onScroll(); scrollNavigation.onScroll(); }}>
-        {!renderedMessages.length && (
-          <div className="empty-compact">
-            {query
-              ? "Сообщения не найдены"
-              : "Начните разговор — отправьте первое сообщение"}
-          </div>
-        )}
+        {!renderedMessages.length && (pinnedOpen
+          ? <div className="pinned-history-empty">{pinnedMessages.length && query ? "Закреплённые сообщения не найдены" : "Нет закреплённых сообщений"}</div>
+          : <div className="empty-compact">{query ? "Сообщения не найдены" : "Начните разговор — отправьте первое сообщение"}</div>)}
         <MessageSelectionContext.Provider value={selection}>{messageRows}</MessageSelectionContext.Provider>
       </div>
       <div className={`message-jump-latest${scrollNavigation.visible ? " is-visible" : ""}`} aria-hidden={!scrollNavigation.visible} inert={!scrollNavigation.visible}>
@@ -1070,10 +1123,10 @@ function Conversation({
         const message = contextMenu.message;
         const own = message.authorId === currentUserId;
         const hasVoice = attachments.some((attachment) => attachment.ownerType === "message" && attachment.ownerId === message.id && attachment.mediaKind === "voice");
-        const mayDelete = message.canDelete ?? (own || message.canPin || ["admin", "superadmin"].includes(currentUserRole));
+        const mayDelete = message.canDelete ?? (own || ["admin", "superadmin"].includes(currentUserRole));
         return <MessageContextMenu x={contextMenu.x} y={contextMenu.y} portalContainer={contextMenu.portalContainer} autoFocus={Boolean(contextMenu.trigger)} onPointerDown={(event) => event.stopPropagation()}
           accessory={<ReactionPicker key={message.id} variant="context" userId={currentUserId} disabled={!canSend || busy} active={(message.reactions ?? []).filter((reaction) => reaction.reactedByCurrentUser).map((reaction) => reaction.emoji)} onSelect={(emoji) => { void run(() => onReactMessage(message, emoji)); setContextMenu(undefined); }} />}>
-          <Button disabled={!canSend || (contextMenu.selectedQuote?.text.length ?? 0) > 4096} title={(contextMenu.selectedQuote?.text.length ?? 0) > 4096 ? "Цитата — не более 4096 символов" : undefined} appearance="subtle" icon={<Reply size={20} />} onClick={() => { setReply({ ...message, selectedQuote: contextMenu.selectedQuote }); setContextMenu(undefined); composerInputRef.current?.focus(); }}>{contextMenu.selectedQuote ? "Ответить с цитатой" : "Ответить"}</Button>
+          <Button disabled={!canSend || (contextMenu.selectedQuote?.text.length ?? 0) > 4096} title={(contextMenu.selectedQuote?.text.length ?? 0) > 4096 ? "Цитата — не более 4096 символов" : undefined} appearance="subtle" icon={<Reply size={20} />} onClick={() => { setReply({ ...message, selectedQuote: contextMenu.selectedQuote }); setContextMenu(undefined); if (pinnedOpen) setPinnedMode(false, true); else composerInputRef.current?.focus(); }}>{contextMenu.selectedQuote ? "Ответить с цитатой" : "Ответить"}</Button>
           {message.canPin && !message.isPinned ? <Button appearance="subtle" icon={<Pin size={20} />} onClick={() => { void run(() => onPinMessage(message, true)); setContextMenu(undefined); }}>Закрепить</Button> : null}
           {message.isPinned && message.pinProtected ? <span className="message-context-note">Закреп председателя · нельзя снять</span> : null}
           {message.isPinned && !message.pinProtected && message.canUnpinForSelf ? <Button appearance="subtle" icon={<PinOff size={20} />} onClick={() => { void run(() => onPinMessage(message, false, "self")); setContextMenu(undefined); }}>Снять закреп для себя</Button> : null}
@@ -1093,7 +1146,7 @@ function Conversation({
             window.requestAnimationFrame(() => scrollRef.current?.querySelector<HTMLInputElement>(".message-select:checked")?.focus({ preventScroll: true }));
           }}>Выделить</Button>}
           <Button appearance="subtle" icon={<ListTodo size={20} />} onClick={() => { setTaskSource(message); setContextMenu(undefined); }}>В задачу</Button>
-          {own && message.canEdit && !hasVoice ? <Button appearance="subtle" icon={<Pencil size={20} />} onClick={() => { startEditing(message); setContextMenu(undefined); }}>Изменить</Button> : null}
+          {own && message.canEdit && !hasVoice ? <Button appearance="subtle" icon={<Pencil size={20} />} onClick={() => { if (pinnedOpen) setPinnedMode(false, true); startEditing(message); setContextMenu(undefined); }}>Изменить</Button> : null}
           {mayDelete ? <Button className="message-context-delete" appearance="subtle" icon={<Trash2 size={20} />} onClick={() => requestMessageDelete(message, contextMenu.trigger)}>Удалить</Button> : null}
           {message.reactions?.length ? <div className="message-context-reactions" onPointerEnter={() => setReactionPreview(true)} onPointerLeave={() => setReactionPreview(false)}>
             <Button appearance="subtle" icon={<Smile size={20} />} aria-haspopup="dialog" aria-expanded={reactionPreview} onFocus={() => setReactionPreview(true)} onClick={() => { setReactionDialog(message); setContextMenu(undefined); setReactionPreview(false); }}>Реакции · {message.reactions.reduce((total, reaction) => total + reaction.count, 0)}</Button>
@@ -1183,6 +1236,7 @@ function Conversation({
         sources={forwarding.map(message => ({ kind: "message", id: message.id }))}
         preview={forwarding.length > 1 ? `Сообщений: ${forwarding.length}` : forwarding[0]!.body} chats={availableChats} excludeChatId={chat.id}
         onForward={onForwardContent} onForwarded={cancelSelection} onClose={() => setForwarding(undefined)} /> : null}
+      <div className="conversation-composer-container" style={{ display: pinnedOpen ? "none" : "contents" }}>
       {!canSend ? (
         <WorkspaceNotice tone="info" className="chat-read-only">
           Вам доступно только чтение. Право отправлять сообщения меняет владелец
@@ -1480,7 +1534,8 @@ function Conversation({
           </div>}
         </>
       )}
-      {attachmentReviewOpen && pendingFiles.length > 0 && <MessageAttachmentsDialog files={pendingFiles} caption={draft}
+      </div>
+      {!pinnedOpen && attachmentReviewOpen && pendingFiles.length > 0 && <MessageAttachmentsDialog files={pendingFiles} caption={draft}
         onFiles={acceptFiles} errorMessage={error}
         blockedReason={fileDropBlocked} onCaption={value => { draftEdited.current = true; setDraft(value); }}
         onRemove={index => setPendingFiles(current => current.filter((_, fileIndex) => fileIndex !== index))}
@@ -1521,7 +1576,10 @@ export function MessengerView(props: MessengerViewProps) {
   const [deletionChoice, setDeletionChoice] = useState<ChatSummary>();
   const [deletionChoiceOpen, setDeletionChoiceOpen] = useState(false);
   const [pendingLeave, setPendingLeave] = useState<ChatSummary>();
-  const visibleChats = chats.filter((chat) => !undo.pending.some(item => item.scope === "chat" && item.id === chat.id));
+  const visibleChats = useMemo(() => {
+    const hidden = new Set(undo.pending.filter(item => item.scope === "chat").map(item => item.id));
+    return chats.filter(chat => !hidden.has(chat.id));
+  }, [chats, undo.pending]);
   const preferences = props.personalPreferences ?? defaultPersonalPreferences;
   const firstActive = visibleChats.find((chat) => chat.id === preferences.pinnedChatIds[0]) ?? visibleChats.find((chat) => !preferences.archivedChatIds.includes(chat.id));
   const [activeChatId, setActiveChatId] = useState(
@@ -1605,13 +1663,13 @@ export function MessengerView(props: MessengerViewProps) {
     onActiveChatChange?.(conversationOpen || !compact ? activeChat?.id : undefined);
   }, [activeChat?.id, conversationOpen, compact, onActiveChatChange]);
   return (
-    <section className={`workspace-view messenger-view ${props.compact ? "messenger-mini" : ""} ${(conversationOpen && activeChat) || pendingAssistantChat ? "conversation-open" : ""}`} aria-label="Мессенджер">
+    <section className={`workspace-view workspace-queue messenger-view ${props.compact ? "messenger-mini" : ""} ${(conversationOpen && activeChat) || pendingAssistantChat ? "conversation-open" : ""}`} aria-label="Мессенджер">
       <aside className="list-pane" ref={listPaneRef}>
-          <OrganizedChatList key={listRevision} token={props.token} chats={visibleChats} messages={messages} people={props.people} departments={props.departments} currentUserId={props.currentUserId} activeChatId={activeChat?.id} focusChatId={focusChatId}
+          {(props.listActive ?? visible) ? <OrganizedChatList key={listRevision} token={props.token} chats={visibleChats} messages={messages} people={props.people} departments={props.departments} currentUserId={props.currentUserId} activeChatId={activeChat?.id} focusChatId={focusChatId}
           preferences={preferences} onChange={props.onPersonalChat} onReorder={props.onPinnedOrder}
           onCreateGroup={() => setPanel("create")}
           onDelete={requestChatDeletion} onLeave={setPendingLeave} onOpenDirect={openDirectChat}
-          onSelect={(id) => { setActiveChatId(id); setAssistantPreparationDismissed(true); setConversationOpen(true); setPanel(undefined); }} />
+          onSelect={(id) => { setActiveChatId(id); setAssistantPreparationDismissed(true); setConversationOpen(true); setPanel(undefined); }} /> : null}
       </aside>
       {pendingAssistantChat ? (
         <div className="conversation-pane assistant-message-prepare" role="region" aria-label="Подготовка сообщения">
@@ -1643,8 +1701,9 @@ export function MessengerView(props: MessengerViewProps) {
             setConversationOpen(false);
             const row = Array.from(listPaneRef.current?.querySelectorAll<HTMLElement>("[data-chat-id]") ?? [])
               .find((item) => item.dataset.chatId === activeChat.id)?.querySelector<HTMLButtonElement>(".chat-row");
+            const focusTarget = row ?? listPaneRef.current?.querySelector<HTMLInputElement>(".pane-search input");
             // The list is revealed in this commit; retain keyboard context without remounting the draft.
-            requestAnimationFrame(() => row?.isConnected && row.focus({ preventScroll: true }));
+            requestAnimationFrame(() => focusTarget?.isConnected && focusTarget.focus({ preventScroll: true }));
           }}
           fileDropDisabledReason={panel || deletionChoiceOpen || pendingLeave ? "Сначала закройте окно управления чатом" : undefined}
         />

@@ -12,6 +12,18 @@ afterEach(cleanup);
 const labels = Object.fromEntries(navigationKeys.map((key) => [key, key])) as Record<NavigationKey, string>;
 
 describe("Personal organization", () => {
+  it("reuses message search data while typing and excludes deleted text", () => {
+    let reads = 0;
+    const message = { ...initialMessages[0]!, get body() { reads++; return "Готовые материалы программы"; } };
+    const removed = { ...initialMessages[0]!, id: "removed", body: "Скрытая тема", deletedAt: "2026-11-26T07:00:00Z" };
+    render(<FluentProvider theme={webLightTheme}><OrganizedChatList chats={initialChats} messages={[message, removed]}
+      preferences={defaultPersonalPreferences} onSelect={vi.fn()} /></FluentProvider>);
+    const initialReads = reads, input = screen.getByRole("textbox", { name: "Поиск чатов и сообщений" });
+    for (const value of ["Го", "Готовые", "Готовые материалы"]) fireEvent.change(input, { target: { value } });
+    expect(reads).toBe(initialReads);
+    expect(screen.queryByText("Чаты не найдены")).not.toBeInTheDocument();
+    fireEvent.change(input, { target: { value: "Скрытая тема" } }); expect(screen.getByText("Чаты не найдены")).toBeInTheDocument();
+  });
   it("moves identities in both directions without losing hidden or future sections", () => {
     const oldOrder = ["home", "tasks", "trip_approvals", "messenger"] as NavigationKey[];
     expect(normalizeNavigation(oldOrder).slice(0, 6)).toEqual([

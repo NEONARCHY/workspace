@@ -23,25 +23,25 @@ html:root body .app-provider .workday-action .workday-action-impact {
   transform: scale(.7); transition: opacity 240ms ease-out, transform 240ms ease-out;
 }
 @media (hover: hover) {
-  html:root body .app-provider .workday-action:hover:not(:disabled) .workday-action-glint {
+  html:root body .app-provider .workday-action:hover:not(:disabled):not([aria-disabled="true"]) .workday-action-glint {
     opacity: 1; transform: translateX(430%) skewX(-18deg);
     transition: transform 680ms var(--ws-ease, ease-out), opacity 120ms ease-out;
   }
 }
-html:root body .app-provider .workday-action:active:not(:disabled) { transform: translateY(1px); transition-duration: 80ms; }
-html:root body .app-provider .workday-action:active:not(:disabled) .workday-action-glint { opacity: 0; transition-duration: 80ms; }
-html:root body .app-provider .workday-action:active:not(:disabled) .workday-action-impact { opacity: 1; transform: scale(1.1); transition-duration: 80ms; }
+html:root body .app-provider .workday-action:active:not(:disabled):not([aria-disabled="true"]) { transform: translateY(1px); transition-duration: 80ms; }
+html:root body .app-provider .workday-action:active:not(:disabled):not([aria-disabled="true"]) .workday-action-glint { opacity: 0; transition-duration: 80ms; }
+html:root body .app-provider .workday-action:active:not(:disabled):not([aria-disabled="true"]) .workday-action-impact { opacity: 1; transform: scale(1.1); transition-duration: 80ms; }
 html:root body .app-provider .workday-action:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 3px; }
-html:root body .app-provider .workday-action:disabled { opacity: .55; cursor: wait; transform: none; }
-html:root body .app-provider .workday-action:disabled :is(.workday-action-glint, .workday-action-impact) { opacity: 0; }
+html:root body .app-provider .workday-action:is(:disabled, [aria-disabled="true"]) { opacity: .55; cursor: wait; transform: none; }
+html:root body .app-provider .workday-action:is(:disabled, [aria-disabled="true"]) :is(.workday-action-glint, .workday-action-impact) { opacity: 0; }
 .app-provider .workday-control-popover-actions .workday-action { width: 100%; }
 
 /* A filled play/stop disc makes the former text action recognisable in the icon bar. */
 .app-provider .workspace-topbar .workday-control-glyph {
-  display: grid; place-items: center; flex: none; width: 28px; height: 28px; border-radius: 50%;
+  display: grid; place-items: center; flex: none; width: 40px; height: 40px; border-radius: 50%;
   background: #006779; color: #fff; transition: background-color 160ms ease-out;
 }
-.app-provider .workspace-topbar .workday-control-glyph > svg { width: 16px; height: 16px; }
+.app-provider .workspace-topbar .workday-control-glyph > svg { width: 22px; height: 22px; }
 .app-provider .workspace-topbar [data-action="finish"] > .workday-control-glyph { background: var(--ws-button-surface, var(--ws-navy, #293a55)); }
 .app-provider .workspace-topbar :is([data-action="away"], [data-action="loading"]) > .workday-control-glyph { background: var(--ws-muted-surface); color: var(--ws-muted); }
 @media (hover: hover) {
@@ -52,7 +52,7 @@ html:root body .app-provider .workday-action:disabled :is(.workday-action-glint,
   html:root body .app-provider .workday-action.fui-Button,
   .app-provider .workspace-topbar .workday-control-glyph { transition: none; }
   html:root body .app-provider .workday-action :is(.workday-action-glint, .workday-action-impact) { display: none; }
-  html:root body .app-provider .workday-action:active:not(:disabled) { transform: none; background-image: linear-gradient(rgb(255 255 255 / 7%), rgb(255 255 255 / 7%)); }
+  html:root body .app-provider .workday-action:active:not(:disabled):not([aria-disabled="true"]) { transform: none; background-image: linear-gradient(rgb(255 255 255 / 7%), rgb(255 255 255 / 7%)); }
 }
 @media (forced-colors: active) {
   html:root body .app-provider .workday-action.fui-Button { color: ButtonText; background: ButtonFace; border: 1px solid ButtonText; box-shadow: none; }

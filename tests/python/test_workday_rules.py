@@ -1,10 +1,17 @@
 from datetime import UTC, date, datetime, time
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
 
 from yuksalish_api.workday_schemas import WorkdayScheduleWrite, WorkdaySessionResponse
-from yuksalish_api.workday_service import ZONE, _status, automatic_close_due, schedule_bounds
+from yuksalish_api.workday_service import (
+    ZONE,
+    _status,
+    automatic_close_due,
+    close_overdue_sessions,
+    schedule_bounds,
+)
 
 
 def test_default_schedule_and_next_day_cutoff() -> None:
@@ -40,3 +47,20 @@ def test_schedule_rejects_inverted_and_overnight_times() -> None:
         WorkdayScheduleWrite(starts_at=time(19), ends_at=time(10))
     with pytest.raises(ValueError):
         WorkdayScheduleWrite(starts_at=time(9), ends_at=time(9))
+
+
+@pytest.mark.anyio
+async def test_personal_cleanup_query_is_scoped_but_scheduler_stays_global() -> None:
+    connection = AsyncMock()
+    result = MagicMock()
+    result.mappings.return_value.all.return_value = []
+    connection.execute.return_value = result
+    user_id = uuid4()
+    now = datetime(2026, 9, 24, 5, tzinfo=UTC)
+    assert await close_overdue_sessions(connection, now=now, user_id=user_id) == 0
+    personal = connection.execute.call_args.args[0].compile()
+    assert user_id in personal.params.values()
+    assert "workday_sessions.user_id =" in str(personal)
+    assert await close_overdue_sessions(connection, now=now) == 0
+    scheduled = connection.execute.call_args.args[0].compile()
+    assert "workday_sessions.user_id =" not in str(scheduled)

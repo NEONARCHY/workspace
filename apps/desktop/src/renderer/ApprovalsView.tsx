@@ -1714,11 +1714,11 @@ export function ApprovalsView({
         <div className="approval-workspace">
 {!dialogOnly && <>
           <div className="approval-view-toolbar ws2-process-toolbar workspace-queue-toolbar">
+            <div className="workspace-queue-controls">
             <SlidingSegmented className="ws2-segmented" role="group" aria-label="Вид заявок">
               <button type="button" className={presentation === "kanban" ? "active" : ""} aria-pressed={presentation === "kanban"} onClick={() => setPresentation("kanban")}>Канбан</button>
               <button type="button" className={presentation === "list" ? "active" : ""} aria-pressed={presentation === "list"} onClick={() => setPresentation("list")}>Список</button>
             </SlidingSegmented>
-            <Input contentBefore={<Search20Regular />} className="approval-search" aria-label="Поиск заявок" placeholder="Номер, название или проект" value={requestQuery} onChange={(_event, data) => setRequestQuery(data.value)} />
             <SlidingSegmented className="ws2-segmented workspace-queue-filters" role="group" aria-label="Фильтр заявок">
               {([
                 ["all", "Все", filterCounts.all],
@@ -1740,6 +1740,8 @@ export function ApprovalsView({
                 </button>
               ))}
             </SlidingSegmented>
+            </div>
+            <Input contentBefore={<Search20Regular />} className="approval-search" aria-label="Поиск заявок" placeholder="Номер, название или проект" value={requestQuery} onChange={(_event, data) => setRequestQuery(data.value)} />
           </div>
           {actionError && !selectedRequest ? (
             <WorkspaceNotice tone="error" className="approval-board-notice approval-action-error" role="alert" actions={<><button type="button" onClick={() => setActionError("")} aria-label="Скрыть ошибку перехода">×</button></>}>

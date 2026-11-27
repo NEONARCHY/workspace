@@ -22,7 +22,7 @@ describe("Shared page scroll rail", () => {
     const css = read("page-scroll-layout.css");
     expect(css).toContain("--ws-page-scrollbar-fallback: 6px");
     expect(css).toContain("--ws-page-scrollbar-fallback: 8px");
-    expect(css).toContain("--ws-page-scroll-outer-inset: max(12px, env(safe-area-inset-right))");
+    expect(css).toContain("--ws-page-scroll-outer-inset: 0px");
     expect(css).toContain("--ws-page-scroll-edge: 0px");
     expect(css).toContain("@container workspace (max-width: 720px)");
     expect(css).toContain(".members-view .member-inspector { margin-inline-end: 0; }");

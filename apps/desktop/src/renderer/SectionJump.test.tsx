@@ -6,13 +6,22 @@ import { workspaceTheme } from "./workspace-theme";
 
 afterEach(cleanup);
 describe("Workspace command entry", () => {
+  it("passes typed text into the search dialog without losing the first characters", async () => {
+    const onSelect = vi.fn();
+    render(<FluentProvider theme={workspaceTheme}><SectionJump items={[]} onNavigate={vi.fn()} commands={[{ id: "task:1", label: "Договор", context: "Задача", icon: null, onSelect }]} /></FluentProvider>);
+    fireEvent.change(screen.getByRole("textbox", { name: "Перейти в раздел" }), { target: { value: "дого" } });
+    const search = await screen.findByRole("textbox", { name: "Найти раздел" });
+    expect(search).toHaveValue("дого");
+    fireEvent.keyDown(search, { key: "Enter" }); expect(onSelect).toHaveBeenCalledOnce();
+  });
   it("keeps the responsive label, keyboard shortcut and focus restoration", async () => {
     render(<FluentProvider theme={workspaceTheme}><SectionJump items={[{ key: "home", label: "Главная", icon: null }]} onNavigate={vi.fn()} /></FluentProvider>);
-    const trigger = screen.getByRole("button", { name: "Перейти в раздел" });
+    const trigger = screen.getByRole("textbox", { name: "Перейти в раздел" });
     expect(trigger).toHaveAttribute("title", "Поиск и быстрый переход · Ctrl+K");
-    expect(trigger).toHaveTextContent("Поиск и быстрый переход");
-    expect(trigger.querySelector("kbd")).toHaveTextContent("Ctrl K");
-    expect(trigger.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+    expect(trigger).toHaveAttribute("placeholder", "Поиск и быстрый переход");
+    const entry = trigger.closest(".section-jump-trigger")!;
+    expect(entry.querySelector("kbd")).toHaveTextContent("Ctrl K");
+    expect(entry.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
     trigger.focus();
     fireEvent.keyDown(window, { key: "k", ctrlKey: true });
     expect(await screen.findByRole("dialog", { name: "Перейти в раздел" })).toBeInTheDocument();
@@ -28,7 +37,7 @@ describe("Workspace command entry", () => {
       { key: "tasks", label: "Задачи", icon: null },
       { key: "calendar", label: "Календарь", icon: null },
     ]} onNavigate={onNavigate} /></FluentProvider>);
-    fireEvent.click(screen.getByRole("button", { name: "Перейти в раздел" }));
+    fireEvent.click(screen.getByRole("textbox", { name: "Перейти в раздел" }));
     const search = screen.getByRole("textbox", { name: "Найти раздел" });
     fireEvent.keyDown(search, { key: "ArrowDown" });
     fireEvent.keyDown(search, { key: "ArrowDown" });
@@ -40,7 +49,7 @@ describe("Workspace command entry", () => {
   it("finds real task commands and opens the keyboard selection", () => {
     const onSelect = vi.fn();
     render(<FluentProvider theme={workspaceTheme}><SectionJump items={[{ key: "tasks", label: "Задачи", icon: null }]} onNavigate={vi.fn()} commands={[{ id: "task:1", label: "Подготовить договор", context: "Задача · Новый офис", icon: null, onSelect }]} /></FluentProvider>);
-    fireEvent.click(screen.getByRole("button", { name: "Перейти в раздел" }));
+    fireEvent.click(screen.getByRole("textbox", { name: "Перейти в раздел" }));
     const search = screen.getByRole("textbox", { name: "Найти раздел" });
     fireEvent.change(search, { target: { value: "договор" } });
     expect(screen.getByRole("button", { name: /Подготовить договор/ })).toBeInTheDocument();

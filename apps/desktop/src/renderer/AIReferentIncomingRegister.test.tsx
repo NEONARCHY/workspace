@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { FluentProvider } from "@fluentui/react-components";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AIReferentIncomingRegistry } from "@yuksalish/contracts";
@@ -30,6 +30,29 @@ beforeEach(() => { vi.clearAllMocks(); vi.mocked(loadAIReferentIncomingRegistry)
 afterEach(cleanup);
 
 describe("Incoming registry rendering", () => {
+  it("clears a temporary error after a successful background refresh", async () => {
+    vi.mocked(loadAIReferentIncomingRegistry).mockRejectedValueOnce(new Error("Временно недоступно"));
+    setup(); await screen.findByRole("alert");
+    vi.mocked(loadAIReferentIncomingRegistry).mockResolvedValue(registry);
+    document.dispatchEvent(new Event("visibilitychange"));
+    await screen.findByText("Исходная тема"); expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+  it("cancels the previous search and ignores a late snapshot", async () => {
+    let resolve!: (value: AIReferentIncomingRegistry) => void;
+    vi.mocked(loadAIReferentIncomingRegistry).mockImplementationOnce(() => new Promise(done => { resolve = done; }));
+    setup(); await waitFor(() => expect(loadAIReferentIncomingRegistry).toHaveBeenCalledTimes(1));
+    const signal = vi.mocked(loadAIReferentIncomingRegistry).mock.calls[0]![2]!;
+    vi.mocked(loadAIReferentIncomingRegistry).mockResolvedValue({ ...registry, letters: [{ ...registry.letters[0]!, subject: "Новый результат" }] });
+    fireEvent.change(screen.getByRole("textbox", { name: "Поиск входящих писем" }), { target: { value: "Новый" } });
+    await screen.findByText("Новый результат"); expect(signal.aborted).toBe(true);
+    await act(async () => { resolve(registry); }); expect(screen.queryByText("Исходная тема")).not.toBeInTheDocument();
+  });
+  it("aborts an unfinished read when leaving the registry", async () => {
+    vi.mocked(loadAIReferentIncomingRegistry).mockReturnValue(new Promise(() => undefined));
+    const view = setup(); await waitFor(() => expect(loadAIReferentIncomingRegistry).toHaveBeenCalledTimes(1));
+    const signal = vi.mocked(loadAIReferentIncomingRegistry).mock.calls[0]![2]!;
+    view.unmount(); expect(signal.aborted).toBe(true);
+  });
   it("keeps loaded rows and file controls out of search/loading renders", async () => {
     setup(); await screen.findByText("Исходная тема");
     vi.mocked(AIReferentFiles).mockClear();
@@ -37,7 +60,7 @@ describe("Incoming registry rendering", () => {
     const input = screen.getByRole("textbox", { name: "Поиск входящих писем" });
     for (const value of ["п", "пи", "пис", "письмо"]) fireEvent.change(input, { target: { value } });
     expect(AIReferentFiles).not.toHaveBeenCalled();
-    await waitFor(() => expect(loadAIReferentIncomingRegistry).toHaveBeenLastCalledWith("token", { query: "письмо", category: "all", offset: 0 }));
+    await waitFor(() => expect(loadAIReferentIncomingRegistry).toHaveBeenLastCalledWith("token", { query: "письмо", category: "all", offset: 0 }, expect.any(AbortSignal)));
     expect(screen.getByRole("region", { name: "Реестр входящих писем" })).toHaveAttribute("aria-busy", "true");
     expect(screen.getByText("Исходная тема")).toBeInTheDocument();
     expect(AIReferentFiles).not.toHaveBeenCalled();

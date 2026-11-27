@@ -125,7 +125,7 @@ describe("AdaptiveNavigation overflow", () => {
     const more = screen.getByRole("button", { name: "Ещё, 2 разделов" });
     fireEvent.click(more);
     expect(more).toHaveClass("active");
-    expect(document.querySelector(".navigation-sliding > .sliding-segmented-indicator")).toHaveStyle({ opacity: "0" });
+    expect(document.querySelector(".sliding-segmented-indicator")).toBeNull();
   });
 
   it("updates the open portalled drawer when the sidebar palette changes", () => {
@@ -186,10 +186,10 @@ describe("AdaptiveNavigation overflow", () => {
   it("reserves More using the actual taller collapsed button height", () => {
     vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(48);
     render(<AdaptiveNavigation items={items} renderItem={(item) => <button key={item.key} className="rail-action">{item.label}</button>} />);
-    expect(screen.getByRole("button", { name: "Ещё, 3 разделов" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Первый" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Ещё, 2 разделов" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Первый" })).toBeInTheDocument();
   });
-  it.each([[153, true], [154, false]])("fits the precise row/gap boundary at %i px", (height, overflow) => {
+  it.each([[151, true], [152, false]])("fits the precise row/gap boundary at %i px", (height, overflow) => {
     vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(48);
     Object.defineProperty(HTMLElement.prototype, "clientHeight", { configurable: true, get: () => height });
     render(<AdaptiveNavigation items={items} renderItem={(item) => <button key={item.key} className="rail-action">{item.label}</button>} />);

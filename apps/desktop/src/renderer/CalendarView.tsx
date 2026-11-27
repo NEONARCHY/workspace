@@ -43,6 +43,7 @@ import { useCalendarEventClock } from "./useCalendarEventClock";
 import { CalendarAppearance, CalendarIcon, calendarAppearanceStyle } from "./CalendarAppearance";
 import { CalendarFilters } from "./CalendarFilters";
 import { CalendarSchedule } from "./CalendarSchedule";
+import { ProgressiveCalendarAgenda } from "./ProgressiveCalendarAgenda";
 import { CalendarAgendaDrawer } from "./CalendarAgendaDrawer";
 import { CalendarEventDialog } from "./CalendarEventDialog";
 import { CalendarZoomDetails } from "./CalendarZoomDetails";
@@ -689,8 +690,8 @@ export function CalendarView({
         {!selectedDayIsPast ? <Button disabled={Boolean(draft) || busy} appearance="primary" icon={<Add24Regular />} onClick={() => createForDay(selectedDay)}>Добавить</Button> : null}
       </div>
       {selectedDayIsPast ? <WorkspaceNotice tone="info" className="calendar-past-note">Новые события задним числом недоступны. Уже созданные события можно открыть и изменить.</WorkspaceNotice> : null}
-      <div className="calendar-day-agenda">
-        {selectedDayItems.length ? <CalendarSchedule items={selectedDayItems} currentUserId={currentUserId} disabled={Boolean(draft) || busy}
+      <ProgressiveCalendarAgenda total={selectedDayItems.length} resetKey={JSON.stringify([dayKey(selectedDay), filters])} disabled={Boolean(draft) || busy}>
+        {shown => selectedDayItems.length ? <CalendarSchedule items={selectedDayItems.slice(0, shown)} currentUserId={currentUserId} disabled={Boolean(draft) || busy}
           people={people} onEvent={openScheduleEvent} onZoom={openZoomEvent} /> : <div className="calendar-empty">
           <span aria-hidden="true">{selectedDayIsPast ? "✓" : "+"}</span>
           <h3>{hasFilters ? "Нет событий по фильтрам" : selectedDayIsPast ? "День без событий" : "Пока свободно"}</h3>
@@ -698,7 +699,7 @@ export function CalendarView({
           {hasFilters && <Button disabled={Boolean(draft) || busy} onClick={resetFilters}>Сбросить фильтры</Button>}
           {!selectedDayIsPast ? <Button disabled={Boolean(draft) || busy} onClick={() => createForDay(selectedDay)}>Создать событие</Button> : null}
         </div>}
-      </div>
+      </ProgressiveCalendarAgenda>
     </div>
   </>;
   return (

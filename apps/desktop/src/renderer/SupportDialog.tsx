@@ -21,7 +21,10 @@ import {
   Lightbulb24Regular,
   Warning24Regular,
 } from "@fluentui/react-icons";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { ArrowLeft20Regular, Search20Regular } from "@fluentui/react-icons";
+import { useProgressiveList } from "./useProgressiveList";
+import { useBrowserCompactLayout } from "./browser-layout";
 import type {
   SupportAdminActionInput,
   SupportRegistry,
@@ -75,6 +78,8 @@ function timeLabel(value: string) {
   });
 }
 
+const EMPTY_REQUESTS: SupportRegistry["requests"] = [];
+
 interface SupportDialogProps {
   readonly open: boolean;
   readonly token: string;
@@ -95,8 +100,13 @@ export function SupportDialog({
   const [category, setCategory] = useState<SupportRequestCategory>("comment");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
-  const [selectedId, setSelectedId] = useState<string>();
-  const [comment, setComment] = useState("");
+  const [selection, setSelection] = useState<{ id: string; focusId?: string }>();
+  const [comments, setComments] = useState<Readonly<Record<string, string>>>({});
+  const [query, setQuery] = useState("");
+  const [phoneScreen, setPhoneScreen] = useState<"list" | "thread" | "compose">();
+  const phoneLayout = useBrowserCompactLayout(true, "(max-width: 700px)");
+  const mainRef = useRef<HTMLElement>(null);
+  const submissionLock = useRef(false);
   const [rejectionReason, setRejectionReason] = useState<SupportRejectionReason>(
     "insufficient_information",
   );
@@ -109,6 +119,7 @@ export function SupportDialog({
     void loadSupportRegistry(token)
       .then(async (loaded) => {
         if (!active) return;
+        setError("");
         onRegistryChange(loaded);
         if (loaded.mode === "support" && loaded.unreadResponseCount > 0) {
           await markSupportResponsesRead(token);
@@ -122,21 +133,31 @@ export function SupportDialog({
     return () => { active = false; };
   }, [onRegistryChange, open, token]);
 
-  const requests = registry?.requests ?? [];
-  const effectiveSelectedId = focusRequestId ?? selectedId ?? requests[0]?.id;
+  const requests = registry?.requests ?? EMPTY_REQUESTS;
+  const isInbox = registry?.mode === "inbox";
+  const effectiveSelectedId = selection?.focusId === focusRequestId ? selection?.id ?? requests[0]?.id : focusRequestId ?? requests[0]?.id;
   const selected = requests.find((item) => item.id === effectiveSelectedId);
+  const comment = comments[effectiveSelectedId ?? ""] ?? "";
+  const setComment = (value: string) => { if (effectiveSelectedId) setComments(current => ({ ...current, [effectiveSelectedId]: value })); };
+  const searchIndex = useMemo(() => requests.map(item => ({ item, text: `${item.subject} ${item.authorName} ${item.authorUsername} ${statusCopy[item.status]}`.toLocaleLowerCase() })), [requests]);
+  const search = query.trim().toLocaleLowerCase();
+  const visibleRequests = useMemo(() => searchIndex.filter(entry => entry.text.includes(search)).map(entry => entry.item), [searchIndex, search]);
+  const { stream, sentinel, shown, hasMore, loadMore } = useProgressiveList(open ? visibleRequests.length : 0, `${token}:${open}:${query}:${registry?.mode}`, '.support-request-card');
+  const mobileScreen = phoneScreen ?? (focusRequestId ? "thread" : isInbox ? "list" : "compose");
 
   const refresh = async (preferredId?: string) => {
     const loaded = await loadSupportRegistry(token);
     onRegistryChange(loaded);
-    if (preferredId) setSelectedId(preferredId);
+    if (preferredId) setSelection({ id: preferredId, focusId: focusRequestId });
   };
 
   const submit = async () => {
+    if (submissionLock.current) return;
     if (subject.trim().length < 3 || body.trim().length < 8) {
       setError("Добавьте короткую тему и описание не короче 8 символов.");
       return;
     }
+    submissionLock.current = true;
     setBusy(true);
     setError("");
     try {
@@ -148,15 +169,18 @@ export function SupportDialog({
       setSubject("");
       setBody("");
       await refresh(created.id);
+      setPhoneScreen("thread");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Не удалось отправить обращение");
     } finally {
+      submissionLock.current = false;
       setBusy(false);
     }
   };
 
   const act = async (payload: SupportAdminActionInput) => {
-    if (!selected) return;
+    if (!selected || submissionLock.current) return;
+    submissionLock.current = true;
     setBusy(true);
     setError("");
     try {
@@ -166,14 +190,14 @@ export function SupportDialog({
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Не удалось сохранить ответ");
     } finally {
+      submissionLock.current = false;
       setBusy(false);
     }
   };
 
-  const isInbox = registry?.mode === "inbox";
   return (
     <WorkspaceDialog open={open} onOpenChange={(_event, data) => {
-      if (!busy) onOpenChange(data.open);
+      if (!busy) { if (!data.open) setPhoneScreen(undefined); onOpenChange(data.open); }
     }}>
       <DialogSurface className="support-dialog" aria-labelledby="support-dialog-title">
         <DialogBody>
@@ -185,41 +209,42 @@ export function SupportDialog({
             {isInbox ? "Обращения сотрудников" : "Поддержка"}
           </DialogTitle>
           <DialogContent className="support-dialog-content">
-            <header className="support-hero">
-              <span><ChatHelp24Regular /></span>
-              <div>
-                <strong>{isInbox ? "Единая очередь обратной связи" : "Помогите сделать Workspace лучше"}</strong>
-                <p>{isInbox
-                  ? "Читайте сообщения, уточняйте детали и возвращайте сотруднику понятный результат."
-                  : "Здесь можно оставить комментарий, сообщить об ошибке или предложить улучшение. Ответ администратора появится в уведомлениях и сохранится в истории."}</p>
-              </div>
-            </header>
+            <p className="support-intro">{isInbox ? "Обратная связь сотрудников: вопросы, ошибки и предложения" : "Сообщите об ошибке или предложите улучшение. Ответ сохранится в истории."}</p>
 
             {error ? <WorkspaceNotice tone="error" className="support-error" role="alert">{error}</WorkspaceNotice> : null}
             {!registry ? (!error ? <LoadingSkeleton layout="rows" label="Загружаем обращения" /> : null) : (
-              <div className={`support-workspace ${isInbox ? "is-inbox" : "is-personal"}`}>
+              <div className={`support-workspace ${isInbox ? "is-inbox" : "is-personal"}`} data-mobile-screen={mobileScreen}>
+                {phoneLayout && (mobileScreen === "thread" || !isInbox) && <nav className="support-mobile-navigation" aria-label="Разделы обращений">
+                  <Button disabled={busy} icon={mobileScreen === "thread" ? <ArrowLeft20Regular /> : undefined} aria-pressed={mobileScreen === "list"} onClick={() => setPhoneScreen("list")}>{isInbox ? "Все обращения" : "Моя история"}</Button>
+                  {!isInbox && <Button disabled={busy} aria-pressed={mobileScreen === "compose"} onClick={() => setPhoneScreen("compose")}>Новое обращение</Button>}
+                </nav>}
                 <aside className="support-request-list" aria-label={isInbox ? "Все обращения" : "Мои обращения"}>
                   <div className="support-list-title">
                     <strong>{isInbox ? "Все обращения" : "Моя история"}</strong>
-                    <span>{requests.length}</span>
+                    <span>{visibleRequests.length}</span>
                   </div>
-                  {requests.length === 0 ? (
-                    <p className="support-empty">{isInbox ? "Новых обращений пока нет." : "Вы ещё не отправляли обращений."}</p>
-                  ) : requests.map((item) => (
+                  <Input aria-label="Поиск обращений" contentBefore={<Search20Regular />} placeholder="Тема или сотрудник" value={query} onChange={(_, data) => setQuery(data.value)} />
+                  <div className="support-request-stream" ref={stream}>
+                  {visibleRequests.length === 0 ? (
+                    <p className="support-empty">{search ? "По этому запросу ничего не найдено." : isInbox ? "Новых обращений пока нет." : "Вы ещё не отправляли обращений."}</p>
+                  ) : visibleRequests.slice(0, shown).map((item) => (
                     <button
                       key={item.id}
                       type="button"
                       className={`support-request-card ${effectiveSelectedId === item.id ? "is-selected" : ""} ${item.responseUnread ? "has-response" : ""}`}
-                      onClick={() => setSelectedId(item.id)}
+                      disabled={busy} aria-pressed={effectiveSelectedId === item.id}
+                      onClick={() => { setSelection({ id: item.id, focusId: focusRequestId }); setPhoneScreen("thread"); setError(""); setRejectionReason("insufficient_information"); if (mainRef.current) mainRef.current.scrollTop = 0; }}
                     >
                       <span><b>{item.subject}</b><em className={`status-${item.status}`}>{statusCopy[item.status]}</em></span>
                       <small>{isInbox ? `${employeeDisplayName(item.authorName)} · @${item.authorUsername}` : categories.find((entry) => entry.key === item.category)?.label}</small>
                       <time>{timeLabel(item.updatedAt)}</time>
                     </button>
                   ))}
+                  {hasMore && <div className="support-load-more" ref={sentinel}><Button disabled={busy} onClick={() => loadMore(true)}>Показать ещё</Button><small>{shown} из {visibleRequests.length}</small></div>}
+                  </div>
                 </aside>
 
-                <main className="support-main">
+                <main className="support-main" ref={mainRef}>
                   {!isInbox ? (
                     <section className="support-composer" aria-label="Новое обращение">
                       <div className="support-category-picker" role="group" aria-label="Тип обращения">

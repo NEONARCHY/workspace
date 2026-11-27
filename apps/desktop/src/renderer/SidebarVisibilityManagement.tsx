@@ -1,9 +1,12 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { LoadingSkeleton } from "./LoadingSkeleton";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { DirectoryBootstrap, NavigationKey, SidebarVisibility, WorkspacePerson } from "@yuksalish/contracts";
 import { Button, Checkbox, DialogSurface, Field } from "@fluentui/react-components";
-import { Dismiss20Regular, Navigation24Regular } from "@fluentui/react-icons";
+import { Dismiss20Regular, Navigation24Regular, Search20Regular } from "@fluentui/react-icons";
+import { Input } from "./WorkspaceInput";
+import { useTabFocusMode } from "./useTabFocusMode";
+import "./admin-management-iteration-14.css";
 import { PersonPicker } from "./PersonPicker";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import { fallbackModules } from "./module-catalog";
@@ -18,11 +21,12 @@ export function SidebarVisibilityManagement({ token, directory, currentUser, ini
   readonly token: string; readonly directory: DirectoryBootstrap; readonly currentUser: WorkspacePerson;
   readonly initialUserId?: string; readonly onClose: () => void;
 }) {
-  const people: WorkspacePerson[] = directory.employees
+  useTabFocusMode();
+  const people: WorkspacePerson[] = useMemo(() => directory.employees
     .filter((employee) => employee.role !== "superadmin" || currentUser.role === "superadmin")
     .map((employee) => ({ id: employee.id, username: employee.username, name: employee.name,
       role: employee.role, departmentId: employee.departmentId, jobTitle: employee.jobTitle,
-      initials: employee.name.split(" ").map((part) => part[0]).slice(0, 2).join(""), color: "brand" }));
+      initials: employee.name.split(" ").map((part) => part[0]).slice(0, 2).join(""), color: "brand" })), [directory.employees, currentUser.role]);
   const [userId, setUserId] = useState(() => people.find((person) => person.id === initialUserId)?.id ?? people[0]?.id ?? "");
   const [saved, setSaved] = useState<SidebarVisibility>();
   const [hidden, setHidden] = useState<readonly NavigationKey[]>([]);
@@ -31,6 +35,9 @@ export function SidebarVisibilityManagement({ token, directory, currentUser, ini
   const [attempt, setAttempt] = useState(0);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [query, setQuery] = useState("");
+  const hiddenKeys = useMemo(() => new Set(hidden), [hidden]);
+  const matchingSections = sections.filter((section) => section.label.toLocaleLowerCase("ru").includes(query.trim().toLocaleLowerCase("ru")));
   const formRef = useRef<HTMLFormElement>(null);
   const restoreSaveFocus = useRef(false);
   useEffect(() => {
@@ -71,10 +78,12 @@ export function SidebarVisibilityManagement({ token, directory, currentUser, ini
     <header><span className="sidebar-visibility-icon" aria-hidden="true"><Navigation24Regular /></span><div><h2>Меню сотрудника</h2><p>Оставьте в боковом меню только нужные разделы.</p></div><Button type="button" appearance="subtle" icon={<Dismiss20Regular />} aria-label="Закрыть настройку меню" disabled={busy} onClick={onClose} /></header>
     <div className="sidebar-visibility-scroll">
       <Field label="Сотрудник"><PersonPicker token={token} people={people} departments={directory.departments} value={userId} label="Сотрудник для настройки меню" disabled={busy} onChange={selectEmployee} /></Field>
-      <p className="sidebar-visibility-explanation">Скрытие убирает кнопку, но не меняет права доступа. Для ограничения доступа используйте «Права модулей». Настройки профиля остаются доступны.</p>
+      <p className="sidebar-visibility-explanation">Скрытие кнопок не меняет права. Ограничения задаются в «Права модулей». Настройки профиля всегда доступны.</p>
       {loading && userId ? <LoadingSkeleton layout="rows" rows={6} label="Загружаем меню" /> : saved?.userId === userId ? <>
         <div className="sidebar-visibility-list-head"><strong>Показывать в меню</strong><Button type="button" appearance="subtle" disabled={busy || !hidden.length} onClick={() => { setHidden([]); setNotice(""); }}>Вернуть все кнопки</Button></div>
-        <div className="sidebar-visibility-list">{sections.map((section) => <Checkbox key={section.key} label={section.label} checked={!hidden.includes(section.key)} disabled={busy} onChange={(_, data) => { setHidden((current) => data.checked ? current.filter((key) => key !== section.key) : [...current, section.key]); setNotice(""); }} />)}</div>
+        <Input expandable={false} contentBefore={<Search20Regular />} aria-label="Найти раздел меню" placeholder="Найти раздел" value={query} onChange={(_, data) => setQuery(data.value)} />
+        <div className="sidebar-visibility-list">{matchingSections.map((section) => <Checkbox key={section.key} label={section.label} checked={!hiddenKeys.has(section.key)} disabled={busy} onChange={(_, data) => { setHidden((current) => data.checked ? current.filter((key) => key !== section.key) : [...current, section.key]); setNotice(""); }} />)}</div>
+        {!matchingSections.length ? <p className="directory-empty">Разделы не найдены. Попробуйте другое название.</p> : null}
       </> : !error ? <p>Выберите сотрудника, чтобы настроить его меню.</p> : null}
       {error ? <WorkspaceNotice tone="error" className="sidebar-visibility-error" role="alert" actions={<><Button type="button" disabled={busy || loading} onClick={reload}>Обновить настройки</Button></>}><span>{error}</span></WorkspaceNotice> : null}
       {notice ? <p className="sidebar-visibility-notice" role="status">{notice}</p> : null}

@@ -1,0 +1,89 @@
+const assert = require('node:assert/strict');
+module.exports = async (page, section, { phase, width }) => {
+  const root = page.locator(section.root).first();
+  const rows = root.locator('.record-table tbody .record-row');
+  await rows.first().waitFor();
+  const first = await rows.first().boundingBox();
+  const frame = await root.locator('.record-table-frame').boundingBox();
+  const header = await root.locator('.ws-section-header').boundingBox();
+  const bounds = await root.boundingBox();
+  const metrics = { firstRowHeight: first.height, headerHeight: header.height, listHeight: frame.height, leftInset: bounds.x, rightInset: width - bounds.x - bounds.width, mountedAvatars: await root.locator('.record-row .task-participant-anchor').count() };
+  if (phase === 'before') return metrics;
+  assert.equal(await rows.count(), 25, 'only the current page is mounted');
+  if (width <= 430) {
+    assert(Math.abs(metrics.leftInset - metrics.rightInset) <= 1, 'page insets are symmetric: ' + JSON.stringify(metrics));
+    assert(Math.abs(header.x - frame.x) <= 1 && Math.abs(header.width - frame.width) <= 1, 'header and list share the same edges');
+    assert(Math.abs(first.x - header.x) <= 1 && Math.abs(first.width - header.width) <= 1, 'cards share the header edges: ' + JSON.stringify({ first, header, frame }));
+    if (section.id === 'grants') {
+      const search = await root.locator('.grants-toolbar > .workspace-search').boundingBox();
+      const controls = await root.locator('.workspace-queue-controls').boundingBox();
+      const gaps = [search.y - header.y - header.height, controls.y - search.y - search.height, first.y - controls.y - controls.height];
+      assert(gaps.every(gap => Math.abs(gap - 8) <= 1), 'grant header, search, filters and cards have eight-pixel gaps: ' + JSON.stringify(gaps));
+    }
+    assert(first.height <= 210, 'mobile record is compact: ' + JSON.stringify(metrics));
+    assert(header.height <= (section.id === 'tasks' ? 128 : 80), 'mobile header stays compact: ' + JSON.stringify(await root.locator('.ws-section-header').evaluate(node => [node, ...node.querySelectorAll('.task-toolbar-actions, .task-domain-tabs, .task-header-copy, .task-mobile-view')].map(el => { const s = getComputedStyle(el), r = el.getBoundingClientRect(); return { class: el.className, display: s.display, columns: s.gridTemplateColumns, position: s.position, x: r.x, y: r.y, width: r.width, height: r.height }; }))));
+    assert.equal(await root.locator('.record-table thead').isVisible(), false, 'no desktop heading rail');
+    assert.equal(await rows.first().locator('.record-status-badge').evaluate(node => getComputedStyle(node).outlineStyle), 'none', 'status uses its semantic fill without a frame');
+    const dimensions = await root.evaluate(node => ({ page: document.documentElement.scrollWidth - window.innerWidth, rails: [...node.querySelectorAll('.workspace-queue-toolbar, .record-table-scroll')].map(el => el.scrollWidth - el.clientWidth) }));
+    assert(dimensions.page <= 1 && dimensions.rails.every(value => value <= 1), 'no horizontal rails: ' + JSON.stringify(dimensions));
+    const sort = root.getByRole('button', { name: `Сортировка: ${section.id === 'tasks' ? 'задачи' : 'гранты'}`, exact: true });
+    await sort.click();
+    assert.equal(await page.getByRole('menuitem').count(), section.id === 'tasks' ? 7 : 5, 'every sort column stays available');
+    await page.getByRole('menuitem', { name: 'Название', exact: true }).click();
+    assert.match(await sort.getAttribute('title'), /↑$/);
+    const next = root.getByRole('button', { name: /^Следующая страница:/ });
+    await next.click();
+    assert.match(await root.getByRole('status').innerText(), /^26–50/);
+    await root.getByRole('button', { name: /^Предыдущая страница:/ }).click();
+    await root.getByRole('button', { name: /^Количество строк на странице:/ }).click();
+    await page.getByRole('menuitem', { name: '10', exact: true }).click();
+    assert.equal(await rows.count(), 10, 'page size still works');
+    await root.getByRole('button', { name: /^Количество строк на странице:/ }).click();
+    await page.getByRole('menuitem', { name: '25', exact: true }).click();
+    const search = root.getByRole(section.id === 'tasks' ? 'textbox' : 'searchbox', { name: section.id === 'tasks' ? 'Поиск задач' : 'Поиск заявок', exact: true });
+    await search.fill('нет-такой-записи');
+    await page.waitForFunction(selector => !document.querySelector(selector)?.querySelector('.record-row'), section.root);
+    assert.equal(await rows.count(), 0, 'search filters the whole collection');
+    await search.fill('');
+    await rows.first().waitFor();
+    const open = rows.first().locator('.record-open');
+    const title = await open.innerText();
+    await open.click();
+    const detail = page.getByRole('dialog').last();
+    await detail.waitFor();
+    assert((await detail.innerText()).includes(title), 'full title remains in the detail');
+    await page.keyboard.press('Escape');
+    await detail.waitFor({ state: 'hidden' });
+    if (section.id === 'tasks') {
+      const filterToggle = root.getByRole('button', { name: 'Фильтры задач', exact: true });
+      await filterToggle.click();
+      await root.getByRole('combobox', { name: 'Моя роль в задаче', exact: true }).waitFor();
+      await filterToggle.click();
+      assert.equal(await root.getByRole('combobox', { name: 'Моя роль в задаче', exact: true }).count(), 0, 'extra filters collapse');
+      const mode = root.getByRole('combobox', { name: 'Вид задач', exact: true });
+      await mode.click();
+      assert.equal(await page.getByRole('option').count(), 5, 'all task views remain accessible');
+      await page.getByRole('option', { name: 'Календарь', exact: true }).click();
+      await root.locator('.task-calendar-embedded').waitFor();
+      assert.equal(await root.locator('.calendar-side-heading').evaluate(node => getComputedStyle(node).borderBottomWidth), '0px');
+      await mode.click(); await page.getByRole('option', { name: 'Список', exact: true }).click();
+      await rows.first().waitFor();
+      const tabs = page.getByRole('tablist', { name: 'Разделы задач' });
+      await tabs.getByRole('tab', { name: /Мои письма/ }).click();
+      await page.getByRole('tab', { name: 'Задачи', exact: true }).click();
+      await root.waitFor();
+      assert(await page.getByRole('tab', { name: 'Задачи', exact: true }).evaluate(node => node === document.activeElement), 'domain switch restores keyboard focus');
+    }
+    const targets = await root.locator('.ws-section-header .fui-Button, .ws-section-header .fui-Tab, .mobile-queue-select > button, .record-page-nav, .record-compact-sort').evaluateAll(nodes => nodes.filter(node => node.getClientRects().length).map(node => ({ name: node.getAttribute('aria-label') || node.textContent, width: node.getBoundingClientRect().width, height: node.getBoundingClientRect().height })));
+    assert(targets.every(target => target.height >= 43.5 && target.width >= 43.5), 'touch targets stay accessible: ' + JSON.stringify(targets));
+    await page.keyboard.press('Tab'); await sort.focus();
+    assert.equal(await sort.evaluate(node => getComputedStyle(node).outlineWidth), '2px', 'sort retains keyboard focus');
+  } else if (section.id === 'tasks' && width > 1023) {
+    const tabs = root.getByRole('tablist', { name: 'Разделы задач' });
+    const requests = root.getByRole('button', { name: 'Запросы', exact: true });
+    const tabBounds = await tabs.boundingBox(), requestBounds = await requests.boundingBox();
+    assert(tabBounds.x + tabBounds.width <= requestBounds.x + 1, 'domain switch precedes requests');
+    assert(Math.abs(tabBounds.y + tabBounds.height / 2 - requestBounds.y - requestBounds.height / 2) <= 1, 'domain switch shares the requests row');
+  }
+  return metrics;
+};

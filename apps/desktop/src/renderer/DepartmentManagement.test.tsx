@@ -16,6 +16,21 @@ beforeEach(() => vi.resetAllMocks());
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 describe("DepartmentManagement", () => {
+  it("windows membership rows while searching the full directory and retaining selection", () => {
+    const employees = Array.from({ length: 80 }, (_, index) => ({ id: `qa-${index}`, username: `qa${index}`, name: `Сотрудник ${index}`, role: "employee" as const, departmentId: "central", status: "active" as const }));
+    const view = render(<DepartmentManagement token="token" departments={[{ id: "central", code: "ca", name: "ЦА", scope: "central", assignedUsersCount: 80, memberIds: ["qa-79"] }]} employees={employees} onChanged={vi.fn()} />);
+    expect(view.container.querySelectorAll(".department-member-row")).toHaveLength(25);
+    fireEvent.click(screen.getByRole("button", { name: "Показать ещё 25" }));
+    expect(view.container.querySelectorAll(".department-member-row")).toHaveLength(50);
+    const query = screen.getByRole("textbox", { name: "Поиск сотрудников для отдела" });
+    fireEvent.change(query, { target: { value: "Сотрудник 79" } });
+    expect(screen.getByRole("checkbox", { name: "Добавить Сотрудник 79" })).toBeChecked();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Добавить Сотрудник 79" }));
+    fireEvent.change(query, { target: { value: "" } });
+    expect(view.container.querySelectorAll(".department-member-row")).toHaveLength(25);
+    fireEvent.change(query, { target: { value: "Сотрудник 79" } });
+    expect(screen.getByRole("checkbox", { name: "Добавить Сотрудник 79" })).not.toBeChecked();
+  });
   it("shows the saved photo in department member cards", async () => {
     loadProfileAvatar.mockResolvedValue(new Blob(["photo"], { type: "image/png" }));
     vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:department-avatar");

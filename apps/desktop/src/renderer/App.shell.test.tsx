@@ -313,6 +313,20 @@ describe("corporate workspace authentication alpha", () => {
     expect(screen.queryByText("Сервер подключён")).not.toBeInTheDocument();
   });
 
+  it.each(["aziza", "malika"])("returns %s to personal Home through the sidebar logo", async username => {
+    mockServer();
+    render(<App />);
+    await loginToWorkspace(username, "home");
+    fireEvent.click(within(screen.getByRole("navigation")).getByRole("button", { name: "Задачи" }));
+    await screen.findByRole("heading", { name: "Задачи" });
+    const logo = screen.getByRole("button", { name: "Перейти на Главную" });
+    expect(within(logo).getByRole("img", { name: "Yuksalish" })).toBeInTheDocument();
+    fireEvent.click(logo);
+    expect(await screen.findByRole("heading", { name: /Добрый день/ })).toBeVisible();
+    expect(logo).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("button", { name: "Главная" })).toHaveAttribute("aria-current", "page");
+  });
+
   it("keeps actual section counters on the buttons inside More", async () => {
     vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockImplementation(function (this: HTMLElement) {
       return this.classList.contains("adaptive-rail-nav") ? 45 : 0;

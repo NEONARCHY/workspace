@@ -1,4 +1,4 @@
-/* Quiet icon toolbar: 44px hit targets, 28px hover circles and visible portraits. */
+/* Full-size toolbar: 44px hit targets, 40px portraits and quiet hover circles. */
 html:root body .app-provider .app-stage > .global-bar.workspace-topbar {
   --ws-topbar-size: 44px;
   --ws-topbar-radius: 50%;
@@ -18,8 +18,8 @@ html:root body .app-provider .app-stage > .global-bar.workspace-topbar :is(.brow
   transition: color 140ms ease;
 }
 html:root body .app-provider .app-stage > .global-bar.workspace-topbar :is(.browser-menu-trigger, .section-jump-trigger, .notification-bell, .color-theme-toggle, .connection-indicator, .context-trigger, .workday-control-mobile-trigger)::before {
-  content: ""; position: absolute; z-index: -1; pointer-events: none; inset: 8px;
-  width: 28px; height: 28px; border: 0; border-radius: 50%; background: transparent;
+  content: ""; position: absolute; z-index: -1; pointer-events: none; inset: 2px;
+  width: 40px; height: 40px; border: 0; border-radius: 50%; background: transparent;
   box-shadow: none; transition: background-color 140ms ease;
 }
 @media (hover: hover) {
@@ -34,7 +34,7 @@ html:root body .app-provider .app-stage > .global-bar.workspace-topbar :is(.noti
   flex: 0 0 var(--ws-topbar-size); width: var(--ws-topbar-size); height: var(--ws-topbar-size);
 }
 html:root body .app-provider .app-stage > .global-bar.workspace-topbar :is(.browser-menu-trigger, .notification-bell-icon, .color-theme-toggle, .connection-indicator, .context-trigger, .workday-control-mobile-trigger) > svg {
-  flex: none; width: 20px; height: 20px;
+  flex: none; width: 24px; height: 24px;
 }
 html:root body .app-provider .app-stage > .global-bar.workspace-topbar .color-theme-toggle .fui-Button__icon { width: 20px; height: 20px; font-size: 20px; }
 html:root body .app-provider .app-stage > .global-bar.workspace-topbar .section-jump-trigger {
@@ -52,7 +52,7 @@ html:root body .app-provider .app-stage > .global-bar.workspace-topbar .context-
 html:root body .app-provider .app-stage > .global-bar.workspace-topbar .workspace-identity-menu { gap: 0; padding: 0; }
 html:root body .app-provider .app-stage > .global-bar.workspace-topbar .workspace-identity-menu > :is(.workspace-identity-name, svg) { display: none; }
 html:root body .app-provider .app-stage > .global-bar.workspace-topbar .workspace-identity-menu .fui-Avatar {
-  width: 28px; height: 28px; min-width: 28px; min-height: 28px; font-size: 12px;
+  width: 40px; height: 40px; min-width: 40px; min-height: 40px; font-size: 14px;
 }
 html:root body .app-provider .app-stage > .global-bar.workspace-topbar .workspace-identity-menu .workspace-identity-name { max-width: 148px; }
 html:root body .app-provider .app-stage > .global-bar.workspace-topbar .connection-indicator { position: relative; }
@@ -63,7 +63,7 @@ html:root body .app-provider .app-stage > .global-bar.workspace-topbar .connecti
 html:root body .app-provider .app-stage > .global-bar.workspace-topbar .connection-indicator.has-error > i { background: var(--ws-theme-ink-danger, #b54453); }
 html:root body .app-provider .app-stage > .global-bar.workspace-topbar :is(.notification-bell-dot, .identity-support-indicator, .workday-control-mobile-trigger > i) { position: absolute; top: 6px; right: 6px; width: 6px; height: 6px; min-width: 0; min-height: 0; margin: 0; border-radius: 50%; }
 html:root body .app-provider .app-stage > .global-bar.workspace-topbar .assistant-launcher { display: grid; place-items: center; }
-html:root body .app-provider .app-stage > .global-bar.workspace-topbar .assistant-launcher > :is(.gradient-orb, .gradient-orb-fallback) { width: 28px; height: 28px; margin: 0; filter: none; }
+html:root body .app-provider .app-stage > .global-bar.workspace-topbar .assistant-launcher > :is(.gradient-orb, .gradient-orb-fallback) { width: 40px; height: 40px; margin: 0; filter: none; }
 html:root body .app-provider .app-stage > .global-bar.workspace-topbar .workday-control-direct > :is(.fui-Button, .workday-control-away) { min-height: 44px; border-radius: 12px; border: 0; }
 html:root body .app-provider .app-stage > .global-bar.workspace-topbar .workday-control-direct { display: none; }
 html:root body .app-provider .app-stage > .global-bar.workspace-topbar .workday-control { flex: 0 0 44px; width: 44px; min-width: 44px; height: 44px; margin: 0; }
@@ -89,12 +89,31 @@ html:root body .app-provider .app-stage > .global-bar.workspace-topbar .workday-
 @media (max-width: 700px) {
   html.web-platform:root body .app-provider .app-stage > .global-bar.workspace-topbar .section-jump-trigger { display: none; }
 }
+/* The command entry stays a readable field on desktop and tablet. */
+html:root body .app-provider .app-stage > .global-bar.workspace-topbar .section-jump-trigger {
+  flex: 1 1 320px; width: min(430px, 100%); min-width: 180px; max-width: 430px;
+  height: 44px; min-height: 44px; gap: 10px; padding: 0 14px; margin: 0;
+  justify-content: flex-start; border: 0; border-radius: 14px;
+  background: var(--ws-button-surface, var(--ws-muted-surface)); color: var(--ws-text); cursor: text;
+}
+html:root body .app-provider .app-stage > .global-bar.workspace-topbar .section-jump-trigger::before { content: none; }
+html:root body .app-provider .app-stage > .global-bar.workspace-topbar .section-jump-trigger > span { display: inline-flex; min-width: 0; }
+html:root body .app-provider .app-stage > .global-bar.workspace-topbar .section-jump-trigger input { min-width: 0; font-size: 14px; color: inherit; }
+html:root body .app-provider .app-stage > .global-bar.workspace-topbar .section-jump-trigger kbd { display: block; padding: 2px 6px; font-size: 11px; border: 0; border-radius: 6px; }
+html:root body .app-provider .app-stage > .global-bar.workspace-topbar .section-jump-trigger .fui-Input__contentBefore svg { width: 20px; height: 20px; }
+html:root body .app-provider .app-stage > .global-bar.workspace-topbar :is(.context-trigger > svg:first-child, .color-theme-toggle .fui-Button__icon) { width: 24px; height: 24px; font-size: 24px; }
+@media (max-width: 1050px) {
+  html:root body .app-provider .app-stage > .global-bar.workspace-topbar .section-jump-trigger .fui-Input__contentAfter { display: none; }
+}
+@media (max-width: 700px) {
+  html:root body .app-provider .app-stage > .global-bar.workspace-topbar .section-jump-trigger { display: none; }
+}
 @media (prefers-reduced-motion: reduce) {
   html:root body .app-provider .app-stage > .global-bar.workspace-topbar button::before { transition: none; }
   html:root body .app-provider .app-stage > .global-bar.workspace-topbar :is(.browser-menu-trigger, .section-jump-trigger, .notification-bell, .color-theme-toggle, .assistant-launcher, .workspace-identity-menu, .connection-indicator, .context-trigger, .workday-control-mobile-trigger) { transition: none; }
 }
 @media (forced-colors: active) {
-  html:root body .app-provider .app-stage > .global-bar.workspace-topbar .assistant-launcher > .gradient-orb-fallback { width: 28px; height: 28px; box-sizing: border-box; mask-image: none; background: transparent; border: 2px solid ButtonText; border-radius: 50%; }
+  html:root body .app-provider .app-stage > .global-bar.workspace-topbar .assistant-launcher > .gradient-orb-fallback { width: 40px; height: 40px; box-sizing: border-box; mask-image: none; background: transparent; border: 2px solid ButtonText; border-radius: 50%; }
   html:root body .app-provider .app-stage > .global-bar.workspace-topbar :is(.browser-menu-trigger, .section-jump-trigger, .notification-bell, .color-theme-toggle, .assistant-launcher, .workspace-identity-menu, .connection-indicator, .context-trigger, .workday-control-mobile-trigger) { background: transparent; color: ButtonText; outline: 1px solid ButtonText; outline-offset: -1px; }
   html:root body .app-provider .app-stage > .global-bar.workspace-topbar :is(.browser-menu-trigger, .section-jump-trigger, .notification-bell, .color-theme-toggle, .assistant-launcher, .workspace-identity-menu, .connection-indicator, .context-trigger, .workday-control-mobile-trigger):is(:focus-visible, [aria-expanded="true"], [aria-pressed="true"]) { outline: 2px solid Highlight; outline-offset: -2px; }
   html:root body .app-provider .app-stage > .global-bar.workspace-topbar :is(.connection-indicator > i, .notification-bell-dot) { background: Highlight; }

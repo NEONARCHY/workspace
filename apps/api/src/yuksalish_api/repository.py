@@ -3198,8 +3198,15 @@ async def load_workspace(
     ]
     send_permissions = {chat.id: chat.permissions.send_messages for chat in chat_responses}
     pin_permissions = {
-        chat.id: bool(chat.permissions.manage_messages)
-        or (chat.kind == "direct" and chat.permissions.send_messages)
+        chat.id: messenger_service.can_pin_messages(
+            chat.kind,
+            chat.permissions,
+            is_member=any(member.user_id == current.id for member in chat.members),
+        )
+        for chat in chat_responses
+    }
+    manage_message_permissions = {
+        chat.id: messenger_service.can_manage_messages(chat.kind, chat.permissions)
         for chat in chat_responses
     }
     reaction_map, pin_map = await messenger_service.message_detail_maps(
@@ -3223,6 +3230,7 @@ async def load_workspace(
             current_user,
             can_send=send_permissions.get(str(row["chat_id"]), False),
             can_pin=pin_permissions.get(str(row["chat_id"]), False),
+            can_delete_others=manage_message_permissions.get(str(row["chat_id"]), False),
             reactions=reaction_map.get(row["id"]),
             pin=pin_map.get(row["id"]),
             forwarded=forward_map.get(row["id"]),
@@ -3523,23 +3531,31 @@ async def search_messages(
     read_ids = await messenger_service.read_message_ids(
         connection, current_user, [row["id"] for row in rows]
     )
-    return [
-        messenger_service.message_response(
-            row,
-            current_user,
-            can_send=messenger_service.member_permissions(row).send_messages,
-            reply_quote=quote_map.get(row["id"]),
-            can_pin=messenger_service.can_manage_messages(row, row),
-            reactions=reaction_map.get(row["id"]),
-            pin=pin_map.get(row["id"]),
-            forwarded=forward_map.get(row["id"]),
-            zoom_invitation=invitations.get(row["id"]),
-            read_by_recipient=row["id"] in read_ids,
-        )
-        for row in rows
+    results = []
+    for row in rows:
         # Unavailable excerpts must not be discoverable by probing search keywords.
-        if (origin := forward_map.get(row["id"])) is None or origin.available
-    ]
+        origin = forward_map.get(row["id"])
+        if origin is not None and not origin.available:
+            continue
+        permissions = messenger_service.member_permissions(row)
+        results.append(
+            messenger_service.message_response(
+                row,
+                current_user,
+                can_send=permissions.send_messages,
+                reply_quote=quote_map.get(row["id"]),
+                can_pin=messenger_service.can_pin_messages(
+                    row["kind"], permissions, is_member=True
+                ),
+                can_delete_others=messenger_service.can_manage_messages(row["kind"], permissions),
+                reactions=reaction_map.get(row["id"]),
+                pin=pin_map.get(row["id"]),
+                forwarded=origin,
+                zoom_invitation=invitations.get(row["id"]),
+                read_by_recipient=row["id"] in read_ids,
+            )
+        )
+    return results
 
 
 async def _feed_post_response(

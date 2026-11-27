@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { Badge, useRestoreFocusTarget } from "@fluentui/react-components";
 import type { TaskPlan, TaskStatus, WorkspacePerson, WorkspaceTask } from "@yuksalish/contracts";
 import { RecordCompactTools, RecordMobileLabel, RecordTablePager, SortHeading, tableCollator, useTablePage, type TableSort } from "./RecordTableTools";
@@ -11,10 +12,11 @@ import { TaskPriorityIndicator } from "./TaskPriority";
 const statuses: Record<TaskStatus, string> = { new: "Новая", in_progress: "В работе", awaiting_review: "На проверке", completed: "Завершена", overdue: "Просрочена", cancelled: "Отменена" };
 const columns = [["title", "Название"], ["assignee", "Участники"], ["status", "Статус"], ["due", "Крайний срок"], ["author", "Постановщик"], ["plan", "План"], ["project", "Проект"]] as const;
 
-export function TaskRecords({ tasks, plans = [], plansLoading = false, plansError = "", people, token, currentUserId, selectedId, filterKey, onSelect }: {
+export function TaskRecords({ tasks, plans = [], plansLoading = false, plansError = "", people, token, currentUserId, selectedId, filterKey, onSelect, compact = false, compactToolsTarget }: {
   tasks: readonly WorkspaceTask[]; plans?: readonly TaskPlan[]; plansLoading?: boolean; plansError?: string;
   people: readonly WorkspacePerson[]; token?: string; currentUserId?: string; selectedId?: string;
   filterKey: string; onSelect: (id: string) => void;
+  compact?: boolean; compactToolsTarget?: HTMLElement | null;
 }) {
   const [sort, setSort] = useState<TableSort>({ key: "", descending: false });
   const now = useTaskDeadlineClock(tasks);
@@ -55,8 +57,16 @@ export function TaskRecords({ tasks, plans = [], plansLoading = false, plansErro
     { userId: task.assigneeId, role: "Исполнитель" as const },
     ...task.participants.map((item) => ({ userId: item.userId, role: item.role === "co_assignee" ? "Соисполнитель" as const : "Наблюдатель" as const })),
   ];
+  const renderParticipants = (task: WorkspaceTask) => {
+    const all = participants(task);
+    return <div className="task-participant-group" aria-label="Участники задачи">
+      {(compact ? all.slice(0, 2) : all).map(({ userId, role }) => <TaskParticipantAvatar key={`${userId}-${role}`} person={peopleById.get(userId)} role={role} token={token} />)}
+      {compact && all.length > 2 && <button className="record-participant-more" type="button" aria-label={`Ещё ${all.length - 2} участников задачи`} onClick={() => onSelect(task.id)}>+{all.length - 2}</button>}
+    </div>;
+  };
+  const compactTools = <RecordCompactTools columns={columns} sort={sort} onSort={onSort} label="задачи" iconOnly={compact && Boolean(compactToolsTarget)} />;
   return <div className="record-table-frame task-records">
-    <RecordCompactTools columns={columns} sort={sort} onSort={onSort} label="задачи" />
+    {compact && compactToolsTarget ? createPortal(compactTools, compactToolsTarget) : compactTools}
     <div className="record-table-scroll" role="region" aria-label="Список задач" tabIndex={0}>
       <table role="table" className="record-table task-record-table" aria-label="Задачи">
         <thead role="rowgroup"><tr role="row">{columns.map(([column, label]) => <SortHeading key={column} column={column} sort={sort} onSort={onSort}>{label}</SortHeading>)}</tr></thead>
@@ -66,14 +76,12 @@ export function TaskRecords({ tasks, plans = [], plansLoading = false, plansErro
             {pendingTaskDeadlineRequest(task) ? <Badge className="task-deadline-request-badge" appearance="tint" color="warning">{task.authorId === currentUserId ? "Перенос срока · ждёт вашего решения" : "Запрошен перенос срока"}</Badge> : null}
             {task.checklistTotal > 0 ? <span className="task-record-progress" aria-hidden="true"><i style={{ width: `${Math.round(task.checklistDone / task.checklistTotal * 100)}%` }} /></span> : null}
           </td>
-          <td role="cell"><RecordMobileLabel>Участники</RecordMobileLabel><div className="task-participant-group" aria-label="Участники задачи">{participants(task).map(({ userId, role }) =>
-            <TaskParticipantAvatar key={`${userId}-${role}`} person={peopleById.get(userId)} role={role} token={token} />
-          )}</div></td>
-          <td role="cell"><RecordMobileLabel>Статус</RecordMobileLabel><Badge className="record-status-badge" data-status={task.status} appearance="tint" color={task.status === "overdue" ? "danger" : task.status === "completed" ? "success" : task.status === "awaiting_review" ? "warning" : "brand"}>{task.status === "awaiting_review" ? task.authorId === currentUserId ? "Ждёт вашей проверки" : "Ждёт проверки постановщиком" : statuses[task.status]}</Badge><TaskPriorityIndicator className="record-priority-indicator" priority={task.priority} /></td>
+          <td role="cell" className="record-participants"><RecordMobileLabel>Участники</RecordMobileLabel>{renderParticipants(task)}</td>
+          <td role="cell" className="record-status"><RecordMobileLabel>Статус</RecordMobileLabel><Badge className="record-status-badge" data-status={task.status} appearance="tint" color={task.status === "overdue" ? "danger" : task.status === "completed" ? "success" : task.status === "awaiting_review" ? "warning" : "brand"}>{task.status === "awaiting_review" ? task.authorId === currentUserId ? "Ждёт вашей проверки" : "Ждёт проверки постановщиком" : statuses[task.status]}</Badge><TaskPriorityIndicator className="record-priority-indicator" priority={task.priority} /></td>
           <td role="cell" className={isTaskOverdue(task, now) ? "record-deadline overdue" : "record-deadline"}><RecordMobileLabel>Крайний срок</RecordMobileLabel>{task.dueLabel}{isTaskOverdue(task, now) && task.status !== "overdue" ? <small className="record-priority">Срок истёк</small> : null}</td>
-          <td role="cell"><RecordMobileLabel>Постановщик</RecordMobileLabel><div className="task-participant-group"><TaskParticipantAvatar person={peopleById.get(task.authorId)} role="Постановщик" token={token} /></div></td>
+          {!compact && <><td role="cell"><RecordMobileLabel>Постановщик</RecordMobileLabel><div className="task-participant-group"><TaskParticipantAvatar person={peopleById.get(task.authorId)} role="Постановщик" token={token} /></div></td>
           <td role="cell" className="record-plan"><RecordMobileLabel>План</RecordMobileLabel><span title={planLabel(task.id)}>{planLabel(task.id)}</span></td>
-          <td role="cell" className="record-project"><RecordMobileLabel>Проект</RecordMobileLabel>{task.project || "Без проекта"}</td>
+          <td role="cell" className="record-project"><RecordMobileLabel>Проект</RecordMobileLabel>{task.project || "Без проекта"}</td></>}
         </tr>)}</tbody>
       </table>
       {!tasks.length && <div className="record-table-empty"><strong>В этом разделе задач нет</strong><span>Измените поиск, переключите фильтр или создайте задачу.</span></div>}

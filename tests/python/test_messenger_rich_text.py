@@ -166,7 +166,7 @@ async def exercise_rich_messages(url: str) -> None:
                     PinMessageRequest(pinned=False, scope="self"),
                 )
                 assert (
-                    hidden.is_pinned and hidden.pin_hidden_for_me and not hidden.can_unpin_for_all
+                    hidden.is_pinned and hidden.pin_hidden_for_me and hidden.can_unpin_for_all
                 )
                 owner_snapshot = await load_workspace(connection, owner)
                 assert not next(
@@ -176,14 +176,10 @@ async def exercise_rich_messages(url: str) -> None:
                 assert next(
                     m for m in peer_snapshot.messages if m.id == original.id
                 ).pin_hidden_for_me
-                with pytest.raises(WorkspaceRepositoryError) as unauthorized:
-                    await service.set_message_pin(
-                        connection, peer, UUID(original.id), PinMessageRequest(pinned=False)
-                    )
-                assert unauthorized.value.status_code == 403
-                await service.set_message_pin(
-                    connection, owner, UUID(original.id), PinMessageRequest(pinned=False)
+                unpinned = await service.set_message_pin(
+                    connection, peer, UUID(original.id), PinMessageRequest(pinned=False)
                 )
+                assert not unpinned.is_pinned
                 await connection.execute(
                     update(users)
                     .where(users.c.id == owner.id)
@@ -205,7 +201,7 @@ async def exercise_rich_messages(url: str) -> None:
                     connection, owner, UUID(original.id), PinMessageRequest(pinned=True)
                 )
                 assert repeated.pinned_at == pinned.pinned_at and repeated.pin_protected
-                for actor, scope in ((peer, "self"), (owner, "all")):
+                for actor, scope in ((peer, "self"), (peer, "all"), (owner, "all")):
                     with pytest.raises(WorkspaceRepositoryError) as protected:
                         await service.set_message_pin(
                             connection,
@@ -257,6 +253,32 @@ async def exercise_rich_messages(url: str) -> None:
                     next(m for m in late_snapshot.messages if m.id == latest.id).reply_quote is None
                 )
                 assert not any(m.id == original.id for m in late_snapshot.messages)
+
+                assert latest.can_pin
+                for message in (reply, latest):
+                    pinned_reply = await service.set_message_pin(
+                        connection, peer, UUID(message.id), PinMessageRequest(pinned=True)
+                    )
+                    assert pinned_reply.is_pinned and pinned_reply.pinned_by_user_id == str(peer.id)
+                peer_snapshot = await load_workspace(connection, peer)
+                pinned_messages = {
+                    message.id: message
+                    for message in peer_snapshot.messages
+                    if message.chat_id == group.id and message.is_pinned
+                }
+                assert set(pinned_messages) == {original.id, reply.id, latest.id}
+                assert pinned_messages[original.id].pin_protected
+                assert pinned_messages[original.id].pinned_at == pinned.pinned_at
+
+                await service.set_message_pin(
+                    connection, peer, UUID(reply.id), PinMessageRequest(pinned=False)
+                )
+                peer_snapshot = await load_workspace(connection, peer)
+                assert {
+                    message.id
+                    for message in peer_snapshot.messages
+                    if message.chat_id == group.id and message.is_pinned
+                } == {original.id, latest.id}
             finally:
                 await transaction.rollback()
     finally:

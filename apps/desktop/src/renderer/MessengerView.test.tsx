@@ -71,7 +71,7 @@ function renderMessenger(
 }
 
 function openMessageMenu(text: string) {
-  const message = screen.getByText(text).closest(".message");
+  const message = screen.getAllByText(text).map(element => element.closest(".message")).find(Boolean);
   if (!message) throw new Error(`Message not found: ${text}`);
   fireEvent.contextMenu(message);
 }
@@ -117,6 +117,28 @@ it("does not read chats in a closed mini messenger or merely in its list", async
   onMarkRead.mockClear();
   result.rerender(<FluentProvider theme={webLightTheme}><MessengerView {...result.props} visible={false} /></FluentProvider>);
   expect(onMarkRead).not.toHaveBeenCalled();
+  result.unmount();
+});
+it("releases the paged chat list on exit and opens a distant chat without losing its draft", async () => {
+  const chats: ChatSummary[] = Array.from({ length: 100 }, (_, i) => ({ ...initialChats[0]!, id: `large-${i}`, title: `Рабочая группа ${i}`, kind: "group", contextType: undefined, unread: 0 }));
+  const result = renderMessenger({ compact: true, chats, messages: [], people: [], focusChatId: "large-99" });
+  const rows = () => document.querySelectorAll(".chat-list [data-chat-id]").length;
+  expect(rows()).toBe(15);
+  expect(screen.getByRole("heading", { name: "Рабочая группа 99" })).toBeInTheDocument();
+  const editor = screen.getByRole("textbox", { name: "Новое сообщение" });
+  changeField(editor, { target: { value: "Сохранить этот черновик" } });
+  fireEvent.click(screen.getByRole("button", { name: "Показать ещё 15" })); expect(rows()).toBe(30);
+  result.rerender(<FluentProvider theme={webLightTheme}><MessengerView {...result.props} visible={false} listActive /></FluentProvider>);
+  expect(rows()).toBe(30); // A modal or background tab suspends reading, not the logical list session.
+  result.rerender(<FluentProvider theme={webLightTheme}><MessengerView {...result.props} visible={false} listActive={false} /></FluentProvider>);
+  expect(rows()).toBe(0);
+  expect(editor).toBeInTheDocument(); expect(editor).toHaveTextContent("Сохранить этот черновик");
+  result.rerender(<FluentProvider theme={webLightTheme}><MessengerView {...result.props} visible listActive /></FluentProvider>);
+  expect(rows()).toBe(15);
+  expect(screen.getByRole("textbox", { name: "Новое сообщение" })).toBe(editor);
+  expect(editor).toHaveTextContent("Сохранить этот черновик");
+  fireEvent.click(screen.getByRole("button", { name: "К списку чатов" }));
+  await waitFor(() => expect(screen.getByRole("textbox", { name: "Поиск чатов и сообщений" })).toHaveFocus());
   result.unmount();
 });
 it("reopens the same focused chat on a new navigation request without remounting its draft", () => {
@@ -229,19 +251,151 @@ describe("rich messenger integration", () => {
     expect(readRichEditor(input).entities).toEqual([{ type: "bold", offset: 0, length: 6 }]);
     expect(onSendMessage).toHaveBeenCalledWith("finance", "Жирный текст", [], expect.objectContaining({ entities: [{ type: "bold", offset: 0, length: 6 }] }));
   });
-  it("offers separate personal/global unpin actions at the top and protects chairman pins", async () => {
+  it("offers permitted personal/global unpin actions in pinned messages and protects chairman pins", async () => {
     const onPinMessage = vi.fn().mockResolvedValue(undefined);
     const ordinary = { ...quoted, isPinned: true, canUnpinForSelf: true, canUnpinForAll: true };
     renderMessenger({ messages: [ordinary], onPinMessage });
     fireEvent.click(screen.getByRole("button", { name: "Закреплено: 1" }));
-    fireEvent.click(screen.getByRole("button", { name: "Снять для себя" }));
+    openMessageMenu(ordinary.body);
+    fireEvent.click(screen.getByRole("button", { name: "Снять закреп для себя" }));
     await waitFor(() => expect(onPinMessage).toHaveBeenCalledWith(ordinary, false, "self"));
-    fireEvent.click(screen.getByRole("button", { name: "Снять для всех" }));
+    openMessageMenu(ordinary.body);
+    fireEvent.click(screen.getByRole("button", { name: "Снять закреп для всех" }));
     await waitFor(() => expect(onPinMessage).toHaveBeenCalledWith(ordinary, false, "all"));
     cleanup(); renderMessenger({ messages: [{ ...ordinary, pinProtected: true, canUnpinForSelf: false, canUnpinForAll: false }] });
     fireEvent.click(screen.getByRole("button", { name: "Закреплено: 1" }));
-    expect(screen.getByText("Закреп председателя · нельзя снять")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Снять для/ })).not.toBeInTheDocument();
+    openMessageMenu(ordinary.body);
+    expect(screen.queryByRole("button", { name: /Снять закреп/ })).not.toBeInTheDocument();
+  });
+  it("allows pinning another participant's message without exposing delete or edit", async () => {
+    const onPinMessage = vi.fn().mockResolvedValue(undefined);
+    const message = { ...quoted, canPin: true, canDelete: undefined, canEdit: false };
+    renderMessenger({ messages: [message], onPinMessage, currentUserRole: "employee" });
+    openMessageMenu(message.body);
+    expect(screen.queryByRole("button", { name: "Удалить" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Изменить" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Закрепить" }));
+    await waitFor(() => expect(onPinMessage).toHaveBeenCalledWith(message, true));
+  });
+  it("shows a compact pinned preview and respects an explicit pin denial", () => {
+    const message = { ...quoted, isPinned: true, canPin: false };
+    renderMessenger({ messages: [message] });
+    const preview = screen.getByRole("button", { name: /Закреплённое сообщение/ });
+    expect(preview).toHaveTextContent(message.body);
+    const pane = screen.getByLabelText("Переписка");
+    pane.scrollTo = vi.fn();
+    fireEvent.click(preview);
+    expect(pane.scrollTo).toHaveBeenCalled();
+    cleanup();
+    renderMessenger({ messages: [{ ...message, isPinned: false }] });
+    openMessageMenu(message.body);
+    expect(screen.queryByRole("button", { name: "Закрепить" })).not.toBeInTheDocument();
+  });
+  it("previews the most recently pinned message even when its message is older", () => {
+    const older = { ...quoted, id: "older", body: "Старое сообщение", createdAt: "2026-01-01T00:00:00Z", isPinned: true, pinnedAt: "2026-03-01T00:00:00Z" };
+    const newer = { ...quoted, id: "newer", body: "Новое сообщение", createdAt: "2026-02-01T00:00:00Z", isPinned: true, pinnedAt: "2026-02-02T00:00:00Z" };
+    renderMessenger({ messages: [older, newer] });
+    expect(screen.getByRole("button", { name: /Закреплённое сообщение/ })).toHaveTextContent("Старое сообщение");
+  });
+  it("cycles multiple pins by pin time and wraps to the newest", () => {
+    const pins = [
+      { ...quoted, id: "cycle-a", body: "Первый закреп", isPinned: true, pinnedAt: "2026-01-02T00:00:00Z" },
+      { ...quoted, id: "cycle-b", body: "Второй закреп", isPinned: true, pinnedAt: "2026-01-03T00:00:00Z" },
+      { ...quoted, id: "cycle-c", body: "Третий закреп", isPinned: true, pinnedAt: "2026-01-04T00:00:00Z" },
+    ];
+    renderMessenger({ messages: pins });
+    const banner = () => screen.getByRole("button", { name: /Закреплённое сообщение/ });
+    expect(banner()).toHaveTextContent("Третий закреп");
+    screen.getByLabelText("Переписка").scrollTo = vi.fn();
+    fireEvent.click(banner()); expect(banner()).toHaveTextContent("Второй закреп");
+    fireEvent.click(banner()); expect(banner()).toHaveTextContent("Первый закреп");
+    fireEvent.click(banner()); expect(banner()).toHaveTextContent("Третий закреп");
+  });
+  it("shows full pinned messages only, preserves drafts and supports normal message actions", async () => {
+    const onPinMessage = vi.fn().mockResolvedValue(undefined);
+    const pinned = { ...quoted, id: "visible-pin", body: "Закреп для проверки", isPinned: true, canUnpinForSelf: true, canUnpinForAll: false,
+      reactions: [{ emoji: "👍", count: 1, reactedByCurrentUser: false, reactorUserIds: ["baxtiyor"] }] };
+    const messages = [pinned,
+      { ...quoted, id: "other-pin", body: "Другой закреп", isPinned: true },
+      { ...quoted, id: "plain", body: "Обычное сообщение", isPinned: false, canPin: true },
+      { ...quoted, id: "hidden", body: "Лично скрытый закреп", isPinned: true, pinHiddenForMe: true },
+      { ...quoted, id: "deleted", body: "Удалённый закреп", isPinned: true, deletedAt: "2026-01-01T00:00:00Z" },
+      { ...quoted, id: "foreign", body: "Закреп другого чата", chatId: "office", isPinned: true },
+    ];
+    renderMessenger({ messages, onPinMessage, onForwardContent: vi.fn(), attachments: [{ id: "pin-file", ownerType: "message", ownerId: "visible-pin", fileName: "решение.pdf", contentType: "application/pdf", byteSize: 1000, documentRole: "general", sha256: "a".repeat(64), uploadedByUserId: "baxtiyor", createdAt: "2026-01-01T00:00:00Z" }] });
+    const editor = screen.getByLabelText("Новое сообщение");
+    changeField(editor, { target: { value: "Черновик сохраняется" } });
+    openMessageMenu("Обычное сообщение");
+    fireEvent.click(screen.getByRole("button", { name: "Закрепить" }));
+    await waitFor(() => expect(onPinMessage).toHaveBeenCalledWith(messages[2], true));
+    fireEvent.click(screen.getByRole("button", { name: "Закреплено: 2" }));
+    const pane = screen.getByLabelText("Переписка");
+    expect(pane).toHaveAttribute("data-pinned-only");
+    expect(pane).toHaveTextContent("Закреп для проверки");
+    expect(pane).toHaveTextContent("Другой закреп");
+    expect(pane).toHaveTextContent("решение.pdf");
+    for (const absent of ["Обычное сообщение", "Лично скрытый закреп", "Удалённый закреп", "Закреп другого чата"]) expect(pane).not.toHaveTextContent(absent);
+    expect(editor).not.toBeVisible();
+    expect(within(pane).getByRole("button", { name: /👍/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Вернуться к переписке" }));
+    expect(screen.getByLabelText("Новое сообщение")).toHaveTextValue("Черновик сохраняется");
+    fireEvent.click(screen.getByRole("button", { name: "Закреплено: 2" }));
+    openMessageMenu(pinned.body);
+    for (const name of ["Ответить", "Копировать", "Переслать", "Снять закреп для себя"]) expect(screen.getByRole("button", { name })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Удалить" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Снять закреп для всех" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Ответить" }));
+    expect(screen.getByLabelText("Переписка")).not.toHaveAttribute("data-pinned-only");
+    expect(screen.getByLabelText("Новое сообщение")).toHaveTextValue("Черновик сохраняется");
+  });
+  it("resets pinned-only mode and preview when switching chats and adopts a newly pinned message", () => {
+    const old = { ...quoted, id: "old-pin", body: "Прежний закреп", isPinned: true, pinnedAt: "2026-01-01T00:00:00Z" };
+    const middle = { ...quoted, id: "middle-pin", body: "Следующий закреп", isPinned: true, pinnedAt: "2026-01-02T00:00:00Z" };
+    const other = { ...quoted, id: "office-pin", chatId: "office", body: "Закреп проекта", isPinned: true, pinnedAt: "2026-01-03T00:00:00Z" };
+    const view = renderMessenger({ messages: [old, middle, other] });
+    const banner = () => screen.getByRole("button", { name: /Закреплённое сообщение/ });
+    screen.getByLabelText("Переписка").scrollTo = vi.fn();
+    fireEvent.click(banner()); expect(banner()).toHaveTextContent("Прежний закреп");
+    const newest = { ...quoted, id: "new-pin", body: "Новый закреп", isPinned: true, pinnedAt: "2026-01-04T00:00:00Z" };
+    view.rerender(<FluentProvider theme={webLightTheme}><MessengerView {...view.props} messages={[old, middle, other, newest]} /></FluentProvider>);
+    expect(banner()).toHaveTextContent("Новый закреп");
+    fireEvent.click(screen.getByRole("button", { name: "Закреплено: 3" }));
+    fireEvent.click(screen.getByText("Проект: новый офис"));
+    expect(screen.getByLabelText("Переписка")).not.toHaveAttribute("data-pinned-only");
+    expect(banner()).toHaveTextContent("Закреп проекта");
+    fireEvent.click(screen.getByText("Финансы и закупки"));
+    expect(banner()).toHaveTextContent("Новый закреп");
+  });
+  it("restores chat search after pinned history and navigates from a pinned reply to its original", () => {
+    const original = { ...quoted, id: "search-original", body: "Исходный текст", isPinned: false };
+    const reply = { ...quoted, id: "search-reply", body: "Закреплённый ответ", isPinned: true, replyToMessageId: original.id };
+    renderMessenger({ messages: [original, reply] });
+    const search = screen.getByPlaceholderText("Найти сообщение в этом чате");
+    fireEvent.change(search, { target: { value: "Исходный" } });
+    fireEvent.click(screen.getByRole("button", { name: "Закреплено: 1" }));
+    const pane = screen.getByLabelText("Переписка");
+    pane.scrollTo = vi.fn();
+    expect(pane).toHaveTextContent("Закреплённый ответ");
+    expect(within(pane).queryByRole("separator", { name: "Непрочитанные сообщения" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Вернуться к переписке" }));
+    expect(search).toHaveValue("Исходный");
+    fireEvent.click(screen.getByRole("button", { name: "Закреплено: 1" }));
+    fireEvent.click(screen.getByRole("button", { name: /К исходному сообщению от/ }));
+    expect(pane).not.toHaveAttribute("data-pinned-only");
+    expect(search).toHaveValue("");
+    expect(pane).toHaveTextContent("Исходный текст");
+  });
+  it("shows the pinned empty state and back control when the last pin disappears", () => {
+    const pinned = { ...quoted, isPinned: true };
+    const view = renderMessenger({ messages: [pinned] });
+    fireEvent.click(screen.getByRole("button", { name: "Закреплено: 1" }));
+    view.rerender(<FluentProvider theme={webLightTheme}><MessengerView {...view.props} messages={[{ ...pinned, isPinned: false }]} /></FluentProvider>);
+    const pane = screen.getByLabelText("Переписка");
+    expect(pane).toHaveTextContent("Нет закреплённых сообщений");
+    expect(pane).not.toHaveTextContent("Начните разговор");
+    fireEvent.click(screen.getByRole("button", { name: "Вернуться к переписке" }));
+    expect(pane).not.toHaveAttribute("data-pinned-only");
+    expect(pane).toHaveTextContent(pinned.body);
   });
   it("does not count personally hidden pins in the top banner", () => {
     renderMessenger({ messages: [{ ...quoted, isPinned: true, pinHiddenForMe: true }] });
@@ -320,6 +474,22 @@ describe("microphone startup without a composer gap", () => {
     expect(screen.queryByRole("textbox", { name: "Новое сообщение" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Отмена" }));
     expect(screen.getByRole("textbox", { name: "Новое сообщение" })).toBeInTheDocument();
+    expect(mic.stop).toHaveBeenCalledOnce();
+  });
+  it("keeps voice capture visible and blocks opening pinned history during recording", async () => {
+    const mic = delayedMicrophone();
+    const pinned: ChatMessage = { id: "voice-pin", chatId: "finance", authorId: "baxtiyor", body: "Закреп при записи", time: "12:00", isPinned: true };
+    renderMessenger({ messages: [pinned] });
+    fireEvent.click(screen.getByRole("button", { name: "Записать голосовое сообщение" }));
+    await act(async () => mic.grant());
+    const trigger = screen.getByRole("button", { name: "Закреплено: 1" });
+    expect(trigger).toHaveAttribute("aria-disabled", "true");
+    expect(trigger).toHaveAttribute("title", "Завершите голосовую запись перед просмотром закреплённых сообщений");
+    fireEvent.click(trigger);
+    expect(screen.getByLabelText("Переписка")).not.toHaveAttribute("data-pinned-only");
+    expect(screen.getByText("Идёт запись")).toBeVisible();
+    expect(mic.stop).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Отмена" }));
     expect(mic.stop).toHaveBeenCalledOnce();
   });
   it.each(["typing", "escape"])("cancels pending capture on %s and releases a late permission grant", async action => {
@@ -1045,7 +1215,7 @@ describe("Private messenger", () => {
     await act(() => vi.advanceTimersByTimeAsync(5_000));
     expect(chatActions.delete).toHaveBeenCalledWith("finance");
   });
-  it("removes an encrypted chat draft after restoring it into the composer", async () => {
+  it("keeps a restored encrypted draft until it is sent or explicitly cleared", async () => {
     const loadDraft = vi.fn().mockResolvedValue("Текст до обновления");
     const clearDraft = vi.fn().mockResolvedValue(undefined);
     const saveDraft = vi.fn().mockResolvedValue(true);
@@ -1053,8 +1223,25 @@ describe("Private messenger", () => {
     renderMessenger();
     await waitFor(() => expect(screen.getByLabelText("Новое сообщение")).toHaveTextValue("Текст до обновления"));
     expect(loadDraft).toHaveBeenCalledWith("chat:aziza:finance");
-    await waitFor(() => expect(clearDraft).toHaveBeenCalledWith("chat:aziza:finance"));
+    expect(clearDraft).not.toHaveBeenCalled();
     expect(saveDraft).not.toHaveBeenCalled();
+  });
+  it("flushes a new draft on immediate exit and restores it on repeated visits", async () => {
+    const drafts = new Map<string, string>();
+    vi.stubGlobal("yuksalish", {
+      loadDraft: vi.fn(async (key: string) => drafts.get(key) ?? null),
+      saveDraft: vi.fn(async (key: string, value: string) => { drafts.set(key, value); return true; }),
+      clearDraft: vi.fn(async (key: string) => { drafts.delete(key); }),
+    });
+    const first = renderMessenger();
+    changeField(screen.getByLabelText("Новое сообщение"), { target: { value: "Быстрый черновик" } });
+    first.unmount();
+    expect(drafts.get("chat:aziza:finance")).toBe("Быстрый черновик");
+    const second = renderMessenger();
+    await waitFor(() => expect(screen.getByLabelText("Новое сообщение")).toHaveTextValue("Быстрый черновик"));
+    second.unmount();
+    renderMessenger();
+    await waitFor(() => expect(screen.getByLabelText("Новое сообщение")).toHaveTextValue("Быстрый черновик"));
   });
   it("flushes the current message draft before a web update reload", async () => {
     const loadDraft = vi.fn().mockResolvedValue(null);
@@ -1693,7 +1880,8 @@ describe("Private messenger", () => {
     await waitFor(() => expect(onPinMessage).toHaveBeenCalledWith(message, false, "all"));
 
     fireEvent.click(screen.getByRole("button", { name: /Закреплено: 1/ }));
-    const panel = screen.getByRole("region", { name: "Закреплённые сообщения" });
+    const panel = screen.getByLabelText("Переписка");
+    expect(panel).toHaveAttribute("data-pinned-only");
     expect(panel).toHaveTextContent("Важное решение по бюджету");
     expect(within(panel).getByText("Бахтиёр Самугов")).toBeInTheDocument();
   });
