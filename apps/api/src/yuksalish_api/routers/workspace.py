@@ -117,7 +117,7 @@ from yuksalish_api.repository import (
     update_trip_request,
     validate_attachment_owner,
 )
-from yuksalish_api.tables import ai_referent_letters, trip_requests, users
+from yuksalish_api.tables import ai_referent_letters, attachments, trip_requests, users
 from yuksalish_api.trip_document_service import issue_order, prepare_signed_brief
 from yuksalish_api.trip_hr_service import apply_resolution, complete_order
 from yuksalish_api.trip_order_revision_permissions import REVISION_ACTIONS
@@ -1660,9 +1660,21 @@ async def put_attachment(
     image_width, image_height = await asyncio.to_thread(
         image_dimensions, bytes(content), content_type,
     )
+    digest = hashlib.sha256(content).hexdigest()
     storage_key = f"{owner_type}/{owner_id}/{uuid4()}"
     if owner_type == "ai_referent_letter":
-        storage_key = f"{owner_type}/{owner_id}/{hashlib.sha256(content).hexdigest()}"
+        # The letter row is locked. Reuse exact retries, including legacy keys,
+        # but give renamed files and different document roles their own object.
+        existing_key = await connection.scalar(
+            select(attachments.c.storage_key).where(
+                attachments.c.owner_type == owner_type,
+                attachments.c.owner_id == owner_id,
+                attachments.c.sha256 == digest,
+                attachments.c.file_name == safe_name,
+                attachments.c.document_role == document_role,
+            ).limit(1)
+        )
+        storage_key = existing_key or f"{owner_type}/{owner_id}/{digest}/{uuid4()}"
     storage = _object_storage(request)
     try:
         await storage.put(storage_key, bytes(content), content_type)
@@ -1674,7 +1686,7 @@ async def put_attachment(
             file_name=safe_name,
             content_type=content_type,
             byte_size=len(content),
-            sha256=hashlib.sha256(content).hexdigest(),
+            sha256=digest,
             storage_key=storage_key,
             document_role=document_role,
             media_kind=media_kind,
