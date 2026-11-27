@@ -44,6 +44,27 @@ const card = () => document.querySelector(".trip-board-card")!;
 async function drop(target: string) { await dropSpatialCard(card(), column(target)); }
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 describe("Trip approvals interaction", async () => {
+  it("lets HR register an approved order without a new resolution and retains failed input", async () => {
+    const trip: TripRequest = { ...request, stage: "approved", status: "approved", stageLabel: "Утверждено",
+      statusLabel: "Утверждено", hasOrderPdf: true, orderNumber: "009-WS", orderRevisionStage: "chair",
+      orderIssuedAt: "2026-11-08T19:00:00Z", allowedActions: ["update_order_details", "cancel_revision"] };
+    const { onAction } = setup(trip);
+    fireEvent.click(screen.getByRole("button", { name: /Все/ }));
+    fireEvent.click(card().querySelector(".approval-card-open")!);
+    fireEvent.click(screen.getByText("Номер, серия и дата приказа", { selector: "summary" }));
+    const form = screen.getByRole("form", { name: "Кадровые реквизиты приказа" });
+    expect(within(form).queryByLabelText("Цель поездки в приказе")).not.toBeInTheDocument();
+    expect(within(form).getByLabelText("Дата приказа (необязательно)")).toHaveValue("2026-11-09");
+    fireEvent.change(within(form).getByLabelText("Номер приказа *"), { target: { value: "77" } });
+    fireEvent.click(within(form).getByRole("button", { name: "Сохранить реквизиты" }));
+    await waitFor(() => expect(onAction).toHaveBeenCalledWith(trip, "update_order_details", undefined, undefined, {
+      orderNumber: "77", orderSeries: "а/ф", orderPurpose: "", orderDate: "2026-11-09",
+    }));
+    expect(within(form).getByLabelText("Номер приказа *")).toHaveValue("77");
+    expect(within(form).getByRole("button", { name: "Сохранить реквизиты" })).toBeEnabled();
+    expect(onAction).not.toHaveBeenCalledWith(trip, "approve_revision", expect.anything());
+  });
+
   it("keeps a legacy invalid date from crashing the whole queue", () => {
     setup({ ...request, startDate: "" });
     expect(card()).toHaveTextContent("Самарканд");

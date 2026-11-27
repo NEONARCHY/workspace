@@ -2360,6 +2360,7 @@ export interface ProjectHubOverview {
 export type TripStage = "launch" | "deputy_approval" | "manager_approval" | "hr" | "approved" | "rejected";
 export type TripStatus = "draft" | "running" | "needs_revision" | "approved" | "rejected" | "annulled";
 export type TripAction = "submit" | "approve" | "return" | "reject" | "resubmit" | "move" | "withdraw" | "annul" | "complete"
+  | "update_order_details"
   | "revise_order" | "approve_revision" | "complete_revision" | "cancel_revision";
 
 export type TripDocumentKind = "attachment" | "brief" | "brief-preview" | "order" | "order-preview" | "revision-brief" | "archived";

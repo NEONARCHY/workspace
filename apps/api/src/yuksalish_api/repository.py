@@ -2221,7 +2221,9 @@ async def _sync_notifications_for_user(
             trip_row, current_user, trip_chair_user_id,
             _trip_row_deputy_id(trip_row, trip_deputy_user_id, legacy_trip_deputy_id),
         )
-        if not any(action not in {"withdraw", "annul", "revise_order", "cancel_revision"}
+        if not any(action not in {
+            "withdraw", "annul", "revise_order", "cancel_revision", "update_order_details",
+        }
                    for action in allowed_actions):
             continue
         event_key = (
