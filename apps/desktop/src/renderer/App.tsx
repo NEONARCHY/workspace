@@ -2339,10 +2339,10 @@ export function App() {
               </div></div>
           </header>
 
-          <DossierReminderPrompt key={`${session.user.id}:${activeApiOrigin}`} token={session.accessToken}
+          <DossierReminderPrompt key={`dossier:${session.user.id}:${activeApiOrigin}`} token={session.accessToken}
             userId={session.user.id} people={displayPeople}
             paused={accountOpen || Boolean(profileUserId) || supportOpen || Boolean(previewAttachment) || Boolean(forwardPhoto) || switchingNetwork} />
-          <HisobotDraftPrompt key={`${workspace.currentUser.id}:${activeApiOrigin}`} token={session.accessToken}
+          <HisobotDraftPrompt key={`hisobot:${workspace.currentUser.id}:${activeApiOrigin}`} token={session.accessToken}
             userId={workspace.currentUser.id} notifications={workspace.notifications}
             enabled={modulePermissions.ai_hisobot?.view === true}
             editingReport={displayedSection === "ai_hisobot"}

@@ -134,6 +134,9 @@ async function measure(page, selector) {
       const page = await context.newPage(); page.setDefaultTimeout(15000);
       if (planningSuite || reportingSuite || registrySuite || communicationsSuite) await page.clock.setFixedTime(new Date(promptSuite ? "2026-11-26T12:39:00Z" : "2026-11-26T09:30:00Z"));
       page.on("pageerror", error => errors.push(error.message));
+      if (communicationsSuite && phase === "after") page.on("console", message => {
+        if (message.type() === "error" && /Encountered two children with the same key/.test(message.text())) errors.push(message.text());
+      });
       await page.addInitScript(theme => localStorage.setItem("yuksalish:color-theme:last", theme), theme);
       let data, releaseIds = [], workdayWorking = false, workdayWrites = 0;
       await page.routeWebSocket("**/api/v1/events", socket => socket.onMessage(message => {
