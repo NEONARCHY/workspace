@@ -22,6 +22,18 @@ function mount() {
 afterEach(cleanup);
 beforeEach(() => { vi.clearAllMocks(); vi.mocked(loadSidebarVisibility).mockResolvedValue(base); });
 describe("employee sidebar settings", () => {
+  it("filters sections locally without losing edits or making writes", async () => {
+    mount();
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Задачи" }));
+    const query = screen.getByRole("textbox", { name: "Найти раздел меню" });
+    fireEvent.change(query, { target: { value: "Лента" } });
+    expect(screen.queryByRole("checkbox", { name: "Задачи" })).toBeNull();
+    expect(screen.getByRole("checkbox", { name: "Лента" })).not.toBeChecked();
+    fireEvent.change(query, { target: { value: "" } });
+    expect(screen.getByRole("checkbox", { name: "Задачи" })).not.toBeChecked();
+    expect(loadSidebarVisibility).toHaveBeenCalledTimes(1);
+    expect(saveSidebarVisibility).not.toHaveBeenCalled();
+  });
   it("restores save focus after a failure so keyboard closing and retry stay available", async () => {
     vi.mocked(saveSidebarVisibility).mockRejectedValue(new Error("Нет соединения"));
     mount();

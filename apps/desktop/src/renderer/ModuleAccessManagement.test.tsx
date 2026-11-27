@@ -27,6 +27,18 @@ const directory: DirectoryBootstrap = {
 };
 
 describe("regional assistant access", () => {
+  it("locks all rules during a write and retains server state after failure", async () => {
+    let reject!: (error: Error) => void;
+    vi.mocked(setModuleAccessRule).mockReturnValue(new Promise((_, no) => { reject = no; }));
+    render(<FluentProvider theme={workspaceTheme}><ModuleAccessManagement token="test-token" directory={{ ...directory, modules: [...directory.modules, { key: "tasks", label: "Задачи", status: "available" }] }} onRuleChanged={vi.fn()} onRuleDeleted={vi.fn()} /></FluentProvider>);
+    fireEvent.click(screen.getByRole("checkbox", { name: "ИИ-ассистент: Просмотр" }));
+    expect(screen.getByRole("checkbox", { name: "Задачи: Просмотр" })).toBeDisabled();
+    expect(screen.getByRole("combobox", { name: "Получатель правила доступа" })).toBeDisabled();
+    reject(new Error("Права не изменены сервером"));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Права не изменены сервером");
+    expect(screen.getByRole("checkbox", { name: "ИИ-ассистент: Просмотр" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Задачи: Просмотр" })).toBeEnabled();
+  });
   beforeEach(() => vi.resetAllMocks());
   afterEach(cleanup);
 

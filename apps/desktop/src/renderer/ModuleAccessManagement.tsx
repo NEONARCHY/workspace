@@ -3,7 +3,11 @@ import { useMemo, useState } from "react";
 
 import type { DirectoryBootstrap, ModuleAccessRule, ModuleAccessSubject, ModulePermissionSet } from "@yuksalish/contracts";
 import { Button, Checkbox } from "@fluentui/react-components";
-import { LockClosed20Regular } from "@fluentui/react-icons";
+import { LockClosed20Regular, Search20Regular } from "@fluentui/react-icons";
+import { Input } from "./WorkspaceInput";
+import { indexAccessRules, indexDepartmentLineage } from "./module-access-index";
+import "./admin-management-iteration-14.css";
+import { useTabFocusMode } from "./useTabFocusMode";
 import { WorkspaceSelect as Select } from "./WorkspaceSelect";
 import { useAutoDismissFeedback } from "./useAutoDismissFeedback";
 
@@ -25,28 +29,6 @@ function defaults(role = "employee", moduleKey = ""): ModulePermissionSet {
   return { view: true, create: true, edit: true, approve: true, admin };
 }
 
-function matchingRule(
-  directory: DirectoryBootstrap,
-  subjectType: ModuleAccessSubject,
-  subjectKey: string,
-  moduleKey: string,
-) {
-  return directory.accessRules.find((rule) => rule.subjectType === subjectType && rule.subjectKey === subjectKey && rule.moduleKey === moduleKey);
-}
-
-function departmentLineage(directory: DirectoryBootstrap, departmentId?: string) {
-  const byId = new Map(directory.departments.map((department) => [department.id, department]));
-  const lineage: string[] = [];
-  const visited = new Set<string>();
-  let current = departmentId ? byId.get(departmentId) : undefined;
-  while (current && !visited.has(current.id)) {
-    visited.add(current.id);
-    lineage.unshift(current.id);
-    current = current.parentId ? byId.get(current.parentId) : undefined;
-  }
-  return lineage;
-}
-
 interface ModuleAccessManagementProps {
   readonly token: string;
   readonly directory: DirectoryBootstrap;
@@ -55,11 +37,16 @@ interface ModuleAccessManagementProps {
 }
 
 export function ModuleAccessManagement({ token, directory, onRuleChanged, onRuleDeleted }: ModuleAccessManagementProps) {
+  useTabFocusMode();
   const [subjectType, setSubjectType] = useState<ModuleAccessSubject>("role");
   const [subjectKey, setSubjectKey] = useState("employee");
   const [busyKey, setBusyKey] = useState("");
   const [feedback, setFeedback] = useState("");
   const [feedbackIsError, setFeedbackIsError] = useState(false);
+  const [query, setQuery] = useState("");
+  const matchingRule = useMemo(() => indexAccessRules(directory.accessRules), [directory.accessRules]);
+  const departmentLineage = useMemo(() => indexDepartmentLineage(directory.departments), [directory.departments]);
+  const employeesById = useMemo(() => new Map(directory.employees.map((item) => [item.id, item])), [directory.employees]);
   useAutoDismissFeedback(feedback, feedbackIsError, setFeedback);
   const subjects = useMemo(() => subjectType === "role"
     ? directory.roles.map((item) => ({ key: item.key, label: item.label }))
@@ -67,13 +54,13 @@ export function ModuleAccessManagement({ token, directory, onRuleChanged, onRule
       ? directory.departments.map((item) => ({ key: item.id, label: item.name }))
       : subjectType === "position"
         ? directory.positions.filter((item) => item.isActive).map((item) => ({ key: item.id, label: item.name }))
-      : directory.employees.filter((item) => item.role !== "superadmin").map((item) => ({ key: item.id, label: item.name })), [directory, subjectType]);
+      : directory.employees.filter((item) => item.role !== "superadmin").map((item) => ({ key: item.id, label: item.name })), [directory.roles, directory.departments, directory.positions, directory.employees, subjectType]);
   const selectedKey = subjects.some((item) => item.key === subjectKey) ? subjectKey : subjects[0]?.key ?? "";
-  const selectedEmployee = directory.employees.find((item) => item.id === selectedKey);
-  const regionalDepartments = directory.departments.filter((item) => item.scope === "regional");
-  const allRegionsEnabled = regionalDepartments.length > 0 && regionalDepartments.every((item) =>
-    departmentLineage(directory, item.id).every((id) =>
-      matchingRule(directory, "department", id, "assistant")?.permissions.view !== false));
+  const selectedEmployee = employeesById.get(selectedKey);
+  const regionalDepartments = useMemo(() => directory.departments.filter((item) => item.scope === "regional"), [directory.departments]);
+  const allRegionsEnabled = useMemo(() => regionalDepartments.length > 0 && regionalDepartments.every((item) =>
+    departmentLineage(item.id).every((id) =>
+      matchingRule("department", id, "assistant")?.permissions.view !== false)), [regionalDepartments, departmentLineage, matchingRule]);
 
   const selectType = (value: ModuleAccessSubject) => {
     setSubjectType(value);
@@ -85,22 +72,22 @@ export function ModuleAccessManagement({ token, directory, onRuleChanged, onRule
     setFeedback("");
   };
 
-  const explicitRule = (moduleKey: string) => matchingRule(directory, subjectType, selectedKey, moduleKey);
+  const explicitRule = (moduleKey: string) => matchingRule(subjectType, selectedKey, moduleKey);
   const inherited = (moduleKey: string) => {
     if (subjectType === "role") return defaults(selectedKey, moduleKey);
     const role = subjectType === "user" ? selectedEmployee?.role ?? "employee" : "employee";
     let permissions = defaults(role, moduleKey);
-    const roleRule = matchingRule(directory, "role", role, moduleKey);
+    const roleRule = matchingRule("role", role, moduleKey);
     if (roleRule) permissions = roleRule.permissions;
     const departmentId = subjectType === "department" ? selectedKey : selectedEmployee?.departmentId ?? undefined;
-    const lineage = departmentLineage(directory, departmentId);
+    const lineage = departmentLineage(departmentId);
     const inheritedDepartments = subjectType === "department" ? lineage.filter((id) => id !== selectedKey) : lineage;
     for (const id of inheritedDepartments) {
-      const rule = matchingRule(directory, "department", id, moduleKey);
+      const rule = matchingRule("department", id, moduleKey);
       if (rule) permissions = rule.permissions;
     }
     if (subjectType === "user" && selectedEmployee?.positionId) {
-      const positionRule = matchingRule(directory, "position", selectedEmployee.positionId, moduleKey);
+      const positionRule = matchingRule("position", selectedEmployee.positionId, moduleKey);
       if (positionRule) permissions = positionRule.permissions;
     }
     return permissions;
@@ -141,8 +128,8 @@ export function ModuleAccessManagement({ token, directory, onRuleChanged, onRule
   };
 
   const assistantDeniedByDepartment = subjectType === "user" && departmentLineage(
-    directory, selectedEmployee?.departmentId ?? undefined,
-  ).some((id) => matchingRule(directory, "department", id, "assistant")?.permissions.view === false);
+    selectedEmployee?.departmentId ?? undefined,
+  ).some((id) => matchingRule("department", id, "assistant")?.permissions.view === false);
   const assistantAllowedForSelectedUser = subjectType === "user" && !assistantDeniedByDepartment
     && (explicitRule("assistant")?.permissions ?? inherited("assistant")).view;
   const toggleUserAssistant = () => {
@@ -172,7 +159,7 @@ export function ModuleAccessManagement({ token, directory, onRuleChanged, onRule
   };
 
   return <section className="module-access-management" aria-label="Модульные разрешения">
-    <header className="directory-subheading"><LockClosed20Regular /><div><h2>Права модулей</h2><p>Приоритет: роль → подразделение → персональное исключение</p></div></header>
+    <header className="directory-subheading"><LockClosed20Regular /><div><h2>Права модулей</h2><p>Роль → подразделение → должность → сотрудник</p></div></header>
     <div className="assistant-regional-access" role="group" aria-label="Доступ регионов к ИИ-ассистенту">
       <span><strong>ИИ-ассистент для регионов</strong><small>{regionalDepartments.length
         ? `${regionalDepartments.length} региональных подразделений · ${allRegionsEnabled ? "доступ включён" : "доступ отключён или различается"}`
@@ -182,6 +169,7 @@ export function ModuleAccessManagement({ token, directory, onRuleChanged, onRule
         {allRegionsEnabled ? "Отключить всем регионам" : "Разрешить всем регионам"}
       </Button>
     </div>
+    <div className="access-module-tools"><Input expandable={false} contentBefore={<Search20Regular />} aria-label="Поиск модулей" placeholder="Найти модуль" value={query} onChange={(_, data) => setQuery(data.value)} /><span>Изменения сохраняются сразу</span></div>
     <div className="access-subject-controls">
       <label>Уровень<Select aria-label="Уровень правила доступа" value={subjectType} disabled={!!busyKey} onChange={(event) => selectType(event.target.value as ModuleAccessSubject)}><option value="role">Роль</option><option value="department">Подразделение</option><option value="position">Должность</option><option value="user">Сотрудник</option></Select></label>
       <label>Кому<Select aria-label="Получатель правила доступа" value={selectedKey} disabled={!!busyKey || !subjects.length} onChange={(event) => setSubjectKey(event.target.value)}>{subjects.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}</Select></label>
@@ -197,18 +185,18 @@ export function ModuleAccessManagement({ token, directory, onRuleChanged, onRule
     </div> : null}
     {feedback ? <WorkspaceNotice tone={feedbackIsError ? "error" : "success"} className="directory-feedback" role={feedbackIsError ? "alert" : "status"}>{feedback}</WorkspaceNotice> : null}
     {!subjects.length ? <div className="directory-empty">Для этого уровня пока нет записей.</div> : <div className="access-matrix" role="table" aria-label="Матрица разрешений">
-      <div className="access-matrix-row access-matrix-head" role="row"><span>Модуль</span>{actionLabels.map((action) => <span key={action.key}>{action.label}</span>)}<span>Источник</span></div>
-      {directory.modules.map((module) => {
+      <div className="access-matrix-row access-matrix-head" role="row"><span role="columnheader">Модуль</span>{actionLabels.map((action) => <span role="columnheader" key={action.key}>{action.label}</span>)}<span role="columnheader">Источник</span></div>
+      {directory.modules.filter((module) => `${module.label} ${module.key}`.toLocaleLowerCase("ru").includes(query.trim().toLocaleLowerCase("ru"))).map((module) => {
         const rule = explicitRule(module.key);
         const permissions = rule?.permissions ?? inherited(module.key);
         return <div className="access-matrix-row" role="row" key={module.key}>
-          <span><strong>{module.label}</strong><small>{module.status === "placeholder" ? "Пока не используется" : module.key}</small></span>
-          {actionLabels.map((action) => <Checkbox key={action.key} aria-label={`${module.label}: ${action.label}`} checked={permissions[action.key]} disabled={busyKey === module.key} onChange={(_, data) => void save(module.key,
+          <span role="cell" className="access-module-name" title={module.key}><strong>{module.label}</strong>{module.status === "placeholder" ? <small>Пока не используется</small> : null}</span>
+          {actionLabels.map((action) => <span role="cell" key={action.key} className="access-permission"><Checkbox label={<span className="access-action-label">{action.label}</span>} aria-label={`${module.label}: ${action.label}`} checked={permissions[action.key]} disabled={Boolean(busyKey)} onChange={(_, data) => void save(module.key,
             module.key === "assistant" && action.key === "view" && data.checked !== true
               ? { view: false, create: false, edit: false, approve: false, admin: false }
               : { ...permissions, [action.key]: data.checked === true },
-          )} />)}
-          <span className="access-rule-source">{rule ? <Button size="small" appearance="subtle" disabled={busyKey === module.key} onClick={() => void reset(module.key)}>Своё · сбросить</Button> : <Button size="small" appearance="subtle" disabled={busyKey === module.key} onClick={() => void save(module.key, permissions)}>Наследуется</Button>}</span>
+          )} /></span>)}
+          <span role="cell" className="access-rule-source">{rule ? <Button size="small" appearance="subtle" disabled={Boolean(busyKey)} onClick={() => void reset(module.key)}>{busyKey === module.key ? "Сохраняем…" : "Своё · сбросить"}</Button> : <Button size="small" appearance="subtle" disabled={Boolean(busyKey)} onClick={() => void save(module.key, permissions)}>{busyKey === module.key ? "Сохраняем…" : "Наследуется"}</Button>}</span>
         </div>;
       })}
     </div>}
