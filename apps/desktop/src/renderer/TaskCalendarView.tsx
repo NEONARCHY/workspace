@@ -1,6 +1,7 @@
 import { formatRussianDate, formatRussianTime, russianDateTimeFormatter } from "./date-time-format";
 import { useMemo, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { ProgressiveCalendarAgenda } from "./ProgressiveCalendarAgenda";
 
 import type { WorkspaceTask } from "@yuksalish/contracts";
 import { Button } from "@fluentui/react-components";
@@ -150,16 +151,20 @@ export function TaskCalendarView({ tasks, onSelect, actions, toolbarTarget }: Ta
           <h2>{formatRussianDate(selectedDay, { day: "numeric", month: "long", year: "numeric" })}</h2>
           <p>{selectedTasks.length ? `${selectedTasks.length} задач по сроку` : "На этот день задач нет"}</p>
         </div>
-        <div className="calendar-day-agenda">
-          {selectedTasks.map((task) => <button className={`calendar-agenda-card task status-${task.status}`} type="button" key={task.id} onClick={() => onSelect(task.id)}>
-            <span className="calendar-agenda-time">{formatRussianTime(new Date(task.dueAt ?? 0), { hour: "2-digit", minute: "2-digit" })}</span>
-            <strong>{task.title}</strong><small>{task.project || "Без проекта"}</small>
-          </button>)}
-        </div>
-        {unscheduled.length ? <section className="task-calendar-unscheduled" aria-label="Задачи без срока">
-          <div><strong>Без срока</strong><span>{unscheduled.length}</span></div>
-          <div>{unscheduled.map((task) => <button type="button" key={task.id} onClick={() => onSelect(task.id)}><strong>{task.title}</strong><span>{task.project || "Без проекта"}</span></button>)}</div>
-        </section> : null}
+        <ProgressiveCalendarAgenda total={selectedTasks.length + unscheduled.length} resetKey={selectedKey}>
+          {shown => <>
+            <div className="calendar-day-agenda">
+              {selectedTasks.slice(0, shown).map((task) => <button className={`calendar-agenda-card task status-${task.status}`} type="button" key={task.id} onClick={() => onSelect(task.id)}>
+                <span className="calendar-agenda-time">{formatRussianTime(new Date(task.dueAt ?? 0), { hour: "2-digit", minute: "2-digit" })}</span>
+                <strong>{task.title}</strong><small>{task.project || "Без проекта"}</small>
+              </button>)}
+            </div>
+            {unscheduled.length && shown > selectedTasks.length ? <section className="task-calendar-unscheduled" aria-label="Задачи без срока">
+              <div><strong>Без срока</strong><span>{unscheduled.length}</span></div>
+              <div>{unscheduled.slice(0, Math.max(0, shown - selectedTasks.length)).map((task) => <button className="calendar-agenda-card" type="button" key={task.id} onClick={() => onSelect(task.id)}><strong>{task.title}</strong><span>{task.project || "Без проекта"}</span></button>)}</div>
+            </section> : null}
+          </>}
+        </ProgressiveCalendarAgenda>
       </aside>
     </div>
   );

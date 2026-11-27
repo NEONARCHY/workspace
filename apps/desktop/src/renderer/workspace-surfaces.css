@@ -42,6 +42,11 @@ html:root body .app-provider :is(
   box-shadow: none;
 }
 @media (forced-colors: none) {
+  html:root body .app-provider .app-content .fui-TabList { border: 0; box-shadow: none; }
+  html:root body .app-provider :is(.workspace-select, .record-page-nav, .record-page-size-trigger):not([aria-invalid="true"]):not(:has([aria-invalid="true"])) {
+    --ws-satin-sheen: none; --ws-satin-edge: none; border: 0; box-shadow: none;
+  }
+  html:root body .app-provider .record-page-nav { border-radius: 50%; }
   html:root body .app-provider .fui-Badge { border-color: transparent; }
   html:root body .app-provider .ws-section-header { --ws-header-action-fill: #123f54; --ws-header-action-hover: #185367; }
   html[data-color-theme="dark"] body .app-provider .ws-section-header { --ws-header-action-fill: var(--ws-button-hover); --ws-header-action-hover: var(--ws-button-surface); }

@@ -24,6 +24,14 @@ module.exports = async (page, { output, phase, width, theme, geometry }) => {
   const selected = await snapshot();
   if (phase === 'after') {
     assert(geometry.pageOverflow <= 1, 'outgoing registry fits the viewport');
+    if (width <= 480) assert((await page.locator('.ai-referent-outgoing-toolbar').boundingBox()).height <= 120, 'phone toolbar stays compact');
+    if (width === 1440) {
+      const layout = await page.locator('.ai-referent-outgoing-toolbar').evaluate(node => [...node.children].map(child => { const r = child.getBoundingClientRect(); return { center: r.y + r.height / 2, bottom: r.bottom }; }));
+      assert(layout.length === 3 && Math.max(...layout.map(r => r.center)) - Math.min(...layout.map(r => r.center)) <= 1, 'participation, search and status filters share a single row');
+      const search = page.getByRole('textbox', { name: 'Поиск исходящих писем' });
+      await search.focus();
+      assert((await search.boundingBox()).width > 100, 'search remains usable in the compact row');
+    }
     for (const state of [initial, selected]) {
       assert(state.group.radius >= 10, 'rounded participation surface');
       assert.equal(state.buttons[0].width, state.buttons[1].width, 'equal segment widths');

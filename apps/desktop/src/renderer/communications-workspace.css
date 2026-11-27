@@ -33,6 +33,9 @@ body .app-provider .workspace-queue.ai-referent-view .ai-referent-summary > butt
 body .app-provider .workspace-queue.ai-referent-view .ai-referent-summary > button:is(:hover, :active, [aria-pressed="true"]) { transform: none; box-shadow: none; }
 body .app-provider .workspace-queue.ai-referent-view .ai-referent-summary > button[aria-pressed="true"]:not(.primary) { background: var(--ws-selected); }
 body .app-provider .workspace-queue.ai-referent-view .ai-referent-toolbar { gap: 12px; margin: 0; padding: 0; }
+body .app-provider .workspace-queue.ai-referent-view .ai-referent-outgoing-toolbar { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; align-content: start; gap: 8px 12px; }
+html:root body .app-provider .workspace-queue.ai-referent-view .ai-referent-outgoing-toolbar .workspace-search { flex: 1 1 160px; width: auto; min-width: 120px; max-width: none; }
+body .app-provider .workspace-queue.ai-referent-view .ai-referent-outgoing-toolbar .ai-referent-toolbar-actions { flex: 0 1 auto; }
 body .app-provider .workspace-queue.ai-referent-view .ai-referent-participation-switch {
   --sliding-indicator-background: var(--ws-selected);
   display: inline-flex; flex: none; flex-wrap: nowrap; align-items: center;
@@ -100,6 +103,7 @@ body .app-provider .workspace-queue.messenger-view .composer { margin: 12px; }
   .ai-referent-register-select select { outline: 1px solid CanvasText; outline-offset: -1px; }
 }
 @media (max-width: 480px) {
+  html:root body .app-provider .workspace-queue.ai-referent-view .ai-referent-outgoing-toolbar .workspace-search { flex-basis: 120px; }
   html:root body .app-provider .workspace-queue.ai-referent-view .ai-referent-register-tools .fui-Button { min-width: 44px; width: 44px; padding: 0; gap: 0; font-size: 0; }
   .workspace-queue.ai-referent-view .ai-referent-register-tools .fui-Button__icon { width: 20px; height: 20px; font-size: 20px; }
   .ai-referent-create-full { display: none; }

@@ -8,6 +8,7 @@ const galleryOnly = process.argv.includes("--gallery-only");
 const chatPaginationSuite = process.argv.includes('--chat-pagination');
 const sidebarSuite = process.argv.includes('--sidebar');
 const referentSurfacesSuite = process.argv.includes('--referent-surfaces');
+const calendarSurfacesSuite = process.argv.includes('--calendar-surfaces');
 const toolbarSuite = process.argv.includes('--toolbar-layout');
 const shellReviewSuite = process.argv.includes("--shell-review");
 const attentionSuite = process.argv.includes("--attention") || shellReviewSuite;
@@ -20,7 +21,7 @@ const workdaySuite = process.argv.includes("--workday");
 const promptSuite = process.argv.includes("--hisobot-prompt");
 const topbarSuite = process.argv.includes("--topbar") || workdaySuite;
 const reportingSuite = process.argv.includes("--reporting");
-const planningSuite = process.argv.includes("--planning") || topbarSuite || promptSuite;
+const planningSuite = process.argv.includes("--planning") || topbarSuite || promptSuite || calendarSurfacesSuite;
 const onlyWidth = Number(process.env.UI_QA_WIDTH || 0);
 assert([0, 320, 390, 720, 1024, 1440].includes(onlyWidth));
 const origin = process.env.UI_QA_ORIGIN || "http://127.0.0.1:5186";
@@ -45,6 +46,7 @@ if (toolbarSuite) sections.splice(0, sections.length, { id: 'referent', label: '
 if (chatPaginationSuite) sections.splice(0, sections.length, { id: 'messenger', label: 'Мессенджер', root: '.messenger-view' });
 if (sidebarSuite) sections.splice(0, sections.length, { id: 'messenger', label: 'Мессенджер', root: '.messenger-view' });
 if (referentSurfacesSuite) sections.splice(0, sections.length, { id: 'referent', label: 'AI Referent · исходящие письма', root: '.ai-referent-view', navLabel: 'AI Referent' });
+if (calendarSurfacesSuite) sections.splice(0, sections.length, { id: 'tasks', label: 'Задачи', root: '.tasks-view' }, { id: 'calendar', label: 'Календарь', root: '.calendar-view' });
 const settle = async page => page.evaluate(async () => {
   await document.fonts.ready;
   await Promise.race([Promise.all(document.getAnimations().filter(a => Number(a.effect?.getComputedTiming().endTime) < 2000).map(a => a.finished.catch(() => undefined))), new Promise(r => setTimeout(r, 900))]);
@@ -139,7 +141,7 @@ async function measure(page, selector) {
   const browser = await chromium.launch({ channel: "msedge", headless: true });
   const results = [], errors = [];
   try {
-    for (const [width, height, theme] of galleryOnly ? [] : [[1440, 960, "dark"], [1440, 960, "light"], [1024, 768, "dark"], [390, 844, "dark"], ...((phase === "after" || topbarSuite || reportingSuite || registrySuite || communicationsSuite) && (peopleSuite || operationsSuite || documentsSuite || planningSuite || reportingSuite || registrySuite || communicationsSuite) ? [[320, 800, "dark"]] : []), ...((phase === "after" || topbarSuite || reportingSuite || registrySuite || communicationsSuite) && (documentsSuite || planningSuite || reportingSuite || registrySuite || communicationsSuite) ? [[720, 480, "dark"]] : [])].filter(([width]) => !onlyWidth || width === onlyWidth)) {
+    for (const [width, height, theme] of galleryOnly ? [] : [[1440, 960, "dark"], [1440, 960, "light"], [1024, 768, "dark"], [390, 844, "dark"], ...((phase === "after" || topbarSuite || reportingSuite || registrySuite || communicationsSuite || calendarSurfacesSuite) && (peopleSuite || operationsSuite || documentsSuite || planningSuite || reportingSuite || registrySuite || communicationsSuite) ? [[320, 800, "dark"]] : []), ...((phase === "after" || topbarSuite || reportingSuite || registrySuite || communicationsSuite || calendarSurfacesSuite) && (documentsSuite || planningSuite || reportingSuite || registrySuite || communicationsSuite) ? [[720, 480, "dark"]] : [])].filter(([width]) => !onlyWidth || width === onlyWidth)) {
       const context = await browser.newContext({ viewport: { width, height }, reducedMotion: "reduce" });
       const page = await context.newPage(); page.setDefaultTimeout(15000);
       if (sidebarSuite) await page.addInitScript(require('./ui-sidebar-checks.cjs').installProbe);
@@ -237,6 +239,10 @@ async function measure(page, selector) {
       await page.goto(origin);
       data = fixtures(await page.evaluate(async () => { const d = await import("/src/renderer/test-fixtures/demo-data.ts"), h = await import("/src/renderer/test-fixtures/personal-home-fixture.ts"), c = await import("/qa/context-fixtures.ts"); return { people: d.people, initialTasks: d.initialTasks, home: h.homeFixture("malika", Date.parse("2026-11-26T09:30:00Z")), personalEfficiency: h.homeEfficiency("malika"), recognition: h.homeRecognition("malika"), contextRates: c.contextRates, contextWeather: c.contextWeather }; }));
       if (promptSuite) data.home.notifications = [...data.home.notifications, { id: "qa-hisobot-reminder", kind: "hisobot", title: "AI Hisobot", body: "Черновик отчёта готов", priority: "attention", section: "ai_hisobot", requiresAction: true, isReminder: true, occurredAt: "2026-11-26T12:40:00Z" }];
+      if (calendarSurfacesSuite) {
+        data.home.tasks = Array.from({ length: 96 }, (_, i) => ({ ...data.tasks[i % data.tasks.length], id: `qa-calendar-task-${i}`, title: `Рабочая задача ${String(i + 1).padStart(2, '0')}`, status: 'in_progress', assigneeId: data.user.id, dueAt: `2026-11-${i < 35 ? '26' : '27'}T09:00:00Z` }));
+        data.calendarEvents = Array.from({ length: 35 }, (_, i) => ({ ...data.calendarEvents[0], id: `qa-agenda-${i}`, title: `Региональная встреча ${String(i + 1).padStart(2, '0')}`, startsAt: '2026-11-26T09:00:00Z', endsAt: '2026-11-26T10:00:00Z', status: 'scheduled' }));
+      }
       releaseIds = await page.evaluate(async () => (await import("/src/renderer/release-history.ts")).bundledReleaseEntries().map(entry => entry.id));
       if (communicationsSuite) { data.communication = require('./ui-communication-fixtures.cjs')(data.people, data.user); data.communication.moduleAccess = await page.evaluate(async () => (await import('/src/renderer/module-catalog.ts')).fallbackModules.map(module => ({ moduleKey: module.key, permissions: { view: true, create: true, edit: true, approve: true, admin: true } }))); }
       if (registrySuite) { data.registry = registryFixtures(data.people, data.user); data.registry.moduleAccess = await page.evaluate(async () => (await import('/src/renderer/module-catalog.ts')).fallbackModules.map(module => ({ moduleKey: module.key, permissions: { view: true, create: true, edit: true, approve: true, admin: true } }))); }
@@ -288,6 +294,17 @@ async function measure(page, selector) {
         if (registrySuite && section.id === "grants") await page.locator('.grant-records tbody tr').first().waitFor();
         if (registrySuite && section.id === "reference") { await page.getByRole('button', { name: 'Организации', exact: true }).click(); await page.locator('.reference-record').first().waitFor(); }
         if (registrySuite && section.id === "mail") await page.locator('.mail-row').first().waitFor();
+        if (calendarSurfacesSuite && section.id === 'tasks') {
+          await page.locator('.tasks-view .view-switch').getByRole('button', { name: 'Список', exact: true }).click();
+          await settle(page);
+          if (phase === 'after') {
+            const borders = await page.locator('.tasks-view .workspace-select, .tasks-view .record-page-nav, .task-domain-tabs').evaluateAll(nodes => nodes.map(node => { const s = getComputedStyle(node); return [s.borderTopWidth, s.borderBottomWidth, s.borderLeftWidth, s.borderRightWidth]; }));
+            assert(borders.length >= 4 && borders.every(sides => sides.every(width => width === '0px')), 'filters, pagination and upper tabs are borderless');
+          }
+          await capture(page, path.join(output, phase, `task-controls-${theme}-${width}.png`));
+          await page.locator('.tasks-view .view-switch').getByRole('button', { name: 'Календарь', exact: true }).click();
+          await page.locator('.task-calendar-embedded').waitFor();
+        }
         try { await page.locator(section.root).waitFor(); } catch (error) {
           await page.screenshot({ path: path.join(output, `${phase}-failure-${width}.png`) });
           console.log((await page.locator(".workspace").innerText().catch(() => page.locator("body").innerText())).slice(0, 2500));
@@ -302,6 +319,7 @@ async function measure(page, selector) {
         if (topbarSuite && section.id === "home" || phase === "after" && reportingSuite && section.id === "hisobot") await capture(page.locator(".global-bar"), path.join(output, phase, `topbar-${theme}-${width}.png`));
         const geometry = await measure(page, section.root);
         results.push({ section: section.id, width, height, theme, ...geometry });
+        if (calendarSurfacesSuite) { if (phase === 'after') await require('./ui-calendar-surface-checks.cjs')(page, section, { width, geometry }); console.log('PASS ' + file); continue; }
         if (referentSurfacesSuite) { results.at(-1).letters = await require('./ui-referent-surface-checks.cjs')(page, { output, phase, width, theme, geometry }); console.log('PASS ' + file); continue; }
         if (sidebarSuite) { results.at(-1).sidebar = await require('./ui-sidebar-checks.cjs').check(page, { output, phase, width, height, theme }); console.log('PASS sidebar-' + theme + '-' + width); continue; }
         if (chatPaginationSuite) { await require('./ui-chat-pagination-checks.cjs')(page, { output, width, theme }); console.log('PASS ' + file); continue; }
@@ -942,11 +960,12 @@ async function measure(page, selector) {
     if (promptSuite) return;
     await fs.writeFile(path.join(output, "index.html"), `<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Yuksalish — сравнение интерфейса</title>
       <style>*{box-sizing:border-box}body{margin:0;padding:24px;background:#111318;color:#eceef4;font:15px/1.5 system-ui}main{max-width:1600px;margin:auto}h1{font-size:28px}p,figcaption{color:#bfc6d3}select{margin:0 0 24px;padding:12px;border-radius:8px;background:#252a33;color:inherit}section{margin:0 0 32px}h2{font-size:20px}article{display:grid;grid-template-columns:1fr 1fr;gap:16px}figure{margin:0;min-width:0}img{display:block;width:100%;height:auto;border-radius:12px}figcaption{margin-bottom:8px}@media(max-width:700px){article{grid-template-columns:1fr}body{padding:12px}}</style>
-      <main><h1>Итерация ${iteration} · Общая сетка рабочих разделов</h1><p>Реальные компоненты приложения, одинаковые синтетические данные до и после. Нажмите на снимок для исходного размера.</p><select id="size" aria-label="Размер и тема"><option value="dark-1440">1440 × 960 · тёмная</option><option value="light-1440">1440 × 960 · светлая</option><option value="dark-1024">1024 × 768 · тёмная</option><option value="dark-390">390 × 844 · тёмная</option>${topbarSuite || reportingSuite || registrySuite || communicationsSuite ? '<option value="dark-320">320 × 800 · тёмная</option><option value="dark-720">720 × 480 · тёмная</option>' : ''}</select>
+      <main><h1>${calendarSurfacesSuite ? 'Календарь и элементы управления' : `Итерация ${iteration} · Общая сетка рабочих разделов`}</h1><p>Реальные компоненты приложения, одинаковые синтетические данные до и после. Нажмите на снимок для исходного размера.</p><select id="size" aria-label="Размер и тема"><option value="dark-1440">1440 × 960 · тёмная</option><option value="light-1440">1440 × 960 · светлая</option><option value="dark-1024">1024 × 768 · тёмная</option><option value="dark-390">390 × 844 · тёмная</option>${topbarSuite || reportingSuite || registrySuite || communicationsSuite || calendarSurfacesSuite ? '<option value="dark-320">320 × 800 · тёмная</option><option value="dark-720">720 × 480 · тёмная</option>' : ''}</select>
       ${workdaySuite ? '<select id="interaction" aria-label="Состояние кнопки"><option value="">Обычное состояние</option><option value="hover">Наведение</option><option value="pressed">Нажатие</option></select>' : ''}
       ${(sidebarSuite ? [{ id: 'sidebar-expanded', label: 'Навигация' }, { id: 'sidebar-ai', label: 'ИИ-модули' }, { id: 'sidebar-collapsed', label: 'Свёрнутое меню' }] : workdaySuite ? [{ id: "workday-start", label: "Начать работу" }, { id: "workday-finish", label: "Завершить работу" }, { id: "topbar", label: "Заметная иконка рабочего дня" }] : topbarSuite ? [{ id: "topbar", label: "Общая верхняя панель" }, ...sections] : sections).map(section => `<section data-section="${section.id}"><h2>${section.label}</h2><article>${["before", "after"].map((state, i) => `<figure><figcaption>${i ? "После" : "До"}</figcaption><a data-state="${state}" href="${state}/${section.id}-dark-1440.png"><img loading="lazy" ${workdaySuite && section.id !== "topbar" ? 'style="max-width:360px"' : ''} src="${state}/${section.id}-dark-1440.png" alt="${section.label} — ${i ? "после" : "до"}"></a></figure>`).join("")}</article></section>`).join("")}
       ${topbarSuite && !workdaySuite ? [1440, 720].map(width => `<section><h2>Открытый ассистент · ${width} px</h2><article>${["before", "after"].map((state, i) => `<figure><figcaption>${i ? "После: орба остаётся в кнопке" : "До: орба переносится в окно"}</figcaption><a href="${state}/assistant-open-dark-${width}.png"><img loading="lazy" src="${state}/assistant-open-dark-${width}.png" alt="Ассистент — ${i ? "после" : "до"}"></a></figure>`).join("")}</article></section>`).join("") : ''}
       ${documentsSuite ? '<section data-section="admin-menu"><h2>Режим администратора в меню аватара</h2><figure><figcaption>После · переключение прав и возврат к правам своей должности</figcaption><a data-state="after" href="after/admin-menu-dark-1440.png"><img loading="lazy" src="after/admin-menu-dark-1440.png" alt="Переключатель прав в меню профиля"></a></figure></section>' : ''}
+      ${calendarSurfacesSuite ? `<section><h2>Фильтры и страницы · desktop</h2><article>${['before', 'after'].map(state => `<figure><figcaption>${state === 'after' ? 'После' : 'До'}</figcaption><a href="${state}/task-controls-dark-1440.png"><img src="${state}/task-controls-dark-1440.png" alt="Фильтры и страницы — ${state}"></a></figure>`).join('')}</article></section>` : ''}
       <p>Подход: <a href="https://github.com/heydamir/unslop" style="color:#90d5df">unslop · Damir Sokolovsky · CC BY 4.0</a>. Цвета статусов, права и рабочие процессы сохранены.</p></main><script>const update=()=>document.querySelectorAll('section[data-section]').forEach(section=>section.querySelectorAll('[data-state]').forEach(link=>{const interaction=link.dataset.state==='after'&&section.dataset.section!=='topbar'?(document.querySelector('#interaction')?.value||''):'';const src=link.dataset.state+'/'+section.dataset.section+(interaction?'-'+interaction:'')+'-'+document.querySelector('#size').value+'.png';link.href=src;link.querySelector('img').src=src}));document.querySelector('#size').addEventListener('change',update);document.querySelector('#interaction')?.addEventListener('change',update)</script></html>`);
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

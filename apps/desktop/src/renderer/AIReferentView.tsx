@@ -1,7 +1,7 @@
 import { russianDateTimeFormatter } from "./date-time-format";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { LoadingSkeleton, SkeletonBlock } from "./LoadingSkeleton";
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useId, useRef, useState } from "react";
 import { previewAIReferentLocalFile } from "./workspace-api";
 
 const LocalFileViewer = lazy(() => import("./FileViewer").then(module => ({ default: module.LocalFileViewer })));
@@ -213,6 +213,8 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, pre
     previewAIReferentLocalFile(token, file, sheet, offset, signal), [token]);
   const [registerKind, setRegisterKind] = useState<RegisterKind>(preferOutgoing ? "outgoing" : "incoming");
   const [participation, setParticipation] = useState<AIReferentParticipation>(preferOutgoing ? "mine" : "all");
+  const participationHintId = useId();
+  const participationHint = participation === "mine" ? "Письма, где вы автор или согласующий" : "Все исходящие письма, доступные вам по правам";
   const [visibility, setVisibility] = useState<AIReferentVisibility>();
   const [visibilityError, setVisibilityError] = useState("");
   const [visibilityAttempt, setVisibilityAttempt] = useState(0);
@@ -671,8 +673,9 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, pre
         </button>
       </section>
 
-      {registerKind === "outgoing" ? <div className="ai-referent-participation-bar">
-        <SlidingSegmented className="ai-referent-filters ai-referent-participation-switch" role="group" aria-label="Участие в исходящих письмах">
+      <div className={`ai-referent-toolbar ${registerKind === "outgoing" ? "ai-referent-outgoing-toolbar" : ""}`}>
+      {registerKind === "outgoing" ? <div className="ai-referent-participation-bar" title={participationHint}>
+        <SlidingSegmented className="ai-referent-filters ai-referent-participation-switch" role="group" aria-label="Участие в исходящих письмах" aria-describedby={participationHintId}>
           {([ ["mine", "Мои"], ["all", "Все"] ] as const).map(([value, label]) =>
             <button type="button" key={value} className={participation === value ? "active" : ""}
               aria-pressed={participation === value} onClick={() => {
@@ -682,9 +685,8 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, pre
                 setParticipation(value); setPage(0);
               }}>{label}</button>)}
         </SlidingSegmented>
-        <span>{participation === "mine" ? "Письма, где вы автор или согласующий" : "Все исходящие письма, доступные вам по правам"}</span>
+        <span className="sr-only" id={participationHintId}>{participationHint}</span>
       </div> : null}
-      <div className="ai-referent-toolbar">
         <AIReferentGooeySearch
           ariaLabel={registerKind === "sign_only" ? "Поиск пакетов на подпись" : "Поиск исходящих писем"}
           placeholder="Номер, тема, организация или сотрудник"

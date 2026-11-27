@@ -6,7 +6,7 @@ import { sampleEvent } from "./test-fixtures/calendar-filter-data";
 import { workspaceTheme } from "./workspace-theme";
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
-function setup(initialWidth = 390, initialHeight = 844) {
+function setup(initialWidth = 390, initialHeight = 844, count = 5) {
   let width = initialWidth;
   let height = initialHeight;
   let resize = () => {};
@@ -27,12 +27,12 @@ function setup(initialWidth = 390, initialHeight = 844) {
     unobserve() {}
     disconnect() {}
   });
-  const events = Array.from({ length: 5 }, (_, index) => sampleEvent(`Встреча ${index + 1}`, { description: "План команды" }));
+  const events = Array.from({ length: count }, (_, index) => sampleEvent(`Встреча ${index + 1}`, { description: "План команды" }));
   const create = vi.fn();
   const result = render(<FluentProvider theme={workspaceTheme} className="app-provider"><CalendarView events={events} people={[]}
     currentUserId="me" onCreate={create} onUpdate={vi.fn()} onCancel={vi.fn()} /></FluentProvider>);
   fireEvent.change(screen.getByLabelText("Перейти к дате"), { target: { value: "2026-10-13" } });
-  const day = () => screen.getByRole("gridcell", { name: /13 октября 2026.*событий: 5/ });
+  const day = () => screen.getByRole("gridcell", { name: new RegExp(`13 октября 2026.*событий: ${count}`) });
   return { ...result, create, day, resize: (nextWidth: number, nextHeight = height) => act(() => { width = nextWidth; height = nextHeight; resize(); }) };
 }
 it("uses the right overlay in a short landscape phone without losing the day after rotation", async () => {
@@ -44,6 +44,20 @@ it("uses the right overlay in a short landscape phone without losing the day aft
   expect(screen.getByRole("complementary", { name: "События выбранного дня" })).toBeInTheDocument();
   await waitFor(() => expect(screen.queryByRole("dialog", { name: "Расписание выбранного дня" })).not.toBeInTheDocument());
   expect(day()).toHaveAttribute("aria-selected", "true");
+});
+it("pages a busy day in tens and resets after closing the mobile agenda", async () => {
+  const { day } = setup(390, 844, 35);
+  fireEvent.click(day());
+  const agenda = screen.getByRole("dialog", { name: "Расписание выбранного дня" });
+  const cards = () => agenda.querySelectorAll(".calendar-agenda-card");
+  expect(cards()).toHaveLength(10);
+  expect(within(agenda).getByText("Показано 10 из 35")).toBeInTheDocument();
+  fireEvent.click(within(agenda).getByRole("button", { name: "Показать ещё 10" }));
+  expect(cards()).toHaveLength(20);
+  fireEvent.click(within(agenda).getByRole("button", { name: "Закрыть расписание" }));
+  await waitFor(() => expect(agenda).not.toBeInTheDocument());
+  fireEvent.click(day());
+  expect(screen.getByRole("dialog", { name: "Расписание выбранного дня" }).querySelectorAll(".calendar-agenda-card")).toHaveLength(10);
 });
 it.each(["Escape", "close button"])("opens a complete phone day and returns focus after %s", async dismissal => {
   const { day } = setup();
