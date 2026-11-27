@@ -19,6 +19,19 @@
 
 .conversation-search { display: flex; align-items: center; gap: 8px; }
 .conversation-search > span:first-child { flex: 1; min-width: 0; }
+@media (forced-colors: none) {
+  /* The search field, including its expanded icon, needs its own surface.
+     Reset satin images on the painted field and its transparent input. */
+  html:root body .conversation-search .workspace-search.workspace-search .workspace-search-field,
+  html:root body .conversation-search .workspace-search .workspace-search-trigger {
+    border: 0;
+    background-color: var(--ws-theme-surface-soft, #e6edf2) !important;
+    background-image: none !important;
+  }
+  html:root body .conversation-search .workspace-search .workspace-search-field .fui-Input__input {
+    background: transparent !important;
+  }
+}
 .pinned-message-bar { display: flex; align-items: center; gap: 9px; flex: none; min-width: 0; min-height: 52px; padding: 5px 16px; background: var(--ws-theme-surface, #f7fbfc); }
 .pinned-message-bar::before { content: ""; align-self: stretch; width: 3px; flex: none; border-radius: 3px; background: var(--ws-turquoise); }
 .pinned-message-preview { display: grid; gap: 2px; flex: 1; min-width: 0; padding: 0; border: 0; background: transparent; text-align: left; cursor: pointer; }

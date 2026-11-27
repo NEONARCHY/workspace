@@ -1,4 +1,5 @@
 import { TeamDecisionFrame } from "./TeamDecisionFrame";
+import { useTabFocusMode } from "./useTabFocusMode";
 import { approvalRequestNeedsAction } from "./approval-board";
 import { MonthlyReportDashboard, MonthlyReportPrompts, MonthlyReportsView } from "./MonthlyReportsView";
 import { useMonthlyReports, useMonthlyReportWindow } from "./useMonthlyReports";
@@ -430,6 +431,7 @@ function emptySupportRegistry(person: WorkspacePerson): SupportRegistry {
 }
 
 export function App() {
+  useTabFocusMode();
   const [previewAttachment, setPreviewAttachment] = useState<WorkspaceAttachment>();
   const [forwardPhoto, setForwardPhoto] = useState<GalleryImage<WorkspaceAttachment>>();
   const [activeSection, setActiveSection] = useState<WorkspaceSection | "notifications">("home");

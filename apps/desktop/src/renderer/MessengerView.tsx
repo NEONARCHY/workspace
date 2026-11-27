@@ -1044,6 +1044,11 @@ function Conversation({
       {pinnedOpen ? <header className="pinned-history-header">
         <Button ref={pinnedBackRef} shape="circular" className="ws-navigation-arrow" appearance="subtle" icon={<ChevronLeft20Regular />} aria-label="Вернуться к переписке" onClick={() => setPinnedMode(false)} />
         <div><h2>Закреплённые сообщения · {pinnedMessages.length}</h2><small>{chat.title}</small></div>
+        {compactBrowser ? <Button shape="circular" className="ws-navigation-arrow pinned-history-search" appearance="subtle" icon={<Search24Regular />} aria-label={searchOpen ? "Закрыть поиск в закреплённых сообщениях" : "Поиск в закреплённых сообщениях"} aria-expanded={searchOpen} onClick={() => {
+          setSearchOpen(value => !value);
+          if (searchOpen) setQuery("");
+          else requestAnimationFrame(() => scrollRef.current?.closest(".conversation-pane")?.querySelector<HTMLInputElement>(".conversation-search input")?.focus());
+        }} /> : null}
         {selectionMode ? <div className="message-selection-toolbar" role="region" aria-label="Выделенные сообщения"
           onKeyDown={event => { if (event.key === "Escape") { event.preventDefault(); paint.stop(); cancelSelection(); } }}>
           <span role="status">Выбрано: {selectedMessages.length}</span>

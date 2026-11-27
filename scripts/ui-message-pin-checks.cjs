@@ -21,6 +21,20 @@ module.exports = async (page, options) => {
   assert.equal(await page.locator('.message-scroll [data-message-id="qa-pin-own"]').count(), 0, 'unpinned messages stay out of pinned view');
   assert(!await page.locator('.composer').isVisible(), 'pinned view has no composer');
   assert(await history.getByRole('button', { name: 'Вернуться к переписке' }).evaluate(node => node === document.activeElement), 'focus enters pinned view');
+  const searchToggle = history.getByRole('button', { name: 'Поиск в закреплённых сообщениях', exact: true });
+  if (await searchToggle.count()) await searchToggle.click();
+  const search = page.locator('.conversation-search input');
+  await search.fill('План следующей недели');
+  assert.equal(await page.locator('.message-scroll [data-message-id]').count(), 1, 'pinned history search filters its own messages');
+  await search.fill(''); await search.blur();
+  const paint = await page.locator('.conversation-search .workspace-search-field').evaluate(node => {
+    const style = getComputedStyle(node); let parent = node.parentElement, surrounding = '';
+    while (parent) { const color = getComputedStyle(parent).backgroundColor; if (color !== 'rgba(0, 0, 0, 0)' && color !== 'transparent') { surrounding = color; break; } parent = parent.parentElement; }
+    const input = node.querySelector('input');
+    return { fill: style.backgroundColor, image: style.backgroundImage, surrounding, inputFill: getComputedStyle(input).backgroundColor };
+  });
+  assert(paint.fill !== paint.surrounding && paint.fill !== 'rgba(0, 0, 0, 0)' && paint.image === 'none', 'conversation search has a distinct painted surface: ' + JSON.stringify(paint));
+  await page.locator('.conversation-search').screenshot({ path: path.join(output, phase, `search-${theme}-${width}.png`) });
   await page.screenshot({ path: path.join(output, phase, `pinned-history-${theme}-${width}.png`) });
   await history.getByRole('button', { name: 'Вернуться к переписке' }).click();
   assert(await bar.locator('.pinned-message-trigger').evaluate(node => node === document.activeElement), 'back restores focus to pin button');

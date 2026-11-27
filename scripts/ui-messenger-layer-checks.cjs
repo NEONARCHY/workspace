@@ -22,6 +22,18 @@ module.exports = async function checkMessengerLayers(page, options = {}) {
   await assertTopmost(menu, 'identity menu');
   await page.keyboard.press('Escape');
   await menu.waitFor({ state: 'hidden' });
+  assert(!await page.locator('html').getAttribute('data-workspace-tab-focus'), 'pointer input does not enable focus rings');
+  await page.keyboard.press('Shift');
+  assert(!await page.locator('html').getAttribute('data-workspace-tab-focus'), 'Shift alone does not enable focus rings');
+  // Start inside the conversation, rather than tabbing out of the last portal
+  // into browser chrome (which intentionally clears modality on window blur).
+  await page.locator('.pinned-message-trigger').focus();
+  await page.keyboard.press('Tab');
+  assert.equal(await page.locator('html').getAttribute('data-workspace-tab-focus'), 'true', 'Tab enables focus traversal rings');
+  await page.keyboard.press('Shift+Tab');
+  assert.equal(await page.locator('html').getAttribute('data-workspace-tab-focus'), 'true', 'Shift+Tab retains focus traversal rings');
+  await page.keyboard.press('Meta');
+  assert(!await page.locator('html').getAttribute('data-workspace-tab-focus'), 'Win clears focus rings');
 };
 
 async function assertTopmost(locator, name) {
