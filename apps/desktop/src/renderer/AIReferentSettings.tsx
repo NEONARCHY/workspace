@@ -1,5 +1,6 @@
 import { formatRussianDateTime } from "./date-time-format";
 import { WorkspaceNotice } from "./WorkspaceNotice";
+import { startVisiblePolling } from "./visible-polling";
 import { LoadingSkeleton } from "./LoadingSkeleton";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AIReferentConfiguration, AIReferentConfigurationUpdate, WorkspacePerson } from "@yuksalish/contracts";
@@ -19,7 +20,7 @@ export function AIReferentSettings({ token, people, readOnly = false }: Props) {
   const [dirty, setDirty] = useState(false);
   const dirtyRef = useRef(false);
   const busyRef = useRef(false);
-  const requestGeneration = useRef(0);
+  const reader = useRef<ReturnType<typeof startVisiblePolling> | undefined>(undefined);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -38,24 +39,14 @@ export function AIReferentSettings({ token, people, readOnly = false }: Props) {
     }
   }, []);
 
-  const refresh = useCallback(async () => {
-    if (busyRef.current) return;
-    const generation = ++requestGeneration.current;
-    try {
-      const next = await loadAIReferentConfiguration(token);
-      if (generation === requestGeneration.current) { accept(next); setError(""); }
-    } catch (reason) {
-      if (generation === requestGeneration.current) {
-        setError(reason instanceof Error ? reason.message : "Не удалось загрузить настройки.");
-      }
-    }
-  }, [accept, token]);
+  const refresh = useCallback(() => reader.current?.refresh(), []);
 
   useEffect(() => {
-    queueMicrotask(() => { void refresh(); });
-    const timer = window.setInterval(() => { void refresh(); }, 15_000);
-    return () => { window.clearInterval(timer); requestGeneration.current += 1; };
-  }, [refresh]);
+    const poll = startVisiblePolling(signal => loadAIReferentConfiguration(token, signal), next => { accept(next); setError(""); },
+      reason => setError(reason instanceof Error ? reason.message : "Не удалось загрузить настройки."), 15_000, () => busyRef.current);
+    reader.current = poll;
+    return () => { reader.current = undefined; poll(); };
+  }, [accept, token]);
 
   const change = (index: number, patch: Partial<AIReferentConfigurationUpdate["reviewers"][number]>) => {
     dirtyRef.current = true;
@@ -69,7 +60,7 @@ export function AIReferentSettings({ token, people, readOnly = false }: Props) {
   const save = async () => {
     if (!draft || busyRef.current || readOnly) return;
     busyRef.current = true;
-    requestGeneration.current += 1;
+    reader.current?.invalidate();
     setSaving(true);
     setError("");
     try {

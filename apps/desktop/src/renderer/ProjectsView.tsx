@@ -1,5 +1,6 @@
 import { formatRussianDate, formatRussianDateTime } from "./date-time-format";
-import { useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
 import { useModalFocus } from "./useModalFocus";
 import { DecisionReason } from "./DecisionReason";
 import { ProcessWorkflowDesigner } from "./ProcessWorkflowDesigner";
@@ -145,9 +146,8 @@ function payloadFromForm(form: ProjectFormState): ProjectInput | undefined {
   };
 }
 
-function money(value: number, currency: string): string {
-  return new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(value) + ` ${currency}`;
-}
+const budgetFormatter = new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 });
+function money(value: number, currency: string): string { return budgetFormatter.format(value) + ` ${currency}`; }
 
 function shortDate(value?: string | null): string {
   if (!value) return "Срок не указан";
@@ -173,7 +173,7 @@ export function ProjectsView({ projects, people, departments, currentUser, onCre
   const [formMode, setFormMode] = useState<"create" | "edit" | null>(null);
   const [formError, setFormError] = useState("");
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<"active" | "all" | "completed">("active");
+  const [filter, setFilter] = useState<"active" | "all" | "completed">(() => projects.some(project => project.id === focusProjectId && project.status === "completed") ? "all" : "active");
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
   const formRef = useRef<HTMLFormElement>(null);
@@ -184,10 +184,12 @@ export function ProjectsView({ projects, people, departments, currentUser, onCre
   };
   const closeDetail = () => { setDetailOpen(false); setFailureId(undefined); };
   useModalFocus(formRef, formMode !== null, closeForm);
-  const selected = projects.find((project) => project.id === selectedId) ?? projects[0];
-  const workflowStages = workflow?.nodes
+  const peopleById = useMemo(() => new Map(people.map(person => [person.id, person])), [people]);
+  const projectsById = useMemo(() => new Map(projects.map(project => [project.id, project])), [projects]);
+  const selected = projectsById.get(selectedId);
+  const workflowStages = useMemo(() => workflow?.nodes
     .filter((node): node is typeof node & { id: ProjectStage } => stages.includes(node.id as ProjectStage))
-    .sort((left, right) => left.positionX - right.positionX);
+    .sort((left, right) => left.positionX - right.positionX), [workflow]);
   const displayStages = workflowStages?.length === stages.length
     ? workflowStages.map((node) => node.id)
     : stages;
@@ -207,19 +209,26 @@ export function ProjectsView({ projects, people, departments, currentUser, onCre
   const availableStages = (project: WorkspaceProject) => isAdministrator
     ? stages.filter((stage) => stage !== project.stage)
     : nextStages[project.stage];
-  const personName = (id: string) => people.find((person) => person.id === id)?.name ?? "Сотрудник";
-  const personLink = (id: string, children: ReactNode, className?: string) => <EmployeeProfileLink userId={people.some((person) => person.id === id) ? id : undefined} personName={personName(id)} className={className}>{children}</EmployeeProfileLink>;
-  const activeCount = projects.filter((project) => project.status !== "completed").length;
+  const personName = (id: string) => peopleById.get(id)?.name ?? "Сотрудник";
+  const personLink = (id: string, children: ReactNode, className?: string) => <EmployeeProfileLink userId={peopleById.has(id) ? id : undefined} personName={personName(id)} className={className}>{children}</EmployeeProfileLink>;
+  const { activeCount, actionableCount, searchIndex } = useMemo(() => ({
+    activeCount: projects.filter(project => project.status !== "completed").length,
+    actionableCount: projects.filter(project => project.canMove).length,
+    searchIndex: projects.map(project => ({ project, text: [project.code, project.title, project.description, peopleById.get(project.managerUserId)?.name ?? "Сотрудник"].join(" ").toLocaleLowerCase("ru-RU") })),
+  }), [projects, peopleById]);
   const completedCount = projects.length - activeCount;
-  const actionableCount = projects.filter((project) => project.canMove).length;
   const deadlineCount = projects.filter((project) => deadlineTone(project) !== "neutral").length;
   const normalizedQuery = query.trim().toLocaleLowerCase("ru-RU");
-  const visibleProjects = projects.filter((project) => {
+  const visibleProjects = useMemo(() => searchIndex.filter(({ project, text }) => {
     if (filter === "active" && project.status === "completed") return false;
     if (filter === "completed" && project.status !== "completed") return false;
-    return [project.code, project.title, project.description, personName(project.managerUserId)]
-      .join(" ").toLocaleLowerCase("ru-RU").includes(normalizedQuery);
-  });
+    return text.includes(normalizedQuery);
+  }).map(({ project }) => project), [searchIndex, filter, normalizedQuery]);
+  const projectsByStage = useMemo(() => {
+    const grouped = new Map<ProjectStage, WorkspaceProject[]>();
+    for (const project of visibleProjects) { const group = grouped.get(project.stage) ?? []; group.push(project); grouped.set(project.stage, group); }
+    return grouped;
+  }, [visibleProjects]);
   const filterCounts = { active: activeCount, all: projects.length, completed: completedCount };
   const validBudget = form.budget.trim() !== "" && form.spentBudget.trim() !== ""
     && Number.isSafeInteger(Number(form.budget)) && Number.isSafeInteger(Number(form.spentBudget))
@@ -255,12 +264,12 @@ export function ProjectsView({ projects, people, departments, currentUser, onCre
   };
 
   return (
-    <section className={`workspace-view bp7-view projects-view workflow-process-view ${detailOpen && selected ? "detail-open" : ""}`} aria-label="Список проектов">
-      <header className="bp7-header workflow-hero-header">
+    <section className={`workspace-view workspace-queue bp7-view projects-view workflow-process-view ${detailOpen && selected ? "detail-open" : ""}`} aria-label="Список проектов">
+      <WorkspaceSectionHeader motif="tasks" className="bp7-header workflow-hero-header">
         <div>
           <span className="view-kicker">BP‑7 · Общая воронка</span>
           <h1>Список проектов</h1>
-          <p>{projects.length} проектов · {activeCount} в работе · бюджеты сохраняются в валюте проекта</p>
+          <p>Сроки, бюджет и команда проектов</p>
           {canManageWorkflow && workflow ? <SlidingSegmented className="process-view-tabs" role="group" aria-label="Разделы проектов"><button type="button" className={view === "board" ? "active" : ""} aria-pressed={view === "board"} onClick={() => setView("board")}>Список проектов</button><button type="button" className={view === "designer" ? "active" : ""} aria-pressed={view === "designer"} onClick={() => setView("designer")}>Конструктор маршрутов</button></SlidingSegmented> : null}
         </div>
         {canCreate ? (
@@ -270,11 +279,11 @@ export function ProjectsView({ projects, people, departments, currentUser, onCre
             setFormMode("create");
           }}>Новый проект</Button>
         ) : null}
-      </header>
+      </WorkspaceSectionHeader>
 
       {view === "designer" && workflow && onSaveWorkflow && onPublishWorkflow ? <ProcessWorkflowDesigner workflow={workflow} processName="Маршрут проектов" accent="project" people={people} departments={departments} positions={positions} onSave={onSaveWorkflow} onPublish={onPublishWorkflow} /> : <>
       <section className="ws2-process-overview project-overview" aria-label="Сводка по проектам">
-        <button type="button" className="ws2-process-focus" onClick={() => setFilter("active")}>
+        <button type="button" className="ws2-process-focus" aria-pressed={filter === "active"} onClick={() => setFilter("active")}>
           <strong>{activeCount}</strong>
           <span>Сейчас в работе</span>
         </button>
@@ -285,13 +294,13 @@ export function ProjectsView({ projects, people, departments, currentUser, onCre
         </div>
       </section>
 
-      <div className="ws2-process-toolbar project-toolbar">
+      <div className="ws2-process-toolbar project-toolbar workspace-queue-toolbar">
         <SlidingSegmented className="ws2-segmented" role="group" aria-label="Вид проектов">
           <button type="button" className={presentation === "kanban" ? "active" : ""} aria-pressed={presentation === "kanban"} onClick={() => setPresentation("kanban")}>Канбан</button>
           <button type="button" className={presentation === "list" ? "active" : ""} aria-pressed={presentation === "list"} onClick={() => setPresentation("list")}>Список</button>
         </SlidingSegmented>
         <Input contentBefore={<Search20Regular />} aria-label="Поиск проектов" placeholder="Код, название или руководитель" value={query} onChange={(_, data) => setQuery(data.value)} />
-        <SlidingSegmented className="ws2-segmented" role="group" aria-label="Фильтр проектов">
+        <SlidingSegmented className="ws2-segmented workspace-queue-filters" role="group" aria-label="Фильтр проектов">
           {([["active", "В работе"], ["all", "Все"], ["completed", "Завершённые"]] as const).map(([key, label]) => (
             <button type="button" key={key} className={filter === key ? "active" : ""} aria-pressed={filter === key} onClick={() => setFilter(key)}>
               {label}<span>{filterCounts[key]}</span>
@@ -300,10 +309,10 @@ export function ProjectsView({ projects, people, departments, currentUser, onCre
         </SlidingSegmented>
       </div>
 
-      {presentation === "kanban" ? <SpatialBoard canDrop={(id, target) => { const project = projects.find(item => item.id === id); return !!project?.canMove && availableStages(project).includes(target as ProjectStage); }} onMove={async (id, target) => { const project = projects.find(item => item.id === id); if (project) await move(project, target as ProjectStage); }}>
+      {presentation === "kanban" ? <SpatialBoard canDrop={(id, target) => { const project = projectsById.get(id); return !!project?.canMove && availableStages(project).includes(target as ProjectStage); }} onMove={async (id, target) => { const project = projectsById.get(id); if (project) await move(project, target as ProjectStage); }}>
       <div className="project-board middle-pan-surface" aria-label="Стадии проектов" {...boardPan}>
         {displayStages.map((stage) => {
-          const items = visibleProjects.filter((project) => project.stage === stage);
+          const items = projectsByStage.get(stage) ?? [];
           return (
             <SpatialLane id={stage}
               className={`project-column project-stage-${stage}`}

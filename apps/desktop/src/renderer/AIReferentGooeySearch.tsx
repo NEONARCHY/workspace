@@ -15,7 +15,7 @@ interface AIReferentGooeySearchProps {
 
 export function AIReferentGooeySearch({
   value, onValueChange, placeholder, ariaLabel, autoComplete = "off",
-  className = "", collapsedWidth = 340, expandedOffset = 51,
+  className = "", collapsedWidth = 320, expandedOffset = 51,
 }: AIReferentGooeySearchProps) {
   return <Input expandable className={`ai-gooey-search ${className}`.trim()}
     style={{ "--search-width": `${collapsedWidth}px`, "--search-growth": `${expandedOffset}px` } as CSSProperties}

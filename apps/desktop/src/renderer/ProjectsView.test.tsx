@@ -19,6 +19,19 @@ const change = (name: string, value: string) => fireEvent.change(screen.getByLab
 const open = () => fireEvent.click(screen.getByRole("button", { name: "Новый проект" }));
 afterEach(cleanup);
 describe("Project composer", () => {
+  it("shows a linked completed project in the board scope", () => {
+    const completed = { ...project, id: "completed-link", title: "Завершённый проект", status: "completed" as const, stage: "success" as const };
+    render(<FluentProvider theme={workspaceTheme}><ProjectsView projects={[project, completed]} people={people} currentUser={people[0]!}
+      focusProjectId={completed.id} onCreate={vi.fn()} onUpdate={vi.fn()} onMove={vi.fn()} /></FluentProvider>);
+    expect(document.querySelector('.workspace-queue-filters button[aria-pressed="true"]')).toHaveTextContent("Все");
+    expect(document.querySelectorAll(".project-card")).toHaveLength(2);
+    expect(document.querySelector(".project-detail h2")).toHaveTextContent(completed.title);
+  });
+  it("does not open another project when a linked project is unavailable", () => {
+    render(<FluentProvider theme={workspaceTheme}><ProjectsView projects={[project]} people={people} currentUser={people[0]!}
+      focusProjectId="unavailable" onCreate={vi.fn()} onUpdate={vi.fn()} onMove={vi.fn()} /></FluentProvider>);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
   it("filters the board without changing projects and exposes exact overview counts", () => {
     const completed = { ...project, id: "done-project", code: "DONE", title: "Завершённый проект", status: "completed" as const, stage: "success" as const, canMove: false };
     setup(undefined, [project, completed]);

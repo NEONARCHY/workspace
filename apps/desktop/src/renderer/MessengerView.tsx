@@ -290,7 +290,7 @@ function Conversation({
   const [draft, setDraft, draftEntities, setDraftDocument] = useRichComposer(assistantDraft?.kind === "message" ? assistantDraft.fields.body ?? "" : "", composerRevision);
   const draftKey = `chat:${currentUserId}:${chat.id}`;
   const draftEdited = useRef(assistantDraft?.kind === "message");
-  const draftReady = useRef(assistantDraft?.kind === "message");
+  const persistDraft = useRef(() => {});
   const [reply, setReply] = useComposerState<ReplyTarget | undefined>(undefined, composerRevision);
   const [mentions, setMentions] = useComposerState<readonly string[]>([], composerRevision);
   const [mentionPicker, setMentionPicker] = useState(false);
@@ -393,18 +393,21 @@ function Conversation({
         const decoded = decodeRichDraft(saved);
         if (assistantDraft?.kind === "message") setDraft(current => decoded.text.trim() ? `${decoded.text.trimEnd()}\n\n${current}` : current);
         else setDraftDocument(decoded.text, decoded.entities);
-        void bridge.clearDraft(draftKey).catch(() => undefined);
       }
-    }).catch(() => undefined).finally(() => { draftReady.current = true; });
+    }).catch(() => undefined);
     return () => { active = false; };
   }, [assistantDraft, draftKey, setDraft, setDraftDocument]);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const bridge = workspacePlatform;
-    if (!draftReady.current || !draftEdited.current) return;
-    const save = () => {
+    persistDraft.current = () => {
+      if (!draftEdited.current) return;
       void (draft ? bridge.saveDraft(draftKey, encodeRichDraft(draft, draftEntities)) : bridge.clearDraft(draftKey))
         .catch(() => undefined);
     };
+  }, [draft, draftKey, draftEntities]);
+  useEffect(() => () => persistDraft.current(), [draftKey]);
+  useEffect(() => {
+    const save = () => persistDraft.current();
     const timer = window.setTimeout(() => {
       save();
     }, 350);
@@ -433,11 +436,21 @@ function Conversation({
     setError("");
     return true;
   }, [fileDropBlocked, setPendingFiles, setError]);
-  const personById = useCallback((id: string) => people.find((person) => person.id === id), [people]);
+  const peopleById = useMemo(() => new Map(people.map(person => [person.id, person])), [people]);
+  const personById = useCallback((id: string) => peopleById.get(id), [peopleById]);
   const personName = useCallback((id: string) => personById(id)?.name ?? "Сотрудник", [personById]);
   const activeMessages = useMemo(() => messages.filter(
     (message) => message.chatId === chat.id && !message.deletedAt,
   ), [messages, chat.id]);
+  const activeMessagesById = useMemo(() => new Map(activeMessages.map(message => [message.id, message])), [activeMessages]);
+  const attachmentsByMessage = useMemo(() => {
+    const grouped = new Map<string, WorkspaceAttachment[]>();
+    for (const attachment of attachments) {
+      if (attachment.ownerType !== "message") continue;
+      const group = grouped.get(attachment.ownerId) ?? []; group.push(attachment); grouped.set(attachment.ownerId, group);
+    }
+    return grouped;
+  }, [attachments]);
   const visibleMessages = useMemo(() => activeMessages.filter(
     (message) => message.id === editing?.id || !query
       || message.body.toLowerCase().includes(query.toLowerCase()),
@@ -711,9 +724,7 @@ function Conversation({
   }, [taskForChat, onDecideTaskDeadline, deadlineDecisionId]);
   // Keep typing local: unchanged history must not rebuild rich message subtrees.
   const messageRows = useMemo(() => renderedMessages.map((message, index) => {
-          const parent = activeMessages.find(
-            (item) => item.id === message.replyToMessageId,
-          );
+          const parent = message.replyToMessageId ? activeMessagesById.get(message.replyToMessageId) : undefined;
           const date = message.createdAt
             ? formatRussianDate(new Date(message.createdAt))
             : "История переписки";
@@ -748,9 +759,7 @@ function Conversation({
           const groupPosition = groupedWithPrevious
             ? groupedWithNext ? "is-group-middle" : "is-group-last"
             : groupedWithNext ? "is-group-first" : "";
-          const messageAttachments = attachments.filter(
-            (attachment) => attachment.ownerType === "message" && attachment.ownerId === message.id,
-          );
+          const messageAttachments = attachmentsByMessage.get(message.id) ?? [];
           const voiceAttachments = messageAttachments.filter((attachment) => attachment.mediaKind === "voice");
           const mediaOnly = !!onLoadAttachment && !message.deletedAt && !message.forwarded && !message.zoomInvitation
             && messageAttachments.length > 0 && messageAttachments.every(attachment => fileViewerKind(attachment) === "image");
@@ -895,7 +904,7 @@ function Conversation({
               </SelectableMessage>
             </div>
           );
-        }), [renderedMessages, activeMessages, taskForChat, people, canDecideDeadline, onDecideTaskDeadline, deadlineDecisionId, decideDeadline, arrivingIds, unreadMessageId, motionDisabled, currentUserId, query, attachments, onLoadAttachment, removingMessage, personName, personById, token, onOpenFeedPost, onDownloadAttachment, reactionTargetId, canSend, busy, run, onReactMessage, isPaintPending, revealMessage]);
+        }), [renderedMessages, activeMessagesById, attachmentsByMessage, taskForChat, people, canDecideDeadline, onDecideTaskDeadline, deadlineDecisionId, decideDeadline, arrivingIds, unreadMessageId, motionDisabled, currentUserId, query, attachments, onLoadAttachment, removingMessage, personName, personById, token, onOpenFeedPost, onDownloadAttachment, reactionTargetId, canSend, busy, run, onReactMessage, isPaintPending, revealMessage]);
   return (
     <MessengerFileDropSurface className={`conversation-pane${embedded ? " embedded-conversation" : ""}${voiceOpen ? " has-voice-draft" : ""}`}
       title={chat.title} blockedReason={fileDropBlocked} receive={acceptFiles} reject={setError}>
@@ -1521,7 +1530,10 @@ export function MessengerView(props: MessengerViewProps) {
   const [deletionChoice, setDeletionChoice] = useState<ChatSummary>();
   const [deletionChoiceOpen, setDeletionChoiceOpen] = useState(false);
   const [pendingLeave, setPendingLeave] = useState<ChatSummary>();
-  const visibleChats = chats.filter((chat) => !undo.pending.some(item => item.scope === "chat" && item.id === chat.id));
+  const visibleChats = useMemo(() => {
+    const hidden = new Set(undo.pending.filter(item => item.scope === "chat").map(item => item.id));
+    return chats.filter(chat => !hidden.has(chat.id));
+  }, [chats, undo.pending]);
   const preferences = props.personalPreferences ?? defaultPersonalPreferences;
   const firstActive = visibleChats.find((chat) => chat.id === preferences.pinnedChatIds[0]) ?? visibleChats.find((chat) => !preferences.archivedChatIds.includes(chat.id));
   const [activeChatId, setActiveChatId] = useState(
@@ -1605,7 +1617,7 @@ export function MessengerView(props: MessengerViewProps) {
     onActiveChatChange?.(conversationOpen || !compact ? activeChat?.id : undefined);
   }, [activeChat?.id, conversationOpen, compact, onActiveChatChange]);
   return (
-    <section className={`workspace-view messenger-view ${props.compact ? "messenger-mini" : ""} ${(conversationOpen && activeChat) || pendingAssistantChat ? "conversation-open" : ""}`} aria-label="Мессенджер">
+    <section className={`workspace-view workspace-queue messenger-view ${props.compact ? "messenger-mini" : ""} ${(conversationOpen && activeChat) || pendingAssistantChat ? "conversation-open" : ""}`} aria-label="Мессенджер">
       <aside className="list-pane" ref={listPaneRef}>
           <OrganizedChatList key={listRevision} token={props.token} chats={visibleChats} messages={messages} people={props.people} departments={props.departments} currentUserId={props.currentUserId} activeChatId={activeChat?.id} focusChatId={focusChatId}
           preferences={preferences} onChange={props.onPersonalChat} onReorder={props.onPinnedOrder}

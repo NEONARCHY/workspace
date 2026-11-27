@@ -62,30 +62,41 @@ export function OrganizedChatList({ token, chats, messages, people = [], departm
     preferences.pinnedChatIds.length === pendingPinnedOrder.order.length &&
     preferences.pinnedChatIds.every((id, index) => id === pendingPinnedOrder.order[index]));
   const pinnedOrder = pendingPinnedOrder && !hasServerOrder ? pendingPinnedOrder.order : preferences.pinnedChatIds;
-  const pinnedIds = pinnedOrder.filter((id) => chats.some((chat) => chat.id === id) && !preferences.archivedChatIds.includes(id));
-  const archivedChats = chats.filter((chat) => preferences.archivedChatIds.includes(chat.id));
-  const regularChats = chats.filter((chat) => !isTaskChat(chat) && !isContextChat(chat) && !preferences.archivedChatIds.includes(chat.id));
-  const directPeerIds = new Set(chats.filter((chat) => chat.kind === "direct").flatMap((chat) => chat.members.map((member) => member.userId).filter((id) => id !== currentUserId)));
-  const availablePeople = people.filter((person) => person.id !== currentUserId && (person.status === undefined || person.status === "active") && !directPeerIds.has(person.id));
-  const scopedPeople = availablePeople.filter((person) => !departments || employeeScope(person.departmentId, departments) === peopleScope);
-  const taskChats = chats.filter((chat) => isTaskChat(chat) && !preferences.archivedChatIds.includes(chat.id));
-  const projectChats = chats.filter((chat) => isProjectChat(chat) && !preferences.archivedChatIds.includes(chat.id));
-  const tripChats = chats.filter((chat) => isTripChat(chat) && !preferences.archivedChatIds.includes(chat.id));
-  const archivedRegularChats = chats.filter((chat) => !isTaskChat(chat) && preferences.archivedChatIds.includes(chat.id));
-  const archivedTaskChats = chats.filter((chat) => isTaskChat(chat) && preferences.archivedChatIds.includes(chat.id));
+  const chatIndex = useMemo(() => {
+    const archived = new Set(preferences.archivedChatIds), ids = new Set(chats.map(chat => chat.id));
+    const active = chats.filter(chat => !archived.has(chat.id));
+    const archivedChats = chats.filter(chat => archived.has(chat.id));
+    const directPeerIds = new Set(chats.filter(chat => chat.kind === "direct").flatMap(chat => chat.members.map(member => member.userId).filter(id => id !== currentUserId)));
+    return {
+      pinnedIds: pinnedOrder.filter(id => ids.has(id) && !archived.has(id)), archivedChats,
+      regularChats: active.filter(chat => !isTaskChat(chat) && !isContextChat(chat)), taskChats: active.filter(isTaskChat),
+      projectChats: active.filter(isProjectChat), tripChats: active.filter(isTripChat),
+      archivedRegularChats: archivedChats.filter(chat => !isTaskChat(chat)), archivedTaskChats: archivedChats.filter(isTaskChat),
+      availablePeople: people.filter(person => person.id !== currentUserId && (person.status === undefined || person.status === "active") && !directPeerIds.has(person.id)),
+      peers: new Map(chats.filter(chat => chat.kind === "direct").map(chat => [chat.id, people.find(person => person.id !== currentUserId && chat.members.some(member => member.userId === person.id))])),
+      sourcePositions: new Map(chats.map((chat, index) => [chat.id, index])),
+    };
+  }, [chats, preferences.archivedChatIds, pinnedOrder, currentUserId, people]);
+  const { pinnedIds, archivedChats, regularChats, taskChats, projectChats, tripChats, archivedRegularChats, archivedTaskChats, availablePeople } = chatIndex;
+  const scopedPeople = useMemo(() => availablePeople.filter(person => !departments || employeeScope(person.departmentId, departments) === peopleScope), [availablePeople, departments, peopleScope]);
+  const messageIndex = useMemo(() => {
+    const activity = new Map<string, number>();
+    const search = messages.map((message, index) => {
+      const parsed = message.createdAt ? Date.parse(message.createdAt) : Number.NaN;
+      activity.set(message.chatId, Math.max(activity.get(message.chatId) ?? -1, Number.isNaN(parsed) ? index : parsed));
+      return { chatId: message.chatId, deleted: Boolean(message.deletedAt), text: message.body.toLowerCase() };
+    });
+    return { activity, search };
+  }, [messages]);
   const visibleChats = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    const matching = new Set(messages.filter((message) => !message.deletedAt && message.body.toLowerCase().includes(normalized)).map((message) => message.chatId));
+    const matching = new Set(messageIndex.search.filter(message => !message.deleted && message.text.includes(normalized)).map(message => message.chatId));
     const base = bucket === "archive" ? [...archivedRegularChats, ...archivedTaskChats] : bucket === "task-chats" ? taskChats : bucket === "project-chats" ? projectChats : bucket === "trip-chats" ? tripChats : regularChats;
     const selected = base.filter((chat) => !normalized || chat.title.toLowerCase().includes(normalized) || matching.has(chat.id));
     if (archive) return selected;
     const positions = new Map(pinnedOrder.map((id, index) => [id, index]));
-    const sourcePositions = new Map(chats.map((chat, index) => [chat.id, index]));
-    const activity = new Map<string, number>();
-    messages.forEach((message, index) => {
-      const parsed = message.createdAt ? Date.parse(message.createdAt) : Number.NaN;
-      activity.set(message.chatId, Math.max(activity.get(message.chatId) ?? -1, Number.isNaN(parsed) ? index : parsed));
-    });
+    const { activity } = messageIndex;
+    const { sourcePositions } = chatIndex;
     return [...selected].sort((a, b) => {
       const aPin = positions.get(a.id);
       const bPin = positions.get(b.id);
@@ -97,11 +108,11 @@ export function OrganizedChatList({ token, chats, messages, people = [], departm
       const activityDifference = (activity.get(b.id) ?? -1) - (activity.get(a.id) ?? -1);
       return activityDifference || (sourcePositions.get(a.id) ?? 0) - (sourcePositions.get(b.id) ?? 0);
     });
-  }, [archive, bucket, archivedRegularChats, archivedTaskChats, regularChats, taskChats, projectChats, tripChats, chats, messages, pinnedOrder, query]);
+  }, [archive, bucket, archivedRegularChats, archivedTaskChats, regularChats, taskChats, projectChats, tripChats, chatIndex, messageIndex, pinnedOrder, query]);
   const normalizedQuery = query.trim().toLowerCase();
-  const visiblePeople = bucket === "chats" && !archive
+  const visiblePeople = useMemo(() => bucket === "chats" && !archive
     ? scopedPeople.filter((person) => !normalizedQuery || `${person.name} ${person.username ?? ""} ${person.jobTitle ?? ""}`.toLowerCase().includes(normalizedQuery)).sort((a, b) => a.name.localeCompare(b.name, "ru"))
-    : [];
+    : [], [bucket, archive, scopedPeople, normalizedQuery]);
   const hasPins = !archive && visibleChats.some((chat) => pinnedIds.includes(chat.id));
   const emptyMessage = bucket === "chats" && query.trim() ? "Чаты не найдены" : bucket === "task-chats" && query.trim() ? "Чаты задач не найдены" : bucket === "archive" && query.trim() ? "В архиве чатов не найдено" : bucketEmptyMessage(bucket);
   const run = async (operation: () => Promise<void>, message: string) => {
@@ -193,9 +204,7 @@ export function OrganizedChatList({ token, chats, messages, people = [], departm
       {visibleChats.flatMap((chat, index): ReactNode[] => {
         const pinned = !archive && pinnedIds.includes(chat.id);
         const pinIndex = pinnedIds.indexOf(chat.id);
-        const peer = chat.kind === "direct"
-          ? people.find((person) => chat.members.some((member) => member.userId === person.id && person.id !== currentUserId))
-          : undefined;
+        const peer = chatIndex.peers.get(chat.id);
         const userManaged = !chat.contextType && (chat.kind === "direct" || chat.kind === "group");
         const currentMembership = chat.members.find((member) => member.userId === currentUserId);
         const managedLeave = ["project", "project_hub", "trip"].includes(chat.contextType ?? "");

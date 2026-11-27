@@ -9,6 +9,7 @@ const attentionSuite = process.argv.includes("--attention");
 const peopleSuite = process.argv.includes("--people");
 const operationsSuite = process.argv.includes("--operations");
 const documentsSuite = process.argv.includes("--documents");
+const communicationsSuite = process.argv.includes("--communications");
 const registrySuite = process.argv.includes("--registry");
 const workdaySuite = process.argv.includes("--workday");
 const promptSuite = process.argv.includes("--hisobot-prompt");
@@ -19,9 +20,9 @@ const onlyWidth = Number(process.env.UI_QA_WIDTH || 0);
 assert([0, 320, 390, 720, 1024, 1440].includes(onlyWidth));
 const origin = process.env.UI_QA_ORIGIN || "http://127.0.0.1:5186";
 assert(["127.0.0.1", "localhost"].includes(new URL(origin).hostname));
-const iteration = registrySuite ? "11" : promptSuite ? "10" : workdaySuite ? "9" : reportingSuite ? "8" : topbarSuite ? "7" : planningSuite ? "6" : documentsSuite ? "5" : operationsSuite ? "4" : peopleSuite ? "3" : attentionSuite ? "2" : "1";
+const iteration = communicationsSuite ? "12" : registrySuite ? "11" : promptSuite ? "10" : workdaySuite ? "9" : reportingSuite ? "8" : topbarSuite ? "7" : planningSuite ? "6" : documentsSuite ? "5" : operationsSuite ? "4" : peopleSuite ? "3" : attentionSuite ? "2" : "1";
 const output = path.resolve(process.env.UI_QA_OUTPUT || `tmp/ui-consistency-iteration-${iteration}`);
-const sections = registrySuite ? [{ id: "grants", label: "Гранты", root: ".grants-view" }, { id: "reference", label: "Справочник", root: ".reference-view" }, { id: "mail", label: "Почта", root: ".mail-view" }] : promptSuite ? [{ id: "home", label: "Главная", root: ".personal-home" }, { id: "tasks", label: "Задачи", root: ".tasks-view" }, { id: "messenger", label: "Мессенджер", root: ".messenger-view" }].filter(section => section.id === (process.env.UI_QA_SECTION || "messenger")) : workdaySuite ? [{ id: "home", label: "Главная", root: ".personal-home" }] : reportingSuite
+const sections = communicationsSuite ? [{ id: "referent", label: "AI Referent", root: ".ai-referent-view" }, { id: "messenger", label: "Мессенджер", root: ".messenger-view" }, { id: "legacy-projects", label: "Список проектов", root: ".projects-view" }] : registrySuite ? [{ id: "grants", label: "Гранты", root: ".grants-view" }, { id: "reference", label: "Справочник", root: ".reference-view" }, { id: "mail", label: "Почта", root: ".mail-view" }] : promptSuite ? [{ id: "home", label: "Главная", root: ".personal-home" }, { id: "tasks", label: "Задачи", root: ".tasks-view" }, { id: "messenger", label: "Мессенджер", root: ".messenger-view" }].filter(section => section.id === (process.env.UI_QA_SECTION || "messenger")) : workdaySuite ? [{ id: "home", label: "Главная", root: ".personal-home" }] : reportingSuite
   ? [{ id: "hisobot", label: "AI Hisobot", root: ".ai-hisobot-view" }, { id: "monthly", label: "Ойлик ҳисоботлар", root: ".monthly-reports-page" }, { id: "efficiency", label: "Эффективность", navLabel: "Задачи", root: ".tasks-view" }]
   : planningSuite
   ? [{ id: "home", label: "Главная", root: ".personal-home" }, { id: "calendar", label: "Календарь", root: ".calendar-view" }, { id: "projects", label: "Проекты", root: ".project-hub-view" }]
@@ -128,10 +129,10 @@ async function measure(page, selector) {
   const browser = await chromium.launch({ channel: "msedge", headless: true });
   const results = [], errors = [];
   try {
-    for (const [width, height, theme] of galleryOnly ? [] : [[1440, 960, "dark"], [1440, 960, "light"], [1024, 768, "dark"], [390, 844, "dark"], ...((phase === "after" || topbarSuite || reportingSuite || registrySuite) && (peopleSuite || operationsSuite || documentsSuite || planningSuite || reportingSuite || registrySuite) ? [[320, 800, "dark"]] : []), ...((phase === "after" || topbarSuite || reportingSuite || registrySuite) && (documentsSuite || planningSuite || reportingSuite || registrySuite) ? [[720, 480, "dark"]] : [])].filter(([width]) => !onlyWidth || width === onlyWidth)) {
+    for (const [width, height, theme] of galleryOnly ? [] : [[1440, 960, "dark"], [1440, 960, "light"], [1024, 768, "dark"], [390, 844, "dark"], ...((phase === "after" || topbarSuite || reportingSuite || registrySuite || communicationsSuite) && (peopleSuite || operationsSuite || documentsSuite || planningSuite || reportingSuite || registrySuite || communicationsSuite) ? [[320, 800, "dark"]] : []), ...((phase === "after" || topbarSuite || reportingSuite || registrySuite || communicationsSuite) && (documentsSuite || planningSuite || reportingSuite || registrySuite || communicationsSuite) ? [[720, 480, "dark"]] : [])].filter(([width]) => !onlyWidth || width === onlyWidth)) {
       const context = await browser.newContext({ viewport: { width, height }, reducedMotion: "reduce" });
       const page = await context.newPage(); page.setDefaultTimeout(15000);
-      if (planningSuite || reportingSuite || registrySuite) await page.clock.setFixedTime(new Date(promptSuite ? "2026-11-26T12:39:00Z" : "2026-11-26T09:30:00Z"));
+      if (planningSuite || reportingSuite || registrySuite || communicationsSuite) await page.clock.setFixedTime(new Date(promptSuite ? "2026-11-26T12:39:00Z" : "2026-11-26T09:30:00Z"));
       page.on("pageerror", error => errors.push(error.message));
       await page.addInitScript(theme => localStorage.setItem("yuksalish:color-theme:last", theme), theme);
       let data, releaseIds = [], workdayWorking = false, workdayWrites = 0;
@@ -141,10 +142,20 @@ async function measure(page, selector) {
       }));
       await page.route("**/api/v1/**", async route => {
         const request = route.request(), endpoint = new URL(request.url()).pathname.replace("/api/v1", "");
-        const send = json => route.fulfill({ json: registrySuite && endpoint === "/workspace/bootstrap" ? { ...json, moduleAccess: data.registry.moduleAccess } : json });
+        const send = json => route.fulfill({ json: communicationsSuite && endpoint === "/workspace/bootstrap" ? { ...json, moduleAccess: data.communication.moduleAccess, projects: data.communication.projects, chats: data.home.chats, messages: data.home.messages } : registrySuite && endpoint === "/workspace/bootstrap" ? { ...json, moduleAccess: data.registry.moduleAccess } : json });
         if (/\/auth\/(web\/)?login$/.test(endpoint)) return send({ accessToken: "qa-token", expiresIn: 3600, user: data.user });
         if (registrySuite && endpoint === "/mail/messages/search") { const { query } = request.postDataJSON(); return send({ messages: data.registry.messages.filter(item => !query || `${item.subject} ${item.sender}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())), nextPageToken: null }); }
         if (!["GET", "HEAD"].includes(request.method())) { if (endpoint.startsWith("/workday/")) workdayWrites++; return route.fulfill({ status: 403, json: { detail: "Synthetic QA: no writes" } }); }
+        if (communicationsSuite && endpoint.startsWith('/ai-referent/')) {
+          const fixture = data.communication, params = new URL(request.url()).searchParams, q = (params.get('query') || params.get('q') || '').toLocaleLowerCase(), offset = Number(params.get('offset') || 0);
+          if (endpoint.endsWith('/visibility')) return send(fixture.visibility);
+          if (endpoint.endsWith('/authority')) return send(fixture.authority);
+          if (endpoint.endsWith('/reviewers')) return send(fixture.reviewers);
+          if (endpoint.endsWith('/incoming')) { const letters = fixture.incoming.filter(item => [item.platformIncomingNumber, item.subject, item.senderOrganization, item.responsibleDisplayName].join(' ').toLocaleLowerCase().includes(q)); return send({ letters: letters.slice(offset, offset + 100), totalCount: fixture.incoming.length, filteredCount: letters.length, registeredCount: 96, attentionCount: 24, withAttachmentsCount: 120, lastSyncAt: '2026-11-26T07:00:00Z', journal: { available: false } }); }
+          if (endpoint.endsWith('/letters')) { const letters = fixture.letters.filter(item => item.subject.toLocaleLowerCase().includes(q)); return send({ letters, participation: params.get('participation') || 'all', totalCount: letters.length, pendingReviewCount: 5, readyCount: 4, sentCount: 4, signedCount: 0 }); }
+          if (endpoint.includes('/letters/')) return send(fixture.letters.find(item => item.id === endpoint.split('/').at(-1)));
+          if (endpoint.endsWith('/recipients')) return send({ entries: [], totalCount: 0 });
+        }
         if (endpoint === "/workspace/bootstrap") return send({ currentUser: { ...data.user, ...(planningSuite ? { departmentId: "qa-dept" } : {}) }, people: planningSuite ? data.people.map(p => ({ ...p, departmentId: "qa-dept" })) : data.people, tasks: planningSuite ? data.home.tasks : data.tasks, requests: data.requests, tripRequests: data.tripRequests, workflow: data.workflow, projectWorkflow: null, tripWorkflow: null, requestWorkflows: {}, projects: [], chats: planningSuite ? data.home.chats : [], messages: planningSuite ? data.home.messages : [], departments: planningSuite ? [{ ...data.departments[0], assignedUsersCount: data.people.length }] : [], positions: [], attachments: [], feedPosts: attentionSuite || planningSuite ? data.feedPosts : [], calendarEvents: planningSuite ? data.calendarEvents : [], notifications: attentionSuite ? data.notifications : planningSuite ? data.home.notifications : [], absenceRequests: peopleSuite ? data.absenceRequests : [], presenceSummary: peopleSuite ? data.presenceSummary : [], canCreatePaymentRequests: true, notificationPreferences: { desktopEnabled: false, soundEnabled: false, messagesEnabled: true, tasksEnabled: true, approvalsEnabled: true, calendarEnabled: true, tripsEnabled: true, remindersEnabled: true } });
         if (planningSuite && endpoint === "/profile/me/efficiency") return send(data.personalEfficiency);
         if (registrySuite && endpoint === "/grants") return send(data.registry.grants);
@@ -206,7 +217,9 @@ async function measure(page, selector) {
       data = fixtures(await page.evaluate(async () => { const d = await import("/src/renderer/test-fixtures/demo-data.ts"), h = await import("/src/renderer/test-fixtures/personal-home-fixture.ts"), c = await import("/qa/context-fixtures.ts"); return { people: d.people, initialTasks: d.initialTasks, home: h.homeFixture("malika", Date.parse("2026-11-26T09:30:00Z")), personalEfficiency: h.homeEfficiency("malika"), recognition: h.homeRecognition("malika"), contextRates: c.contextRates, contextWeather: c.contextWeather }; }));
       if (promptSuite) data.home.notifications = [...data.home.notifications, { id: "qa-hisobot-reminder", kind: "hisobot", title: "AI Hisobot", body: "Черновик отчёта готов", priority: "attention", section: "ai_hisobot", requiresAction: true, isReminder: true, occurredAt: "2026-11-26T12:40:00Z" }];
       releaseIds = await page.evaluate(async () => (await import("/src/renderer/release-history.ts")).bundledReleaseEntries().map(entry => entry.id));
+      if (communicationsSuite) { data.communication = require('./ui-communication-fixtures.cjs')(data.people, data.user); data.communication.moduleAccess = await page.evaluate(async () => (await import('/src/renderer/module-catalog.ts')).fallbackModules.map(module => ({ moduleKey: module.key, permissions: { view: true, create: true, edit: true, approve: true, admin: true } }))); }
       if (registrySuite) { data.registry = registryFixtures(data.people, data.user); data.registry.moduleAccess = await page.evaluate(async () => (await import('/src/renderer/module-catalog.ts')).fallbackModules.map(module => ({ moduleKey: module.key, permissions: { view: true, create: true, edit: true, approve: true, admin: true } }))); }
+      if (communicationsSuite) data.home.chats = [...data.home.chats.map(chat => ({ ...chat, unread: 0 })), { ...data.home.chats[0], id: 'qa-legacy-project-chat', title: 'Проект: региональные инициативы', preview: 'План работ и материалы проекта', unread: 0, kind: 'group', contextType: 'project', contextId: 'legacy-project-0' }];
       await page.evaluate(({ id, theme }) => localStorage.setItem(`yuksalish:color-theme:${id}`, theme), { id: data.user.id, theme });
       await page.getByRole("textbox", { name: /Логин/ }).fill("qa-user");
       await page.getByLabel(/Пароль/).fill("qa-only-password");
@@ -214,20 +227,31 @@ async function measure(page, selector) {
       for (const section of sections) {
         // Isolate responsive content geometry from the separately tested rail drawer.
         await page.setViewportSize({ width: 1440, height: 960 }); await settle(page);
-        const nav = section.id === "notifications" ? page.locator(".notification-bell") : registrySuite ? page.getByRole("button", { name: section.label, exact: true }).or(page.getByRole("menuitem", { name: section.label, exact: true })) : reportingSuite ? page.getByRole("button", { name: section.navLabel || section.label, exact: true }) : page.locator(`.rail-action[aria-label="${section.navLabel || section.label}"]`);
+        if (communicationsSuite && section.id === 'legacy-projects') {
+          await page.locator('.chat-buckets').getByRole('button', { name: /^Ещё/ }).click();
+          await page.getByRole('menuitem', { name: /^Чаты проектов/ }).click();
+          await page.locator('.chat-list').getByRole('button', { name: /Проект: региональные инициативы/ }).click();
+          await page.getByRole('button', { name: 'Открыть проект', exact: true }).click();
+          await page.getByRole('dialog').waitFor(); await page.keyboard.press('Escape'); await page.getByRole('dialog').waitFor({ state: 'hidden' });
+        } else {
+        const nav = section.id === "notifications" ? page.locator(".notification-bell") : registrySuite || communicationsSuite ? page.getByRole("button", { name: section.label, exact: true }).or(page.getByRole("menuitem", { name: section.label, exact: true })) : reportingSuite ? page.getByRole("button", { name: section.navLabel || section.label, exact: true }) : page.locator(`.rail-action[aria-label="${section.navLabel || section.label}"]`);
         if (!await nav.isVisible()) {
           const menu = page.getByRole("button", { name: "Открыть меню", exact: true });
           if (await menu.count()) await menu.click();
           const more = page.getByRole("button", { name: /^Ещё,/ });
           if (!await nav.isVisible() && await more.count()) await more.click();
         }
-        if (reportingSuite && ["hisobot", "monthly"].includes(section.id) && !await nav.isVisible()) await page.getByRole("button", { name: "ИИ-модули", exact: true }).click();
+        if ((reportingSuite && ["hisobot", "monthly"].includes(section.id) || communicationsSuite && section.id === "referent") && !await nav.isVisible()) await page.getByRole("button", { name: "ИИ-модули", exact: true }).click();
         // Keyboard activation also works for entries in the overflow portal.
         if (peopleSuite) await nav.click();
         else { await nav.focus(); await nav.press("Enter"); }
+        }
         if (reportingSuite && section.id === "efficiency") { await page.getByRole("button", { name: "Эффективность", exact: true }).click(); await page.locator(".eff-summary .eff-gauge-ring strong").first().waitFor(); }
         if (reportingSuite && section.id === "hisobot") await page.locator("#hisobot-report-text").waitFor();
         if (reportingSuite && section.id === "monthly") await page.locator(".monthly-reports-period").waitFor();
+        if (communicationsSuite && section.id === 'referent') { await page.getByRole('tab', { name: 'Входящие', exact: true }).click(); await page.locator('.ai-incoming-table tbody tr').first().waitFor(); }
+        if (communicationsSuite && section.id === 'legacy-projects') await page.locator('.project-card').first().waitFor();
+        if (communicationsSuite && section.id === 'messenger') await page.locator('.chat-row').first().waitFor();
         if (registrySuite && section.id === "grants") await page.locator('.grant-records tbody tr').first().waitFor();
         if (registrySuite && section.id === "reference") { await page.getByRole('button', { name: 'Организации', exact: true }).click(); await page.locator('.reference-record').first().waitFor(); }
         if (registrySuite && section.id === "mail") await page.locator('.mail-row').first().waitFor();
@@ -245,6 +269,7 @@ async function measure(page, selector) {
         if (topbarSuite && section.id === "home" || phase === "after" && reportingSuite && section.id === "hisobot") await capture(page.locator(".global-bar"), path.join(output, phase, `topbar-${theme}-${width}.png`));
         const geometry = await measure(page, section.root);
         results.push({ section: section.id, width, height, theme, ...geometry });
+        if (communicationsSuite) { if (phase === 'after') await require('./ui-communication-checks.cjs')(page, section, { width, geometry }); console.log('PASS ' + file); continue; }
         if (registrySuite && phase === "after") {
           assert(geometry.pageOverflow <= 1, `${file}: page overflow`);
           const pane = page.locator(`${section.root} ${section.id === 'grants' ? '.grant-records' : section.id === 'reference' ? '.reference-content' : '.mail-workspace'}`);
@@ -870,7 +895,7 @@ async function measure(page, selector) {
     if (promptSuite) return;
     await fs.writeFile(path.join(output, "index.html"), `<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Yuksalish — сравнение интерфейса</title>
       <style>*{box-sizing:border-box}body{margin:0;padding:24px;background:#111318;color:#eceef4;font:15px/1.5 system-ui}main{max-width:1600px;margin:auto}h1{font-size:28px}p,figcaption{color:#bfc6d3}select{margin:0 0 24px;padding:12px;border-radius:8px;background:#252a33;color:inherit}section{margin:0 0 32px}h2{font-size:20px}article{display:grid;grid-template-columns:1fr 1fr;gap:16px}figure{margin:0;min-width:0}img{display:block;width:100%;height:auto;border-radius:12px}figcaption{margin-bottom:8px}@media(max-width:700px){article{grid-template-columns:1fr}body{padding:12px}}</style>
-      <main><h1>Итерация ${iteration} · Общая сетка рабочих разделов</h1><p>Реальные компоненты приложения, одинаковые синтетические данные до и после. Нажмите на снимок для исходного размера.</p><select id="size" aria-label="Размер и тема"><option value="dark-1440">1440 × 960 · тёмная</option><option value="light-1440">1440 × 960 · светлая</option><option value="dark-1024">1024 × 768 · тёмная</option><option value="dark-390">390 × 844 · тёмная</option>${topbarSuite || reportingSuite || registrySuite ? '<option value="dark-320">320 × 800 · тёмная</option><option value="dark-720">720 × 480 · тёмная</option>' : ''}</select>
+      <main><h1>Итерация ${iteration} · Общая сетка рабочих разделов</h1><p>Реальные компоненты приложения, одинаковые синтетические данные до и после. Нажмите на снимок для исходного размера.</p><select id="size" aria-label="Размер и тема"><option value="dark-1440">1440 × 960 · тёмная</option><option value="light-1440">1440 × 960 · светлая</option><option value="dark-1024">1024 × 768 · тёмная</option><option value="dark-390">390 × 844 · тёмная</option>${topbarSuite || reportingSuite || registrySuite || communicationsSuite ? '<option value="dark-320">320 × 800 · тёмная</option><option value="dark-720">720 × 480 · тёмная</option>' : ''}</select>
       ${workdaySuite ? '<select id="interaction" aria-label="Состояние кнопки"><option value="">Обычное состояние</option><option value="hover">Наведение</option><option value="pressed">Нажатие</option></select>' : ''}
       ${(workdaySuite ? [{ id: "workday-start", label: "Начать работу" }, { id: "workday-finish", label: "Завершить работу" }, { id: "topbar", label: "Заметная иконка рабочего дня" }] : topbarSuite ? [{ id: "topbar", label: "Общая верхняя панель" }, ...sections] : sections).map(section => `<section data-section="${section.id}"><h2>${section.label}</h2><article>${["before", "after"].map((state, i) => `<figure><figcaption>${i ? "После" : "До"}</figcaption><a data-state="${state}" href="${state}/${section.id}-dark-1440.png"><img loading="lazy" ${workdaySuite && section.id !== "topbar" ? 'style="max-width:360px"' : ''} src="${state}/${section.id}-dark-1440.png" alt="${section.label} — ${i ? "после" : "до"}"></a></figure>`).join("")}</article></section>`).join("")}
       ${topbarSuite && !workdaySuite ? [1440, 720].map(width => `<section><h2>Открытый ассистент · ${width} px</h2><article>${["before", "after"].map((state, i) => `<figure><figcaption>${i ? "После: орба остаётся в кнопке" : "До: орба переносится в окно"}</figcaption><a href="${state}/assistant-open-dark-${width}.png"><img loading="lazy" src="${state}/assistant-open-dark-${width}.png" alt="Ассистент — ${i ? "после" : "до"}"></a></figure>`).join("")}</article></section>`).join("") : ''}

@@ -173,7 +173,7 @@ describe("AIReferentView", () => {
     expect(tabs.map(tab => tab.textContent)).toEqual(["Исходящие", "На подпись", "Архив и журналы", "Входящие", "Мой Telegram"]);
     expect(tabs[0]).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("button", { name: "Мои", pressed: true })).toBeInTheDocument();
-    await waitFor(() => expect(loadAIReferentRegistry).toHaveBeenCalledWith("token", expect.objectContaining({ participation: "mine", workflowKind: "delivery" })));
+    await waitFor(() => expect(loadAIReferentRegistry).toHaveBeenCalledWith("token", expect.objectContaining({ participation: "mine", workflowKind: "delivery" }), expect.any(AbortSignal)));
     expect(loadAIReferentIncomingRegistry).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("tab", { name: "Входящие" }));
     await waitFor(() => expect(loadAIReferentIncomingRegistry).toHaveBeenCalled());
@@ -192,12 +192,12 @@ describe("AIReferentView", () => {
     await screen.findByRole("button", { name: /Ответ партнёру/ });
     fireEvent.change(screen.getByRole("textbox", { name: "Поиск исходящих писем" }), { target: { value: "номер" } });
     fireEvent.click(screen.getByRole("button", { name: "На согласовании" }));
-    await waitFor(() => expect(loadAIReferentRegistry).toHaveBeenLastCalledWith("token", expect.objectContaining({ participation: "mine", query: "номер", status: "pending_review", offset: 0 })));
+    await waitFor(() => expect(loadAIReferentRegistry).toHaveBeenLastCalledWith("token", expect.objectContaining({ participation: "mine", query: "номер", status: "pending_review", offset: 0 }), expect.any(AbortSignal)));
     vi.mocked(loadAIReferentRegistry).mockRejectedValueOnce(new Error("Scope unavailable"));
     fireEvent.click(screen.getByRole("button", { name: "Все" }));
     expect(screen.queryByRole("button", { name: /Ответ партнёру/ })).not.toBeInTheDocument();
     await screen.findByText("Scope unavailable");
-    expect(loadAIReferentRegistry).toHaveBeenLastCalledWith("token", expect.objectContaining({ participation: "all", query: "номер", status: "pending_review", offset: 0 }));
+    expect(loadAIReferentRegistry).toHaveBeenLastCalledWith("token", expect.objectContaining({ participation: "all", query: "номер", status: "pending_review", offset: 0 }), expect.any(AbortSignal));
     fireEvent.click(screen.getByRole("button", { name: "Обновить" }));
     await screen.findByRole("button", { name: /Ответ партнёру/ });
   });
@@ -208,7 +208,7 @@ describe("AIReferentView", () => {
     view.unmount();
     render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate preferOutgoing /></FluentProvider>);
     fireEvent.click(screen.getByRole("tab", { name: "На подпись" }));
-    await waitFor(() => expect(loadAIReferentRegistry).toHaveBeenLastCalledWith("token", expect.objectContaining({ workflowKind: "sign_only", participation: undefined })));
+    await waitFor(() => expect(loadAIReferentRegistry).toHaveBeenLastCalledWith("token", expect.objectContaining({ workflowKind: "sign_only", participation: undefined }), expect.any(AbortSignal)));
     expect(screen.queryByRole("group", { name: "Участие в исходящих письмах" })).not.toBeInTheDocument();
   });
 
@@ -240,9 +240,9 @@ describe("AIReferentView", () => {
     const pages = screen.getByRole("group", { name: "Страницы исходящих писем" });
     await waitFor(() => expect(within(pages).getByRole("button", { name: "Далее" })).toBeEnabled());
     fireEvent.click(within(pages).getByRole("button", { name: "Далее" }));
-    await waitFor(() => expect(loadAIReferentRegistry).toHaveBeenLastCalledWith("token", expect.objectContaining({ participation: "mine", offset: 50 })));
+    await waitFor(() => expect(loadAIReferentRegistry).toHaveBeenLastCalledWith("token", expect.objectContaining({ participation: "mine", offset: 50 }), expect.any(AbortSignal)));
     fireEvent.click(screen.getByRole("button", { name: "Все" }));
-    await waitFor(() => expect(loadAIReferentRegistry).toHaveBeenLastCalledWith("token", expect.objectContaining({ participation: "all", offset: 0 })));
+    await waitFor(() => expect(loadAIReferentRegistry).toHaveBeenLastCalledWith("token", expect.objectContaining({ participation: "all", offset: 0 }), expect.any(AbortSignal)));
     expect(within(pages).getByText("Страница 1")).toBeInTheDocument();
   });
 
@@ -867,9 +867,9 @@ describe("AIReferentView", () => {
     expect(pages.compareDocumentPosition(screen.getByRole("region", { name: "Реестр входящих писем" })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByRole("button", { name: "Пакет документов" })).toHaveTextContent("2 файла");
     fireEvent.click(within(pages).getByRole("button", { name: "Далее" }));
-    await waitFor(() => expect(loadAIReferentIncomingRegistry).toHaveBeenLastCalledWith("token", expect.objectContaining({ offset: 100 })));
+    await waitFor(() => expect(loadAIReferentIncomingRegistry).toHaveBeenLastCalledWith("token", expect.objectContaining({ offset: 100 }), expect.any(AbortSignal)));
     fireEvent.click(screen.getByRole("button", { name: /требуют внимания/ }));
-    await waitFor(() => expect(loadAIReferentIncomingRegistry).toHaveBeenLastCalledWith("token", expect.objectContaining({ offset: 0, category: "attention" })));
+    await waitFor(() => expect(loadAIReferentIncomingRegistry).toHaveBeenLastCalledWith("token", expect.objectContaining({ offset: 0, category: "attention" }), expect.any(AbortSignal)));
   });
 
   it("shows incoming letters from the robot and keeps the outgoing register available", async () => {
@@ -891,12 +891,13 @@ describe("AIReferentView", () => {
     expect(screen.getByText("Организация-получатель")).toBeInTheDocument();
     expect(screen.getAllByText("На согласовании")).not.toHaveLength(0);
     const registerBar = screen.getByRole("tablist", { name: "Реестры корреспонденции" }).parentElement;
+    const header = screen.getByRole("heading", { name: "AI Referent" }).closest("header");
     const newLetter = screen.getByRole("button", { name: /Новое письмо/ });
     const signOnly = screen.getByRole("button", { name: "На подпись" });
     expect(newLetter).toBeEnabled();
-    expect(newLetter.closest(".ai-referent-register-actions")?.parentElement).toBe(registerBar);
-    expect(signOnly.closest(".ai-referent-register-actions")?.parentElement).toBe(registerBar);
-    expect(document.querySelector(".ai-referent-header-actions")).toBeNull();
+    expect(newLetter.closest(".ai-referent-register-actions")?.parentElement).toBe(header);
+    expect(signOnly.closest(".ai-referent-register-actions")?.parentElement).toBe(header);
+    expect(registerBar).not.toContainElement(newLetter);
     const outgoingRefresh = screen.getByRole("button", { name: "Обновить" });
     expect(outgoingRefresh.closest(".ai-referent-toolbar-actions")).not.toBeNull();
     expect(outgoingRefresh.closest(".ai-referent-header-actions")).toBeNull();
@@ -914,7 +915,7 @@ describe("AIReferentView", () => {
     expect(screen.queryByRole("button", { name: "Все" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /требуют внимания/ }));
     await waitFor(() => expect(loadAIReferentIncomingRegistry).toHaveBeenCalledWith(
-      "token", expect.objectContaining({ category: "attention" }),
+      "token", expect.objectContaining({ category: "attention" }), expect.any(AbortSignal),
     ));
     expect(totalCard).toHaveTextContent("1");
     expect(screen.getByText("Страница 1 · Найдено 0")).toBeInTheDocument();

@@ -1045,7 +1045,7 @@ describe("Private messenger", () => {
     await act(() => vi.advanceTimersByTimeAsync(5_000));
     expect(chatActions.delete).toHaveBeenCalledWith("finance");
   });
-  it("removes an encrypted chat draft after restoring it into the composer", async () => {
+  it("keeps a restored encrypted draft until it is sent or explicitly cleared", async () => {
     const loadDraft = vi.fn().mockResolvedValue("Текст до обновления");
     const clearDraft = vi.fn().mockResolvedValue(undefined);
     const saveDraft = vi.fn().mockResolvedValue(true);
@@ -1053,8 +1053,25 @@ describe("Private messenger", () => {
     renderMessenger();
     await waitFor(() => expect(screen.getByLabelText("Новое сообщение")).toHaveTextValue("Текст до обновления"));
     expect(loadDraft).toHaveBeenCalledWith("chat:aziza:finance");
-    await waitFor(() => expect(clearDraft).toHaveBeenCalledWith("chat:aziza:finance"));
+    expect(clearDraft).not.toHaveBeenCalled();
     expect(saveDraft).not.toHaveBeenCalled();
+  });
+  it("flushes a new draft on immediate exit and restores it on repeated visits", async () => {
+    const drafts = new Map<string, string>();
+    vi.stubGlobal("yuksalish", {
+      loadDraft: vi.fn(async (key: string) => drafts.get(key) ?? null),
+      saveDraft: vi.fn(async (key: string, value: string) => { drafts.set(key, value); return true; }),
+      clearDraft: vi.fn(async (key: string) => { drafts.delete(key); }),
+    });
+    const first = renderMessenger();
+    changeField(screen.getByLabelText("Новое сообщение"), { target: { value: "Быстрый черновик" } });
+    first.unmount();
+    expect(drafts.get("chat:aziza:finance")).toBe("Быстрый черновик");
+    const second = renderMessenger();
+    await waitFor(() => expect(screen.getByLabelText("Новое сообщение")).toHaveTextValue("Быстрый черновик"));
+    second.unmount();
+    renderMessenger();
+    await waitFor(() => expect(screen.getByLabelText("Новое сообщение")).toHaveTextValue("Быстрый черновик"));
   });
   it("flushes the current message draft before a web update reload", async () => {
     const loadDraft = vi.fn().mockResolvedValue(null);

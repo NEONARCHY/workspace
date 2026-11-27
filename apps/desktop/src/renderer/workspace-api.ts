@@ -395,6 +395,7 @@ export function issueEmployeeReward(
 export function loadAIReferentRegistry(
   token: string,
   filters: { readonly query?: string; readonly status?: string; readonly offset?: number; readonly workflowKind?: "delivery" | "sign_only"; readonly participation?: AIReferentParticipation } = {},
+  signal?: AbortSignal,
 ): Promise<AIReferentRegistry> {
   const query = new URLSearchParams();
   if (filters.query?.trim()) query.set("query", filters.query.trim());
@@ -403,7 +404,7 @@ export function loadAIReferentRegistry(
   if (filters.workflowKind) query.set("workflow_kind", filters.workflowKind);
   if (filters.participation) query.set("participation", filters.participation);
   const suffix = query.size > 0 ? `?${query.toString()}` : "";
-  return apiRequest<AIReferentRegistry>(`/ai-referent/letters${suffix}`, {}, token);
+  return apiRequest<AIReferentRegistry>(`/ai-referent/letters${suffix}`, { signal }, token);
 }
 
 export function loadSignatureInbox(token: string, offset = 0): Promise<AIReferentRegistry> {
@@ -440,8 +441,8 @@ export function removeAIReferentManualRecipient(token: string, id: string): Prom
   }, token);
 }
 
-export function loadAIReferentVisibility(token: string) {
-  return apiRequest<AIReferentVisibility>("/ai-referent/visibility", {}, token);
+export function loadAIReferentVisibility(token: string, signal?: AbortSignal) {
+  return apiRequest<AIReferentVisibility>("/ai-referent/visibility", { signal }, token);
 }
 
 export function loadAIReferentIncomingAccess(token: string) {
@@ -457,19 +458,19 @@ export function saveAIReferentIncomingAccess(
   );
 }
 
-export function loadAIReferentConfiguration(token: string) {
+export function loadAIReferentConfiguration(token: string, signal?: AbortSignal) {
   return apiRequest<AIReferentConfiguration>(
-    "/ai-referent/configuration", {}, token,
+    "/ai-referent/configuration", { signal }, token,
   );
 }
 
-export function loadAIReferentAuthority(token: string): Promise<AIReferentAuthorityStatus> {
-  return apiRequest<AIReferentAuthorityStatus>("/ai-referent/authority", {}, token);
+export function loadAIReferentAuthority(token: string, signal?: AbortSignal): Promise<AIReferentAuthorityStatus> {
+  return apiRequest<AIReferentAuthorityStatus>("/ai-referent/authority", { signal }, token);
 }
 
-export function loadAIReferentReviewers(token: string) {
+export function loadAIReferentReviewers(token: string, signal?: AbortSignal) {
   return apiRequest<AIReferentConfiguration>(
-    "/ai-referent/reviewers", {}, token,
+    "/ai-referent/reviewers", { signal }, token,
   );
 }
 
@@ -543,8 +544,8 @@ export function actOnAIReferentLetter(
   );
 }
 
-export function loadAIReferentLetter(token: string, id: string) {
-  return apiRequest<AIReferentLetter>(`/ai-referent/letters/${id}`, {}, token);
+export function loadAIReferentLetter(token: string, id: string, signal?: AbortSignal) {
+  return apiRequest<AIReferentLetter>(`/ai-referent/letters/${id}`, { signal }, token);
 }
 
 export function deleteAIReferentLetter(token: string, letter: Pick<AIReferentLetter, "id" | "revision">) {
@@ -602,8 +603,8 @@ export function loadAIReferentJournals(token: string) {
   return apiRequest<{ readonly files: readonly AIReferentJournalFile[] }>("/ai-referent/journals", {}, token);
 }
 
-export function loadAIReferentTelegramLink(token: string) {
-  return apiRequest<{ readonly telegramId: string | null }>("/ai-referent/telegram-link", {}, token);
+export function loadAIReferentTelegramLink(token: string, signal?: AbortSignal) {
+  return apiRequest<{ readonly telegramId: string | null }>("/ai-referent/telegram-link", { signal }, token);
 }
 
 export function loadTelegramAccess(token: string, signal?: AbortSignal): Promise<TelegramAccessRegistry> {

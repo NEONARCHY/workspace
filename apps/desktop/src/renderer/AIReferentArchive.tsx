@@ -1,4 +1,5 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
+import { startVisiblePolling } from "./visible-polling";
 import { SkeletonTableRows } from "./LoadingSkeleton";
 import { useEffect, useState } from "react";
 import type { AIReferentArchiveLetter, AIReferentJournalFile } from "@yuksalish/contracts";
@@ -68,11 +69,8 @@ export function AIReferentTelegram({ token }: { readonly token: string }) {
   const [telegramId, setTelegramId] = useState<string | null>();
   const [error, setError] = useState("");
   useEffect(() => {
-    let alive = true;
-    const refresh = () => { void loadAIReferentTelegramLink(token).then((value) => { if (alive) setTelegramId(value.telegramId); }).catch((reason: unknown) => { if (alive) setError(reason instanceof Error ? reason.message : "Не удалось проверить привязку."); }); };
-    refresh();
-    const timer = setInterval(refresh, 10000);
-    return () => { alive = false; clearInterval(timer); };
+    return startVisiblePolling(signal => loadAIReferentTelegramLink(token, signal), value => { setTelegramId(value.telegramId); setError(""); },
+      reason => setError(reason instanceof Error ? reason.message : "Не удалось проверить привязку."), 10000);
   }, [token]);
   return <div className="ai-referent-page ai-referent-telegram-page">
     <div className="ai-referent-page-intro"><div><span className="ai-referent-eyebrow">Личный канал</span><h2>Workspace и Telegram</h2>

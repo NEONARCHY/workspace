@@ -94,6 +94,7 @@ import { observePopupInputMode } from "./popup-input-mode";
 import { observeFieldCaptionActivation } from "./field-caption-activation";
 import { workspacePlatform } from "./platform-adapter";
 import "./floating-messenger.css";
+import "./communications-workspace.css";
 import { observeBrowserViewport } from "./browser-layout";
 
 if (workspacePlatform.kind === "web") {

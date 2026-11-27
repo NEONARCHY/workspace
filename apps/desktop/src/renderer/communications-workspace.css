@@ -1,0 +1,80 @@
+/* Iteration 12 reuses the same queue spacing, colours and accessible controls. */
+html:root body .app-provider .workspace-queue.ai-referent-view:not([data-dialog-only]) {
+  width: 100%; height: 100%; min-height: 0; margin: 0; padding: 0;
+  gap: var(--ws-queue-space); background: transparent; border: 0; box-shadow: none; overflow: hidden; scrollbar-gutter: auto;
+}
+body .app-provider .workspace-queue.ai-referent-view .ai-referent-header { overflow: hidden; }
+body .app-provider .workspace-queue.ai-referent-view .ai-referent-register-actions { display: flex; gap: 8px; margin: 0; z-index: 1; }
+body .app-provider .workspace-queue.ai-referent-view .ai-referent-register-action { border: 0; box-shadow: none; font-size: 13px; }
+body .app-provider .workspace-queue.ai-referent-view .ai-referent-register-bar { padding: 0; margin: 0; }
+body .app-provider .workspace-queue.ai-referent-view .ai-referent-register-tabs {
+  flex-wrap: nowrap; width: max-content; max-width: 100%; min-height: var(--ws-queue-control);
+  gap: 4px; overflow-x: auto; scrollbar-width: thin; border: 0; border-radius: 12px;
+}
+body .app-provider .workspace-queue.ai-referent-view .ai-referent-register-tabs button { height: var(--ws-queue-button); padding-inline: 12px; border-radius: 8px; font-size: 12px; }
+.ai-referent-register-select { display: none; }
+.ai-referent-create-short { display: none; }
+body .app-provider .workspace-queue.ai-referent-view .ai-referent-page { gap: var(--ws-queue-space); margin: 0; padding: 0; }
+body .app-provider .workspace-queue.ai-referent-view .ai-referent-summary { gap: var(--ws-queue-space); margin: 0; padding: 0; }
+body .app-provider .workspace-queue.ai-referent-view .ai-referent-summary > button { min-height: 72px; padding: 12px 16px; border: 0; border-radius: 16px; }
+body .app-provider .workspace-queue.ai-referent-view .ai-referent-summary > button:not(.primary) { background: var(--ws-surface); }
+body .app-provider .workspace-queue.ai-referent-view .ai-referent-summary > button:is(:hover, :active, [aria-pressed="true"]) { transform: none; box-shadow: none; }
+body .app-provider .workspace-queue.ai-referent-view .ai-referent-summary > button[aria-pressed="true"]:not(.primary) { background: var(--ws-selected); }
+body .app-provider .workspace-queue.ai-referent-view .ai-referent-toolbar { gap: 12px; margin: 0; padding: 0; }
+.workspace-queue.ai-referent-view .ai-gooey-search { --search-height: var(--ws-queue-control); max-width: 100%; }
+body .app-provider .workspace-queue.ai-referent-view .ai-referent-toolbar-actions { gap: 8px; }
+html:root body .app-provider .workspace-queue.ai-referent-view .ai-referent-toolbar .fui-Button { min-height: var(--ws-queue-control); }
+body .app-provider .workspace-queue.ai-referent-view .ai-referent-list-bar { gap: 12px; margin: 0; padding: 0; }
+.workspace-queue.ai-referent-view :is(.ai-incoming-table, .ai-referent-table) th { text-transform: none; letter-spacing: normal; font-size: 12px; }
+body .app-provider .workspace-queue.ai-referent-view .ai-incoming-table-wrap { border: 0; }
+body .app-provider .workspace-queue.projects-view { gap: 0; padding: 0; min-height: 0; overflow-x: hidden; overflow-y: auto; }
+body .app-provider .workspace-queue.projects-view .project-overview { margin: var(--ws-queue-space) 0 0; padding: 12px; gap: 12px; border: 0; border-radius: 16px; }
+body .app-provider .workspace-queue.projects-view .project-overview .ws2-process-focus { min-height: 64px; padding: 12px 16px; border: 0; }
+.workspace-queue.projects-view .project-overview .ws2-process-metrics { gap: 12px; }
+.workspace-queue.projects-view .project-overview .ws2-process-metrics > div { padding: 12px 16px; border: 0; }
+body .app-provider .workspace-queue.projects-view .project-board { flex: 1 0 280px; min-height: 280px; margin: 0; padding: 0 0 4px; gap: var(--ws-queue-space); }
+.workspace-queue.projects-view .project-column { min-height: 0; }
+body .app-provider .workspace-queue.projects-view .project-column > header { min-height: 52px; padding: 12px 16px 8px; gap: 8px; }
+body .app-provider .workspace-queue.projects-view .project-column-total { min-height: 36px; padding: 0 16px 12px; gap: 4px; }
+body .app-provider .workspace-queue.projects-view .project-stack { padding: 12px; gap: 8px; }
+body .app-provider .workspace-queue.projects-view .project-card .spatial-card-open { padding: 16px; }
+.workspace-queue.projects-view .project-card small { white-space: normal; overflow-wrap: anywhere; }
+body .app-provider .workspace-queue.messenger-view { gap: var(--ws-queue-space); min-height: 0; }
+body .app-provider .workspace-queue.messenger-view > .list-pane { padding: 12px; gap: 12px; }
+body .app-provider .workspace-queue.messenger-view .chat-list-searchbar { gap: 8px; margin: 0; }
+.workspace-queue.messenger-view .chat-list-searchbar > .workspace-search { --search-height: 44px; min-width: 0; flex: 1; margin: 0; }
+body .app-provider .workspace-queue.messenger-view .chat-list-searchbar > .fui-Button { min-width: 44px; min-height: 44px; padding: 0; }
+body .app-provider .workspace-queue.messenger-view .chat-row { min-height: 72px; padding: 12px; gap: 12px; border: 0; box-shadow: none; border-radius: 12px; }
+.workspace-queue.messenger-view .chat-row-line { gap: 8px; }
+.workspace-queue.messenger-view .chat-row-copy { gap: 4px; }
+body .app-provider .workspace-queue.messenger-view .conversation-header { padding: 16px; gap: 12px; }
+.workspace-queue.messenger-view .conversation-header h2 { font-size: 18px; font-weight: 600; }
+.workspace-queue.messenger-view .conversation-search { margin: 0; padding: 0 16px 12px; }
+.workspace-queue.messenger-view .conversation-search > .workspace-search { --search-height: 44px; margin: 0; }
+body .app-provider .workspace-queue.messenger-view .composer { margin: 12px; }
+@media (max-width: 1120px) {
+  body .app-provider .workspace-queue.ai-referent-view .ai-referent-register-tabs { display: none; }
+  .ai-referent-register-select { display: block; width: 100%; margin: 0; }
+  .ai-referent-register-select select { box-sizing: border-box; width: 100%; min-height: 44px; padding: 12px 16px; border: 0; border-radius: 12px; font: inherit; color: var(--ws-text); background: var(--ws-surface); }
+  .ai-referent-register-select select:focus-visible { outline: 2px solid var(--ws-link); outline-offset: -2px; }
+}
+@media (max-width: 720px) {
+  body .app-provider .workspace-queue.ai-referent-view .ai-referent-register-action { min-height: 44px; padding-inline: 10px; font-size: 12px; }
+  body .app-provider .workspace-queue.ai-referent-view .ai-referent-toolbar { gap: 8px; }
+  body .app-provider .workspace-queue.ai-referent-view .ai-referent-summary > button { padding: 12px; }
+  body .app-provider .workspace-queue.messenger-view { gap: 0; }
+  body .app-provider .workspace-queue.messenger-view .conversation-header { padding: 12px; gap: 8px; }
+  .workspace-queue.messenger-view .conversation-search { padding: 0 12px 8px; }
+  body .app-provider .workspace-queue.messenger-view .composer { margin: 8px; }
+}
+@media (forced-colors: active) {
+  .ai-referent-register-select select { outline: 1px solid CanvasText; outline-offset: -1px; }
+}
+@media (max-width: 480px) {
+  .ai-referent-create-full { display: none; }
+  .ai-referent-create-short { display: inline; }
+  body .app-provider .workspace-queue.projects-view .project-overview { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .workspace-queue.projects-view .project-overview .ws2-process-metrics { display: contents; }
+  body .app-provider .workspace-queue.projects-view .project-overview :is(.ws2-process-focus, .ws2-process-metrics > div) { min-width: 0; padding: 8px 12px; }
+  .workspace-queue.projects-view .project-overview :is(.ws2-process-focus, .ws2-process-metrics > div) span { white-space: normal; overflow-wrap: anywhere; }
+}
