@@ -1,0 +1,204 @@
+/* Iteration 14: only module rights, departments and employee menu settings. */
+html body .app-provider .directory-management-dialog:has(> :is(.module-access-management, .department-management)),
+html body .app-provider .fui-DialogSurface.sidebar-visibility-dialog {
+  box-sizing: border-box;
+  inline-size: min(1180px, calc(100vw - 32px));
+  max-inline-size: none;
+  max-block-size: calc(100dvh - 32px);
+  padding: 0;
+  border: 0;
+  background: var(--ws-surface);
+}
+html body .app-provider .fui-DialogSurface.sidebar-visibility-dialog { inline-size: min(700px, calc(100vw - 32px)); }
+.app-provider :is(.module-access-management, .department-management) {
+  box-sizing: border-box;
+  display: grid;
+  align-content: start;
+  min-inline-size: 0;
+  min-block-size: 0;
+  max-block-size: calc(100dvh - 32px);
+  gap: 16px;
+  padding: 24px;
+  overflow: auto;
+  color: var(--ws-text);
+  background: var(--ws-surface);
+  scrollbar-gutter: stable;
+}
+.app-provider :is(.module-access-management, .department-management) .directory-subheading {
+  align-items: start;
+  min-inline-size: 0;
+  padding: 0 44px 0 0;
+  border: 0;
+}
+.app-provider :is(.module-access-management, .department-management) .directory-subheading h2 { font-size: 24px; line-height: 1.25; }
+.app-provider :is(.module-access-management, .department-management) .directory-subheading p { margin-block-start: 4px; font-size: 13px; line-height: 1.45; }
+.app-provider :is(.module-access-management, .department-management, .sidebar-visibility-management) :is(.fui-Button, .workspace-select, .person-picker-trigger, .fui-Input) {
+  box-sizing: border-box;
+  min-inline-size: 0;
+  min-block-size: 44px;
+  border: 0;
+  box-shadow: none;
+}
+.app-provider :is(.module-access-management, .department-management, .sidebar-visibility-management) :is(.fui-Button, .workspace-select, .fui-Input)::before,
+.app-provider :is(.module-access-management, .department-management, .sidebar-visibility-management) :is(.fui-Button, .workspace-select, .fui-Input)::after { border: 0; box-shadow: none; }
+.app-provider :is(.module-access-management, .department-management, .sidebar-visibility-management) :is(.fui-Input, .workspace-select, .person-picker-trigger) { inline-size: 100%; background: var(--ws-muted-surface); }
+.app-provider :is(.module-access-management, .department-management, .sidebar-visibility-management) .workspace-select > button { min-block-size: 44px; }
+.app-provider :is(.module-access-management, .department-management, .sidebar-visibility-management) .fui-Field { min-inline-size: 0; }
+.app-provider :is(.module-access-management, .department-management, .sidebar-visibility-management) .fui-Checkbox { min-block-size: 44px; align-items: center; }
+
+/* Rights: one desktop matrix, labelled permission cells on narrow screens. */
+html:root body .app-provider :is(.module-access-management, .department-management, .sidebar-visibility-management) .fui-Button:not(.message-actions .fui-Button):not(.chat-more) { min-height: 44px; }
+html:root body .app-provider .directory-management-dialog:has(> :is(.module-access-management, .department-management)) > .record-dialog-close .fui-Button { inline-size: 44px; min-height: 44px; padding: 0; border: 0; }
+html:not([data-workspace-tab-focus]):root body .app-provider .directory-management-dialog:has(> :is(.module-access-management, .department-management)) > .record-dialog-close .fui-Button:is(:focus, :focus-visible) { outline: none; }
+html:not([data-workspace-tab-focus]):root body .app-provider :is(.module-access-management, .department-management, .sidebar-visibility-management) :is(button, a, .fui-Input, .workspace-select, .fui-Checkbox):is(:focus, :focus-visible, :focus-within) { outline: none; }
+html[data-workspace-tab-focus]:root body .app-provider .directory-management-dialog:has(> :is(.module-access-management, .department-management)) > .record-dialog-close .fui-Button:focus-visible { outline: 2px solid var(--ws-link); outline-offset: -2px; }
+.app-provider .module-access-management .assistant-regional-access {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 12px 16px; border: 0; border-radius: 12px; background: var(--ws-muted-surface); box-shadow: none;
+}
+.app-provider .module-access-management .assistant-regional-access > span { display: grid; gap: 4px; min-inline-size: 0; }
+.app-provider .module-access-management .assistant-regional-access small { color: var(--ws-muted); line-height: 1.4; }
+.app-provider .module-access-management .access-subject-controls { grid-template-columns: minmax(160px, .6fr) minmax(0, 1.4fr); gap: 12px; }
+.app-provider .module-access-management .access-subject-controls label { display: grid; gap: 6px; min-inline-size: 0; font-size: 13px; }
+.module-access-management .access-module-tools { display: flex; align-items: center; gap: 12px; }
+.module-access-management .access-module-tools > .fui-Input { flex: 0 1 360px; max-inline-size: 360px; margin: 0; }
+.module-access-management .access-module-tools > span { margin-inline-start: auto; color: var(--ws-muted); font-size: 12px; }
+.app-provider .module-access-management .access-matrix { min-inline-size: 0; overflow: visible; border: 0; background: transparent; }
+.app-provider .module-access-management .access-matrix-row {
+  display: grid; grid-template-columns: minmax(170px, 1.6fr) repeat(5, minmax(72px, .65fr)) minmax(120px, 1fr);
+  min-inline-size: 0; align-items: center; gap: 4px; padding: 4px 12px; border: 0; border-radius: 10px;
+}
+.app-provider .module-access-management .access-matrix-row:not(.access-matrix-head):nth-child(even) { background: var(--ws-muted-surface); }
+.app-provider .module-access-management .access-matrix-head { min-block-size: 40px; color: var(--ws-muted); font-size: 12px; }
+.app-provider .module-access-management .access-matrix-head > span:not(:first-child) { text-align: center; }
+.module-access-management .access-module-name { display: grid; gap: 4px; min-inline-size: 0; font-size: 13px; overflow-wrap: anywhere; }
+.module-access-management .access-permission { display: flex; justify-content: center; min-inline-size: 0; }
+.module-access-management .access-action-label { display: none; }
+.app-provider .module-access-management .access-rule-source { display: flex; justify-content: center; }
+.app-provider .module-access-management .access-rule-source .fui-Button { padding-inline: 8px; font-size: 12px; }
+.app-provider .module-access-management .access-help { margin: 0; font-size: 12px; line-height: 1.5; }
+
+/* Department structure and editor share one spacing system. */
+.app-provider .department-management .department-hero { flex-wrap: wrap; }
+.app-provider .department-management .department-hero > div { flex: 1; min-inline-size: min(260px, 100%); }
+.app-provider .department-management .department-hero > .fui-Button { margin-inline-start: auto; }
+.app-provider .department-management .department-workspace {
+  display: grid; grid-template-columns: minmax(250px, .7fr) minmax(0, 1.3fr);
+  flex: none; min-block-size: 0; min-height: 0; gap: 16px; border: 0; overflow: visible; background: transparent;
+}
+.app-provider .department-management :is(.department-tree, .department-editor, .department-create-card) {
+  min-inline-size: 0; border: 0; padding: 16px; gap: 12px; border-radius: 14px; box-shadow: none; background: var(--ws-muted-surface);
+}
+.app-provider .department-management .department-tree { max-height: none; align-self: start; }
+.app-provider .department-management .department-tree-list { max-block-size: 540px; padding: 0; }
+.app-provider .department-management .department-tree-list button { margin-block: 4px; box-shadow: none; }
+.app-provider .department-management .department-tree-list button.selected { background: var(--ws-selected); box-shadow: none; }
+.department-management .department-mobile-select { display: none; }
+.app-provider .department-management .department-tree .employee-scope-switch { inline-size: 100%; }
+.app-provider .department-management .employee-scope-switch { box-sizing: border-box; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); flex-wrap: nowrap; border: 0; box-shadow: none; background: var(--ws-surface); }
+.app-provider .department-management .employee-scope-switch > button { flex: 1; min-inline-size: 0; inline-size: auto; min-block-size: 44px; padding: 6px; box-shadow: none; font-size: 12px; }
+.app-provider .department-management .employee-scope-switch > button[aria-pressed="true"] { color: var(--ws-link); background: var(--ws-selected); box-shadow: none; }
+.app-provider .department-management .department-editor { overflow: visible; }
+.app-provider .department-management .department-card-heading > div { min-inline-size: 0; }
+.app-provider .department-management .department-card-heading h3 { white-space: normal; overflow-wrap: anywhere; line-height: 1.35; }
+.app-provider .department-management :is(.department-editor-fields, .department-create-grid) { gap: 12px; }
+.app-provider .department-management :is(.department-editor-fields, .department-create-grid) > .fui-Field { align-self: start; }
+.app-provider .department-management .department-editor-organization { align-items: start; }
+.app-provider .department-management .department-editor-organization :is(.workspace-select, .workspace-select > button) { min-height: 50px; }
+.app-provider .department-management .department-create-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.app-provider .department-management .department-icon-options { gap: 8px; }
+.app-provider .department-management .department-icon-options button { box-sizing: border-box; inline-size: 44px; block-size: 44px; border: 0; background: var(--ws-surface); box-shadow: none; }
+.app-provider .department-management .department-icon-options button[aria-pressed="true"] { color: var(--ws-link); background: var(--ws-selected); box-shadow: none; }
+.app-provider .department-management :is(.department-members-section, .department-members-heading) { border: 0; padding-block-start: 0; }
+.app-provider .department-management .department-members-section { gap: 12px; margin-block-start: 8px; }
+.app-provider .department-management .department-members-heading p { margin-block-start: 4px; }
+.app-provider .department-management .department-member-list { max-block-size: 280px; min-inline-size: 0; gap: 4px; padding: 4px; border: 0; background: var(--ws-surface); }
+.app-provider .department-management .department-member-row { grid-template-columns: 44px minmax(0, 1fr); gap: 4px; padding: 4px; }
+.app-provider .department-management .department-member-row > .employee-profile-link { display: flex; align-items: center; gap: 8px; min-block-size: 44px; }
+.department-management .department-members-more { display: grid; gap: 4px; padding: 4px; text-align: center; }
+.department-management .department-members-more small { color: var(--ws-muted); }
+.app-provider .department-management .department-delete-confirm { border: 0; background: var(--ws-theme-wash-danger, var(--ws-selected)); }
+
+/* Employee menu: selected surfaces, no decorative checkbox/card frames. */
+html:root body .app-provider .sidebar-visibility-dialog > .sidebar-visibility-management { max-height: calc(100dvh - 32px); min-height: 0; }
+.app-provider .sidebar-visibility-management .sidebar-visibility-scroll { flex: 1 1 auto; }
+.app-provider .sidebar-visibility-management > header { gap: 12px; padding: 24px; border: 0; background: var(--ws-muted-surface); color: var(--ws-text); }
+.app-provider .sidebar-visibility-management > header h2 { margin: 0; color: var(--ws-text); font-size: 24px; line-height: 1.25; }
+.app-provider .sidebar-visibility-management > header p { margin-block-start: 4px; color: var(--ws-muted); font-size: 13px; }
+.app-provider .sidebar-visibility-management > header .fui-Button { min-inline-size: 44px; padding: 0; color: var(--ws-muted); background: transparent; border: 0; }
+.app-provider .sidebar-visibility-management .sidebar-visibility-icon { background: var(--ws-selected); color: var(--ws-link); }
+.app-provider .sidebar-visibility-management .sidebar-visibility-scroll { display: grid; gap: 12px; padding: 24px; }
+.app-provider .sidebar-visibility-management .sidebar-visibility-explanation { margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; font-size: 13px; line-height: 1.45; }
+.app-provider .sidebar-visibility-management .sidebar-visibility-list-head { margin: 0; gap: 8px; }
+.app-provider .sidebar-visibility-management .sidebar-visibility-list-head strong { font-size: 14px; }
+.app-provider .sidebar-visibility-management .sidebar-visibility-list-head .fui-Button { padding-inline: 8px; font-size: 12px; }
+.app-provider .sidebar-visibility-management .sidebar-visibility-list { gap: 8px; }
+.app-provider .sidebar-visibility-management .sidebar-visibility-list > .fui-Checkbox { border: 0; box-shadow: none; background: var(--ws-muted-surface); }
+.app-provider .sidebar-visibility-management .sidebar-visibility-list > .fui-Checkbox:has(input:checked) { border: 0; background: var(--ws-selected); }
+.app-provider .sidebar-visibility-management .sidebar-visibility-list .fui-Checkbox__label { padding-block: 10px; font-size: 13px; }
+.app-provider .sidebar-visibility-management > footer { gap: 8px; padding: 16px 24px; border: 0; background: var(--ws-muted-surface); }
+
+/* Ring opt-in follows Tab/Shift+Tab, never a modifier or pointer click.
+   Pseudo-element ring also survives the legacy light-theme focus suppression. */
+html:not([data-workspace-tab-focus]) .app-provider :is(.module-access-management, .department-management, .sidebar-visibility-management) :is(:focus, :focus-visible),
+html:not([data-workspace-tab-focus]) .app-provider :is(.module-access-management, .department-management, .sidebar-visibility-management) :has(> input:focus-visible) { outline: none; }
+html:not([data-workspace-tab-focus]) .app-provider :is(.module-access-management, .department-management, .sidebar-visibility-management) :is(.fui-Button, .fui-Checkbox__indicator, .workspace-select, .fui-Input)::after { outline: none; }
+html[data-workspace-tab-focus] .app-provider :is(.module-access-management, .department-management, .sidebar-visibility-management) :is(button, a):focus-visible { position: relative; }
+html[data-workspace-tab-focus] .app-provider :is(.module-access-management, .department-management, .sidebar-visibility-management) :is(button, a):focus-visible::after {
+  content: ""; position: absolute; inset: 2px; border: 0; border-radius: inherit; outline: 2px solid var(--ws-link); outline-offset: -1px; pointer-events: none; box-shadow: none;
+}
+html[data-workspace-tab-focus] .app-provider :is(.module-access-management, .department-management, .sidebar-visibility-management) :is(.fui-Checkbox, .fui-Input, .workspace-select):has(:focus-visible) { outline: 2px solid var(--ws-link); outline-offset: -2px; }
+
+@media (max-width: 1000px) {
+  .app-provider .module-access-management .access-matrix-row { grid-template-columns: minmax(140px, 1.5fr) repeat(5, minmax(60px, .65fr)) 110px; padding-inline: 8px; }
+  .app-provider .module-access-management .access-matrix-head { font-size: 11px; }
+  .app-provider .department-management .department-editor-fields { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 760px) {
+  html:root body .app-provider .directory-management-dialog:has(> :is(.module-access-management, .department-management)),
+  html:root body .app-provider .fui-DialogSurface.sidebar-visibility-dialog { inset: 12px auto auto 12px; margin: 0; inline-size: calc(100vw - 24px); width: calc(100vw - 24px); height: auto; max-height: calc(100dvh - 24px); max-block-size: calc(100dvh - 24px); overflow: hidden; }
+  .app-provider :is(.module-access-management, .department-management) { max-block-size: calc(100dvh - 24px); gap: 8px; padding: 12px; }
+  .app-provider :is(.module-access-management, .department-management) .directory-subheading { gap: 8px; }
+  .app-provider :is(.module-access-management, .department-management) .directory-subheading h2 { font-size: 20px; }
+  .app-provider :is(.module-access-management, .department-management) .directory-subheading > svg,
+  .app-provider .department-management .department-hero-icon { display: none; }
+  .app-provider .module-access-management .assistant-regional-access { flex-wrap: wrap; gap: 8px; padding: 12px; }
+  .app-provider .module-access-management .assistant-regional-access > .fui-Button { inline-size: 100%; }
+  .app-provider .module-access-management .access-subject-controls { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .module-access-management .access-module-tools { flex-wrap: wrap; gap: 4px; }
+  .module-access-management .access-module-tools > .fui-Input { max-inline-size: none; }
+  .module-access-management .access-module-tools > span { margin: 0; }
+  .app-provider .module-access-management .access-matrix { display: grid; gap: 8px; }
+  .app-provider .module-access-management .access-matrix-head { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); padding: 0; white-space: nowrap; }
+  .app-provider .module-access-management .access-matrix-row:not(.access-matrix-head) { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 8px; background: var(--ws-muted-surface); }
+  .app-provider .module-access-management .access-module-name { grid-column: 1 / -1; grid-row: 1; min-block-size: 44px; justify-content: start; align-content: center; padding-inline-end: 112px; }
+  .app-provider .module-access-management .access-rule-source { grid-column: 2; grid-row: 1; justify-content: end; }
+  .app-provider .module-access-management .access-permission { justify-content: start; }
+  .module-access-management .access-action-label { display: inline; font-size: 12px; }
+  .app-provider .module-access-management .access-permission .fui-Checkbox { inline-size: 100%; }
+  .app-provider .module-access-management .access-permission .fui-Checkbox__label { padding-inline: 0; }
+  .app-provider .department-management .department-hero { padding-inline-end: 44px; gap: 8px; }
+  .app-provider .department-management .department-hero > div { flex-basis: 100%; min-inline-size: 0; }
+  .app-provider .department-management .department-hero > .fui-Button { margin: 0; }
+  .app-provider .department-management .department-workspace { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .app-provider .department-management :is(.department-tree, .department-editor, .department-create-card) { padding: 12px; gap: 8px; }
+  .app-provider .department-management :is(.department-tree-list, .department-tree-search) { display: none; }
+  .app-provider .department-management .department-mobile-select { display: block; }
+  .app-provider .department-management .department-create-grid { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .app-provider .department-management .department-editor-fields { gap: 8px; }
+  .app-provider .department-management .department-members-section { gap: 8px; }
+  .app-provider .department-management .department-editor-actions { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .app-provider .department-management .department-card-heading h3 { font-size: 16px; }
+  .app-provider .sidebar-visibility-management > header { padding: 12px; gap: 8px; }
+  html:root body .app-provider .sidebar-visibility-dialog > .sidebar-visibility-management { max-height: calc(100dvh - 24px); }
+  .app-provider .sidebar-visibility-management > header h2 { font-size: 20px; }
+  .app-provider .sidebar-visibility-management .sidebar-visibility-icon { display: none; }
+  .app-provider .sidebar-visibility-management .sidebar-visibility-scroll { padding: 12px; gap: 8px; }
+  .app-provider .sidebar-visibility-management .sidebar-visibility-list { grid-template-columns: minmax(0, 1fr); }
+  .app-provider .sidebar-visibility-management > footer { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 12px; }
+  .app-provider .sidebar-visibility-management > footer > span { grid-column: 1 / -1; }
+}
+@media (forced-colors: active) {
+  html[data-workspace-tab-focus] .app-provider :is(.module-access-management, .department-management, .sidebar-visibility-management) :is(button, a):focus-visible::after { outline-color: Highlight; }
+  html[data-workspace-tab-focus] .app-provider :is(.module-access-management, .department-management, .sidebar-visibility-management) :is(.fui-Checkbox, .fui-Input, .workspace-select):has(:focus-visible) { outline-color: Highlight; }
+}
