@@ -33,6 +33,21 @@ body .app-provider .workspace-queue.ai-referent-view .ai-referent-summary > butt
 body .app-provider .workspace-queue.ai-referent-view .ai-referent-summary > button:is(:hover, :active, [aria-pressed="true"]) { transform: none; box-shadow: none; }
 body .app-provider .workspace-queue.ai-referent-view .ai-referent-summary > button[aria-pressed="true"]:not(.primary) { background: var(--ws-selected); }
 body .app-provider .workspace-queue.ai-referent-view .ai-referent-toolbar { gap: 12px; margin: 0; padding: 0; }
+body .app-provider .workspace-queue.ai-referent-view .ai-referent-participation-switch {
+  --sliding-indicator-background: var(--ws-selected);
+  display: inline-flex; flex: none; flex-wrap: nowrap; align-items: center;
+  width: max-content; max-width: 100%; min-height: var(--ws-queue-control);
+  gap: 4px; padding: 4px; border: 0; border-radius: var(--ws-queue-radius);
+  background: var(--ws-surface); box-shadow: none;
+}
+body .app-provider .workspace-queue.ai-referent-view .ai-referent-participation-switch > button {
+  flex: 1 0 64px; min-width: 64px; height: var(--ws-queue-button); min-height: var(--ws-queue-button);
+  padding: 8px 16px; border: 0; border-radius: 8px;
+  font-size: 13px; line-height: 20px; font-weight: 600; color: var(--ws-muted);
+}
+body .app-provider .workspace-queue.ai-referent-view .ai-referent-participation-switch > button[aria-pressed="true"] { color: var(--ws-text); }
+body .app-provider .workspace-queue.ai-referent-view .ai-referent-participation-switch > .sliding-segmented-indicator { border-radius: 8px; box-shadow: none; }
+body .app-provider .workspace-queue.ai-referent-view .ai-referent-row:focus-visible { outline: 2px solid var(--ws-link); outline-offset: -2px; }
 .workspace-queue.ai-referent-view .ai-gooey-search { --search-height: var(--ws-queue-control); max-width: 100%; }
 body .app-provider .workspace-queue.ai-referent-view .ai-referent-toolbar-actions { gap: 8px; }
 html:root body .app-provider .workspace-queue.ai-referent-view .ai-referent-toolbar .fui-Button { min-height: var(--ws-queue-control); }

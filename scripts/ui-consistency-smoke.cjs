@@ -7,13 +7,14 @@ const phase = process.argv.includes("--before") ? "before" : "after";
 const galleryOnly = process.argv.includes("--gallery-only");
 const chatPaginationSuite = process.argv.includes('--chat-pagination');
 const sidebarSuite = process.argv.includes('--sidebar');
+const referentSurfacesSuite = process.argv.includes('--referent-surfaces');
 const toolbarSuite = process.argv.includes('--toolbar-layout');
 const shellReviewSuite = process.argv.includes("--shell-review");
 const attentionSuite = process.argv.includes("--attention") || shellReviewSuite;
 const peopleSuite = process.argv.includes("--people");
 const operationsSuite = process.argv.includes("--operations");
 const documentsSuite = process.argv.includes("--documents");
-const communicationsSuite = process.argv.includes("--communications") || shellReviewSuite || toolbarSuite || chatPaginationSuite || sidebarSuite;
+const communicationsSuite = process.argv.includes("--communications") || shellReviewSuite || toolbarSuite || chatPaginationSuite || sidebarSuite || referentSurfacesSuite;
 const registrySuite = process.argv.includes("--registry") || toolbarSuite;
 const workdaySuite = process.argv.includes("--workday");
 const promptSuite = process.argv.includes("--hisobot-prompt");
@@ -43,6 +44,7 @@ if (shellReviewSuite) sections.splice(0, sections.length, { id: 'overview', labe
 if (toolbarSuite) sections.splice(0, sections.length, { id: 'referent', label: 'AI Referent', root: '.ai-referent-view' }, { id: 'legacy-projects', label: 'Список проектов', root: '.projects-view' }, { id: 'payments', label: 'Заявки на оплату', root: '.approvals-view' }, { id: 'trips', label: 'Поездки', root: '.trips-view' }, { id: 'tasks', label: 'Задачи', root: '.tasks-view' }, { id: 'grants', label: 'Гранты', root: '.grants-view' });
 if (chatPaginationSuite) sections.splice(0, sections.length, { id: 'messenger', label: 'Мессенджер', root: '.messenger-view' });
 if (sidebarSuite) sections.splice(0, sections.length, { id: 'messenger', label: 'Мессенджер', root: '.messenger-view' });
+if (referentSurfacesSuite) sections.splice(0, sections.length, { id: 'referent', label: 'AI Referent · исходящие письма', root: '.ai-referent-view', navLabel: 'AI Referent' });
 const settle = async page => page.evaluate(async () => {
   await document.fonts.ready;
   await Promise.race([Promise.all(document.getAnimations().filter(a => Number(a.effect?.getComputedTiming().endTime) < 2000).map(a => a.finished.catch(() => undefined))), new Promise(r => setTimeout(r, 900))]);
@@ -262,7 +264,7 @@ async function measure(page, selector) {
           await page.getByRole('button', { name: 'Открыть проект', exact: true }).click();
           await page.getByRole('dialog').waitFor(); await page.keyboard.press('Escape'); await page.getByRole('dialog').waitFor({ state: 'hidden' });
         } else {
-        const nav = section.id === "notifications" ? page.locator(".notification-bell") : registrySuite || communicationsSuite ? page.getByRole("button", { name: section.label, exact: true }).or(page.getByRole("menuitem", { name: section.label, exact: true })) : reportingSuite ? page.getByRole("button", { name: section.navLabel || section.label, exact: true }) : page.locator(`.rail-action[aria-label="${section.navLabel || section.label}"]`);
+        const nav = section.id === "notifications" ? page.locator(".notification-bell") : registrySuite || communicationsSuite ? page.getByRole("button", { name: section.navLabel || section.label, exact: true }).or(page.getByRole("menuitem", { name: section.navLabel || section.label, exact: true })) : reportingSuite ? page.getByRole("button", { name: section.navLabel || section.label, exact: true }) : page.locator(`.rail-action[aria-label="${section.navLabel || section.label}"]`);
         if (!await nav.isVisible()) {
           const menu = page.getByRole("button", { name: "Открыть меню", exact: true });
           if (await menu.count()) await menu.click();
@@ -277,7 +279,10 @@ async function measure(page, selector) {
         if (reportingSuite && section.id === "efficiency") { await page.getByRole("button", { name: "Эффективность", exact: true }).click(); await page.locator(".eff-summary .eff-gauge-ring strong").first().waitFor(); }
         if (reportingSuite && section.id === "hisobot") await page.locator("#hisobot-report-text").waitFor();
         if (reportingSuite && section.id === "monthly") await page.locator(".monthly-reports-period").waitFor();
-        if (communicationsSuite && section.id === 'referent') { await page.getByRole('tab', { name: 'Входящие', exact: true }).click(); await page.locator('.ai-incoming-table tbody tr').first().waitFor(); }
+        if (communicationsSuite && section.id === 'referent') {
+          await page.getByRole('tab', { name: referentSurfacesSuite ? 'Исходящие' : 'Входящие', exact: true }).click();
+          await page.locator(referentSurfacesSuite ? '.ai-referent-row' : '.ai-incoming-table tbody tr').first().waitFor();
+        }
         if (communicationsSuite && section.id === 'legacy-projects') await page.locator('.project-card').first().waitFor();
         if (communicationsSuite && section.id === 'messenger') await page.locator('.chat-row').first().waitFor();
         if (registrySuite && section.id === "grants") await page.locator('.grant-records tbody tr').first().waitFor();
@@ -297,6 +302,7 @@ async function measure(page, selector) {
         if (topbarSuite && section.id === "home" || phase === "after" && reportingSuite && section.id === "hisobot") await capture(page.locator(".global-bar"), path.join(output, phase, `topbar-${theme}-${width}.png`));
         const geometry = await measure(page, section.root);
         results.push({ section: section.id, width, height, theme, ...geometry });
+        if (referentSurfacesSuite) { results.at(-1).letters = await require('./ui-referent-surface-checks.cjs')(page, { output, phase, width, theme, geometry }); console.log('PASS ' + file); continue; }
         if (sidebarSuite) { results.at(-1).sidebar = await require('./ui-sidebar-checks.cjs').check(page, { output, phase, width, height, theme }); console.log('PASS sidebar-' + theme + '-' + width); continue; }
         if (chatPaginationSuite) { await require('./ui-chat-pagination-checks.cjs')(page, { output, width, theme }); console.log('PASS ' + file); continue; }
         if (toolbarSuite) { if (phase === 'after') await require('./ui-toolbar-checks.cjs')(page, section, { width, geometry }); console.log('PASS ' + file); continue; }

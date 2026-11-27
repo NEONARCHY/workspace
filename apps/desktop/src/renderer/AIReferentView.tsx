@@ -672,7 +672,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, pre
       </section>
 
       {registerKind === "outgoing" ? <div className="ai-referent-participation-bar">
-        <SlidingSegmented className="ai-referent-filters" role="group" aria-label="Участие в исходящих письмах">
+        <SlidingSegmented className="ai-referent-filters ai-referent-participation-switch" role="group" aria-label="Участие в исходящих письмах">
           {([ ["mine", "Мои"], ["all", "Все"] ] as const).map(([value, label]) =>
             <button type="button" key={value} className={participation === value ? "active" : ""}
               aria-pressed={participation === value} onClick={() => {
