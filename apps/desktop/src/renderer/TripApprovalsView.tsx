@@ -358,14 +358,16 @@ export function TripApprovalsView({ token, focusRequestId, requests, people, dep
       {mapOpen ? <Suspense fallback={<LoadingSkeleton layout="map" label="Загружаем карту поездок…" />}><TripWorldMap requests={requests} people={people} onOpenRequest={openRequest} onClose={() => { restoreMapFocus.current = true; setMapOpen(false); }} /></Suspense>
         : section === "designer" && workflow && onSaveWorkflow && onPublishWorkflow ? <><WorkspaceNotice tone="warning" className="trip-document-reminder">Для этапа «Согласование первого заместителя» выберите должность или конкретного сотрудника, затем сохраните и опубликуйте маршрут. Новые отправки закрепляют выбранного согласующего; уже отправленные заявки сохраняют прежнее назначение. Председатель и подпись приказа по-прежнему определяются настройками HR.</WorkspaceNotice><ProcessWorkflowDesigner workflow={currentTripWorkflow(workflow, positions)} processName="Маршрут поездок" accent="trip" people={people} departments={departments} positions={positions} onSave={onSaveWorkflow} onPublish={onPublishWorkflow} /></> : <>
       <div className="trip-commandbar ws2-process-toolbar workspace-queue-toolbar">
+        <div className="workspace-queue-controls">
         <SlidingSegmented className="ws2-segmented" role="group" aria-label="Вид поездок">
           <button type="button" className={view === "kanban" ? "active" : ""} aria-pressed={view === "kanban"} onClick={() => setView("kanban")}>Канбан</button>
           <button type="button" className={view === "list" ? "active" : ""} aria-pressed={view === "list"} onClick={() => setView("list")}>Список</button>
         </SlidingSegmented>
-        <Input contentBefore={<Search20Regular />} className="trip-search" aria-label="Поиск поездок" placeholder="Цель, город, сотрудник или номер" value={query} onChange={(_, data) => setQuery(data.value)} />
         <SlidingSegmented className="ws2-segmented workspace-queue-filters" role="group" aria-label="Фильтр поездок">
           {([["all", "Все"], ["actionable", "Нужно моё решение"], ["running", "В работе"], ["revision", "На доработке"], ["approved", "Утверждено"], ["finished", "Завершённые"]] as const).map(([key, label]) => <button type="button" key={key} className={filter === key ? "active" : ""} aria-pressed={filter === key} onClick={() => setFilter(key)}>{label}<span className="approval-filter-count">{filterCounts[key]}</span></button>)}
         </SlidingSegmented>
+        </div>
+        <Input contentBefore={<Search20Regular />} className="trip-search" aria-label="Поиск поездок" placeholder="Цель, город, сотрудник или номер" value={query} onChange={(_, data) => setQuery(data.value)} />
       </div>
       {feedback}
       {visibleRequests.length === 0 ? <WorkspaceNotice tone="info" className="trip-board-help" role="status"><span>{requests.length ? "По выбранным фильтрам поездок нет. Измените поиск или выберите «Все»." : "Поездок пока нет. Создайте первую командировку — она появится в колонке «Запуск»."}</span></WorkspaceNotice> : null}

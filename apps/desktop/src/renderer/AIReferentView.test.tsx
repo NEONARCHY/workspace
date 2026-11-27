@@ -885,6 +885,7 @@ describe("AIReferentView", () => {
     expect(screen.getByRole("button", { name: /Excel-журнал/ })).toBeEnabled();
     const incomingRefresh = screen.getByRole("button", { name: "Обновить" });
     expect(incomingRefresh.closest(".ai-referent-toolbar-actions")).not.toBeNull();
+    expect(incomingRefresh.closest(".ai-referent-register-tools")?.parentElement).toHaveClass("ai-referent-register-bar");
 
     fireEvent.click(screen.getByRole("tab", { name: "Исходящие" }));
     await waitFor(() => expect(screen.getByText("Ответ партнёру")).toBeInTheDocument());
@@ -900,6 +901,7 @@ describe("AIReferentView", () => {
     expect(registerBar).not.toContainElement(newLetter);
     const outgoingRefresh = screen.getByRole("button", { name: "Обновить" });
     expect(outgoingRefresh.closest(".ai-referent-toolbar-actions")).not.toBeNull();
+    expect(outgoingRefresh.closest(".ai-referent-register-tools")?.parentElement).toHaveClass("ai-referent-register-bar");
     expect(outgoingRefresh.closest(".ai-referent-header-actions")).toBeNull();
   });
 

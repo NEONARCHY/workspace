@@ -21,10 +21,12 @@ import {
 import { AIReferentFiles } from "./AIReferentFiles";
 import { AIReferentGooeySearch } from "./AIReferentGooeySearch";
 import { AIReferentPagination } from "./AIReferentPagination";
+import { AIReferentToolbarActions } from "./AIReferentToolbarActions";
 
 interface AIReferentIncomingRegisterProps {
   readonly token: string;
   readonly focusLetterId?: string;
+  readonly toolbarTarget?: HTMLElement | null;
 }
 
 type IncomingFilter = "all" | "registered" | "attention" | "attachments";
@@ -64,7 +66,7 @@ function fileCountLabel(count: number): string {
   return `${count} ${!teen && end === 1 ? "файл" : !teen && end >= 2 && end <= 4 ? "файла" : "файлов"}`;
 }
 
-export function AIReferentIncomingRegister({ token, focusLetterId }: AIReferentIncomingRegisterProps) {
+export function AIReferentIncomingRegister({ token, focusLetterId, toolbarTarget }: AIReferentIncomingRegisterProps) {
   const [registry, setRegistry] = useState<AIReferentIncomingRegistry>();
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
@@ -173,7 +175,7 @@ export function AIReferentIncomingRegister({ token, focusLetterId }: AIReferentI
           value={query}
           onValueChange={(value) => { setPage(0); setQuery(value); }}
         />
-        <div className="ai-referent-toolbar-actions">
+        <AIReferentToolbarActions target={toolbarTarget}>
           <Button
             appearance="secondary"
             icon={<ArrowDownload20Regular />}
@@ -192,7 +194,7 @@ export function AIReferentIncomingRegister({ token, focusLetterId }: AIReferentI
           >
             Обновить
           </Button>
-        </div>
+        </AIReferentToolbarActions>
       </div>
 
       <div className="ai-referent-list-bar">

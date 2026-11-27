@@ -6,13 +6,25 @@ html:root body .app-provider .workspace-queue.ai-referent-view:not([data-dialog-
 body .app-provider .workspace-queue.ai-referent-view .ai-referent-header { overflow: hidden; }
 body .app-provider .workspace-queue.ai-referent-view .ai-referent-register-actions { display: flex; gap: 8px; margin: 0; z-index: 1; }
 body .app-provider .workspace-queue.ai-referent-view .ai-referent-register-action { border: 0; box-shadow: none; font-size: 13px; }
-body .app-provider .workspace-queue.ai-referent-view .ai-referent-register-bar { padding: 0; margin: 0; }
+body .app-provider .workspace-queue.ai-referent-view .ai-referent-register-bar { display: flex; align-items: center; gap: var(--ws-queue-space); min-width: 0; padding: 0; margin: 0; }
 body .app-provider .workspace-queue.ai-referent-view .ai-referent-register-tabs {
-  flex-wrap: nowrap; width: max-content; max-width: 100%; min-height: var(--ws-queue-control);
+  flex: 0 1 auto; flex-wrap: nowrap; width: max-content; min-width: 0; max-width: 100%; min-height: var(--ws-queue-control);
   gap: 4px; overflow-x: auto; scrollbar-width: thin; border: 0; border-radius: 12px;
 }
 body .app-provider .workspace-queue.ai-referent-view .ai-referent-register-tabs button { height: var(--ws-queue-button); padding-inline: 12px; border-radius: 8px; font-size: 12px; }
 .ai-referent-register-select { display: none; }
+body .app-provider .workspace-queue.ai-referent-view .ai-referent-register-tools { flex: none; min-width: 0; }
+body .app-provider .workspace-queue.ai-referent-view .ai-referent-register-tools:empty { display: none; }
+body .app-provider .workspace-queue.ai-referent-view .ai-referent-register-tools > .ai-referent-toolbar-actions {
+  display: flex; flex: none; align-items: center; flex-wrap: nowrap; width: auto;
+  min-height: var(--ws-queue-control); padding: 4px; gap: 4px; border: 0; border-radius: 12px;
+  background: var(--ws-surface); overflow: visible;
+}
+html:root body .app-provider .workspace-queue.ai-referent-view .ai-referent-register-tools .fui-Button {
+  min-height: var(--ws-queue-button); height: var(--ws-queue-button); padding: 8px 10px; gap: 6px;
+  border: 0; border-radius: 8px; box-shadow: none; font-size: 12px; white-space: nowrap;
+}
+.workspace-queue.ai-referent-view .ai-referent-register-tools .fui-Button__icon { width: 16px; height: 16px; font-size: 16px; margin: 0; }
 .ai-referent-create-short { display: none; }
 body .app-provider .workspace-queue.ai-referent-view .ai-referent-page { gap: var(--ws-queue-space); margin: 0; padding: 0; }
 body .app-provider .workspace-queue.ai-referent-view .ai-referent-summary { gap: var(--ws-queue-space); margin: 0; padding: 0; }
@@ -54,8 +66,8 @@ body .app-provider .workspace-queue.messenger-view .conversation-header { paddin
 body .app-provider .workspace-queue.messenger-view .composer { margin: 12px; }
 @media (max-width: 1120px) {
   body .app-provider .workspace-queue.ai-referent-view .ai-referent-register-tabs { display: none; }
-  .ai-referent-register-select { display: block; width: 100%; margin: 0; }
-  .ai-referent-register-select select { box-sizing: border-box; width: 100%; min-height: 44px; padding: 12px 16px; border: 0; border-radius: 12px; font: inherit; color: var(--ws-text); background: var(--ws-surface); }
+  .ai-referent-register-select { display: block; flex: 1; min-width: 0; margin: 0; }
+  .ai-referent-register-select select { box-sizing: border-box; width: 100%; min-height: var(--ws-queue-control); padding: 12px 16px; border: 0; border-radius: 12px; font: inherit; color: var(--ws-text); background: var(--ws-surface); }
   .ai-referent-register-select select:focus-visible { outline: 2px solid var(--ws-link); outline-offset: -2px; }
 }
 @media (max-width: 720px) {
@@ -71,6 +83,8 @@ body .app-provider .workspace-queue.messenger-view .composer { margin: 12px; }
   .ai-referent-register-select select { outline: 1px solid CanvasText; outline-offset: -1px; }
 }
 @media (max-width: 480px) {
+  html:root body .app-provider .workspace-queue.ai-referent-view .ai-referent-register-tools .fui-Button { min-width: 44px; width: 44px; padding: 0; gap: 0; font-size: 0; }
+  .workspace-queue.ai-referent-view .ai-referent-register-tools .fui-Button__icon { width: 20px; height: 20px; font-size: 20px; }
   .ai-referent-create-full { display: none; }
   .ai-referent-create-short { display: inline; }
   body .app-provider .workspace-queue.projects-view .project-overview { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }

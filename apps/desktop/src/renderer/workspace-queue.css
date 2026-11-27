@@ -48,11 +48,10 @@ body .app-provider .workspace-queue .ws-section-header :is(.view-switch, .approv
   white-space: nowrap;
   overflow-wrap: normal;
 }
-/* Stable two-row composition: controls/search first, scope filters second.
-   Filters scroll within their own row, never through the edge of the page. */
+/* Related groups share a row; search wraps only when its usable width is lost. */
 body .app-provider .workspace-queue .workspace-queue-toolbar {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px 12px;
   flex: none;
@@ -63,12 +62,17 @@ body .app-provider .workspace-queue .workspace-queue-toolbar {
   background: transparent;
   box-shadow: none;
 }
+body .app-provider .workspace-queue .workspace-queue-controls {
+  display: flex; align-items: center; gap: 12px; flex: 0 1 auto;
+  width: max-content; min-width: 0; max-width: 100%;
+}
+body .app-provider .workspace-queue .workspace-queue-controls > :not(.workspace-queue-filters) { flex-shrink: 0; }
 .workspace-queue-options { display: flex; align-items: center; gap: 8px; min-width: 0; }
-body .app-provider .workspace-queue .workspace-queue-toolbar > .workspace-search {
-  --search-width: 320px;
+html:root body .app-provider .workspace-queue .workspace-queue-toolbar > .workspace-search {
+  --search-width: 100%; --search-growth: 0px;
   --search-height: var(--ws-queue-control);
-  justify-self: end;
-  margin: 0;
+  flex: 1 1 180px; width: 100%; min-width: min(180px, 100%); max-width: 320px;
+  margin: 0 0 0 auto;
 }
 body .app-provider .workspace-queue .workspace-queue-toolbar :is(.ws2-segmented, .task-filter-tabs) {
   display: flex;
@@ -85,9 +89,8 @@ body .app-provider .workspace-queue .workspace-queue-toolbar :is(.ws2-segmented,
   scrollbar-width: thin;
 }
 body .app-provider .workspace-queue .workspace-queue-toolbar .workspace-queue-filters {
-  grid-column: 1 / -1;
   width: max-content;
-  justify-self: start;
+  flex: 0 1 auto;
   margin: 0;
 }
 body .app-provider .workspace-queue .workspace-queue-toolbar :is(.ws2-segmented, .task-filter-tabs) > button {
@@ -128,15 +131,15 @@ body .app-provider .workspace-queue .approval-board-card > footer { padding: 8px
 body .app-provider .workspace-queue .record-table-frame.task-records { margin-inline: 0; }
 
 @container workspace (max-width: 720px) {
-  body .app-provider .workspace-queue .workspace-queue-toolbar { grid-template-columns: minmax(0, 1fr); }
-  body .app-provider .workspace-queue .workspace-queue-toolbar > .workspace-search {
-    /* The focus reveal uses the available slot instead of widening the page. */
-    --search-width: 100%;
-    justify-self: stretch;
-  }
+  html:root body .app-provider .workspace-queue .workspace-queue-toolbar > .workspace-search { max-width: 100%; }
   .workspace-queue-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   body .app-provider .workspace-queue .workspace-queue-options .workspace-select { width: 100%; min-width: 0; }
   body .app-provider .workspace-queue .workspace-queue-toolbar > .ws2-segmented:not(.workspace-queue-filters) { width: max-content; }
+}
+@container workspace (max-width: 480px) {
+  body .app-provider .workspace-queue .workspace-queue-controls { flex-wrap: wrap; width: 100%; gap: 8px; }
+  body .app-provider .workspace-queue .workspace-queue-controls > .workspace-queue-filters { flex-basis: 100%; width: 100%; }
+  body .app-provider .workspace-queue .workspace-queue-controls > .workspace-queue-options { flex: 1 1 100%; }
 }
 @media (max-width: 1023px), (max-width: 1366px) and (any-pointer: coarse) {
   .web-platform :is(.workspace-view, .team-dashboard).workspace-queue:not([data-dialog-only]) {

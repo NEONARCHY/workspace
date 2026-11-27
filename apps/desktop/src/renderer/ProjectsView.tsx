@@ -295,11 +295,11 @@ export function ProjectsView({ projects, people, departments, currentUser, onCre
       </section>
 
       <div className="ws2-process-toolbar project-toolbar workspace-queue-toolbar">
+        <div className="workspace-queue-controls">
         <SlidingSegmented className="ws2-segmented" role="group" aria-label="Вид проектов">
           <button type="button" className={presentation === "kanban" ? "active" : ""} aria-pressed={presentation === "kanban"} onClick={() => setPresentation("kanban")}>Канбан</button>
           <button type="button" className={presentation === "list" ? "active" : ""} aria-pressed={presentation === "list"} onClick={() => setPresentation("list")}>Список</button>
         </SlidingSegmented>
-        <Input contentBefore={<Search20Regular />} aria-label="Поиск проектов" placeholder="Код, название или руководитель" value={query} onChange={(_, data) => setQuery(data.value)} />
         <SlidingSegmented className="ws2-segmented workspace-queue-filters" role="group" aria-label="Фильтр проектов">
           {([["active", "В работе"], ["all", "Все"], ["completed", "Завершённые"]] as const).map(([key, label]) => (
             <button type="button" key={key} className={filter === key ? "active" : ""} aria-pressed={filter === key} onClick={() => setFilter(key)}>
@@ -307,6 +307,8 @@ export function ProjectsView({ projects, people, departments, currentUser, onCre
             </button>
           ))}
         </SlidingSegmented>
+        </div>
+        <Input contentBefore={<Search20Regular />} aria-label="Поиск проектов" placeholder="Код, название или руководитель" value={query} onChange={(_, data) => setQuery(data.value)} />
       </div>
 
       {presentation === "kanban" ? <SpatialBoard canDrop={(id, target) => { const project = projectsById.get(id); return !!project?.canMove && availableStages(project).includes(target as ProjectStage); }} onMove={async (id, target) => { const project = projectsById.get(id); if (project) await move(project, target as ProjectStage); }}>

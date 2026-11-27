@@ -227,11 +227,10 @@ export function GrantsView({ token, currentUser, people, departments, canCreate,
     </WorkspaceSectionHeader>
     {loadError && <WorkspaceNotice tone="error" role="alert" actions={<Button onClick={() => void refresh()}>Повторить</Button>}>{loadError}</WorkspaceNotice>}
     {!loading && settings && !routeReady && <WorkspaceNotice tone="warning">Администратору нужно назначить руководителя и председателя в маршруте согласования.</WorkspaceNotice>}
-    <div className="grants-toolbar workspace-queue-toolbar"><span className="grants-count">Найдено: {visible.length}</span>
-      <Input type="search" aria-label="Поиск заявок" value={query} onChange={event => setQuery(event.target.value)} placeholder="Название или сотрудник" />
+    <div className="grants-toolbar workspace-queue-toolbar"><div className="workspace-queue-controls"><span className="grants-count">Найдено: {visible.length}</span>
       <div className="grants-filters ws2-segmented workspace-queue-filters" role="group" aria-label="Фильтр грантов">
       {filters.map(([key, label]) => <Button key={key} aria-pressed={filter === key} appearance={filter === key ? "primary" : "subtle"} onClick={() => setFilter(key)}>{label}</Button>)}
-    </div></div>
+    </div></div><Input type="search" aria-label="Поиск заявок" value={query} onChange={event => setQuery(event.target.value)} placeholder="Название или сотрудник" /></div>
     {loading ? <p role="status">Загружаем заявки…</p> : <GrantRecords grants={visible} people={people} token={token} selectedId={selectedId} filterKey={`${filter}:${query}`} statusLabels={grantStatusLabels} now={now} onSelect={openDetail} />}
 
 

@@ -5,13 +5,14 @@ const path = require("node:path");
 const assert = require("node:assert/strict");
 const phase = process.argv.includes("--before") ? "before" : "after";
 const galleryOnly = process.argv.includes("--gallery-only");
+const toolbarSuite = process.argv.includes('--toolbar-layout');
 const shellReviewSuite = process.argv.includes("--shell-review");
 const attentionSuite = process.argv.includes("--attention") || shellReviewSuite;
 const peopleSuite = process.argv.includes("--people");
 const operationsSuite = process.argv.includes("--operations");
 const documentsSuite = process.argv.includes("--documents");
-const communicationsSuite = process.argv.includes("--communications") || shellReviewSuite;
-const registrySuite = process.argv.includes("--registry");
+const communicationsSuite = process.argv.includes("--communications") || shellReviewSuite || toolbarSuite;
+const registrySuite = process.argv.includes("--registry") || toolbarSuite;
 const workdaySuite = process.argv.includes("--workday");
 const promptSuite = process.argv.includes("--hisobot-prompt");
 const topbarSuite = process.argv.includes("--topbar") || workdaySuite;
@@ -37,6 +38,7 @@ const sections = communicationsSuite ? [{ id: "referent", label: "AI Referent", 
   ? [{ id: "overview", label: "Обзор команды", root: ".team-dashboard" }, { id: "notifications", label: "Уведомления", root: ".notifications-view" }, { id: "feed", label: "Лента", root: ".feed-view" }]
   : [{ id: "tasks", label: "Задачи", root: ".tasks-view" }, { id: "payments", label: "Заявки на оплату", root: ".approvals-view" }, { id: "trips", label: "Поездки", root: ".trips-view" }];
 if (shellReviewSuite) sections.splice(0, sections.length, { id: 'overview', label: 'Обзор команды', root: '.team-dashboard' }, { id: 'payments', label: 'Заявки на оплату', root: '.approvals-view' }, { id: 'referent', label: 'AI Referent', root: '.ai-referent-view' });
+if (toolbarSuite) sections.splice(0, sections.length, { id: 'referent', label: 'AI Referent', root: '.ai-referent-view' }, { id: 'legacy-projects', label: 'Список проектов', root: '.projects-view' }, { id: 'payments', label: 'Заявки на оплату', root: '.approvals-view' }, { id: 'trips', label: 'Поездки', root: '.trips-view' }, { id: 'tasks', label: 'Задачи', root: '.tasks-view' }, { id: 'grants', label: 'Гранты', root: '.grants-view' });
 const settle = async page => page.evaluate(async () => {
   await document.fonts.ready;
   await Promise.race([Promise.all(document.getAnimations().filter(a => Number(a.effect?.getComputedTiming().endTime) < 2000).map(a => a.finished.catch(() => undefined))), new Promise(r => setTimeout(r, 900))]);
@@ -160,6 +162,9 @@ async function measure(page, selector) {
           if (endpoint.endsWith('/visibility')) return send(fixture.visibility);
           if (endpoint.endsWith('/authority')) return send(fixture.authority);
           if (endpoint.endsWith('/reviewers')) return send(fixture.reviewers);
+          if (toolbarSuite && endpoint.endsWith('/archive')) return send({ letters: [], totalCount: 0 });
+          if (toolbarSuite && endpoint.endsWith('/journals')) return send({ files: [] });
+          if (toolbarSuite && endpoint.endsWith('/telegram-link')) return send({ telegramId: '120000001' });
           if (endpoint.endsWith('/incoming')) { const letters = fixture.incoming.filter(item => [item.platformIncomingNumber, item.subject, item.senderOrganization, item.responsibleDisplayName].join(' ').toLocaleLowerCase().includes(q)); return send({ letters: letters.slice(offset, offset + 100), totalCount: fixture.incoming.length, filteredCount: letters.length, registeredCount: 96, attentionCount: 24, withAttachmentsCount: 120, lastSyncAt: '2026-11-26T07:00:00Z', journal: { available: false } }); }
           if (endpoint.endsWith('/letters')) { const letters = fixture.letters.filter(item => item.subject.toLocaleLowerCase().includes(q)); return send({ letters, participation: params.get('participation') || 'all', totalCount: letters.length, pendingReviewCount: 5, readyCount: 4, sentCount: 4, signedCount: 0 }); }
           if (endpoint.includes('/letters/')) return send(fixture.letters.find(item => item.id === endpoint.split('/').at(-1)));
@@ -237,6 +242,11 @@ async function measure(page, selector) {
         // Isolate responsive content geometry from the separately tested rail drawer.
         await page.setViewportSize({ width: 1440, height: 960 }); await settle(page);
         if (communicationsSuite && section.id === 'legacy-projects') {
+          if (toolbarSuite) {
+            const messenger = page.getByRole('button', { name: 'Мессенджер', exact: true }).or(page.getByRole('menuitem', { name: 'Мессенджер', exact: true }));
+            if (!await messenger.isVisible()) await page.getByRole('button', { name: /^Ещё,/ }).click();
+            await messenger.click(); await page.locator('.chat-buckets').waitFor();
+          }
           await page.locator('.chat-buckets').getByRole('button', { name: /^Ещё/ }).click();
           await page.getByRole('menuitem', { name: /^Чаты проектов/ }).click();
           await page.locator('.chat-list').getByRole('button', { name: /Проект: региональные инициативы/ }).click();
@@ -278,6 +288,7 @@ async function measure(page, selector) {
         if (topbarSuite && section.id === "home" || phase === "after" && reportingSuite && section.id === "hisobot") await capture(page.locator(".global-bar"), path.join(output, phase, `topbar-${theme}-${width}.png`));
         const geometry = await measure(page, section.root);
         results.push({ section: section.id, width, height, theme, ...geometry });
+        if (toolbarSuite) { if (phase === 'after') await require('./ui-toolbar-checks.cjs')(page, section, { width, geometry }); console.log('PASS ' + file); continue; }
         if (shellReviewSuite) {
           if (phase === 'after') await require('./ui-shell-checks.cjs')(page, section, { width, theme, geometry, output });
           await capture(page.locator('.global-bar'), path.join(output, phase, `topbar-${theme}-${width}.png`));

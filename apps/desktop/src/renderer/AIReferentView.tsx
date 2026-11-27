@@ -8,6 +8,7 @@ const LocalFileViewer = lazy(() => import("./FileViewer").then(module => ({ defa
 import { SlidingSegmented } from "./SlidingSegmented";
 import { employeeDisplayName } from "./employee-display-name";
 import { startVisiblePolling } from "./visible-polling";
+import { AIReferentToolbarActions } from "./AIReferentToolbarActions";
 
 import type {
   AIReferentAuthorityStatus,
@@ -241,6 +242,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, pre
   const [authority, setAuthority] = useState<AIReferentAuthorityStatus>();
   const [authorityError, setAuthorityError] = useState("");
   const [query, setQuery] = useState("");
+  const [registerToolbarTarget, setRegisterToolbarTarget] = useState<HTMLDivElement | null>(null);
   const [page, setPage] = useState(0);
   const [filter, setFilter] = useState<"all" | AIReferentLetter["status"]>("all");
   const [selectedId, setSelectedId] = useState("");
@@ -638,17 +640,18 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, pre
             const next = registerOptions.find(option => option.key === event.target.value); if (next) selectRegister(next.key);
           }}>{registerOptions.map(option => <option key={option.key} value={option.key}>{option.label}</option>)}</select>
         </label>
+        <div ref={setRegisterToolbarTarget} className="ai-referent-register-tools" />
       </div>
 
       {visibilityError ? <WorkspaceNotice tone="error" className="ai-referent-feedback" role="alert" actions={<><Button onClick={() => setVisibilityAttempt((value) => value + 1)}>Повторить проверку доступа</Button></>}>{visibilityError} </WorkspaceNotice> : null}
       {registerKind === "settings" && canAdmin ? <AIReferentSettings token={token} people={people} readOnly={readOnly} /> :
         registerKind === "visibility" && visibility?.canManageVisibility ? <AIReferentIncomingAccess token={token} people={people} /> :
         registerKind === "addresses" && canAdmin ? <AIReferentAddressBook token={token} readOnly={readOnly} /> :
-        registerKind === "archive" && visibility?.canViewJournals ? <AIReferentArchive token={token} /> :
+        registerKind === "archive" && visibility?.canViewJournals ? <AIReferentArchive token={token} toolbarTarget={registerToolbarTarget} /> :
         registerKind === "telegram" ? <AIReferentTelegram token={token} /> :
         registerKind === "incoming" ? (canIncoming ? <>
           {visibility?.incomingMode === "assigned" ? <WorkspaceNotice tone="info" className="ai-referent-readonly">Здесь только письма, назначенные вам роботом Exat. Общий журнал скрыт.</WorkspaceNotice> : null}
-          <AIReferentIncomingRegister key={`${visibility?.incomingMode}:${visibility?.revision}:${focusRevision}`} token={token} focusLetterId={focusIncomingId} />
+          <AIReferentIncomingRegister key={`${visibility?.incomingMode}:${visibility?.revision}:${focusRevision}`} token={token} focusLetterId={focusIncomingId} toolbarTarget={registerToolbarTarget} />
         </> : <LoadingSkeleton layout="lines" rows={1} label="Проверяем доступ к входящим" />) : (
         <div className="ai-referent-page ai-referent-outgoing-page" key={registerKind}>
 
@@ -708,14 +711,14 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, pre
               </button>
             ))}
           </div>
-          <Button
+          <AIReferentToolbarActions target={registerToolbarTarget}><Button
             appearance="subtle"
             icon={<ArrowClockwise20Regular />}
             disabled={loading || busy}
             onClick={() => void refresh()}
           >
             Обновить
-          </Button>
+          </Button></AIReferentToolbarActions>
         </div>
       </div>
 

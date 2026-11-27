@@ -857,16 +857,18 @@ function TaskWorkspaceView(props: TasksViewProps) {
         </div> : null}
 
         {!(["calendar", "efficiency", "plans"] as TaskMode[]).includes(mode) ? <div className="task-filters workspace-queue-toolbar">
+          <div className="workspace-queue-controls">
           <div className="workspace-queue-options">
           <WorkspaceSelect className="task-role-filter" aria-label="Моя роль в задаче" value={roleFilter} onChange={event => setRoleFilter(event.target.value)}><option value="all">Все роли</option><option value="author">Я постановщик</option><option value="assignee">Я исполнитель</option><option value="co_assignee">Я соисполнитель</option><option value="observer">Я наблюдатель</option></WorkspaceSelect>
           <WorkspaceSelect className="task-role-filter" aria-label="Фильтр по плану" value={planFilter} onChange={(event) => setPlanFilter(event.target.value)} disabled={plansLoading || Boolean(plansError)}><option value="">Все планы</option>{plans.map((plan) => <option key={plan.id} value={plan.id}>{plan.title}</option>)}</WorkspaceSelect>
           </div>
-          <Input className="task-search" aria-label="Поиск задач" contentBefore={<Search20Regular />} placeholder="Название, проект, исполнитель" value={query} onChange={(_, data) => setQuery(data.value)} />
           <SlidingSegmented className="task-filter-tabs workspace-queue-filters" role="group" aria-label="Фильтры задач">
           {(Object.keys(taskFilterLabels) as TaskFilter[]).map((key) => (
             <button className={filter === key ? "active" : ""} aria-label={taskFilterLabels[key]} aria-pressed={filter === key} key={key} onClick={() => setFilter(key)} type="button"><span>{taskFilterLabels[key]}</span><b aria-hidden="true">{taskCounts[key]}</b></button>
           ))}
           </SlidingSegmented>
+          </div>
+          <Input className="task-search" aria-label="Поиск задач" contentBefore={<Search20Regular />} placeholder="Название, проект, исполнитель" value={query} onChange={(_, data) => setQuery(data.value)} />
         </div> : null}
 
         {mode !== "plans" && plansError ? <WorkspaceNotice tone="error" className="task-plan-error" role="alert" actions={<><Button appearance="secondary" onClick={() => setPlansRevision((revision) => revision + 1)}>Повторить</Button></>}>{plansError} </WorkspaceNotice> : null}

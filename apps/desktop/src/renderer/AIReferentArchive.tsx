@@ -7,9 +7,10 @@ import { Button } from "@fluentui/react-components";
 import { ArrowClockwise20Regular, Chat20Regular } from "@fluentui/react-icons";
 import { AIReferentFiles } from "./AIReferentFiles";
 import { AIReferentGooeySearch } from "./AIReferentGooeySearch";
+import { AIReferentToolbarActions } from "./AIReferentToolbarActions";
 import { loadAIReferentArchive, loadAIReferentJournals, loadAIReferentTelegramLink } from "./workspace-api";
 
-export function AIReferentArchive({ token }: { readonly token: string }) {
+export function AIReferentArchive({ token, toolbarTarget }: { readonly token: string; readonly toolbarTarget?: HTMLElement | null }) {
   const [letters, setLetters] = useState<readonly AIReferentArchiveLetter[]>([]);
   const [loadedToken, setLoadedToken] = useState<string>();
   const [journals, setJournals] = useState<readonly AIReferentJournalFile[]>([]);
@@ -50,9 +51,9 @@ export function AIReferentArchive({ token }: { readonly token: string }) {
         value={query}
         onValueChange={(value) => { setQuery(value); setPage(0); }}
       />
-      <div className="ai-referent-toolbar-actions">
+      <AIReferentToolbarActions target={toolbarTarget}>
         <Button icon={<ArrowClockwise20Regular />} disabled={loading} onClick={() => setRevision((value) => value + 1)}>Обновить</Button>
-      </div>
+      </AIReferentToolbarActions>
     </div>
     {error ? <WorkspaceNotice tone="error" className="ai-referent-feedback" role="alert">{error}</WorkspaceNotice> : null}
     {loadedToken === token && !error && letters.length === 0 ? <div className="ai-referent-empty"><h2>{query ? "Письма не найдены" : "Архив пока пуст"}</h2><p>{query ? "Попробуйте другой номер или тему." : "После синхронизации робот покажет здесь прежние письма."}</p></div> : null}
