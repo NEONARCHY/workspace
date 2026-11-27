@@ -21,6 +21,7 @@ html:root body .app-provider .calendar-view .calendar-day {
 html:root body .app-provider .calendar-view .calendar-day.muted:not(.selected) { background: color-mix(in srgb, var(--ws-muted-surface) 65%, var(--ws-surface)); }
 html:root body .app-provider .calendar-view .calendar-day:is(.selected, :hover) { background: var(--ws-selected); }
 body .app-provider .tasks-view.calendar-mode .tasks-main { gap: var(--ws-queue-space); }
+body .app-provider .tasks-view .task-calendar-embedded { gap: 12px; background: transparent; }
 body .app-provider .tasks-view .task-calendar-embedded .calendar-main { padding: 0; }
 body .app-provider .tasks-view .task-calendar-embedded .calendar-board { border-radius: 16px; }
 html:root body .app-provider .calendar-view .calendar-side:has(.calendar-agenda-stream) {
@@ -35,6 +36,9 @@ html:root body .app-provider .calendar-view .calendar-side:has(.calendar-agenda-
 .calendar-agenda-stream:focus-visible, .calendar-agenda-stream button:focus-visible { outline: 2px solid var(--ws-link); outline-offset: -2px; }
 @container workspace (max-width: 850px) {
   html:root body .app-provider .calendar-view .calendar-filter-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 900px) {
+  body .app-provider .tasks-view .task-calendar-embedded .calendar-main { height: min(560px, 70dvh); min-height: 0; }
 }
 @media (max-width: 680px) {
   html:root body .app-provider .calendar-view .calendar-filter-fields { grid-template-columns: minmax(0, 1fr); }

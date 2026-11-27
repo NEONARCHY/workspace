@@ -9,7 +9,7 @@ html:not([data-color-theme="dark"]) .app-provider :is(
   [role="menuitem"],
   [role="tab"],
   [tabindex="0"]
-):not(.workday-action, .workspace-topbar *, .sidebar-palette *, .sidebar-theme-choice, .approval-view-toolbar *, .approval-metric-actionable, .calendar-agenda-drawer *, .calendar-ux .calendar-day, .calendar-ux .browser-calendar-agenda, .calendar-ux .calendar-filter-toggle, .ai-referent-row, .ai-referent-participation-switch *, .calendar-agenda-stream, .calendar-agenda-stream *, .task-calendar-embedded .calendar-day, .workspace-select *, .record-page-nav, .team-dash-metric, .team-dash-flow-legend > button):is(:focus, :focus-visible) {
+):not(.workday-action, .workspace-topbar *, .sidebar-palette *, .sidebar-theme-choice, .approval-view-toolbar *, .approval-metric-actionable, .calendar-agenda-drawer *, .calendar-ux .calendar-day, .calendar-ux .browser-calendar-agenda, .calendar-ux .calendar-filter-toggle, .ai-referent-row, .ai-referent-participation-switch *, .calendar-agenda-stream, .calendar-agenda-stream *, .task-calendar-embedded .calendar-day, .workspace-select *, .record-page-nav, .team-dash-metric, .team-dash-flow-legend > button, .task-domain-tabs *):is(:focus, :focus-visible) {
   outline: 0 !important;
   outline-offset: 0 !important;
 }

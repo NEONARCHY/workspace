@@ -8,7 +8,8 @@ const galleryOnly = process.argv.includes("--gallery-only");
 const chatPaginationSuite = process.argv.includes('--chat-pagination');
 const sidebarSuite = process.argv.includes('--sidebar');
 const referentSurfacesSuite = process.argv.includes('--referent-surfaces');
-const calendarSurfacesSuite = process.argv.includes('--calendar-surfaces');
+const taskSpacingSuite = process.argv.includes('--task-spacing');
+const calendarSurfacesSuite = process.argv.includes('--calendar-surfaces') || taskSpacingSuite;
 const surfaceFollowupSuite = process.argv.includes('--surface-followup');
 const toolbarSuite = process.argv.includes('--toolbar-layout');
 const shellReviewSuite = process.argv.includes("--shell-review");
@@ -48,6 +49,7 @@ if (chatPaginationSuite) sections.splice(0, sections.length, { id: 'messenger', 
 if (sidebarSuite) sections.splice(0, sections.length, { id: 'messenger', label: 'Мессенджер', root: '.messenger-view' });
 if (referentSurfacesSuite) sections.splice(0, sections.length, { id: 'referent', label: 'AI Referent · исходящие письма', root: '.ai-referent-view', navLabel: 'AI Referent' });
 if (calendarSurfacesSuite) sections.splice(0, sections.length, { id: 'tasks', label: 'Задачи', root: '.tasks-view' }, { id: 'calendar', label: 'Календарь', root: '.calendar-view' });
+if (taskSpacingSuite) sections.splice(1);
 if (surfaceFollowupSuite) sections.splice(0, sections.length, { id: 'overview', label: 'Обзор команды', root: '.team-dashboard' }, { id: 'calendar', label: 'Календарь', root: '.calendar-view' }, { id: 'grants', label: 'Гранты', root: '.grants-view' });
 const settle = async page => page.evaluate(async () => {
   await document.fonts.ready;

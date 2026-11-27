@@ -1,5 +1,26 @@
 /* Shared queue composition. Opt in page by page; embedded record dialogs keep
    their own geometry. Next visual iterations should reuse these same tokens. */
+body .app-provider .task-domain-tabs {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-self: flex-start;
+  box-sizing: border-box; width: 320px; max-width: 100%; gap: 4px;
+  margin: 0 0 12px; padding: 4px; border: 0; border-radius: 12px; background: var(--ws-surface);
+}
+body .app-provider .task-domain-tabs .fui-Tab {
+  justify-content: center; min-width: 0; min-height: 36px; padding: 8px 12px; border: 0; border-radius: 8px;
+  color: var(--ws-muted); font-size: 13px; font-weight: 600; line-height: 20px;
+}
+body .app-provider .task-domain-tabs .fui-Tab__content { display: inline-flex; align-items: center; gap: 8px; font: inherit; }
+body .app-provider .task-domain-tabs .task-domain-count { flex: none; margin: 0; }
+body .app-provider .task-domain-tabs .fui-Tab:focus-visible { outline: 2px solid var(--ws-link); outline-offset: -2px; }
+@media (forced-colors: none) {
+  body .app-provider .task-domain-tabs .fui-Tab[aria-selected="true"] { background: var(--ws-selected); color: var(--ws-text); }
+  body .app-provider .task-domain-tabs .fui-Tab::after { display: none; }
+}
+@media (max-width: 720px) {
+  body .app-provider .task-domain-tabs { margin-bottom: 8px; }
+  body .app-provider .task-domain-tabs .fui-Tab { min-height: 44px; padding: 8px; line-height: 16px; }
+  body .app-provider .task-domain-tabs .fui-Tab__content { gap: 6px; }
+}
 :is(.workspace-view, .team-dashboard).workspace-queue:not([data-dialog-only]) {
   --ws-view-edge: 0px;
   --ws-queue-space: 12px;

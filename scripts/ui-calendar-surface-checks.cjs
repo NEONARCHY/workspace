@@ -14,6 +14,15 @@ module.exports = async (page, section, { width, geometry }) => {
     const hero = await root.locator('.ws-section-header').boundingBox();
     const calendar = await root.locator('.task-calendar-embedded').boundingBox();
     assert(calendar.y - hero.y - hero.height >= 8, 'space below the task header');
+    const board = await root.locator('.calendar-board').boundingBox();
+    const side = await root.locator('.calendar-side').boundingBox();
+    assert((side.x >= board.x + board.width ? side.x - board.x - board.width : side.y - board.y - board.height) >= 11.5, 'calendar and agenda have a twelve-pixel gap: ' + JSON.stringify({ width, board, side }));
+    if (width <= 900) assert(board.height <= 561, 'compact month stays bounded');
+    const tabs = page.locator('.task-domain-tabs .fui-Tab');
+    const [first, second] = await tabs.evaluateAll(nodes => nodes.map(node => { const r = node.getBoundingClientRect(); return { width: r.width, height: r.height }; }));
+    assert(Math.abs(first.width - second.width) <= 1 && Math.abs(first.height - second.height) <= 1, 'task and letter tabs have equal geometry');
+    await page.keyboard.press('Tab'); await tabs.first().focus();
+    assert.equal(await tabs.first().evaluate(node => getComputedStyle(node).outlineWidth), '2px', 'task tabs retain keyboard focus');
   } else if (!await root.locator('.calendar-agenda-stream').isVisible()) {
     await root.locator('.calendar-day.selected').click();
   }
