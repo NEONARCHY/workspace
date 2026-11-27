@@ -1,13 +1,13 @@
 /* Navigation-only palettes: the work canvas and settings keep their own theme. */
 .sidebar-palette {
-  --ws-rail-bg: linear-gradient(145deg, #21475b, #205968);
+  --ws-rail-bg: #214f60;
   --ws-rail-text: #f1f7fa;
   --ws-rail-muted: #c6dbe3;
   --ws-rail-icon: #c6dbe3;
   --ws-rail-line: rgb(225 242 249 / 22%);
   --ws-rail-hover: rgb(225 242 249 / 12%);
   --ws-rail-profile: rgb(225 242 249 / 8%);
-  --ws-rail-selected: linear-gradient(110deg, #d9eeee, #edf6f7);
+  --ws-rail-selected: #e0eef0;
   --ws-rail-selected-ink: #293a55;
   --ws-rail-selected-icon: #006779;
   --ws-rail-focus: #d1f3fa;
@@ -17,7 +17,7 @@
   --ws-rail-badge-ink: #8a3145;
 }
 .sidebar-palette[data-sidebar-theme="navy"] {
-  --ws-rail-bg: linear-gradient(145deg, #293a55, #24394b);
+  --ws-rail-bg: #293a55;
 }
 .sidebar-palette[data-sidebar-theme="light"] {
   --ws-rail-bg: #f9fcfc;
@@ -27,7 +27,7 @@
   --ws-rail-line: #d5e3e8;
   --ws-rail-hover: #eaf2f3;
   --ws-rail-profile: #eef4f3;
-  --ws-rail-selected: linear-gradient(110deg, #e1f1ee, #eaf3f2);
+  --ws-rail-selected: #e5eff0;
   --ws-rail-focus: #006779;
   --ws-rail-count: #ffffff;
 }
@@ -65,8 +65,7 @@
   color: var(--ws-rail-selected-ink);
   background: transparent;
 }
-.sidebar-palette .rail-action.active::before,
-.sidebar-palette .navigation-sliding > .sliding-segmented-indicator {
+.sidebar-palette .rail-action.active::before {
   border-color: var(--ws-rail-line);
   background: var(--ws-rail-selected);
   box-shadow: 0 5px 14px -10px rgb(11 35 50 / 40%);

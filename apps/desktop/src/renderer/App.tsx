@@ -76,7 +76,6 @@ import {
   BookContacts24Regular,
   Home24Regular,
   CalendarLtr24Regular,
-  Chat24Filled,
   Chat24Regular,
   DocumentBulletList24Regular,
   DocumentBulletList24Filled,
@@ -90,7 +89,6 @@ import {
   PersonAccounts24Regular,
   Settings24Regular,
   Edit16Regular,
-  TaskListSquareLtr24Filled,
   Trophy24Regular,
   TaskListSquareLtr24Regular,
   Video24Regular,
@@ -2147,7 +2145,7 @@ export function App() {
   }
   const sidebarItems = groupAiNavigation(orderedNavItems);
   const aiModuleGroup = sidebarItems.find((item) => item.key === "ai_modules");
-  const aiModuleExpansionHeight = aiModuleGroup?.key === "ai_modules" ? aiModuleGroup.modules.length * 46 + 9 : 0;
+  const aiModuleExpansionHeight = aiModuleGroup?.key === "ai_modules" ? aiModuleGroup.modules.length * 44 + 4 : 0;
   const activeSectionDenied = activeSection !== "notifications" &&
     !canView(activeSection);
   const fallbackSection = orderedNavItems.find((item) => item.key !== "settings")?.key ?? "notifications";
@@ -2267,17 +2265,12 @@ export function App() {
             badges={badgeBySection}
             onClose={() => setNavigationEditing(false)}
             onSave={(order, revision) => personalMutation((token) => reorderNavigation(token, order, revision))}
-          /> : <AdaptiveNavigation scrollable={browserCompact} sidebarTheme={sidebarTheme} items={sidebarItems} expandedItem={aiModulesOpen && !railCollapsed ? { key: "ai_modules", height: aiModuleExpansionHeight } : undefined} renderItem={(item, inOverflow) => {
+          /> : <AdaptiveNavigation scrollable={browserCompact} sidebarTheme={sidebarTheme} items={sidebarItems} activeKey={aiModuleGroup?.key === "ai_modules" && aiModuleGroup.modules.some(item => item.key === displayedSection) ? "ai_modules" : displayedSection} expandedItem={aiModulesOpen && !railCollapsed ? { key: "ai_modules", height: aiModuleExpansionHeight } : undefined} renderItem={(item, inOverflow) => {
               if (item.key === "ai_modules") return <div key={item.key} className="rail-slot" data-navigation-key={item.key}>
                 <AiModulesNavigation sidebarTheme={sidebarTheme} modules={item.modules} activeKey={displayedSection} inOverflow={inOverflow} inline={!railCollapsed} open={aiModulesOpen} onOpenChange={setAiModulesOpen}
                   onSelect={(key) => { if (key === "settings") return; closeBrowserMenu(); setPreparedAction(undefined); setFocusTarget(undefined); setActiveSection(key); }} />
               </div>;
               const badge = badgeBySection[item.key];
-              const icon = displayedSection === item.key && item.key === "messenger"
-                ? <Chat24Filled />
-                : displayedSection === item.key && item.key === "tasks"
-                  ? <TaskListSquareLtr24Filled />
-                  : item.icon;
               return (
                 <div key={item.key} className="rail-slot" data-navigation-key={item.key}><button
                   className={`rail-action ${displayedSection === item.key ? "active" : ""}`}
@@ -2295,7 +2288,7 @@ export function App() {
                     setActiveSection(item.key);
                   }}
                 >
-                  <span className="rail-icon">{icon}</span>
+                  <span className="rail-icon">{item.icon}</span>
                   <span className="rail-label">{item.label}</span>
                   {badge ? <span className="rail-badge">{badge > 99 ? "99+" : badge}</span> : null}
                 </button></div>

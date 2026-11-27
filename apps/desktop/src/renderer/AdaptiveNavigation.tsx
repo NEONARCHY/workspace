@@ -2,7 +2,6 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "re
 import { Portal } from "@fluentui/react-components";
 import { MoreHorizontal24Regular } from "@fluentui/react-icons";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { SlidingSegmented } from "./SlidingSegmented";
 import { defaultSidebarTheme, type SidebarTheme } from "./sidebar-theme";
 
 export interface AdaptiveNavigationItem {
@@ -14,12 +13,14 @@ export function AdaptiveNavigation<T extends AdaptiveNavigationItem>({
   items,
   renderItem,
   expandedItem,
+  activeKey,
   sidebarTheme = defaultSidebarTheme,
   scrollable = false,
 }: {
   readonly items: readonly T[];
   readonly renderItem: (item: T, inOverflow: boolean, closeOverflow: () => void) => ReactNode;
   readonly expandedItem?: { readonly key: string; readonly height: number };
+  readonly activeKey?: string;
   readonly sidebarTheme?: SidebarTheme;
   readonly scrollable?: boolean;
 }) {
@@ -29,32 +30,33 @@ export function AdaptiveNavigation<T extends AdaptiveNavigationItem>({
   const [visibleCount, setVisibleCount] = useState(items.length);
   const [open, setOpen] = useState(false);
   const reducedMotion = useReducedMotion();
+  // Labels, badges and parent polling do not change row capacity.
+  const itemKeys = JSON.stringify(items.map(item => item.key));
 
   useLayoutEffect(() => {
     const container = containerRef.current;
-    if (!container) return;
+    if (!container || scrollable) return;
+    const keys: readonly string[] = JSON.parse(itemKeys);
     const update = () => {
-      if (scrollable) { setVisibleCount(items.length); return; }
-      // Collapsed icons are taller than labelled rows. Fit the actual hit target,
-      // including the gap, rather than letting More overflow into the profile.
+      // Fit the actual hit target and gap, without overflowing into the profile.
       const action = container.querySelector<HTMLElement>(":scope > .rail-slot > .rail-action, :scope > .rail-action");
-      const actionHeight = action?.offsetHeight || 45;
-      const gap = Number.parseFloat(getComputedStyle(container).rowGap) || 5;
+      const actionHeight = action?.offsetHeight || 44;
+      const gap = Number.parseFloat(getComputedStyle(container).rowGap) || 4;
       const slotHeight = actionHeight + gap;
       if (container.clientHeight <= 0) {
-        setVisibleCount(items.length);
+        setVisibleCount(keys.length);
         return;
       }
-      const heights = items.map((item) => slotHeight + (item.key === expandedItem?.key ? expandedItem.height : 0));
+      const heights = keys.map(key => slotHeight + (key === expandedItem?.key ? expandedItem.height : 0));
       if (heights.reduce((total, height) => total + height, 0) - gap <= container.clientHeight) {
-        setVisibleCount(items.length);
+        setVisibleCount(keys.length);
         return;
       }
       let used = actionHeight; // Reserve More, with no unused trailing gap.
       let count = 0;
-      while (count < items.length && used + heights[count]! <= container.clientHeight) used += heights[count++]!;
+      while (count < keys.length && used + heights[count]! <= container.clientHeight) used += heights[count++]!;
       // Never unmount the expanded trigger while moving the items below it to More.
-      const expandedIndex = items.findIndex((item) => item.key === expandedItem?.key);
+      const expandedIndex = keys.findIndex(key => key === expandedItem?.key);
       const collapsedCapacity = Math.max(0, Math.floor((container.clientHeight + gap) / slotHeight) - 1);
       if (expandedIndex >= 0 && expandedIndex < collapsedCapacity) count = Math.max(count, expandedIndex + 1);
       setVisibleCount(count);
@@ -63,7 +65,7 @@ export function AdaptiveNavigation<T extends AdaptiveNavigationItem>({
     const observer = new ResizeObserver(update);
     observer.observe(container);
     return () => observer.disconnect();
-  }, [items, expandedItem?.key, expandedItem?.height, scrollable]);
+  }, [itemKeys, expandedItem?.key, expandedItem?.height, scrollable]);
 
   useEffect(() => {
     if (!open) return;
@@ -86,8 +88,10 @@ export function AdaptiveNavigation<T extends AdaptiveNavigationItem>({
     };
   }, [open]);
 
-  const visible = items.slice(0, visibleCount);
-  const overflow = items.slice(visibleCount);
+  const count = scrollable ? items.length : visibleCount;
+  const visible = items.slice(0, count);
+  const overflow = items.slice(count);
+  const activeOverflow = overflow.find(item => item.key === activeKey);
   const drawerOpen = open && overflow.length > 0;
   useLayoutEffect(() => {
     const drawer = drawerRef.current;
@@ -99,10 +103,15 @@ export function AdaptiveNavigation<T extends AdaptiveNavigationItem>({
       const scale = drawer.offsetWidth && drawerRect.width ? drawerRect.width / drawer.offsetWidth : 1;
       const viewportWidth = window.innerWidth / scale;
       const viewportHeight = window.innerHeight / scale;
-      drawer.style.width = `${Math.min(284, Math.max(48, viewportWidth - 24))}px`;
-      drawer.style.maxHeight = `${Math.max(48, Math.min(520, viewportHeight - 24))}px`;
-      drawer.style.left = `${Math.max(12, Math.min(railRect.right / scale + 10, viewportWidth - drawer.offsetWidth - 12))}px`;
-      drawer.style.bottom = `${Math.min(82, Math.max(12, viewportHeight - drawer.offsetHeight - 12))}px`;
+      const width = Math.min(284, Math.max(48, viewportWidth - 24));
+      const maxHeight = Math.max(48, Math.min(520, viewportHeight - 24));
+      const height = Math.min(drawer.scrollHeight, maxHeight);
+      // Read first, then write: positioning must not force layout between assignments.
+      Object.assign(drawer.style, {
+        width: `${width}px`, maxHeight: `${maxHeight}px`,
+        left: `${Math.max(12, Math.min(railRect.right / scale + 12, viewportWidth - width - 12))}px`,
+        bottom: `${Math.min(82, Math.max(12, viewportHeight - height - 12))}px`,
+      });
     };
     update();
     const observer = new ResizeObserver(update);
@@ -111,7 +120,7 @@ export function AdaptiveNavigation<T extends AdaptiveNavigationItem>({
     window.addEventListener("resize", update);
     return () => { observer.disconnect(); window.removeEventListener("resize", update); };
   }, [drawerOpen]);
-  return <SlidingSegmented as="nav" onContainer={(node) => { containerRef.current = node; }} activeSelector=":scope > .rail-slot .rail-action.active:not(.rail-ai-trigger):not(.rail-more-action), :scope > button.rail-action.active:not(.rail-ai-trigger):not(.rail-more-action), :scope > .rail-slot .rail-ai-disclosure.is-open .rail-ai-link.active" className="rail-nav personal-rail-nav adaptive-rail-nav navigation-sliding"
+  return <nav ref={containerRef} className="rail-nav personal-rail-nav adaptive-rail-nav" aria-label="Разделы Workspace"
     onClick={(event) => {
       if (event.target instanceof Element && event.target.closest(".rail-action:not(.rail-more-action):not(.rail-ai-trigger)")) {
         setOpen(false);
@@ -119,8 +128,8 @@ export function AdaptiveNavigation<T extends AdaptiveNavigationItem>({
     }}>
     {visible.map((item) => renderItem(item, false, () => setOpen(false)))}
     {overflow.length ? <div className="rail-slot rail-more-slot">
-      <button ref={moreRef} type="button" className={`rail-action rail-more-action ${drawerOpen ? "active" : ""}`}
-        aria-label={`Ещё, ${overflow.length} разделов`} aria-expanded={drawerOpen} aria-controls="rail-more-drawer" onClick={() => setOpen((current) => !current)}>
+      <button ref={moreRef} type="button" className={`rail-action rail-more-action ${drawerOpen ? "active" : ""}${activeOverflow ? " has-active-section" : ""}`}
+        aria-label={`Ещё, ${overflow.length} разделов`} aria-description={activeOverflow ? `Текущий раздел: ${activeOverflow.label}` : undefined} aria-expanded={drawerOpen} aria-controls="rail-more-drawer" onClick={() => setOpen((current) => !current)}>
         <span className="rail-icon"><MoreHorizontal24Regular /></span>
         <span className="rail-label">Ещё</span>
         <span className="rail-more-count" aria-hidden="true">{overflow.length}</span>
@@ -142,5 +151,5 @@ export function AdaptiveNavigation<T extends AdaptiveNavigationItem>({
         </motion.aside> : null}
       </AnimatePresence></Portal>
     </div> : null}
-  </SlidingSegmented>;
+  </nav>;
 }

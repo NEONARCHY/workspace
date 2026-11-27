@@ -12,80 +12,65 @@ const items = groupAiNavigation([
   { key: "calendar" as const, label: "Календарь", icon: null },
 ]);
 let measure: (() => void) | undefined;
-let calendarTop = 150;
 let renders = 0;
 let observed: Element[] = [];
-
 function Sidebar() {
   renders++;
   const [active, setActive] = useState<NavigationKey>("tasks");
   const [open, setOpen] = useState(false);
   return <AdaptiveNavigation items={items} expandedItem={open ? { key: "ai_modules", height: 101 } : undefined}
-    renderItem={(item) => <div className="rail-slot" key={item.key}>{item.key === "ai_modules"
+    renderItem={item => <div className="rail-slot" key={item.key}>{item.key === "ai_modules"
       ? <AiModulesNavigation modules={item.modules} activeKey={active} inline open={open} onOpenChange={setOpen} onSelect={setActive} />
       : <button className={`rail-action${active === item.key ? " active" : ""}`} onClick={() => setActive(item.key)}>{item.label}</button>}
     </div>} />;
 }
-
 beforeEach(() => {
-  calendarTop = 150; renders = 0; observed = []; measure = undefined;
+  renders = 0; observed = []; measure = undefined;
   vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(600);
-  vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(43);
-  vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(190);
-  vi.spyOn(HTMLElement.prototype, "offsetLeft", "get").mockReturnValue(0);
-  vi.spyOn(HTMLElement.prototype, "offsetTop", "get").mockImplementation(function (this: HTMLElement) {
-    return this.textContent === "AI Referent" ? 100 : this.textContent === "AI Hisobot" ? 146
-      : this.textContent === "Календарь" ? calendarTop : 0;
-  });
+  vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(44);
   vi.stubGlobal("ResizeObserver", class {
     constructor(readonly callback: () => void) {}
-    observe(element: Element) {
-      observed.push(element);
-      if (element.matches(".rail-slot:has(.rail-ai-trigger)")) measure = this.callback;
-    }
+    observe(element: Element) { observed.push(element); if (element.matches(".adaptive-rail-nav")) measure = this.callback; }
     disconnect() {}
   });
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
-
 describe("sidebar module selection", () => {
-  it("travels directly to the chosen module, never its disclosure trigger, and preserves mounted links", () => {
-    const view = render(<Sidebar />);
-    const indicator = view.container.querySelector<HTMLElement>(".sliding-segmented-indicator")!;
-    const trigger = screen.getByRole("button", { name: "ИИ-модули" });
+  it("selects the module locally without a travelling surface and preserves mounted links", () => {
+    const view = render(<Sidebar />), trigger = screen.getByRole("button", { name: "ИИ-модули" });
     fireEvent.click(trigger);
-    expect(indicator.style.transform).toBe("translate(0px, 0px)");
     const referent = screen.getByRole("button", { name: "AI Referent" });
-    fireEvent.click(referent);
-    expect(trigger).not.toHaveClass("active");
-    expect(trigger).toHaveClass("has-active-module");
-    expect(trigger).toHaveAttribute("aria-expanded", "true");
-    expect(referent).toHaveAttribute("aria-current", "page");
-    expect(indicator.style.transform).toBe("translate(0px, 100px)");
-    expect(indicator.style.transition).toBe("");
-    fireEvent.click(screen.getByRole("button", { name: "AI Hisobot" }));
-    expect(indicator.style.transform).toBe("translate(0px, 146px)");
-    fireEvent.click(referent);
-    expect(indicator.style.transform).toBe("translate(0px, 100px)");
-    fireEvent.click(trigger);
-    expect(indicator.style.opacity).toBe("0");
-    fireEvent.click(trigger);
+    for (const label of ["AI Referent", "AI Hisobot", "AI Referent"]) {
+      fireEvent.click(screen.getByRole("button", { name: label }));
+      expect(trigger).not.toHaveClass("active"); expect(trigger).toHaveClass("has-active-module");
+      expect(trigger).toHaveAttribute("aria-expanded", "true");
+      expect(screen.getByRole("button", { name: label })).toHaveAttribute("aria-current", "page");
+      expect(view.container.querySelectorAll('[aria-current="page"]')).toHaveLength(1);
+      expect(view.container.querySelector(".sliding-segmented-indicator")).toBeNull();
+    }
+    fireEvent.click(trigger); fireEvent.click(trigger);
     expect(screen.getByRole("button", { name: "AI Referent" })).toBe(referent);
-    expect(indicator).toHaveStyle({ transform: "translate(0px, 100px)", opacity: "1", transition: "none" });
   });
-
-  it("follows rows displaced by disclosure without an extra selection tween or React render per frame", () => {
-    const view = render(<Sidebar />);
+  it("does not measure or observe selection coordinates during disclosure layout changes", () => {
+    render(<Sidebar />);
     fireEvent.click(screen.getByRole("button", { name: "Календарь" }));
     fireEvent.click(screen.getByRole("button", { name: "ИИ-модули" }));
-    expect(observed).toContain(view.container.querySelector(".rail-slot:has(.rail-ai-trigger)"));
-    const previousRenders = renders;
-    const indicator = view.container.querySelector<HTMLElement>(".sliding-segmented-indicator")!;
-    for (const top of [165, 190, 220, 251, 230, 180, 150]) {
-      calendarTop = top;
-      act(() => measure?.());
-      expect(indicator).toHaveStyle({ transform: `translate(0px, ${top}px)`, transition: "none" });
-    }
+    const previousRenders = renders, observations = observed.length;
+    const coordinateReads = vi.spyOn(HTMLElement.prototype, "offsetTop", "get");
+    for (let frame = 0; frame < 7; frame++) act(() => measure?.());
+    expect(screen.getByRole("button", { name: "Календарь" })).toHaveClass("active");
+    expect(observed.every(element => element.matches(".adaptive-rail-nav"))).toBe(true);
+    expect(observed).toHaveLength(observations); expect(coordinateReads).not.toHaveBeenCalled();
     expect(renders).toBe(previousRenders);
+  });
+  it("keeps the capacity observer across counter updates and marks an active overflow section", () => {
+    const renderItems = (label = "Задачи") => <AdaptiveNavigation items={items.map(item => item.key === "tasks" ? { ...item, label } : { ...item })}
+      activeKey="calendar" renderItem={item => <button key={item.key} className="rail-action">{item.label}</button>} />;
+    vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(100);
+    const view = render(renderItems()), observations = observed.length;
+    view.rerender(renderItems("Задачи 18"));
+    expect(observed).toHaveLength(observations);
+    const more = screen.getByRole("button", { name: /Ещё,/ });
+    expect(more).toHaveClass("has-active-section"); expect(more).toHaveAttribute("aria-description", "Текущий раздел: Календарь");
   });
 });

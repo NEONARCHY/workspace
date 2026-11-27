@@ -3,7 +3,7 @@ import { SpatialSort, SpatialSortItem } from "./SpatialSort";
 import { useState, type ReactNode } from "react";
 import { navigationKeys, type NavigationKey } from "@yuksalish/contracts";
 import { moveBefore, normalizeNavigation } from "./personal-organization";
-import { Sparkle24Regular } from "@fluentui/react-icons";
+import { Apps24Regular } from "@fluentui/react-icons";
 import { groupAiNavigation, moveAiNavigationGroup } from "./AiModulesNavigation";
 
 export function NavigationEditor({ order, revision, labels, hiddenKeys = [], icons, badges, onSave, onClose }: {
@@ -41,7 +41,7 @@ export function NavigationEditor({ order, revision, labels, hiddenKeys = [], ico
     <div role="list" aria-label="Разделы меню">
       {groups.map((item) => <SpatialSortItem id={item.key} label={item.label} disabled={busy} key={item.key} role="listitem" className="navigation-edit-row"
         data-navigation-key={item.key}>
-        {item.key === "ai_modules" ? <span className="rail-icon"><Sparkle24Regular /></span> : item.icon ? <span className="rail-icon">{item.icon}</span> : null}
+        {item.key === "ai_modules" ? <span className="rail-icon"><Apps24Regular /></span> : item.icon ? <span className="rail-icon">{item.icon}</span> : null}
         <span className="rail-label">{item.label}</span>
         {item.key !== "ai_modules" && badges?.[item.key] ? <span className="rail-badge">{badges[item.key]! > 99 ? "99+" : badges[item.key]}</span> : null}
       </SpatialSortItem>)}

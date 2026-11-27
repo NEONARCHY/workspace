@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { FluentProvider } from "@fluentui/react-components";
-import { Alert24Regular, CalendarLtr24Regular, Chat24Regular, DocumentBulletList24Regular, Mail24Regular, News24Regular, Settings24Regular, TaskListSquareLtr24Regular } from "@fluentui/react-icons";
+import { Alert24Regular, CalendarLtr24Regular, Chat24Regular, DocumentBulletList24Regular, Mail24Regular, Navigation24Regular, News24Regular, Settings24Regular, TaskListSquareLtr24Regular } from "@fluentui/react-icons";
 import type { NavigationKey } from "@yuksalish/contracts";
 import { AdaptiveNavigation } from "../src/renderer/AdaptiveNavigation";
 import { AiModulesNavigation, groupAiNavigation } from "../src/renderer/AiModulesNavigation";
@@ -26,6 +26,7 @@ import "../src/renderer/sliding-segmented.css";
 import "../src/renderer/navigation-sliding.css";
 import "../src/renderer/section-headers.css";
 import "../src/renderer/sidebar-theme.css";
+import "../src/renderer/sidebar-workspace.css";
 
 const items = groupAiNavigation([
   { key: "tasks" as NavigationKey, label: "Задачи", icon: <TaskListSquareLtr24Regular /> },
@@ -49,9 +50,9 @@ function Preview() {
   return <FluentProvider theme={workspaceTheme} className="app-provider">
     <div className={`app-shell${collapsed ? " rail-collapsed" : ""}`}>
       <aside className="app-rail sidebar-palette" data-sidebar-theme={theme} aria-label="Основная навигация">
-        <div className="workspace-logo"><button className="rail-toggle" aria-label="Свернуть или развернуть меню" onClick={() => { setCollapsed(!collapsed); setAiOpen(false); }}>☰</button><CompanyLogo tone={theme === "light" ? "color" : "white"} className="rail-brand" /></div>
+        <div className="workspace-logo"><button className="rail-toggle" aria-label="Свернуть или развернуть меню" onClick={() => { setCollapsed(!collapsed); setAiOpen(false); }}><Navigation24Regular /></button><CompanyLogo tone={theme === "light" ? "color" : "white"} className="rail-brand" /></div>
         <div className="rail-customize"><span>Меню</span></div>
-        <AdaptiveNavigation items={items} sidebarTheme={theme} expandedItem={aiOpen && !collapsed ? { key: "ai_modules", height: 101 } : undefined} renderItem={(item, inOverflow, closeOverflow) =>
+        <AdaptiveNavigation items={items} sidebarTheme={theme} activeKey={active.startsWith("ai_") ? "ai_modules" : active} expandedItem={aiOpen && !collapsed ? { key: "ai_modules", height: 92 } : undefined} renderItem={(item, inOverflow, closeOverflow) =>
           <div className="rail-slot" key={item.key}>{item.key === "ai_modules"
             ? <AiModulesNavigation modules={item.modules} activeKey={active} sidebarTheme={theme} inOverflow={inOverflow} inline={!collapsed} open={aiOpen} onOpenChange={setAiOpen} onSelect={setActive} onCloseOverflow={closeOverflow} />
             : <button className={`rail-action${active === item.key ? " active" : ""}`} aria-label={item.label} aria-current={active === item.key ? "page" : undefined} onClick={() => { setActive(item.key); closeOverflow(); }}><span className="rail-icon">{item.icon}</span><span className="rail-label">{item.label}</span></button>}

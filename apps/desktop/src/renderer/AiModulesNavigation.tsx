@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { ChevronRight20Regular, Sparkle24Regular } from "@fluentui/react-icons";
+import { Apps24Regular, ChevronRight20Regular } from "@fluentui/react-icons";
 import type { NavigationKey } from "@yuksalish/contracts";
 import { moveBefore } from "./personal-organization";
 import { defaultSidebarTheme, type SidebarTheme } from "./sidebar-theme";
@@ -119,7 +119,7 @@ export function AiModulesNavigation({ modules, activeKey, inOverflow = false, in
     <button ref={triggerRef} className={`rail-action rail-ai-trigger${active ? " has-active-module" : ""}`} type="button"
       aria-label="ИИ-модули" title="ИИ-модули" aria-expanded={open} aria-haspopup={inlinePanel ? undefined : "dialog"}
       aria-controls={inlinePanel || open ? "rail-ai-modules" : undefined} onClick={toggle}>
-      <span className="rail-icon"><Sparkle24Regular /></span>
+      <span className="rail-icon"><Apps24Regular /></span>
       <span className="rail-label">ИИ-модули</span>
       <ChevronRight20Regular className="rail-ai-chevron" aria-hidden="true" />
     </button>
