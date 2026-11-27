@@ -1,0 +1,17 @@
+diff --git a/tests/python/test_messenger_postgres.py b/tests/python/test_messenger_postgres.py
+--- a/tests/python/test_messenger_postgres.py
++++ b/tests/python/test_messenger_postgres.py
+@@ -975,6 +975,13 @@
+             content=b"not-webm-or-opus",
+         )
+         assert invalid_voice.status_code == 422
++        # The pin-access scenario removed this member. Restore the membership
++        # before checking the original owner-transfer and self-leave contract.
++        rejoined = await client.post(
++            f"{base}/members", headers=headers, json={"memberIds": [third_id]}
++        )
++        assert rejoined.status_code == 200, rejoined.text
++
+         assert (
+             await client.post(f"{base}/owner", headers=headers, json={"userId": peer_id})
+         ).status_code == 200
