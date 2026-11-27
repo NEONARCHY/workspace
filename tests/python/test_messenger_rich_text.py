@@ -253,6 +253,32 @@ async def exercise_rich_messages(url: str) -> None:
                     next(m for m in late_snapshot.messages if m.id == latest.id).reply_quote is None
                 )
                 assert not any(m.id == original.id for m in late_snapshot.messages)
+
+                assert latest.can_pin
+                for message in (reply, latest):
+                    pinned_reply = await service.set_message_pin(
+                        connection, peer, UUID(message.id), PinMessageRequest(pinned=True)
+                    )
+                    assert pinned_reply.is_pinned and pinned_reply.pinned_by_user_id == str(peer.id)
+                peer_snapshot = await load_workspace(connection, peer)
+                pinned_messages = {
+                    message.id: message
+                    for message in peer_snapshot.messages
+                    if message.chat_id == group.id and message.is_pinned
+                }
+                assert set(pinned_messages) == {original.id, reply.id, latest.id}
+                assert pinned_messages[original.id].pin_protected
+                assert pinned_messages[original.id].pinned_at == pinned.pinned_at
+
+                await service.set_message_pin(
+                    connection, peer, UUID(reply.id), PinMessageRequest(pinned=False)
+                )
+                peer_snapshot = await load_workspace(connection, peer)
+                assert {
+                    message.id
+                    for message in peer_snapshot.messages
+                    if message.chat_id == group.id and message.is_pinned
+                } == {original.id, latest.id}
             finally:
                 await transaction.rollback()
     finally:

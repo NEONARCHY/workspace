@@ -15,8 +15,6 @@ html body .app-provider .messenger-view .composer-textarea.composer-rich-editor 
 .message-context-note { padding: 8px 12px; color: var(--ws-muted); font-size: 12px; }
 .composer-link-dialog { max-width: 440px; }
 .composer-link-dialog .fui-Input { width: 100%; }
-.pinned-message-item { display: grid; gap: 4px; }
-.pinned-message-item > small { padding-inline: 12px; color: var(--ws-muted); }
 .pinned-message-actions { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
 @media (forced-colors: none) {
   html body .app-provider .messenger-view .composer-textarea.composer-rich-editor:focus {

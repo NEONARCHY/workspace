@@ -942,11 +942,6 @@ async def exercise_http(url: str) -> None:
         assert (
             await client.patch(path, headers=outsider, json={"body": "No", "expectedRevision": 2})
         ).status_code == 403
-        removal = await client.delete(f"{base}/members/{third_id}", headers=headers)
-        assert removal.status_code == 204
-        for pin in (True, False):
-            denied_pin = await client.put(path + "/pin", headers=outsider, json={"pinned": pin})
-            assert denied_pin.status_code == 404
         deleted = await client.request(
             "DELETE", path, headers=headers, json={"expectedRevision": 2}
         )
@@ -975,6 +970,10 @@ async def exercise_http(url: str) -> None:
             content=b"not-webm-or-opus",
         )
         assert invalid_voice.status_code == 422
+        voice_pin_path = f"/api/v1/messages/{voice_message.json()['id']}/pin"
+        assert (
+            await client.put(voice_pin_path, headers=headers, json={"pinned": True})
+        ).status_code == 200
         assert (
             await client.post(f"{base}/owner", headers=headers, json={"userId": peer_id})
         ).status_code == 200
@@ -984,6 +983,9 @@ async def exercise_http(url: str) -> None:
         assert (
             await client.delete(f"{base}/members/{third_id}", headers=outsider)
         ).status_code == 204
+        for pin in (True, False):
+            denied_pin = await client.put(voice_pin_path, headers=outsider, json={"pinned": pin})
+            assert denied_pin.status_code == 404
         assert (
             await client.post(f"{base}/messages", headers=outsider, json={"body": "No membership"})
         ).status_code == 404
