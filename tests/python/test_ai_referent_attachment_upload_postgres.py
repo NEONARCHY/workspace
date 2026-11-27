@@ -45,11 +45,10 @@ async def test_identical_letter_attachments_roles_retries_and_legacy_keys() -> N
                 "Authorization": "Bearer " + issue_access_token(
                     author["id"], settings.auth_signing_key,
                 ),
-                "Content-Type": "application/pdf",
             }
             created = await client.post(
                 "/api/v1/ai-referent/letters", headers=headers,
-                json={"subject": "Attachment batch regression"},
+                json={"subject": "Attachment batch regression", "route": "exat"},
             )
             assert created.status_code == 201, created.text
             letter = created.json()
