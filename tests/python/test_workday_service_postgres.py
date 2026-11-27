@@ -148,3 +148,44 @@ async def test_workday_checkin_schedule_scope_and_automatic_close() -> None:
                 await transaction.rollback()
     finally:
         await engine.dispose()
+
+
+@pytest.mark.anyio
+@pytest.mark.postgres
+async def test_personal_actions_leave_other_users_cleanup_to_the_scheduler() -> None:
+    database_url = os.environ.get("YUKSALISH_TEST_DATABASE_URL")
+    if not database_url:
+        pytest.skip("YUKSALISH_TEST_DATABASE_URL is not configured")
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.connect() as connection:
+            transaction = await connection.begin()
+            try:
+                employee_id, other_id = uuid4(), uuid4()
+                for user_id in (employee_id, other_id):
+                    await connection.execute(insert(users).values(
+                        id=user_id, username=f"workday-{user_id.hex[:12]}", full_name="Test",
+                        role="employee", status="active", created_at=datetime.now(UTC),
+                        updated_at=datetime.now(UTC),
+                    ))
+                employee = AuthenticatedUser(id=employee_id, username="employee", full_name="Test",
+                    position_id=None, job_title=None, role="employee")
+                other = AuthenticatedUser(id=other_id, username="other", full_name="Test",
+                    position_id=None, job_title=None, role="employee")
+                old = await start_workday(
+                    connection, other, now=datetime(2026, 9, 23, 5, tzinfo=UTC),
+                )
+                assert old.session is not None
+                now = datetime(2026, 9, 24, 5, tzinfo=UTC)
+                assert (await start_workday(connection, employee, now=now)).status == "working"
+                assert (await finish_workday(connection, employee, now=now)).status == "finished"
+                other_session = (await connection.execute(select(workday_sessions).where(
+                    workday_sessions.c.id == old.session.id,
+                ))).mappings().one()
+                assert other_session["ended_at"] is None
+                assert await close_overdue_sessions(connection, now=now) == 1
+                assert await close_overdue_sessions(connection, now=now) == 0
+            finally:
+                await transaction.rollback()
+    finally:
+        await engine.dispose()

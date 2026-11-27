@@ -42,6 +42,17 @@ html:root body .app-provider :is(
 }
 @media (forced-colors: none) {
   html:root body .app-provider .fui-Badge { border-color: transparent; }
+  html:root body .app-provider .ws-section-header { --ws-header-action-fill: #123f54; --ws-header-action-hover: #185367; }
+  html[data-color-theme="dark"] body .app-provider .ws-section-header { --ws-header-action-fill: var(--ws-button-hover); --ws-header-action-hover: var(--ws-button-surface); }
+  html:root body .app-provider .app-content .ws-section-header :is(.fui-Button, .telegram-access-secondary) {
+    --ws-satin-sheen: none; --ws-satin-edge: none; border: 0; box-shadow: none;
+  }
+  html:root body .app-provider .app-content .ws-section-header :is(.fui-Button, .telegram-access-secondary):not(:disabled) {
+    color: #fff; background: var(--ws-header-action-fill);
+  }
+  html:root body .app-provider .app-content .ws-section-header :is(.fui-Button, .telegram-access-secondary):not(:disabled):hover { background: var(--ws-header-action-hover); }
+  html[data-color-theme="light"] body .app-provider .team-dashboard.workspace-queue .ws-section-header .team-dash-hero-summary,
+  html[data-color-theme="light"] body .app-provider .team-dashboard.workspace-queue .ws-section-header .team-dash-hero-summary :is(strong, span, svg) { color: #fff; }
 }
 @media (max-width: 700px) {
   html.web-platform:root body .app-provider .record-table .record-row { background: var(--ws-muted-surface); }

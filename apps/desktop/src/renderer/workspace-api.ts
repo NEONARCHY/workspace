@@ -1954,8 +1954,8 @@ export function loadWorkspaceEfficiency(
   return apiRequest<EfficiencyOverview>(`/efficiency${suffix}`, {}, token);
 }
 
-export function loadMyWorkday(token: string): Promise<WorkdayMe> {
-  return apiRequest<WorkdayMe>("/workday/me", {}, token);
+export function loadMyWorkday(token: string, signal?: AbortSignal): Promise<WorkdayMe> {
+  return apiRequest<WorkdayMe>("/workday/me", { signal }, token);
 }
 
 export function startMyWorkday(token: string): Promise<WorkdayMe> {

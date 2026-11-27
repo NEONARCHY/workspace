@@ -5,11 +5,12 @@ const path = require("node:path");
 const assert = require("node:assert/strict");
 const phase = process.argv.includes("--before") ? "before" : "after";
 const galleryOnly = process.argv.includes("--gallery-only");
-const attentionSuite = process.argv.includes("--attention");
+const shellReviewSuite = process.argv.includes("--shell-review");
+const attentionSuite = process.argv.includes("--attention") || shellReviewSuite;
 const peopleSuite = process.argv.includes("--people");
 const operationsSuite = process.argv.includes("--operations");
 const documentsSuite = process.argv.includes("--documents");
-const communicationsSuite = process.argv.includes("--communications");
+const communicationsSuite = process.argv.includes("--communications") || shellReviewSuite;
 const registrySuite = process.argv.includes("--registry");
 const workdaySuite = process.argv.includes("--workday");
 const promptSuite = process.argv.includes("--hisobot-prompt");
@@ -35,6 +36,7 @@ const sections = communicationsSuite ? [{ id: "referent", label: "AI Referent", 
   : attentionSuite
   ? [{ id: "overview", label: "Обзор команды", root: ".team-dashboard" }, { id: "notifications", label: "Уведомления", root: ".notifications-view" }, { id: "feed", label: "Лента", root: ".feed-view" }]
   : [{ id: "tasks", label: "Задачи", root: ".tasks-view" }, { id: "payments", label: "Заявки на оплату", root: ".approvals-view" }, { id: "trips", label: "Поездки", root: ".trips-view" }];
+if (shellReviewSuite) sections.splice(0, sections.length, { id: 'overview', label: 'Обзор команды', root: '.team-dashboard' }, { id: 'payments', label: 'Заявки на оплату', root: '.approvals-view' }, { id: 'referent', label: 'AI Referent', root: '.ai-referent-view' });
 const settle = async page => page.evaluate(async () => {
   await document.fonts.ready;
   await Promise.race([Promise.all(document.getAnimations().filter(a => Number(a.effect?.getComputedTiming().endTime) < 2000).map(a => a.finished.catch(() => undefined))), new Promise(r => setTimeout(r, 900))]);
@@ -147,6 +149,10 @@ async function measure(page, selector) {
         const request = route.request(), endpoint = new URL(request.url()).pathname.replace("/api/v1", "");
         const send = json => route.fulfill({ json: communicationsSuite && endpoint === "/workspace/bootstrap" ? { ...json, moduleAccess: data.communication.moduleAccess, projects: data.communication.projects, chats: data.home.chats, messages: data.home.messages } : registrySuite && endpoint === "/workspace/bootstrap" ? { ...json, moduleAccess: data.registry.moduleAccess } : json });
         if (/\/auth\/(web\/)?login$/.test(endpoint)) return send({ accessToken: "qa-token", expiresIn: 3600, user: data.user });
+        if (shellReviewSuite && request.method() === 'POST' && /^\/workday\/(start|finish)$/.test(endpoint)) {
+          workdayWrites++; workdayWorking = endpoint.endsWith('/start');
+          return send({ status: workdayWorking ? 'working' : 'finished', schedule: { startsAt: '09:00', endsAt: '18:00' }, session: null });
+        }
         if (registrySuite && endpoint === "/mail/messages/search") { const { query } = request.postDataJSON(); return send({ messages: data.registry.messages.filter(item => !query || `${item.subject} ${item.sender}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())), nextPageToken: null }); }
         if (!["GET", "HEAD"].includes(request.method())) { if (endpoint.startsWith("/workday/")) workdayWrites++; return route.fulfill({ status: 403, json: { detail: "Synthetic QA: no writes" } }); }
         if (communicationsSuite && endpoint.startsWith('/ai-referent/')) {
@@ -272,6 +278,11 @@ async function measure(page, selector) {
         if (topbarSuite && section.id === "home" || phase === "after" && reportingSuite && section.id === "hisobot") await capture(page.locator(".global-bar"), path.join(output, phase, `topbar-${theme}-${width}.png`));
         const geometry = await measure(page, section.root);
         results.push({ section: section.id, width, height, theme, ...geometry });
+        if (shellReviewSuite) {
+          if (phase === 'after') await require('./ui-shell-checks.cjs')(page, section, { width, theme, geometry, output });
+          await capture(page.locator('.global-bar'), path.join(output, phase, `topbar-${theme}-${width}.png`));
+          console.log('PASS ' + file); continue;
+        }
         if (communicationsSuite) { if (phase === 'after') await require('./ui-communication-checks.cjs')(page, section, { width, geometry }); console.log('PASS ' + file); continue; }
         if (registrySuite && phase === "after") {
           assert(geometry.pageOverflow <= 1, `${file}: page overflow`);
@@ -405,9 +416,13 @@ async function measure(page, selector) {
           });
           for (const control of toolbar) {
             assert(Math.abs(control.height - 44) <= 1, `${file}: toolbar height ${control.name}`);
+            if (control.name.includes('section-jump-trigger')) {
+              assert(control.width >= 180, `${file}: readable search field`);
+              assert.equal(control.radius, '14px'); assert.equal(control.border, '0px'); assert.equal(control.shadow, 'none');
+              assert.notEqual(control.fill, 'rgba(0, 0, 0, 0)'); continue;
+            }
             assert.equal(control.radius, "50%", `${file}: toolbar corner ${control.name}`);
             assert.equal(control.border, "0px", `${file}: toolbar without frames ${control.name}`);
-            assert.equal(control.fill, toolbar[0].fill, `${file}: shared toolbar fill ${control.name}`);
             assert.equal(control.fill, "rgba(0, 0, 0, 0)", `${file}: transparent toolbar fill ${control.name}`);
             assert.equal(control.image, "none", `${file}: no gradient frame ${control.name}`);
             assert.equal(control.shadow, "none", `${file}: no inset frame ${control.name}`);
@@ -423,11 +438,11 @@ async function measure(page, selector) {
           if (section.id === "home" || reportingSuite && section.id === "hisobot") {
             const avatarSize = await page.locator(".workspace-identity-menu .fui-Avatar").boundingBox();
             const orbSize = await page.locator(".assistant-launcher > .gradient-orb, .assistant-launcher > .gradient-orb-fallback").boundingBox();
-            assert.equal(avatarSize.width, 28); assert.equal(avatarSize.height, 28);
+            assert.equal(avatarSize.width, 40); assert.equal(avatarSize.height, 40);
             assert.equal(orbSize.width, avatarSize.width); assert.equal(orbSize.height, avatarSize.height);
             await page.locator(".notification-bell").hover(); await settle(page);
             const hover = await page.locator(".notification-bell").evaluate(node => { const style = getComputedStyle(node, "::before"); return { width: style.width, height: style.height, radius: style.borderRadius, fill: style.backgroundColor }; });
-            assert.deepEqual({ width: hover.width, height: hover.height, radius: hover.radius }, { width: "28px", height: "28px", radius: "50%" });
+            assert.deepEqual({ width: hover.width, height: hover.height, radius: hover.radius }, { width: "40px", height: "40px", radius: "50%" });
             assert.notEqual(hover.fill, "rgba(0, 0, 0, 0)");
             for (const selector of [".assistant-launcher", ".workspace-identity-menu"]) {
               await page.locator(selector).hover(); await settle(page);
