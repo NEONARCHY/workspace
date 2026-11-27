@@ -135,6 +135,8 @@ interface OutgoingDraft {
 export interface MessengerViewProps {
   readonly compact?: boolean;
   readonly visible?: boolean;
+  /** Logical panel visibility: release the list without discarding the conversation draft. */
+  readonly listActive?: boolean;
   /** The floating full-page host has measured its destination bounds. */
   readonly layoutReady?: boolean;
   readonly onActiveChatChange?: (chatId: string | undefined) => void;
@@ -1619,11 +1621,11 @@ export function MessengerView(props: MessengerViewProps) {
   return (
     <section className={`workspace-view workspace-queue messenger-view ${props.compact ? "messenger-mini" : ""} ${(conversationOpen && activeChat) || pendingAssistantChat ? "conversation-open" : ""}`} aria-label="Мессенджер">
       <aside className="list-pane" ref={listPaneRef}>
-          <OrganizedChatList key={listRevision} token={props.token} chats={visibleChats} messages={messages} people={props.people} departments={props.departments} currentUserId={props.currentUserId} activeChatId={activeChat?.id} focusChatId={focusChatId}
+          {(props.listActive ?? visible) ? <OrganizedChatList key={listRevision} token={props.token} chats={visibleChats} messages={messages} people={props.people} departments={props.departments} currentUserId={props.currentUserId} activeChatId={activeChat?.id} focusChatId={focusChatId}
           preferences={preferences} onChange={props.onPersonalChat} onReorder={props.onPinnedOrder}
           onCreateGroup={() => setPanel("create")}
           onDelete={requestChatDeletion} onLeave={setPendingLeave} onOpenDirect={openDirectChat}
-          onSelect={(id) => { setActiveChatId(id); setAssistantPreparationDismissed(true); setConversationOpen(true); setPanel(undefined); }} />
+          onSelect={(id) => { setActiveChatId(id); setAssistantPreparationDismissed(true); setConversationOpen(true); setPanel(undefined); }} /> : null}
       </aside>
       {pendingAssistantChat ? (
         <div className="conversation-pane assistant-message-prepare" role="region" aria-label="Подготовка сообщения">
@@ -1655,8 +1657,9 @@ export function MessengerView(props: MessengerViewProps) {
             setConversationOpen(false);
             const row = Array.from(listPaneRef.current?.querySelectorAll<HTMLElement>("[data-chat-id]") ?? [])
               .find((item) => item.dataset.chatId === activeChat.id)?.querySelector<HTMLButtonElement>(".chat-row");
+            const focusTarget = row ?? listPaneRef.current?.querySelector<HTMLInputElement>(".pane-search input");
             // The list is revealed in this commit; retain keyboard context without remounting the draft.
-            requestAnimationFrame(() => row?.isConnected && row.focus({ preventScroll: true }));
+            requestAnimationFrame(() => focusTarget?.isConnected && focusTarget.focus({ preventScroll: true }));
           }}
           fileDropDisabledReason={panel || deletionChoiceOpen || pendingLeave ? "Сначала закройте окно управления чатом" : undefined}
         />

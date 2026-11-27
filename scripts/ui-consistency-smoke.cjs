@@ -5,13 +5,14 @@ const path = require("node:path");
 const assert = require("node:assert/strict");
 const phase = process.argv.includes("--before") ? "before" : "after";
 const galleryOnly = process.argv.includes("--gallery-only");
+const chatPaginationSuite = process.argv.includes('--chat-pagination');
 const toolbarSuite = process.argv.includes('--toolbar-layout');
 const shellReviewSuite = process.argv.includes("--shell-review");
 const attentionSuite = process.argv.includes("--attention") || shellReviewSuite;
 const peopleSuite = process.argv.includes("--people");
 const operationsSuite = process.argv.includes("--operations");
 const documentsSuite = process.argv.includes("--documents");
-const communicationsSuite = process.argv.includes("--communications") || shellReviewSuite || toolbarSuite;
+const communicationsSuite = process.argv.includes("--communications") || shellReviewSuite || toolbarSuite || chatPaginationSuite;
 const registrySuite = process.argv.includes("--registry") || toolbarSuite;
 const workdaySuite = process.argv.includes("--workday");
 const promptSuite = process.argv.includes("--hisobot-prompt");
@@ -39,6 +40,7 @@ const sections = communicationsSuite ? [{ id: "referent", label: "AI Referent", 
   : [{ id: "tasks", label: "Задачи", root: ".tasks-view" }, { id: "payments", label: "Заявки на оплату", root: ".approvals-view" }, { id: "trips", label: "Поездки", root: ".trips-view" }];
 if (shellReviewSuite) sections.splice(0, sections.length, { id: 'overview', label: 'Обзор команды', root: '.team-dashboard' }, { id: 'payments', label: 'Заявки на оплату', root: '.approvals-view' }, { id: 'referent', label: 'AI Referent', root: '.ai-referent-view' });
 if (toolbarSuite) sections.splice(0, sections.length, { id: 'referent', label: 'AI Referent', root: '.ai-referent-view' }, { id: 'legacy-projects', label: 'Список проектов', root: '.projects-view' }, { id: 'payments', label: 'Заявки на оплату', root: '.approvals-view' }, { id: 'trips', label: 'Поездки', root: '.trips-view' }, { id: 'tasks', label: 'Задачи', root: '.tasks-view' }, { id: 'grants', label: 'Гранты', root: '.grants-view' });
+if (chatPaginationSuite) sections.splice(0, sections.length, { id: 'messenger', label: 'Мессенджер', root: '.messenger-view' });
 const settle = async page => page.evaluate(async () => {
   await document.fonts.ready;
   await Promise.race([Promise.all(document.getAnimations().filter(a => Number(a.effect?.getComputedTiming().endTime) < 2000).map(a => a.finished.catch(() => undefined))), new Promise(r => setTimeout(r, 900))]);
@@ -234,6 +236,10 @@ async function measure(page, selector) {
       if (communicationsSuite) { data.communication = require('./ui-communication-fixtures.cjs')(data.people, data.user); data.communication.moduleAccess = await page.evaluate(async () => (await import('/src/renderer/module-catalog.ts')).fallbackModules.map(module => ({ moduleKey: module.key, permissions: { view: true, create: true, edit: true, approve: true, admin: true } }))); }
       if (registrySuite) { data.registry = registryFixtures(data.people, data.user); data.registry.moduleAccess = await page.evaluate(async () => (await import('/src/renderer/module-catalog.ts')).fallbackModules.map(module => ({ moduleKey: module.key, permissions: { view: true, create: true, edit: true, approve: true, admin: true } }))); }
       if (communicationsSuite) data.home.chats = [...data.home.chats.map(chat => ({ ...chat, unread: 0 })), { ...data.home.chats[0], id: 'qa-legacy-project-chat', title: 'Проект: региональные инициативы', preview: 'План работ и материалы проекта', unread: 0, kind: 'group', contextType: 'project', contextId: 'legacy-project-0' }];
+      if (chatPaginationSuite) data.home.chats.push(...['group', 'task', 'project', 'trip'].flatMap(kind => Array.from({ length: 100 }, (_, i) => ({
+        ...data.home.chats[0], id: `qa-paged-${kind}-${i}`, title: `Переписка ${kind} ${String(i).padStart(3, '0')}`, preview: 'Материалы и рабочее обсуждение', unread: 0,
+        kind: kind === 'task' ? 'task' : 'group', contextType: kind === 'group' ? undefined : kind, contextId: undefined,
+      }))));
       await page.evaluate(({ id, theme }) => localStorage.setItem(`yuksalish:color-theme:${id}`, theme), { id: data.user.id, theme });
       await page.getByRole("textbox", { name: /Логин/ }).fill("qa-user");
       await page.getByLabel(/Пароль/).fill("qa-only-password");
@@ -288,6 +294,7 @@ async function measure(page, selector) {
         if (topbarSuite && section.id === "home" || phase === "after" && reportingSuite && section.id === "hisobot") await capture(page.locator(".global-bar"), path.join(output, phase, `topbar-${theme}-${width}.png`));
         const geometry = await measure(page, section.root);
         results.push({ section: section.id, width, height, theme, ...geometry });
+        if (chatPaginationSuite) { await require('./ui-chat-pagination-checks.cjs')(page, { output, width, theme }); console.log('PASS ' + file); continue; }
         if (toolbarSuite) { if (phase === 'after') await require('./ui-toolbar-checks.cjs')(page, section, { width, geometry }); console.log('PASS ' + file); continue; }
         if (shellReviewSuite) {
           if (phase === 'after') await require('./ui-shell-checks.cjs')(page, section, { width, theme, geometry, output });
@@ -921,6 +928,7 @@ async function measure(page, selector) {
       await fs.writeFile(resultPath, JSON.stringify({ results: [...previous, ...results], errors }, null, 2));
     }
     assert.deepEqual(errors, []);
+    if (chatPaginationSuite) return;
     if (promptSuite) return;
     await fs.writeFile(path.join(output, "index.html"), `<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Yuksalish — сравнение интерфейса</title>
       <style>*{box-sizing:border-box}body{margin:0;padding:24px;background:#111318;color:#eceef4;font:15px/1.5 system-ui}main{max-width:1600px;margin:auto}h1{font-size:28px}p,figcaption{color:#bfc6d3}select{margin:0 0 24px;padding:12px;border-radius:8px;background:#252a33;color:inherit}section{margin:0 0 32px}h2{font-size:20px}article{display:grid;grid-template-columns:1fr 1fr;gap:16px}figure{margin:0;min-width:0}img{display:block;width:100%;height:auto;border-radius:12px}figcaption{margin-bottom:8px}@media(max-width:700px){article{grid-template-columns:1fr}body{padding:12px}}</style>

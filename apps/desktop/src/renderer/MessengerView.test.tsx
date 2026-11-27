@@ -119,6 +119,28 @@ it("does not read chats in a closed mini messenger or merely in its list", async
   expect(onMarkRead).not.toHaveBeenCalled();
   result.unmount();
 });
+it("releases the paged chat list on exit and opens a distant chat without losing its draft", async () => {
+  const chats: ChatSummary[] = Array.from({ length: 100 }, (_, i) => ({ ...initialChats[0]!, id: `large-${i}`, title: `Рабочая группа ${i}`, kind: "group", contextType: undefined, unread: 0 }));
+  const result = renderMessenger({ compact: true, chats, messages: [], people: [], focusChatId: "large-99" });
+  const rows = () => document.querySelectorAll(".chat-list [data-chat-id]").length;
+  expect(rows()).toBe(15);
+  expect(screen.getByRole("heading", { name: "Рабочая группа 99" })).toBeInTheDocument();
+  const editor = screen.getByRole("textbox", { name: "Новое сообщение" });
+  changeField(editor, { target: { value: "Сохранить этот черновик" } });
+  fireEvent.click(screen.getByRole("button", { name: "Показать ещё 15" })); expect(rows()).toBe(30);
+  result.rerender(<FluentProvider theme={webLightTheme}><MessengerView {...result.props} visible={false} listActive /></FluentProvider>);
+  expect(rows()).toBe(30); // A modal or background tab suspends reading, not the logical list session.
+  result.rerender(<FluentProvider theme={webLightTheme}><MessengerView {...result.props} visible={false} listActive={false} /></FluentProvider>);
+  expect(rows()).toBe(0);
+  expect(editor).toBeInTheDocument(); expect(editor).toHaveTextContent("Сохранить этот черновик");
+  result.rerender(<FluentProvider theme={webLightTheme}><MessengerView {...result.props} visible listActive /></FluentProvider>);
+  expect(rows()).toBe(15);
+  expect(screen.getByRole("textbox", { name: "Новое сообщение" })).toBe(editor);
+  expect(editor).toHaveTextContent("Сохранить этот черновик");
+  fireEvent.click(screen.getByRole("button", { name: "К списку чатов" }));
+  await waitFor(() => expect(screen.getByRole("textbox", { name: "Поиск чатов и сообщений" })).toHaveFocus());
+  result.unmount();
+});
 it("reopens the same focused chat on a new navigation request without remounting its draft", () => {
   const result = renderMessenger({ compact: true, focusChatId: "finance", focusRevision: 1 });
   const editor = screen.getByRole("textbox", { name: "Новое сообщение" });

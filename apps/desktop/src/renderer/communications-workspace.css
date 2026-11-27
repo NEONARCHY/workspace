@@ -53,6 +53,8 @@ body .app-provider .workspace-queue.projects-view .project-card .spatial-card-op
 .workspace-queue.projects-view .project-card small { white-space: normal; overflow-wrap: anywhere; }
 body .app-provider .workspace-queue.messenger-view { gap: var(--ws-queue-space); min-height: 0; }
 body .app-provider .workspace-queue.messenger-view > .list-pane { padding: 12px; gap: 12px; }
+.messenger-view .chat-list-load-more { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px; padding: 12px 4px; color: var(--ws-muted); font-size: 12px; }
+.messenger-view .chat-list-load-more > .fui-Button { min-height: 44px; border: 0; box-shadow: none; }
 body .app-provider .workspace-queue.messenger-view .chat-list-searchbar { gap: 8px; margin: 0; }
 .workspace-queue.messenger-view .chat-list-searchbar > .workspace-search { --search-height: 44px; min-width: 0; flex: 1; margin: 0; }
 body .app-provider .workspace-queue.messenger-view .chat-list-searchbar > .fui-Button { min-width: 44px; min-height: 44px; padding: 0; }

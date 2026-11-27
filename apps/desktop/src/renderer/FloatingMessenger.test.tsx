@@ -9,7 +9,7 @@ import { initialChats } from "./test-fixtures/demo-data";
 vi.mock("./MessengerView", () => ({
   MessengerView: (props: MessengerViewProps) => {
     const [draft, setDraft] = useState("");
-    return <div data-testid="shared-messenger" data-visible={String(props.visible)} data-compact={String(props.compact)}>
+    return <div data-testid="shared-messenger" data-visible={String(props.visible)} data-list-active={String(props.listActive)} data-compact={String(props.compact)}>
       <input aria-label="Test draft" value={draft} onChange={event => setDraft(event.target.value)} />
       <button onClick={() => props.onActiveChatChange?.("finance")}>Choose finance</button>
     </div>;
@@ -58,6 +58,7 @@ it("hides the launcher on direct full-page entry and restores it on another page
   expect(screen.queryByRole("button", { name: "Открыть мини-мессенджер" })).not.toBeInTheDocument();
   fireEvent.change(screen.getByLabelText("Test draft"), { target: { value: "Сохранить при выходе" } });
   rendered.rerender(view(false));
+  expect(screen.getByTestId("shared-messenger")).toHaveAttribute("data-list-active", "false");
   const launcher = screen.getByRole("button", { name: "Открыть мини-мессенджер" });
   expect(launcher).not.toHaveAttribute("hidden");
   fireEvent.click(launcher);
@@ -101,6 +102,7 @@ it("suspends reading when the application tab is hidden", () => {
   visibility.mockReturnValue("hidden");
   fireEvent(document, new Event("visibilitychange"));
   expect(screen.getByTestId("shared-messenger")).toHaveAttribute("data-visible", "false");
+  expect(screen.getByTestId("shared-messenger")).toHaveAttribute("data-list-active", "true");
   visibility.mockReturnValue("visible");
   fireEvent(document, new Event("visibilitychange"));
   expect(screen.getByTestId("shared-messenger")).toHaveAttribute("data-visible", "true");
