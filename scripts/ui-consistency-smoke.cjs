@@ -11,7 +11,8 @@ const referentSurfacesSuite = process.argv.includes('--referent-surfaces');
 const taskSpacingSuite = process.argv.includes('--task-spacing');
 const calendarSurfacesSuite = process.argv.includes('--calendar-surfaces') || taskSpacingSuite;
 const surfaceFollowupSuite = process.argv.includes('--surface-followup');
-const mobileQueuesSuite = process.argv.includes('--mobile-queues');
+const grantsSpacingSuite = process.argv.includes('--grants-spacing');
+const mobileQueuesSuite = process.argv.includes('--mobile-queues') || grantsSpacingSuite;
 const gutterSuite = process.argv.includes('--shell-gutters');
 const toolbarSuite = process.argv.includes('--toolbar-layout');
 const shellReviewSuite = process.argv.includes("--shell-review");
@@ -54,6 +55,7 @@ if (calendarSurfacesSuite) sections.splice(0, sections.length, { id: 'tasks', la
 if (taskSpacingSuite) sections.splice(1);
 if (surfaceFollowupSuite) sections.splice(0, sections.length, { id: 'overview', label: 'Обзор команды', root: '.team-dashboard' }, { id: 'calendar', label: 'Календарь', root: '.calendar-view' }, { id: 'grants', label: 'Гранты', root: '.grants-view' });
 if (mobileQueuesSuite) sections.splice(0, sections.length, { id: 'tasks', label: 'Задачи', root: '.tasks-view' }, { id: 'grants', label: 'Гранты', root: '.grants-view' });
+if (grantsSpacingSuite) sections.splice(0, 1);
 if (gutterSuite) sections.splice(0, sections.length, { id: 'home', label: 'Главная', root: '.personal-home' }, { id: 'tasks', label: 'Задачи', root: '.tasks-view' }, { id: 'grants', label: 'Гранты', root: '.grants-view' }, { id: 'notifications', label: 'Уведомления', root: '.notifications-view' }, { id: 'calendar', label: 'Календарь', root: '.calendar-view' }, { id: 'referent', label: 'AI Referent', root: '.ai-referent-view' }, { id: 'payments', label: 'Заявки на оплату', root: '.approvals-view' });
 const settle = async page => page.evaluate(async () => {
   await document.fonts.ready;

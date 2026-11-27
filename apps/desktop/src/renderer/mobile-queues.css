@@ -13,6 +13,7 @@ body .app-provider .task-domain-tabs .fui-Tab { white-space: nowrap; }
 }
 
 @media (max-width: 700px) {
+  body .app-provider .grants-view.workspace-queue:not([data-dialog-only]) { gap: var(--ws-queue-space); }
   html:root body .app-provider :is(.tasks-view, .grants-view).workspace-view.workspace-queue:not([data-dialog-only]) .ws-section-header {
     display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; min-height: 0; padding: 8px;
     border: 0; border-radius: 16px; background: var(--ws-surface); color: var(--ws-text);

@@ -2242,7 +2242,11 @@ export function App() {
         <aside className="app-rail sidebar-palette" data-sidebar-theme={sidebarTheme} aria-label="Основная навигация">
           <div className="workspace-logo" aria-label="Yuksalish Workspace">
             <button type="button" className="rail-toggle" disabled={!browserCompact && navigationEditing} aria-label={browserCompact ? "Закрыть меню" : railCollapsed ? "Развернуть меню" : "Свернуть меню"} aria-expanded={browserCompact ? browserMenuOpen : !railCollapsed} onClick={() => browserCompact ? closeBrowserMenu() : setRailPreference(!railCollapsed)}><Navigation24Regular /></button>
-            <CompanyLogo tone={sidebarTheme === "light" ? "color" : "white"} className="rail-brand" />
+            <button type="button" className="rail-home" aria-label="Перейти на Главную" title="Главная"
+              aria-current={displayedSection === "home" ? "page" : undefined} disabled={navigationEditing || !canView("home")}
+              onClick={() => { closeBrowserMenu(); setPreparedAction(undefined); setFocusTarget(undefined); setFocusNotification(undefined); setActiveSection("home"); }}>
+              <CompanyLogo tone={sidebarTheme === "light" ? "color" : "white"} className="rail-brand" />
+            </button>
           </div>
           <div className="rail-customize">
             <span>Меню</span>

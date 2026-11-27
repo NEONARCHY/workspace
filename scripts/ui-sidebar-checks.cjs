@@ -77,6 +77,7 @@ exports.check = async (page, { output, phase, width, height, theme }) => {
   await rail.getByRole('button', { name: 'Отмена', exact: true }).click();
   if (width >= 1024) {
     await rail.getByRole('button', { name: 'Свернуть меню', exact: true }).click(); await capture('sidebar-collapsed');
+    if (after) assert.equal(await rail.getByRole('button', { name: 'Перейти на Главную', exact: true }).isVisible(), false, 'collapsed rail has no invisible logo target');
     await rail.getByRole('button', { name: 'Развернуть меню', exact: true }).click();
     await page.setViewportSize({ width, height: 600 }); await settle();
     const more = rail.getByRole('button', { name: /^Ещё,/ }); await more.click();
@@ -86,6 +87,18 @@ exports.check = async (page, { output, phase, width, height, theme }) => {
     await page.setViewportSize({ width, height });
   } else {
     await rail.getByRole('button', { name: 'Закрыть меню', exact: true }).click(); await capture('sidebar-collapsed');
+    await open();
+  }
+  if (after) {
+    await navigate('Задачи'); await open();
+    const logo = rail.getByRole('button', { name: 'Перейти на Главную', exact: true });
+    const bounds = await logo.boundingBox();
+    assert(bounds.height >= 44 && bounds.width >= 44, 'logo has a usable hit target');
+    await page.keyboard.press('Tab'); await logo.focus();
+    assert.equal(await logo.evaluate(node => getComputedStyle(node).outlineWidth), '2px', 'logo retains keyboard focus');
+    await logo.press('Enter');
+    await page.locator('.personal-home').waitFor();
+    if (width < 1024) assert.equal(await rail.isVisible(), false, 'logo closes the mobile menu');
     await open();
   }
   await page.emulateMedia({ forcedColors: 'active' });

@@ -14,6 +14,12 @@ module.exports = async (page, section, { phase, width }) => {
     assert(Math.abs(metrics.leftInset - metrics.rightInset) <= 1, 'page insets are symmetric: ' + JSON.stringify(metrics));
     assert(Math.abs(header.x - frame.x) <= 1 && Math.abs(header.width - frame.width) <= 1, 'header and list share the same edges');
     assert(Math.abs(first.x - header.x) <= 1 && Math.abs(first.width - header.width) <= 1, 'cards share the header edges: ' + JSON.stringify({ first, header, frame }));
+    if (section.id === 'grants') {
+      const search = await root.locator('.grants-toolbar > .workspace-search').boundingBox();
+      const controls = await root.locator('.workspace-queue-controls').boundingBox();
+      const gaps = [search.y - header.y - header.height, controls.y - search.y - search.height, first.y - controls.y - controls.height];
+      assert(gaps.every(gap => Math.abs(gap - 8) <= 1), 'grant header, search, filters and cards have eight-pixel gaps: ' + JSON.stringify(gaps));
+    }
     assert(first.height <= 210, 'mobile record is compact: ' + JSON.stringify(metrics));
     assert(header.height <= (section.id === 'tasks' ? 128 : 80), 'mobile header stays compact: ' + JSON.stringify(await root.locator('.ws-section-header').evaluate(node => [node, ...node.querySelectorAll('.task-toolbar-actions, .task-domain-tabs, .task-header-copy, .task-mobile-view')].map(el => { const s = getComputedStyle(el), r = el.getBoundingClientRect(); return { class: el.className, display: s.display, columns: s.gridTemplateColumns, position: s.position, x: r.x, y: r.y, width: r.width, height: r.height }; }))));
     assert.equal(await root.locator('.record-table thead').isVisible(), false, 'no desktop heading rail');

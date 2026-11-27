@@ -10,6 +10,9 @@ html:root body :is(.app-shell, .browser-navigation-dialog) .app-rail.sidebar-pal
 }
 html:root body .sidebar-palette .workspace-logo { min-height: 64px; margin: 0; padding: 0; gap: 8px; border: 0; }
 html:root body .sidebar-palette .rail-brand { flex: none; width: 148px; height: auto; transform: none; }
+html:root body .sidebar-palette .rail-home { display: grid; place-items: center; flex: none; min-height: 44px; padding: 0; border: 0; border-radius: 6px; background: transparent; box-shadow: none; cursor: pointer; }
+html:root body .sidebar-palette .rail-home:disabled { cursor: default; }
+html:root body .sidebar-palette .rail-home:focus-visible { outline: 2px solid var(--ws-rail-selected-icon); outline-offset: 3px; }
 html:root body .sidebar-palette .rail-toggle { display: grid; place-items: center; flex: none; width: 44px; min-width: 44px; height: 44px; padding: 0; border: 0; border-radius: 12px; box-shadow: none; }
 html:root body .sidebar-palette .rail-toggle svg { width: 24px; height: 24px; }
 html:root body .sidebar-palette .rail-customize { min-height: 32px; padding: 0 12px; margin: 0; opacity: 1; }
@@ -66,7 +69,7 @@ html:root body .sidebar-palette.rail-more-drawer .rail-action { height: auto; }
 
 @media (min-width: 761px) {
   html:root body .rail-collapsed .app-rail .workspace-logo { justify-content: center; gap: 0; }
-  html:root body .rail-collapsed .app-rail :is(.rail-brand, .rail-label, .rail-customize > span, .rail-profile > span:last-child) { display: none; }
+  html:root body .rail-collapsed .app-rail :is(.rail-home, .rail-brand, .rail-label, .rail-customize > span, .rail-profile > span:last-child) { display: none; }
   html:root body .rail-collapsed .app-rail .rail-customize { justify-content: center; padding: 0; }
   html:root body .rail-collapsed .app-rail .rail-action { grid-template-columns: 1fr; justify-items: center; gap: 0; padding-inline: 0; }
   html:root body .rail-collapsed .app-rail .rail-action .rail-icon { width: 24px; height: 24px; }
@@ -78,6 +81,7 @@ html:root body .browser-navigation-dialog .app-rail .workspace-logo { min-height
 html:root body .browser-navigation-dialog .app-rail .rail-nav { overflow-y: auto; overflow-x: hidden; }
 html:root body .browser-navigation-dialog .app-rail :is(.rail-action, .rail-ai-link, .rail-profile) { min-height: 48px; height: auto; }
 html:root body .browser-navigation-dialog .app-rail :is(.rail-brand, .rail-label, .rail-customize > span, .rail-profile > span:last-child) { display: block; opacity: 1; transform: none; }
+html:root body .browser-navigation-dialog .app-rail .rail-home { display: grid; }
 html:root body .browser-navigation-dialog .app-rail .rail-label { white-space: normal; }
 html:root body .browser-navigation-dialog .app-rail .rail-ai-chevron { display: block; }
 html:root body .browser-navigation-dialog .app-rail :is(.rail-toggle, .rail-customize button) { min-width: 48px; min-height: 48px; }
