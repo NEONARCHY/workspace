@@ -1172,6 +1172,7 @@ TripAction = Literal[
     "annul",
     "complete",
     "revise_order",
+    "update_order_details",
     "approve_revision",
     "complete_revision",
     "cancel_revision",
@@ -1501,14 +1502,16 @@ class TripActionRequest(ApiModel):
         self.order_number = self.order_number.strip()
         self.order_series = self.order_series.strip()
         self.order_purpose = self.order_purpose.strip()
-        if self.action in {"complete", "complete_revision"} and (
+        if self.action in {"complete", "complete_revision", "update_order_details"} and (
             not self.order_number or not self.order_series
         ):
             raise ValueError("Укажите номер и серию приказа")
-        if self.action not in {"complete", "complete_revision"} and (
+        if self.action not in {"complete", "complete_revision", "update_order_details"} and (
             self.order_number or self.order_series or self.order_purpose or self.order_date
         ):
             raise ValueError("Реквизиты приказа доступны только при кадровом оформлении")
+        if self.action == "update_order_details" and self.order_purpose:
+            raise ValueError("Кадровые реквизиты не изменяют цель утверждённой поездки")
         if self.action in {"revise_order", "cancel_revision"} and not self.comment.strip():
             raise ValueError("Укажите причину переоформления или отмены")
         return self

@@ -48,9 +48,16 @@ def test_new_trip_actions_require_the_actual_chair_and_pinned_hr():
 
 
 @pytest.mark.parametrize("number,series", [("", "a/f"), ("29", ""), ("  ", "a/f")])
-def test_complete_requires_real_number_and_series(number, series):
+@pytest.mark.parametrize("action", ["complete", "update_order_details"])
+def test_complete_requires_real_number_and_series(number, series, action):
     with pytest.raises(ValidationError):
-        TripActionRequest(action="complete", order_number=number, order_series=series)
+        TripActionRequest(action=action, order_number=number, order_series=series)
+
+
+def test_registration_cannot_change_the_approved_purpose():
+    with pytest.raises(ValidationError, match="не изменяют цель"):
+        TripActionRequest(action="update_order_details", order_number="29", order_series="a/f",
+                          order_purpose="A different purpose")
 
 
 def test_other_actions_cannot_change_hr_order_fields():

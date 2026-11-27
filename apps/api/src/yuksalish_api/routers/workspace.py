@@ -1330,6 +1330,7 @@ async def post_trip_action(
     permission_action: ModuleAction = (
         "edit" if payload.action in {
             "submit", "resubmit", "withdraw", "annul", "revise_order", "cancel_revision",
+            "update_order_details",
         } else "approve"
     )
     await ensure_module_action(connection, current_user, "trip_approvals", permission_action)
