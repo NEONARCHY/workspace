@@ -1,6 +1,7 @@
+import { formatRussianDateTime } from "./date-time-format";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { LoadingSkeleton, SkeletonBlock } from "./LoadingSkeleton";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Button, DialogSurface, Input, Textarea } from "@fluentui/react-components";
 import { Add24Regular, ArrowClockwise24Regular, Attach20Regular, Dismiss20Regular } from "@fluentui/react-icons";
 import type {
@@ -28,6 +29,7 @@ import { assistantPeopleIds, resolveAssistantPerson } from "./assistant-form-han
 import { ProjectImportDialog } from "./ProjectImportDialog";
 import { ProjectBudgetDialog } from "./ProjectBudgetDialog";
 import { ProjectPaymentRouteFields } from "./ProjectPaymentRouteFields";
+import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
 
 type ViewMode = "projects" | "funding";
 type FormMode = "project" | "workstream" | "item" | "request" | "status" | null;
@@ -52,6 +54,7 @@ interface Props {
 }
 
 const emptyHub: ProjectHubOverview = { projects: [], workstreams: [], items: [], requests: [] };
+const noPaymentRequests: readonly ApprovalRequestSummary[] = [];
 const itemStatus: Record<ProjectHubItem["status"], string> = {
   planned: "Запланировано", active: "В работе", completed: "Завершено",
   rejected: "Отклонено", cancelled: "Отменено",
@@ -59,13 +62,14 @@ const itemStatus: Record<ProjectHubItem["status"], string> = {
 const requestStatus: Record<ProjectHubRequest["status"], string> = {
   draft: "Черновик", pending: "На согласовании", approved: "Согласовано", rejected: "Отклонено",
 };
+const moneyFormatter = new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 });
 function formatMoney(value: number | bigint, currency: string): string {
-  return `${new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 }).format(value)} ${currency}`;
+  return `${moneyFormatter.format(value)} ${currency}`;
 }
 
 function formatDate(value?: string | null): string {
   if (!value) return "Срок не указан";
-  return new Date(value).toLocaleString("ru-RU", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  return formatRussianDateTime(new Date(value), { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
 function localDateTime(value?: string | null): string {
@@ -91,7 +95,7 @@ function emptyItem(workstreamId = ""): ProjectHubItemInput {
 }
 
 export function ProjectHubView({ mode, token, people, departments, currentUserId, canCreateProject,
-  canCreateRequest, paymentRequests = [], canCreatePaymentRequest = false,
+  canCreateRequest, paymentRequests = noPaymentRequests, canCreatePaymentRequest = false,
   onOpenPaymentRequest, onCreatePaymentRequest, focusId, onOpenCalendar, onOpenChat,
   assistantDraft }: Props) {
   const [hub, setHub] = useState<ProjectHubOverview>(emptyHub);
@@ -144,51 +148,69 @@ export function ProjectHubView({ mode, token, people, departments, currentUserId
   const [requestDraftId, setRequestDraftId] = useState("");
   const [uploadedFileCount, setUploadedFileCount] = useState(0);
   const [decisionComment, setDecisionComment] = useState("");
-  const [filter, setFilter] = useState("active");
+  const [filter, setFilter] = useState(focusId ? "all" : "active");
+  const [projectToolsOpen, setProjectToolsOpen] = useState(false);
+  const [projectIndexOpen, setProjectIndexOpen] = useState(false);
+  const projectIndexId = useId(), projectToolsId = useId();
+  const request = useRef<AbortController | null>(null);
 
   const reload = useCallback(async (propagateError = false) => {
+    request.current?.abort();
+    const controller = new AbortController(); request.current = controller;
     setLoading(true); setLoadError("");
     try {
       const [freshHub, freshRequests] = await Promise.all([
-        mode === "projects" ? loadProjectHub(token) : canCreateRequest ? loadProjectHubRequestTargets(token) : Promise.resolve(emptyHub),
-        mode === "funding" ? loadProjectHubRequests(token) : Promise.resolve([]),
+        mode === "projects" ? loadProjectHub(token, controller.signal) : canCreateRequest ? loadProjectHubRequestTargets(token, controller.signal) : Promise.resolve(emptyHub),
+        mode === "funding" ? loadProjectHubRequests(token, controller.signal) : Promise.resolve([]),
       ]);
+      if (controller.signal.aborted) return;
       setHub(freshHub); setRequests(freshRequests);
       setLoadedToken(`${token}:${mode}`);
       setAsOf(Date.now());
-      setSelectedProjectId((current) => current || freshHub.projects[0]?.id || "");
+      setSelectedProjectId((current) => freshHub.projects.some(project => project.id === current) ? current : freshHub.projects[0]?.id || "");
       setSelectedRequestId((current) => current || freshRequests[0]?.id || "");
       setFundingProjectId((current) => current || freshHub.projects[0]?.id || "");
-    } catch (error) { setLoadError(errorText(error)); if (propagateError) throw error; }
-    finally { setLoading(false); }
+    } catch (error) { if (!controller.signal.aborted) { setLoadError(errorText(error)); if (propagateError) throw error; } }
+    finally { if (!controller.signal.aborted) setLoading(false); }
   }, [token, mode, canCreateRequest]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void reload(), 0);
-    return () => window.clearTimeout(timer);
+    return () => { window.clearTimeout(timer); request.current?.abort(); };
   }, [reload]);
-  const selectedProject = hub.projects.find((project) => project.id === selectedProjectId);
-  const selectedRequest = requests.find((request) => request.id === selectedRequestId);
-  const projectItems = hub.items.filter((item) => item.projectId === selectedProjectId);
-  const projectWorkstreams = hub.workstreams.filter((workstream) => workstream.projectId === selectedProjectId);
-  const selectedWorkstream = projectWorkstreams.find((workstream) => workstream.id === selectedWorkstreamId);
-  const workstreamItems = projectItems.filter((item) => item.workstreamId === selectedWorkstreamId);
-  const selectedItem = workstreamItems.find((item) => item.id === selectedItemId);
-  const fundingWorkstreams = hub.workstreams.filter((workstream) => workstream.projectId === fundingProjectId);
-  const fundingItems = hub.items.filter((item) => item.workstreamId === fundingWorkstreamId);
-  const requestProject = hub.projects.find((project) => project.id === (mode === "funding" ? fundingProjectId : selectedProjectId));
-  const linkedPaymentRequests = paymentRequests.filter((request) => request.details.projectId === selectedProjectId);
-  const workstreamPaymentRequests = linkedPaymentRequests.filter((request) => request.details.workstreamId === selectedWorkstreamId);
-  const visibleProjects = hub.projects.filter((project) => filter === "all" || project.lifecycleStatus === filter);
-  const personName = (id: string) => people.find((person) => person.id === id)?.name ?? "Сотрудник";
-  const overview = (() => {
-    const active = projectItems.filter((item) => item.status === "planned" || item.status === "active");
-    return { overdue: active.filter((item) => item.dueAt && new Date(item.dueAt).getTime() < asOf).length,
-      upcoming: active.filter((item) => item.dueAt && new Date(item.dueAt).getTime() >= asOf && new Date(item.dueAt).getTime() <= asOf + 20 * 86_400_000).length,
-      planned: active.length, plannedBudget: active.reduce((total, item) => total + BigInt(item.budget), 0n),
-      completed: projectItems.filter((item) => item.status === "completed").length,
-      rejected: projectItems.filter((item) => item.status === "rejected").length };
-  })();
+  const { selectedProject, selectedRequest, projectWorkstreams, selectedWorkstream, workstreamItems,
+    selectedItem, fundingWorkstreams, fundingItems, requestProject, linkedPaymentRequests,
+    workstreamPaymentRequests, visibleProjects, itemsByWorkstream, overview } = useMemo(() => {
+    const visibleProjects = hub.projects.filter(project => filter === "all" || project.lifecycleStatus === filter);
+    const selectedProject = visibleProjects.find(project => project.id === selectedProjectId) ?? visibleProjects[0];
+    const selectedRequest = requests.find(item => item.id === selectedRequestId);
+    const projectItems = hub.items.filter(item => item.projectId === selectedProject?.id);
+    const projectWorkstreams = hub.workstreams.filter(item => item.projectId === selectedProject?.id);
+    const itemsByWorkstream = new Map<string, ProjectHubItem[]>();
+    const overview = { overdue: 0, upcoming: 0, planned: 0, plannedBudget: 0n, completed: 0, rejected: 0 };
+    for (const item of projectItems) {
+      const group = itemsByWorkstream.get(item.workstreamId);
+      if (group) group.push(item); else itemsByWorkstream.set(item.workstreamId, [item]);
+      if (item.status === "completed") overview.completed++;
+      if (item.status === "rejected") overview.rejected++;
+      if (item.status !== "active" && item.status !== "planned") continue;
+      overview.planned++; overview.plannedBudget += BigInt(item.budget);
+      const due = item.dueAt ? Date.parse(item.dueAt) : NaN;
+      if (due < asOf) overview.overdue++;
+      if (due >= asOf && due <= asOf + 20 * 86_400_000) overview.upcoming++;
+    }
+    const workstreamItems = itemsByWorkstream.get(selectedWorkstreamId) ?? [];
+    const linkedPaymentRequests = paymentRequests.filter(item => item.details.projectId === selectedProject?.id);
+    return { selectedProject, selectedRequest, projectWorkstreams, itemsByWorkstream, overview, workstreamItems,
+      selectedWorkstream: projectWorkstreams.find(item => item.id === selectedWorkstreamId),
+      selectedItem: workstreamItems.find(item => item.id === selectedItemId),
+      fundingWorkstreams: hub.workstreams.filter(item => item.projectId === fundingProjectId),
+      fundingItems: hub.items.filter(item => item.workstreamId === fundingWorkstreamId),
+      requestProject: mode === "funding" ? hub.projects.find(item => item.id === fundingProjectId) : selectedProject,
+      linkedPaymentRequests, workstreamPaymentRequests: linkedPaymentRequests.filter(item => item.details.workstreamId === selectedWorkstreamId), visibleProjects };
+  }, [hub, requests, selectedProjectId, selectedRequestId, selectedWorkstreamId, selectedItemId, fundingProjectId, fundingWorkstreamId, paymentRequests, filter, asOf, mode]);
+  const namesById = useMemo(() => new Map(people.map(person => [person.id, person.name])), [people]);
+  const personName = (id: string) => namesById.get(id) ?? "Сотрудник";
 
   const mutate = async (operation: () => Promise<unknown>, closeForm = false) => {
     if (busy) return;
@@ -289,28 +311,29 @@ export function ProjectHubView({ mode, token, people, departments, currentUserId
   };
 
   const initialLoading = loading && loadedToken !== `${token}:${mode}`;
-  if (loadError && !hub.projects.length && !requests.length) return <section className="project-hub-view"><h1>{mode === "projects" ? "Проекты" : "Проектные заявки"}</h1><WorkspaceNotice tone="error" role="alert">{loadError}</WorkspaceNotice><Button onClick={() => void reload()}>Повторить</Button></section>;
+  if (loadError && !hub.projects.length && !requests.length) return <section className="workspace-view workspace-queue project-hub-view"><h1>{mode === "projects" ? "Проекты" : "Проектные заявки"}</h1><WorkspaceNotice tone="error" role="alert">{loadError}</WorkspaceNotice><Button onClick={() => void reload()}>Повторить</Button></section>;
 
-  return <section className={`project-hub-view workspace-view is-${mode}`} aria-label={mode === "projects" ? "Проекты" : "Проектные заявки"}>
-    <header className="project-hub-header">
+  return <section className={`project-hub-view workspace-view workspace-queue is-${mode}`} aria-label={mode === "projects" ? "Проекты" : "Проектные заявки"}>
+    <WorkspaceSectionHeader motif="tasks" className="project-hub-header">
       <div><h1>{mode === "projects" ? "Проекты" : "Проектные заявки"}</h1>
         <p>{mode === "projects" ? "Планируйте работу, бюджет и решения в одной карточке проекта." : "Отдельный маршрут денежных решений по проектам."}</p></div>
-      <div className="project-hub-header-side"><div className="project-hub-hero-summary" aria-label={initialLoading ? "Загрузка количества" : mode === "projects" ? `Всего проектов: ${hub.projects.length}` : `Всего проектных заявок: ${requests.length}`}><strong>{initialLoading ? <SkeletonBlock width="48px" height="30px" /> : mode === "projects" ? hub.projects.length : requests.length}</strong><span>{mode === "projects" ? "проектов в пространстве" : "заявок в пространстве"}</span></div><div className="project-hub-header-actions"><Button icon={<ArrowClockwise24Regular />} onClick={() => void reload()} disabled={loading}>Обновить</Button>
+      <div className="project-hub-header-side"><div className="project-hub-hero-summary" aria-label={initialLoading ? "Загрузка количества" : mode === "projects" ? `Всего проектов: ${hub.projects.length}` : `Всего проектных заявок: ${requests.length}`}><strong>{initialLoading ? <SkeletonBlock width="48px" height="30px" /> : mode === "projects" ? hub.projects.length : requests.length}</strong><span>{mode === "projects" ? "проектов" : "заявок"}</span></div><div className="project-hub-header-actions"><Button icon={<ArrowClockwise24Regular />} onClick={() => void reload()} disabled={loading}>Обновить</Button>
         {mode === "projects" && canCreateProject ? <Button className="project-hub-primary-action" appearance="primary" icon={<Add24Regular />} onClick={() => startProject()}>Новый проект</Button> : null}
-        {mode === "projects" && canCreateProject ? <Button onClick={() => { setImportArchiveProjectId(undefined); setImportOpen(true); }}>Из документов с ИИ</Button> : null}
-        {mode === "projects" && selectedProject ? <Button onClick={() => { setImportArchiveProjectId(selectedProject.id); setImportOpen(true); }}>Документы проекта</Button> : null}
-        {mode === "projects" && selectedProject ? <Button onClick={() => setBudgetOpen(true)}>Бюджет и расходы</Button> : null}
         {mode === "funding" && canCreateRequest ? <Button className="project-hub-primary-action" appearance="primary" icon={<Add24Regular />} onClick={() => { setFundingProjectId((id) => id || hub.projects[0]?.id || ""); setFundingWorkstreamId(""); setRequestForm({ itemId: "", title: "", purpose: "", amount: "", approvalDueAt: "" }); setRequestFiles([]); setRequestDraftId(""); setUploadedFileCount(0); setActionError(""); setFormMode("request"); }}>Новая проектная заявка</Button> : null}</div></div>
-    </header>
+    </WorkspaceSectionHeader>
     {loadError ? <WorkspaceNotice tone="error" className="project-hub-error" role="alert">{loadError}</WorkspaceNotice> : null}
     {mode === "projects" ? <div className="project-hub-layout">
       <aside className="project-hub-index" aria-label="Список новых проектов">
-        <div className="project-hub-index-top"><div><span className="view-kicker">ПОРТФЕЛЬ</span><strong>Ваши проекты</strong><small>{initialLoading ? <SkeletonBlock width="120px" height="12px" /> : `${visibleProjects.length} в выбранном срезе`}</small></div><WorkspaceSelect aria-label="Фильтр проектов" value={filter} onChange={(event) => setFilter(event.target.value)}><option value="active">Активные</option><option value="completed">Завершённые</option><option value="all">Все</option></WorkspaceSelect></div>
-        <div className="project-hub-index-list">{visibleProjects.map((project) => <button type="button" key={project.id} className={`project-hub-project ${project.id === selectedProjectId ? "selected" : ""}`} aria-current={project.id === selectedProjectId ? "true" : undefined} onClick={() => { setSelectedProjectId(project.id); setSelectedWorkstreamId(""); setSelectedItemId(""); }}>
+        <Button className="project-hub-index-toggle" aria-expanded={projectIndexOpen} aria-controls={projectIndexId} onClick={() => setProjectIndexOpen(open => !open)}>Список проектов · {visibleProjects.length}</Button>
+        <div id={projectIndexId} className="project-hub-index-body" data-open={projectIndexOpen}>
+        <div className="project-hub-index-top"><div><strong>Ваши проекты</strong><small>{initialLoading ? <SkeletonBlock width="120px" height="12px" /> : `${visibleProjects.length} в выбранном срезе`}</small></div><WorkspaceSelect aria-label="Фильтр проектов" value={filter} onChange={(event) => { setFilter(event.target.value); setSelectedWorkstreamId(""); setSelectedItemId(""); setProjectToolsOpen(false); }}><option value="active">Активные</option><option value="completed">Завершённые</option><option value="all">Все</option></WorkspaceSelect></div>
+        {canCreateProject ? <Button className="project-hub-import-action" onClick={() => { setImportArchiveProjectId(undefined); setImportOpen(true); }}>Из документов с ИИ</Button> : null}
+        <div className="project-hub-index-list">{visibleProjects.map((project) => <button type="button" key={project.id} className={`project-hub-project ${project.id === selectedProject?.id ? "selected" : ""}`} aria-current={project.id === selectedProject?.id ? "true" : undefined} onClick={() => { setSelectedProjectId(project.id); setSelectedWorkstreamId(""); setSelectedItemId(""); setProjectToolsOpen(false); setProjectIndexOpen(false); }}>
           <span>{project.code} · {project.accessStatus === "closed" ? "Закрытый" : "Открытый"}</span><strong>{project.title}</strong><small>{personName(project.managerUserId)}</small>
           <span className="project-hub-mini-budget">{formatMoney(project.approvedAmount, project.currency)} согласовано из {formatMoney(project.budget, project.currency)}</span>
         </button>)}
         {initialLoading ? <LoadingSkeleton layout="custom" label="Загружаем проекты…">{Array.from({ length: 4 }, (_, index) => <div className="project-hub-project ws-skeleton-copy" key={index}><SkeletonBlock width="50%" height="12px" /><SkeletonBlock width="85%" height="20px" /><SkeletonBlock width="65%" height="12px" /><SkeletonBlock width="90%" /></div>)}</LoadingSkeleton> : !visibleProjects.length ? <p className="project-hub-empty">Пока нет проектов с таким статусом.</p> : null}</div>
+        </div>
       </aside>
       <main className={`project-hub-canvas${selectedProject || initialLoading ? "" : " is-empty"}`}>
         {initialLoading ? <LoadingSkeleton layout="custom" label="Загружаем проектное пространство…">
@@ -320,8 +343,14 @@ export function ProjectHubView({ mode, token, people, departments, currentUserId
           <section className="project-hub-work"><div className="project-hub-section-head"><SkeletonBlock width="40%" height="26px" /></div><div className="project-hub-workstream-grid">{Array.from({ length: 3 }, (_, index) => <div className="project-hub-workstream-card ws-skeleton-copy" key={index}><SkeletonBlock width="60%" /><SkeletonBlock width="85%" height="20px" /><SkeletonBlock width="90%" /><SkeletonBlock width="70%" /></div>)}</div></section>
         </LoadingSkeleton> : selectedProject ? <>
           <div className="project-hub-title"><div><span className="view-kicker">{selectedProject.code} · {selectedProject.lifecycleStatus === "active" ? "В РАБОТЕ" : "ЗАВЕРШЁН"}</span><h2>{selectedProject.title}</h2><p>{selectedProject.description || "Описание проекта ещё не добавлено."}</p></div>
+            </div>
+          <Button className="project-hub-tools-toggle" aria-expanded={projectToolsOpen} aria-controls={projectToolsId} onClick={() => setProjectToolsOpen(open => !open)}>Действия проекта</Button>
+          <div id={projectToolsId} className="project-hub-title-actions" data-open={projectToolsOpen}>
+            <Button onClick={() => setBudgetOpen(true)}>Бюджет и расходы</Button>
+            <Button onClick={() => { setImportArchiveProjectId(selectedProject.id); setImportOpen(true); }}>Документы проекта</Button>
             {selectedProject.chatId && onOpenChat ? <Button onClick={() => onOpenChat(selectedProject.chatId!)}>Открыть чат проекта</Button> : null}
-            {selectedProject.canEdit ? <Button onClick={() => startProject(selectedProject)}>Настроить проект</Button> : null}</div>
+            {selectedProject.canEdit ? <Button onClick={() => startProject(selectedProject)}>Настроить проект</Button> : null}
+          </div>
           <div className="project-hub-metrics" aria-label="Обзор проекта">
             <div><span>Бюджет</span><strong>{formatMoney(selectedProject.budget, selectedProject.currency)}</strong><small>План проекта</small></div>
             <div><span>Заявки на оплату</span><strong>{linkedPaymentRequests.length}</strong><small>Доступные вам заявки проекта</small></div>
@@ -331,7 +360,7 @@ export function ProjectHubView({ mode, token, people, departments, currentUserId
           <div className="project-hub-context"><span>Руководитель: <strong>{personName(selectedProject.managerUserId)}</strong></span><span>Срок: <strong>{selectedProject.endDate || "Не указан"}</strong></span><span>В ближайшие 20 дней: <strong>{overview.upcoming}</strong></span><span>Завершено: <strong>{overview.completed}</strong></span></div>
           <section className="project-hub-work" aria-label="Направления и работы проекта"><div className="project-hub-section-head"><div><span className="view-kicker">ПЛАН И ИСПОЛНЕНИЕ</span><h3>{selectedWorkstream ? selectedWorkstream.title : "Направления проекта"}</h3><p>{selectedWorkstream ? "Задачи, мероприятия и решения внутри направления" : `${projectWorkstreams.length} направлений · ${overview.planned} активных работ · ${overview.completed} завершено`}</p></div>{selectedWorkstream ? <Button onClick={() => { setSelectedWorkstreamId(""); setSelectedItemId(""); }}>← К проекту</Button> : selectedProject.canEdit && selectedProject.lifecycleStatus === "active" ? <Button icon={<Add24Regular />} onClick={() => startWorkstream()}>Добавить направление</Button> : null}</div>
             {!selectedWorkstream ? <div className="project-hub-workstream-grid">{projectWorkstreams.map((workstream) => {
-              const items = projectItems.filter((item) => item.workstreamId === workstream.id);
+              const items = itemsByWorkstream.get(workstream.id) ?? [];
               const live = items.filter((item) => item.status === "planned" || item.status === "active");
               const late = live.filter((item) => item.dueAt && new Date(item.dueAt).getTime() < asOf).length;
               return <button type="button" className="project-hub-workstream-card" key={workstream.id} onClick={() => { setSelectedWorkstreamId(workstream.id); setSelectedItemId(""); }}>

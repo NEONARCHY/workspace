@@ -26,8 +26,8 @@ describe("React Bits assistant orb", () => {
   });
   it("keeps a static ring without WebGL", () => {
     vi.stubGlobal("WebGLRenderingContext", undefined);
-    const { container } = render(<GradientOrb className="assistant-header-icon" />);
-    expect(container.querySelector(".gradient-orb-fallback.assistant-header-icon")).not.toBeNull();
+    const { container } = render(<GradientOrb className="toolbar-orb" />);
+    expect(container.querySelector(".gradient-orb-fallback.toolbar-orb")).not.toBeNull();
     expect(container.querySelector("canvas")).toBeNull();
   });
   it("renders the animated canvas when WebGL is available", () => {

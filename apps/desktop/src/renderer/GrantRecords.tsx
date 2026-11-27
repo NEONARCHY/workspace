@@ -1,3 +1,4 @@
+import { formatRussianDateTime } from "./date-time-format";
 import { useMemo, useState } from "react";
 import { Badge, useRestoreFocusTarget } from "@fluentui/react-components";
 import type { GrantStatus, GrantSummary, WorkspacePerson } from "@yuksalish/contracts";
@@ -49,7 +50,7 @@ export function GrantRecords({ grants, people, token, selectedId, filterKey, sta
             {grant.coAssigneeIds.map((id) => <TaskParticipantAvatar key={id} person={byId.get(id)} role="Соисполнитель" token={token} />)}</div></td>
           <td><Badge className="record-status-badge" data-status={grant.status} appearance="tint" color={grant.status === "completed" ? "success" : grant.status === "launch_rejected" ? "danger" : "brand"}>{statusLabels[grant.status]}</Badge>
             {grant.allowedActions.some((action) => ["approve", "approve_launch", "approve_deadline"].includes(action)) && <small className="grant-record-decision">Нужно ваше решение</small>}</td>
-          <td className={`record-deadline${overdue ? " overdue" : ""}`}><time dateTime={grant.dueAt}>{new Date(grant.dueAt).toLocaleString("ru-RU", {dateStyle: "short", timeStyle: "short"})}</time>{overdue && <small className="grants-overdue">Срок истёк</small>}{grant.pendingDeadlineRequest && <small className="grant-record-deadline-request">Запрошено продление</small>}</td>
+          <td className={`record-deadline${overdue ? " overdue" : ""}`}><time dateTime={grant.dueAt}>{formatRussianDateTime(new Date(grant.dueAt), {dateStyle: "short", timeStyle: "short"})}</time>{overdue && <small className="grants-overdue">Срок истёк</small>}{grant.pendingDeadlineRequest && <small className="grant-record-deadline-request">Запрошено продление</small>}</td>
         </tr>;
       })}</tbody></table>
       {!sorted.length && <div className="record-empty"><strong>Заявки не найдены</strong><span>Измените фильтр или создайте новую заявку на грант.</span></div>}

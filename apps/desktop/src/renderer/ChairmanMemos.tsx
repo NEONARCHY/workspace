@@ -1,3 +1,4 @@
+import { formatRussianDate } from "./date-time-format";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { Button, DialogSurface, Field, Select, Spinner, Textarea, useRestoreFocusTarget } from "@fluentui/react-components";
 import { DocumentText24Regular, Dismiss20Regular, Add20Regular, ArrowDownload20Regular } from "@fluentui/react-icons";
@@ -18,7 +19,7 @@ const labels: Readonly<Record<ChairmanMemoStatus, string>> = {
   draft: "Черновик", pending: "На согласовании", approved: "Одобрено председателем", needs_revision: "На доработке",
 };
 const message = (error: unknown) => error instanceof Error ? error.message : "Не удалось загрузить билдирги";
-const date = (value: string) => new Date(value).toLocaleDateString("ru-RU", { timeZone: "Asia/Tashkent" });
+const date = (value: string) => formatRussianDate(new Date(value), { timeZone: "Asia/Tashkent" });
 
 export function ChairmanMemoLauncher({ token, userId, onOpen, compact = false }: {
   readonly token: string; readonly userId: string; readonly onOpen: () => void; readonly compact?: boolean;

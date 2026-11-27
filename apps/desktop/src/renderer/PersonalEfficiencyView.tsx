@@ -60,13 +60,13 @@ export function PersonalEfficiencyView({ token, onBack, onOpenTask }: { readonly
   const [resource, setResource] = useState<{ token: string; period: string; retry: number; data?: PersonalEfficiency; error?: string }>();
   const motionRef = useContextMotion(period, { enter: true });
   useEffect(() => {
-    let active = true;
-    void loadPersonalEfficiency(token, period).then((data) => {
-      if (active) setResource({ token, period, retry, data });
+    const controller = new AbortController();
+    void loadPersonalEfficiency(token, period, controller.signal).then((data) => {
+      if (!controller.signal.aborted) setResource({ token, period, retry, data });
     }).catch((cause: unknown) => {
-      if (active) setResource({ token, period, retry, error: cause instanceof Error ? cause.message : "Не удалось загрузить сводку" });
+      if (!controller.signal.aborted) setResource({ token, period, retry, error: cause instanceof Error ? cause.message : "Не удалось загрузить сводку" });
     });
-    return () => { active = false; };
+    return () => controller.abort();
   }, [period, retry, token]);
   const current = resource?.token === token && resource.period === period && resource.retry === retry ? resource : undefined;
   // A retry of this same month keeps confirmed content until its result arrives.

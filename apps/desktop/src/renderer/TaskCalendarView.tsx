@@ -1,3 +1,4 @@
+import { formatRussianDate, formatRussianTime, russianDateTimeFormatter } from "./date-time-format";
 import { useMemo, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
@@ -31,7 +32,7 @@ export function TaskCalendarView({ tasks, onSelect, actions, toolbarTarget }: Ta
   });
   const todayKey = localDateKey(new Date());
   const [selectedDay, setSelectedDay] = useState(() => new Date());
-  const monthLabel = new Intl.DateTimeFormat("ru-RU", {
+  const monthLabel = russianDateTimeFormatter({
     month: "long",
     year: "numeric",
   }).format(month);
@@ -43,22 +44,19 @@ export function TaskCalendarView({ tasks, onSelect, actions, toolbarTarget }: Ta
       new Date(month.getFullYear(), month.getMonth(), index - firstWeekday + 1)
     ));
   }, [month]);
-  const tasksByDay = useMemo(() => {
-    const grouped = new Map<string, WorkspaceTask[]>();
+  const { tasksByDay, unscheduled } = useMemo(() => {
+    const grouped = new Map<string, { task: WorkspaceTask; due: number }[]>();
+    const unscheduled: WorkspaceTask[] = [];
     for (const task of tasks) {
       const dueAt = validDate(task.dueAt);
-      if (!dueAt) continue;
+      if (!dueAt) { unscheduled.push(task); continue; }
       const key = localDateKey(dueAt);
-      grouped.set(key, [...(grouped.get(key) ?? []), task]);
+      const entry = { task, due: dueAt.getTime() }, group = grouped.get(key);
+      if (group) group.push(entry); else grouped.set(key, [entry]);
     }
-    for (const values of grouped.values()) {
-      values.sort((left, right) => (
-        new Date(left.dueAt ?? 0).getTime() - new Date(right.dueAt ?? 0).getTime()
-      ));
-    }
-    return grouped;
+    const tasksByDay = new Map([...grouped].map(([key, values]) => [key, values.sort((left, right) => left.due - right.due).map(value => value.task)]));
+    return { tasksByDay, unscheduled };
   }, [tasks]);
-  const unscheduled = tasks.filter((task) => !validDate(task.dueAt));
   const selectedKey = localDateKey(selectedDay);
   const selectedTasks = tasksByDay.get(selectedKey) ?? [];
 
@@ -110,7 +108,7 @@ export function TaskCalendarView({ tasks, onSelect, actions, toolbarTarget }: Ta
                 key={key}
                 role="gridcell"
                 tabIndex={0}
-                aria-label={`${day.toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}: ${dayTasks.length} задач`}
+                aria-label={`${formatRussianDate(day, { day: "numeric", month: "long" })}: ${dayTasks.length} задач`}
                 aria-selected={key === selectedKey}
                 onClick={() => setSelectedDay(day)}
                 onKeyDown={(event) => {
@@ -134,7 +132,7 @@ export function TaskCalendarView({ tasks, onSelect, actions, toolbarTarget }: Ta
                       aria-label={`Открыть задачу: ${task.title}`}
                       onClick={(event) => { event.stopPropagation(); onSelect(task.id); }}
                     >
-                      <span>{new Date(task.dueAt ?? 0).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</span>
+                      <span>{formatRussianTime(new Date(task.dueAt ?? 0), { hour: "2-digit", minute: "2-digit" })}</span>
                       <strong>{task.title}</strong>
                     </button>
                   ))}
@@ -149,12 +147,12 @@ export function TaskCalendarView({ tasks, onSelect, actions, toolbarTarget }: Ta
       <aside className="calendar-side" aria-label="Задачи выбранного дня">
         <div className="calendar-side-heading calendar-day-heading">
           <span>Выбранный день</span>
-          <h2>{selectedDay.toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" })}</h2>
+          <h2>{formatRussianDate(selectedDay, { day: "numeric", month: "long", year: "numeric" })}</h2>
           <p>{selectedTasks.length ? `${selectedTasks.length} задач по сроку` : "На этот день задач нет"}</p>
         </div>
         <div className="calendar-day-agenda">
           {selectedTasks.map((task) => <button className={`calendar-agenda-card task status-${task.status}`} type="button" key={task.id} onClick={() => onSelect(task.id)}>
-            <span className="calendar-agenda-time">{new Date(task.dueAt ?? 0).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</span>
+            <span className="calendar-agenda-time">{formatRussianTime(new Date(task.dueAt ?? 0), { hour: "2-digit", minute: "2-digit" })}</span>
             <strong>{task.title}</strong><small>{task.project || "Без проекта"}</small>
           </button>)}
         </div>

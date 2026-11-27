@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { Badge, useRestoreFocusTarget } from "@fluentui/react-components";
 import type { TaskPlan, TaskStatus, WorkspacePerson, WorkspaceTask } from "@yuksalish/contracts";
-import { RecordMobileLabel, RecordTablePager, SortHeading, tableCollator, useTablePage, type TableSort } from "./RecordTableTools";
+import { RecordCompactTools, RecordMobileLabel, RecordTablePager, SortHeading, tableCollator, useTablePage, type TableSort } from "./RecordTableTools";
 import { TaskParticipantAvatar } from "./TaskParticipantAvatar";
 import { isTaskOverdue, taskDeadlineTone } from "./task-deadline";
 import { useTaskDeadlineClock } from "./useTaskDeadlineClock";
@@ -9,6 +9,7 @@ import { pendingTaskDeadlineRequest } from "./task-deadline-request";
 import { TaskPriorityIndicator } from "./TaskPriority";
 
 const statuses: Record<TaskStatus, string> = { new: "Новая", in_progress: "В работе", awaiting_review: "На проверке", completed: "Завершена", overdue: "Просрочена", cancelled: "Отменена" };
+const columns = [["title", "Название"], ["assignee", "Участники"], ["status", "Статус"], ["due", "Крайний срок"], ["author", "Постановщик"], ["plan", "План"], ["project", "Проект"]] as const;
 
 export function TaskRecords({ tasks, plans = [], plansLoading = false, plansError = "", people, token, currentUserId, selectedId, filterKey, onSelect }: {
   tasks: readonly WorkspaceTask[]; plans?: readonly TaskPlan[]; plansLoading?: boolean; plansError?: string;
@@ -55,9 +56,10 @@ export function TaskRecords({ tasks, plans = [], plansLoading = false, plansErro
     ...task.participants.map((item) => ({ userId: item.userId, role: item.role === "co_assignee" ? "Соисполнитель" as const : "Наблюдатель" as const })),
   ];
   return <div className="record-table-frame task-records">
+    <RecordCompactTools columns={columns} sort={sort} onSort={onSort} label="задачи" />
     <div className="record-table-scroll" role="region" aria-label="Список задач" tabIndex={0}>
       <table role="table" className="record-table task-record-table" aria-label="Задачи">
-        <thead role="rowgroup"><tr role="row">{[["title", "Название"], ["assignee", "Участники"], ["status", "Статус"], ["due", "Крайний срок"], ["author", "Постановщик"], ["plan", "План"], ["project", "Проект"]].map(([column, label]) => <SortHeading key={column} column={column!} sort={sort} onSort={onSort}>{label}</SortHeading>)}</tr></thead>
+        <thead role="rowgroup"><tr role="row">{columns.map(([column, label]) => <SortHeading key={column} column={column} sort={sort} onSort={onSort}>{label}</SortHeading>)}</tr></thead>
         <tbody role="rowgroup">{sorted.slice(paging.start, paging.start + paging.size).map(task => <tr role="row" key={task.id} data-deadline={taskDeadlineTone(task, now)} className={`task-row record-row ${selectedId === task.id ? "selected" : ""}`} onClick={event => { if (!(event.target as HTMLElement).closest("button")) { event.currentTarget.querySelector("button")?.focus(); onSelect(task.id); } }}>
           <td role="cell" className="record-title"><span className="list-row-hover-wash" aria-hidden="true" /><button {...restoreFocusTarget} className="record-open" type="button" aria-haspopup="dialog" aria-label={`Открыть задачу: ${task.title}`} onClick={() => onSelect(task.id)}><strong>{task.title}</strong></button>
             <div className="record-secondary">{task.checklistTotal > 0 && <span>Чек-лист {task.checklistDone}/{task.checklistTotal}</span>}{task.comments.length > 0 && <span>Обсуждение · {task.comments.length}</span>}{task.cycle && <span>Повторяется</span>}</div>

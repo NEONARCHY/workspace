@@ -1,6 +1,7 @@
+import { formatRussianDate, formatRussianDateTime } from "./date-time-format";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import type {
@@ -87,6 +88,7 @@ const shortDayFormatter = new Intl.DateTimeFormat("ru-RU", { weekday: "short" })
 const dateFormatter = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short" });
 const timeFormatter = new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit" });
 const fullDayFormatter = new Intl.DateTimeFormat("ru-RU", { weekday: "long", day: "numeric", month: "long" });
+const workloadMonthFormatter = new Intl.DateTimeFormat("ru-RU", { month: "long", year: "numeric", timeZone: "UTC" });
 
 const taskStatusLabels: Readonly<Record<WorkspaceTask["status"], string>> = {
   new: "Новая",
@@ -255,6 +257,16 @@ export function TeamDashboardView({
   const currentUser = people.find((person) => person.id === currentUserId);
   const visiblePeople = people;
   const activeTasks = tasks.filter((task) => activeStatuses.has(task.status));
+  const assignedByUser = useMemo(() => {
+    const groups = new Map<string, WorkspaceTask[]>();
+    for (const task of tasks) {
+      if (!activeStatuses.has(task.status)) continue;
+      const assigned = groups.get(task.assigneeId);
+      if (assigned) assigned.push(task);
+      else groups.set(task.assigneeId, [task]);
+    }
+    return groups;
+  }, [tasks]);
   const overdueTasks = activeTasks.filter((task) => isTaskOverdue(task, now));
   const teamReviewTasks = activeTasks.filter((task) => task.status === "awaiting_review");
   const reviewTasks = teamReviewTasks.filter((task) => task.authorId === currentUserId);
@@ -292,7 +304,7 @@ export function TeamDashboardView({
 
   const teamRows = (() => {
     const rows = visiblePeople.map((person) => {
-      const assigned = activeTasks.filter((task) => task.assigneeId === person.id);
+      const assigned = assignedByUser.get(person.id) ?? [];
       const expiredTasks = assigned.filter((task) => isTaskOverdue(task, now));
       const overdue = expiredTasks.length;
       const excludedExpired = expiredTasks.filter((task) => task.efficiencyExcluded).length;
@@ -395,7 +407,7 @@ export function TeamDashboardView({
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [flowSelection]);
 
-  return <div className="team-dashboard">
+  return <div className="team-dashboard workspace-queue">
     <WorkspaceSectionHeader motif="team" className="team-dash-hero" aria-labelledby="team-dashboard-title">
       <div className="team-dash-hero-copy">
         <span>Обзор команды · сегодня</span>
@@ -440,7 +452,7 @@ export function TeamDashboardView({
         {approvalInbox.error ? <WorkspaceNotice tone="error" role="alert" actions={<Button onClick={approvalInbox.refresh}>Повторить загрузку</Button>}>{approvalInbox.error}</WorkspaceNotice> : null}
         {approvalInbox.loading ? <p role="status">Загружаем согласования…</p> : null}
         {approvalInbox.visible ? approvalInbox.items?.map((item) => <button type="button" className="team-dash-payment-item" key={item.id} onClick={() => openApproval(decisionPanel, item.id)}>
-          <strong>{item.title}</strong><span>{item.requesterName} · {new Date(`${item.startsOn}T00:00:00`).toLocaleDateString("ru-RU")}{item.endsOn ? ` — ${new Date(`${item.endsOn}T00:00:00`).toLocaleDateString("ru-RU")}` : ""}</span><ArrowRight20Regular aria-hidden="true" />
+          <strong>{item.title}</strong><span>{item.requesterName} · {formatRussianDate(new Date(`${item.startsOn}T00:00:00`))}{item.endsOn ? ` — ${formatRussianDate(new Date(`${item.endsOn}T00:00:00`))}` : ""}</span><ArrowRight20Regular aria-hidden="true" />
         </button>) : null}
         {!approvalInbox.visible ? <p>Очередь согласования вам больше недоступна.</p> : approvalInbox.items?.length === 0 ? <p>Заявок, ожидающих вашего согласования, нет.</p> : null}
       </> : null}
@@ -448,7 +460,7 @@ export function TeamDashboardView({
         <p>{decisionPanel === "grant_launches" ? "После вашего разрешения вы станете постановщиком, а сотрудник сохранится инициатором." : "Результаты после проверки заместителя. Откройте заявку для принятия решения."}</p>
         {grantInbox.error ? <WorkspaceNotice tone="error" role="alert" actions={<Button onClick={grantInbox.refresh}>Повторить загрузку</Button>}>{grantInbox.error}</WorkspaceNotice> : null}
         {grantInbox.loading ? <p role="status">Загружаем гранты…</p> : null}
-        {(decisionPanel === "grant_launches" ? grantInbox.launches : grantInbox.reviews)?.map((grant) => <button type="button" className="team-dash-payment-item" key={grant.id} onClick={() => openDecision(() => onSelectGrant(grant.id))}><strong>{grant.title}</strong><span>Инициатор: {personById.get(grant.initiatorUserId)?.name ?? "Сотрудник"} · Срок: {new Date(grant.dueAt).toLocaleString("ru-RU")}</span>{grant.pendingDeadlineRequest && <span>Запрос продления до {new Date(grant.pendingDeadlineRequest.dueAt).toLocaleString("ru-RU")}</span>}<ArrowRight20Regular aria-hidden="true" /></button>)}
+        {(decisionPanel === "grant_launches" ? grantInbox.launches : grantInbox.reviews)?.map((grant) => <button type="button" className="team-dash-payment-item" key={grant.id} onClick={() => openDecision(() => onSelectGrant(grant.id))}><strong>{grant.title}</strong><span>Инициатор: {personById.get(grant.initiatorUserId)?.name ?? "Сотрудник"} · Срок: {formatRussianDateTime(new Date(grant.dueAt))}</span>{grant.pendingDeadlineRequest && <span>Запрос продления до {formatRussianDateTime(new Date(grant.pendingDeadlineRequest.dueAt))}</span>}<ArrowRight20Regular aria-hidden="true" /></button>)}
         {(decisionPanel === "grant_launches" ? grantInbox.launches : grantInbox.reviews)?.length === 0 ? <p>{decisionPanel === "grant_launches" ? "Запросов на запуск грантов нет." : "Грантов, ожидающих вашей проверки, нет."}</p> : null}
       </> : null}
       {decisionPanel === "overdue" || decisionPanel === "review" ? (decisionPanel === "overdue" ? overdueTasks : reviewTasks).length ? (decisionPanel === "overdue" ? overdueTasks : reviewTasks).map((task) => <button type="button" className="team-dash-payment-item" key={task.id} onClick={() => openTask(task.id)}><strong>{task.title}</strong><span>{personById.get(task.assigneeId)?.name ?? "Сотрудник"} · {task.dueLabel} · {decisionPanel === "overdue" ? overdueLabel(task, now) : "Вы постановщик"}</span><ArrowRight20Regular aria-hidden="true" /></button>) : <p>{decisionPanel === "overdue" ? "Задач с истёкшим сроком нет." : "Ваших задач, ожидающих проверки, нет."}</p> : null}
@@ -458,12 +470,12 @@ export function TeamDashboardView({
       {decisionPanel === "extensions" ? deadlineTasks.length ? deadlineTasks.map((task) => {
         const request = pendingTaskDeadlineRequest(task);
         return request ? <div className="team-dash-decision-item" key={request.id}>
-          <button type="button" aria-expanded={selectedDeadlineTaskId === task.id} onClick={() => setSelectedDeadlineTaskId((current) => current === task.id ? undefined : task.id)}><strong>{task.title}</strong><span>Предлагаемый срок: {new Date(request.proposedDueAt).toLocaleString("ru-RU")}</span></button>
+          <button type="button" aria-expanded={selectedDeadlineTaskId === task.id} onClick={() => setSelectedDeadlineTaskId((current) => current === task.id ? undefined : task.id)}><strong>{task.title}</strong><span>Предлагаемый срок: {formatRussianDateTime(new Date(request.proposedDueAt))}</span></button>
           {selectedDeadlineTaskId === task.id ? <><TaskDeadlineDecision task={task} request={request} people={people} canDecide={Boolean(onDecideDeadline)} onDecide={onDecideDeadline} onResolved={() => setSelectedDeadlineTaskId(undefined)} /><Button appearance="subtle" onClick={() => openTask(task.id)}>Открыть задачу</Button></> : null}
         </div> : null;
       }) : <p>Запросов на перенос срока нет.</p> : null}
       {decisionPanel === "invitations" ? pendingInvitations.length ? pendingInvitations.map((event) => <article className="team-dash-decision-item" key={event.id}>
-        <strong>{event.title}</strong><span>{new Date(event.startsAt).toLocaleString("ru-RU")}{event.location ? ` · ${event.location}` : ""}</span>
+        <strong>{event.title}</strong><span>{formatRussianDateTime(new Date(event.startsAt))}{event.location ? ` · ${event.location}` : ""}</span>
         {event.description ? <p>{event.description}</p> : null}
         <div><Button appearance="primary" disabled={Boolean(invitationBusyId) || !onCalendarResponse} onClick={() => void respondToInvitation(event, "accepted")}>Подтвердить участие</Button><Button disabled={Boolean(invitationBusyId) || !onCalendarResponse} onClick={() => void respondToInvitation(event, "declined")}>Отказаться</Button></div>
       </article>) : <p>Приглашений, ожидающих ответа, нет.</p> : null}
@@ -471,7 +483,7 @@ export function TeamDashboardView({
         <p>Сотрудник предлагает задачу от вашего имени. До вашего подтверждения она не становится рабочей задачей.</p>
         {proposalInbox.error ? <WorkspaceNotice tone="error" role="alert" actions={<Button onClick={proposalInbox.refresh}>Повторить загрузку</Button>}>{proposalInbox.error}</WorkspaceNotice> : null}
         {proposalInbox.loading ? <p role="status">Загружаем запросы…</p> : null}
-        {proposalInbox.proposals?.map((proposal) => <button type="button" className="team-dash-payment-item" key={proposal.id} onClick={() => openDecision(() => onSelectTaskProposal(proposal.id))}><strong>{proposal.task.title}</strong><span>{personById.get(proposal.creatorUserId)?.name ?? "Сотрудник"} · {proposal.task.dueAt ? new Date(proposal.task.dueAt).toLocaleString("ru-RU") : "Без срока"}</span><ArrowRight20Regular aria-hidden="true" /></button>)}
+        {proposalInbox.proposals?.map((proposal) => <button type="button" className="team-dash-payment-item" key={proposal.id} onClick={() => openDecision(() => onSelectTaskProposal(proposal.id))}><strong>{proposal.task.title}</strong><span>{personById.get(proposal.creatorUserId)?.name ?? "Сотрудник"} · {proposal.task.dueAt ? formatRussianDateTime(new Date(proposal.task.dueAt)) : "Без срока"}</span><ArrowRight20Regular aria-hidden="true" /></button>)}
         {proposalInbox.proposals?.length === 0 ? <p>Запросов на постановку задач, ожидающих вашего решения, нет.</p> : null}
       </> : null}
       {invitationError && decisionPanel === "invitations" ? <WorkspaceNotice tone="error" role="alert">{invitationError}</WorkspaceNotice> : null}
@@ -593,7 +605,7 @@ export function TeamDashboardView({
 
     <section className="team-dash-panel team-dash-workload" aria-labelledby="workload-title">
       <header className="team-dash-panel-heading team-dash-workload-heading">
-        <div><span>Без скрытых оценок</span><h3 id="workload-title">Текущая нагрузка</h3><p>Полоса показывает только количество активных задач относительно команды — не норму и не оценку сотрудника.</p><p>«Истёк срок» — текущие дедлайны. Процент справа — эффективность{efficiency ? ` за ${new Intl.DateTimeFormat("ru-RU", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${efficiency.period}-01T00:00:00Z`))}` : " за месяц"}, а не доля активных задач без просрочки.</p></div>
+        <div><span>Без скрытых оценок</span><h3 id="workload-title">Текущая нагрузка</h3><p>Полоса показывает только количество активных задач относительно команды — не норму и не оценку сотрудника.</p><p>«Истёк срок» — текущие дедлайны. Процент справа — эффективность{efficiency ? ` за ${workloadMonthFormatter.format(new Date(`${efficiency.period}-01T00:00:00Z`))}` : " за месяц"}, а не доля активных задач без просрочки.</p></div>
         <SlidingSegmented className="team-dash-filters" role="group" aria-label="Фильтр нагрузки">
           {([ ["all", "Все"], ["risk", "Истёк срок"], ["review", "На проверке"] ] as const).map(([key, label]) => <button className={teamFilter === key ? "active" : ""} aria-pressed={teamFilter === key} key={key} onClick={() => setTeamFilter(key)} type="button">{label}</button>)}
         </SlidingSegmented>

@@ -1,4 +1,5 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import * as names from "./employee-display-name";
 import type { TelegramAccessPerson, TelegramAccessRegistry } from "@yuksalish/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -34,7 +35,31 @@ describe("Telegram bot access hub", () => {
     vi.clearAllMocks();
     vi.mocked(loadTelegramAccess).mockResolvedValue(registry);
   });
-  afterEach(cleanup);
+  afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+
+  it("does not redraw unchanged editors while filtering the same employees", async () => {
+    const initials = vi.spyOn(names, "employeeInitials");
+    render(<TelegramAccessView token="token" />);
+    await screen.findByText(employee.fullName); initials.mockClear();
+    fireEvent.change(screen.getByRole("searchbox", { name: "Поиск сотрудников для Telegram" }), { target: { value: "Пример" } });
+    expect(screen.getByText(employee.fullName)).toBeVisible();
+    expect(initials).not.toHaveBeenCalled();
+  });
+
+  it("aborts old registry reads on token change and ignores a late response after unmount", async () => {
+    let finish!: (value: TelegramAccessRegistry) => void;
+    vi.mocked(loadTelegramAccess).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const view = render(<TelegramAccessView token="old" />);
+    await waitFor(() => expect(loadTelegramAccess).toHaveBeenCalledOnce());
+    const signal = vi.mocked(loadTelegramAccess).mock.calls[0]![1]!;
+    view.rerender(<TelegramAccessView token="new" />);
+    await screen.findByText(employee.fullName);
+    expect(signal.aborted).toBe(true);
+    await act(async () => finish({ ...registry, people: [{ ...employee, fullName: "Устаревший ответ" }] }));
+    expect(screen.queryByText("Устаревший ответ")).toBeNull();
+    const latestSignal = vi.mocked(loadTelegramAccess).mock.calls[1]![1]!;
+    view.unmount(); expect(latestSignal.aborted).toBe(true);
+  });
 
   it("does not grant a bot without a Telegram ID", async () => {
     render(<TelegramAccessView token="token" />);

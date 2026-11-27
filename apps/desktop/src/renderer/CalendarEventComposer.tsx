@@ -1,3 +1,4 @@
+import { formatRussianDateTime } from "./date-time-format";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { LoadingSkeleton } from "./LoadingSkeleton";
 import { useState, type FormEvent } from "react";
@@ -81,7 +82,7 @@ const priorityLabels: Readonly<Record<WorkspaceTask["priority"], string>> = {
 function dateTimeLabel(value: string): string {
   const date = new Date(value);
   return Number.isFinite(date.getTime())
-    ? date.toLocaleString("ru-RU", { dateStyle: "medium", timeStyle: "short" })
+    ? formatRussianDateTime(date, { dateStyle: "medium", timeStyle: "short" })
     : "Укажите дату и время";
 }
 

@@ -5,7 +5,7 @@ export const nodeTestFiles = [
   "src/renderer/ai-register-action-glow.test.ts",
   "src/renderer/assistant-context-close.test.ts",
   "src/renderer/assistant-resize-layout.test.ts",
-  "src/renderer/assistant-resize-orb.test.ts",
+  "src/renderer/assistant-panel-layout.test.ts",
   "src/renderer/calendar-filters.test.ts",
   "src/renderer/calendar-navigation-style.test.ts",
   "src/renderer/chat-row-hover.test.ts",

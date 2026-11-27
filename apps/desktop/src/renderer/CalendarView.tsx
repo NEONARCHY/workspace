@@ -1,3 +1,4 @@
+import { formatRussianDateTime, formatRussianTime, russianDateTimeFormatter } from "./date-time-format";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { LoadingSkeleton } from "./LoadingSkeleton";
 import { CalendarAudienceActions } from "./CalendarAudienceActions";
@@ -46,7 +47,7 @@ import { CalendarAgendaDrawer } from "./CalendarAgendaDrawer";
 import { CalendarEventDialog } from "./CalendarEventDialog";
 import { CalendarZoomDetails } from "./CalendarZoomDetails";
 import { SlidingSegmented } from "./SlidingSegmented";
-import { calendarDayInRange, calendarItemsOnDay, emptyCalendarFilters, filterCalendarSchedule, type CalendarFilters as Filters } from "./calendar-filters";
+import { calendarDayInRange, calendarItemsOnDay, emptyCalendarFilters, filterCalendarSchedule, indexCalendarDays, type CalendarFilters as Filters } from "./calendar-filters";
 import "./calendar-ux.css";
 
 interface CalendarViewProps {
@@ -122,7 +123,7 @@ function isPastDay(value: Date): boolean {
 }
 
 function dateLabel(value: Date, weekday = true): string {
-  return new Intl.DateTimeFormat("ru-RU", {
+  return russianDateTimeFormatter({
     weekday: weekday ? "long" : undefined,
     day: "numeric",
     month: "long",
@@ -132,7 +133,7 @@ function dateLabel(value: Date, weekday = true): string {
 
 function eventTime(event: CalendarEvent): string {
   if (event.allDay) return "Весь день";
-  const format = new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit" });
+  const format = russianDateTimeFormatter({ hour: "2-digit", minute: "2-digit" });
   return `${format.format(new Date(event.startsAt))}–${format.format(new Date(event.endsAt))}`;
 }
 
@@ -228,7 +229,7 @@ export function CalendarView({
   const [selectedZoomState, setSelectedZoom] = useState<ZoomMeeting>();
   const [draft, setDraft] = useState<CalendarEventInput>();
   const [editAttendeeScope, setEditAttendeeScope] = useState<EmployeeScope>("central");
-  const activePeople = people.filter(person => !person.status || person.status === "active");
+  const activePeople = useMemo(() => people.filter(person => !person.status || person.status === "active"), [people]);
   const selectAudience = (scope: NonNullable<CalendarEventInput["audienceScope"]>) => {
     if (!canInviteCalendarAudience || !draft || busy) return;
     setDraft({ ...draft, audienceScope: scope, attendeeIds: [...new Set([currentUserId,
@@ -298,7 +299,7 @@ export function CalendarView({
     observer.observe(frame);
     return () => observer.disconnect();
   }, []);
-  const monthLabel = new Intl.DateTimeFormat("ru-RU", { month: "long", year: "numeric" }).format(month);
+  const monthLabel = russianDateTimeFormatter({ month: "long", year: "numeric" }).format(month);
   const selectedFromEvents = events.find((item) => item.id === selectedState?.id);
   const selected = selectedState && selectedFromEvents
     ? Date.parse(selectedFromEvents.updatedAt) > Date.parse(selectedState.updatedAt)
@@ -312,9 +313,8 @@ export function CalendarView({
   const schedule = useMemo(() => filterCalendarSchedule(events, zoomMeetings ?? [], filters), [events, zoomMeetings, filters]);
   const monthStart = month.getTime();
   const monthEnd = new Date(month.getFullYear(), month.getMonth() + 1, 1).getTime();
-  const monthItems = schedule.filter(item => Date.parse(item.record.startsAt) < monthEnd && Date.parse(item.record.endsAt) > monthStart);
+  const monthItems = useMemo(() => schedule.filter(item => Date.parse(item.record.startsAt) < monthEnd && Date.parse(item.record.endsAt) > monthStart), [schedule, monthStart, monthEnd]);
   const listItems = filters.from || filters.to ? schedule : monthItems;
-  const selectedDayItems = calendarItemsOnDay(schedule, selectedDay, filters);
   const hasFilters = Boolean(filters.employeeId || filters.query.trim() || filters.from || filters.to || !filters.showCancelled);
   const changeFilters = (next: Filters) => {
     setFilters(next); setListLimit(100); setSelected(undefined); setSelectedZoom(undefined); setError("");
@@ -379,6 +379,9 @@ export function CalendarView({
       return new Date(month.getFullYear(), month.getMonth(), day);
     });
   }, [month]);
+
+  const itemsByDay = useMemo(() => indexCalendarDays(schedule, days, filters), [schedule, days, filters]);
+  const selectedDayItems = useMemo(() => itemsByDay.get(dayKey(selectedDay)) ?? calendarItemsOnDay(schedule, selectedDay, filters), [itemsByDay, schedule, selectedDay, filters]);
 
   useEffect(() => {
     if (!createFromChat || createFromChat.key === lastChatDraftKey.current) return;
@@ -699,7 +702,7 @@ export function CalendarView({
     </div>
   </>;
   return (
-    <section ref={frameRef} className={`workspace-view calendar-view calendar-ux ${agendaCompact ? "calendar-agenda-compact" : "calendar-agenda-inline"}${agendaDense ? " calendar-agenda-dense" : ""}${view === "list" ? " calendar-tiles-mode" : ""}`} aria-label="Календарь">
+    <section ref={frameRef} className={`workspace-view workspace-queue calendar-view calendar-ux ${agendaCompact ? "calendar-agenda-compact" : "calendar-agenda-inline"}${agendaDense ? " calendar-agenda-dense" : ""}${view === "list" ? " calendar-tiles-mode" : ""}`} aria-label="Календарь">
       <CalendarFilters value={filters} onChange={changeFilters} onReset={resetFilters}
         people={people} token={token} currentUserId={currentUserId} disabled={Boolean(draft) || busy} actions={<Button
               className="calendar-new-event"
@@ -762,7 +765,7 @@ export function CalendarView({
           >
             {days.map((day) => {
               const key = dayKey(day);
-               const dayItems = calendarItemsOnDay(schedule, day, filters);
+               const dayItems = itemsByDay.get(key) ?? [];
                const dayItemCount = dayItems.length;
               const outside = day.getMonth() !== month.getMonth();
               const today = key === dayKey(new Date());
@@ -813,8 +816,8 @@ export function CalendarView({
                         {...eventFocusTarget}
                         className={`calendar-event-pill ${item.kind === "zoom" ? "zoom" : `${item.record.eventType} ${item.record.status}`}`}
                         style={item.kind === "event" ? calendarAppearanceStyle(item.record) : undefined}
-                        aria-label={`${item.kind === "event" ? eventTime(item.record) : `Zoom · ${new Date(item.record.startsAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}`} · ${item.title}`}
-                        title={`${item.title} · ${new Date(item.record.startsAt).toLocaleString("ru-RU")}`}
+                        aria-label={`${item.kind === "event" ? eventTime(item.record) : `Zoom · ${formatRussianTime(new Date(item.record.startsAt), { hour: "2-digit", minute: "2-digit" })}`} · ${item.title}`}
+                        title={`${item.title} · ${formatRussianDateTime(new Date(item.record.startsAt))}`}
                         key={item.key}
                         type="button"
                         onClick={(clickEvent) => {
@@ -827,7 +830,7 @@ export function CalendarView({
                           setError("");
                         }}
                       >
-                        <span>{item.kind === "event" && item.record.allDay ? "День" : dayKey(new Date(item.record.startsAt)) === key ? new Date(item.record.startsAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }) : "↳"}</span>
+                        <span>{item.kind === "event" && item.record.allDay ? "День" : dayKey(new Date(item.record.startsAt)) === key ? formatRussianTime(new Date(item.record.startsAt), { hour: "2-digit", minute: "2-digit" }) : "↳"}</span>
                         <CalendarIcon zoom={item.kind === "zoom"} iconKey={item.kind === "event" ? item.record.iconKey : undefined} /><strong>{item.title}</strong>
                       </button>
                     ))}

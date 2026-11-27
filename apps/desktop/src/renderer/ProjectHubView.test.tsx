@@ -103,6 +103,29 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.clearAllMocks(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe("standalone project hub", () => {
+  it("keeps the selected detail within the chosen lifecycle filter", async () => {
+    const completed = { ...project, id: "completed-project", title: "Завершённый проект", code: "DONE", lifecycleStatus: "completed" as const };
+    vi.mocked(loadProjectHub).mockResolvedValue({ projects: [project, completed], workstreams: [], items: [], requests: [] });
+    setup();
+    await screen.findByRole("heading", { name: project.title });
+    fireEvent.change(screen.getByRole("combobox", { name: "Фильтр проектов" }), { target: { value: "completed" } });
+    expect(screen.getByRole("heading", { name: completed.title })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: project.title })).not.toBeInTheDocument();
+    expect(document.querySelector('.project-hub-project[aria-current="true"]')).toHaveTextContent(completed.title);
+    fireEvent.change(screen.getByRole("combobox", { name: "Фильтр проектов" }), { target: { value: "active" } });
+    expect(screen.getByRole("heading", { name: project.title })).toBeInTheDocument();
+  });
+  it("opens a completed project from its direct link and aborts reads when leaving", async () => {
+    const completed = { ...project, id: "completed-project", title: "Завершённый проект", lifecycleStatus: "completed" as const };
+    vi.mocked(loadProjectHub).mockResolvedValue({ projects: [project, completed], workstreams: [], items: [], requests: [] });
+    const rendered = render(<ProjectHubView mode="projects" token="test-token" people={people}
+      currentUserId={people[0]!.id} canCreateProject canCreateRequest canViewFunding focusId={completed.id} />);
+    await screen.findByRole("heading", { name: completed.title });
+    const signal = vi.mocked(loadProjectHub).mock.calls[0]![1]!;
+    expect(signal.aborted).toBe(false);
+    rendered.unmount();
+    expect(signal.aborted).toBe(true);
+  });
   it("keeps the payment route in the project form after an error and saves it on retry", async () => {
     vi.mocked(saveProjectHubProject).mockRejectedValueOnce(new Error("Не удалось сохранить маршрут"))
       .mockResolvedValue({ ...project, paymentApproverUserIds: [] });

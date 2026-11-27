@@ -1,8 +1,7 @@
 .grants-view { display: flex; flex-direction: column; gap: 16px; min-width: 0; min-height: 0; overflow: auto; }
 .grants-actions, .grants-detail-command, .grants-filters { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .grants-toolbar { display: flex; gap: 16px; justify-content: space-between; align-items: end; flex-wrap: wrap; }
-.grants-search, .grants-form label, .grants-result label, .grants-comment label, .grants-return label, .grants-upload { display: grid; gap: 8px; }
-.grants-search { min-width: min(260px, 100%); }
+.grants-form label, .grants-result label, .grants-comment label, .grants-return label, .grants-upload { display: grid; gap: 8px; }
 .grants-view input, .grants-view select, .grants-view textarea,
 .grants-dialog input:not([type="checkbox"]), .grants-dialog select, .grants-dialog textarea {
   font: inherit; color: var(--ws-text); background: var(--ws-surface); border: 1px solid var(--ws-line);

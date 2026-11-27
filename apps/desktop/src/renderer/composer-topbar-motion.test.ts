@@ -14,10 +14,6 @@ it("reveals fixed context panels with a shadow-inclusive mask, never animated la
   expect(component.match(/<Popover surfaceMotion=\{null\}/g)).toHaveLength(2);
   expect(component.match(/data-surface-resize-motion="off"/g)).toHaveLength(2);
   expect(component).not.toContain("ContextPanelCurtain");
-  expect(css.match(/:has\(\.topbar-insights\):has\(\.assistant-launcher-space\[data-vacated\]\)/g)).toHaveLength(2);
-  const compact = readFileSync("src/renderer/mobile-density.css", "utf8");
-  expect(compact).toContain(".assistant-launcher-space[data-vacated]");
-  expect(compact).toContain("flex: 0 0 0; width: 0; min-width: 0; max-width: 0; margin-inline-start: -6px");
 });
 
 it("gives every composer tool the same theme surface without disabling the microphone", () => {

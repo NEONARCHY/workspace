@@ -1,0 +1,77 @@
+/* Same queue tokens as tasks, payments and the other workspace pages. */
+body .app-provider .workspace-queue:is(.grants-view, .reference-view, .mail-view) { gap: 0; }
+body .app-provider .grants-view.workspace-queue:not([data-dialog-only]) { overflow: hidden; }
+.workspace-queue .grants-count { color: var(--ws-muted); font-size: 13px; }
+body .app-provider .grants-view.workspace-queue .grants-filters { flex-wrap: nowrap; }
+body .app-provider .grants-view.workspace-queue .grant-records { flex: 1; min-height: 0; }
+body .app-provider .grants-view.workspace-queue .grant-record-owners { gap: 8px; }
+body .app-provider .reference-view.workspace-queue .reference-tabs {
+  flex: none; flex-wrap: nowrap; gap: 4px; min-height: var(--ws-queue-control); margin-block: var(--ws-queue-space);
+  padding: 4px; border: 0; border-radius: var(--ws-queue-radius); overflow-x: auto; scrollbar-width: thin;
+}
+body .app-provider .reference-view.workspace-queue .reference-tabs > button { flex: none; min-height: var(--ws-queue-button); padding: 8px 12px; border-radius: 8px; white-space: nowrap; font-size: 12px; }
+body .app-provider .reference-view.workspace-queue .reference-content { padding: 0; }
+body .app-provider .reference-view.workspace-queue .reference-toolbar { gap: 12px; padding: 0 0 var(--ws-queue-space); align-items: center; }
+.workspace-queue .reference-toolbar h2 { margin: 0 0 4px; font-size: 18px; font-weight: 600; }
+.workspace-queue .reference-toolbar p { font-size: 13px; line-height: 1.5; }
+body .app-provider .reference-view.workspace-queue .reference-toolbar-actions { gap: 12px; min-width: 0; }
+html:root body .app-provider .reference-view.workspace-queue .reference-toolbar-actions > .fui-Button { min-height: var(--ws-queue-control); }
+body .app-provider .reference-view.workspace-queue .reference-toolbar-actions > .workspace-search { --search-width: 280px; --search-height: var(--ws-queue-control); margin: 0; }
+.workspace-queue .reference-archive-toggle { min-height: var(--ws-queue-control); gap: 8px; }
+body .app-provider .reference-view.workspace-queue .reference-records { grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: var(--ws-queue-space); }
+body .app-provider .reference-view.workspace-queue .reference-record { gap: 8px; padding: 16px; border: 0; border-radius: 16px; }
+.workspace-queue .reference-record-kind { font-size: 12px; font-weight: 500; text-transform: none; letter-spacing: normal; }
+.workspace-queue .reference-record h3 { font-size: 16px; font-weight: 600; }
+body .app-provider .reference-view.workspace-queue .reference-profile { max-width: none; padding: 20px 24px; border: 0; }
+.workspace-queue .reference-profile-grid { gap: 12px; margin-top: 16px; }
+.workspace-queue .reference-profile-grid > div { padding: 12px; border: 0; border-radius: 12px; background: var(--ws-surface-recessed, var(--ws-muted-surface)); }
+.workspace-queue .reference-profile-grid dd { margin-top: 4px; }
+.workspace-queue .reference-history { margin-top: 16px; padding-top: 0; border: 0; }
+.workspace-queue .reference-history summary { box-sizing: border-box; min-height: 44px; display: list-item; padding-block: 12px; line-height: 20px; }
+body .app-provider .reference-view.workspace-queue .reference-empty { border: 0; background: var(--ws-surface); }
+body .app-provider .mail-view.workspace-queue { overflow: hidden; }
+body .app-provider .mail-view.workspace-queue .mail-workspace { margin-top: var(--ws-queue-space); min-height: 0; gap: var(--ws-queue-space); grid-template-columns: 180px minmax(280px, .85fr) minmax(0, 1.15fr); }
+.workspace-queue .mail-folders { padding: 8px; gap: 4px; }
+body .app-provider .mail-view.workspace-queue .mail-folders > .fui-Button[aria-pressed="false"] { background: transparent; }
+body .app-provider .mail-view.workspace-queue .mail-folders > .fui-Button[aria-pressed="false"]:hover { background: var(--ws-surface-recessed, var(--ws-muted-surface)); }
+.workspace-queue .mail-folder-select { display: none; }
+html:root body .app-provider .mail-view.workspace-queue .mail-account-menu.fui-Button { min-width: 44px; width: 44px; min-height: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; }
+body .app-provider .mail-view.workspace-queue .mail-search { align-items: center; gap: 8px; padding: 12px; }
+.workspace-queue .mail-search > .fui-Input { flex: 1; min-width: 0; min-height: var(--ws-queue-control); }
+.workspace-queue .mail-search input { min-height: 0; }
+body .app-provider .mail-view.workspace-queue .mail-search > .fui-Button { min-height: var(--ws-queue-control); }
+.workspace-queue .mail-list-scroll { min-height: 0; }
+.workspace-queue .mail-row { gap: 8px; padding: 16px; }
+.workspace-queue .mail-row strong { font-weight: 600; }
+.workspace-queue .mail-row[aria-pressed="true"] { box-shadow: none; background: var(--ws-selected); }
+.workspace-queue .mail-reader { padding: 20px; }
+.workspace-queue .mail-reader-header h2 { font-size: 20px; font-weight: 600; }
+.workspace-queue .mail-reader > .mail-empty { padding: 12px 4px; }
+@media (max-width: 1120px) {
+  body .app-provider .mail-view.workspace-queue .mail-workspace { grid-template-columns: minmax(260px, .85fr) minmax(0, 1.15fr); }
+  body .app-provider .reference-view.workspace-queue .reference-toolbar { align-items: start; flex-direction: column; }
+  body .app-provider .reference-view.workspace-queue .reference-toolbar-actions { width: 100%; }
+  body .app-provider .reference-view.workspace-queue .reference-toolbar-actions > .workspace-search { margin-left: auto; }
+}
+@media (max-width: 760px) {
+  body .app-provider .reference-view.workspace-queue .reference-toolbar-actions { gap: 8px; }
+  body .app-provider .reference-view.workspace-queue .reference-toolbar-actions > .workspace-search { --search-width: 100%; flex: 1 0 100%; margin: 0; }
+  .workspace-queue .reference-archive-toggle { order: 1; flex: 1; }
+  body .app-provider .reference-view.workspace-queue .reference-toolbar-actions > .fui-Button { order: 2; min-height: 44px; }
+  body .app-provider .reference-view.workspace-queue .reference-profile { padding: 16px; }
+  .workspace-queue .reference-profile-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 720px) {
+  .workspace-queue .mail-refresh-label { display: none; }
+  html:root body .app-provider .mail-view.workspace-queue .mail-refresh.fui-Button { min-width: 44px; width: 44px; min-height: 44px; padding: 0; }
+  body .app-provider .mail-view.workspace-queue { overflow-y: auto; }
+  body .app-provider .mail-view.workspace-queue .mail-workspace { display: flex; flex-direction: column; flex: none; overflow: visible; }
+  body .app-provider .mail-view.workspace-queue .mail-folders { overflow: visible; display: block; padding: 12px; }
+  .workspace-queue .mail-folders > .fui-Button { display: none; }
+  .workspace-queue .mail-folder-select { display: block; width: 100%; }
+  .workspace-queue .mail-folder-select select { width: 100%; min-height: 44px; padding: 8px 12px; border-radius: 12px; font: inherit; color: var(--ws-text); background: var(--ws-surface-recessed, var(--ws-muted-surface)); }
+  .workspace-queue .mail-folders .mail-muted { margin: 8px 0 0; font-size: 12px; line-height: 1.5; }
+  body .app-provider .mail-view.workspace-queue :is(.mail-list, .mail-reader) { max-height: none; overflow: visible; }
+  .workspace-queue .mail-list-scroll { overflow: visible; }
+  .workspace-queue .mail-pagination { gap: 8px; }
+}

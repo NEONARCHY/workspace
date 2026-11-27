@@ -20,16 +20,13 @@
   .web-platform .browser-compact .global-bar:has(.topbar-insights) .browser-menu-trigger { order: 1; }
   .web-platform .browser-compact .global-bar:has(.topbar-insights) .section-jump-trigger { order: 2; }
   .web-platform .browser-compact .global-bar:has(.topbar-insights) .notification-bell-wrap { order: 3; }
-  .web-platform .browser-compact .global-bar:has(.topbar-insights) .color-theme-toggle-wrap { order: 4; }
+  .web-platform .browser-compact .global-bar:has(.topbar-insights) .color-theme-toggle-wrap { order: 10; }
   .web-platform .browser-compact .global-bar:has(.topbar-insights) .assistant-launcher-space { order: 5; }
-  .web-platform .browser-compact .app-stage .global-bar:has(.topbar-insights) .assistant-launcher-space[data-vacated] {
-    flex: 0 0 0; width: 0; min-width: 0; max-width: 0; margin-inline-start: -6px;
-  }
   .web-platform .browser-compact .global-bar:has(.topbar-insights) .workspace-identity-menu { order: 6; }
   .web-platform .browser-compact .global-bar:has(.topbar-insights) .connection-indicator { position: static; order: 7; }
   .web-platform .browser-compact .global-bar:has(.topbar-insights) .context-currency-trigger { order: 8; }
   .web-platform .browser-compact .global-bar:has(.topbar-insights) .context-weather-trigger { order: 9; }
-  .web-platform .browser-compact .global-bar:has(.topbar-insights) .workday-control { order: 10; }
+  .web-platform .browser-compact .global-bar:has(.topbar-insights) .workday-control { order: 4; }
   .web-platform .browser-compact .global-bar:has(.topbar-insights) :is(.section-jump-trigger, .context-trigger, .connection-indicator, .workday-control-mobile-trigger) { justify-content: center; padding: 0; border: 1px solid transparent; color: var(--ws-link); background: var(--ws-button-hover, var(--ws-surface)); }
   .web-platform .browser-compact .global-bar:has(.topbar-insights) :is(.context-trigger > span, .context-trigger > svg:last-child, .connection-indicator > span, .workday-control-direct) { display: none; }
   .web-platform .browser-compact .global-bar:has(.topbar-insights) .context-trigger > svg:first-child { display: block; flex: none; width: 22px; height: 22px; }

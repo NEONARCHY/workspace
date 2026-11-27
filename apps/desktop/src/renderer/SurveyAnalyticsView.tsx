@@ -1,6 +1,8 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { LoadingSkeleton, SkeletonBlock } from "./LoadingSkeleton";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
+import { russianDateTimeFormatter } from "./date-time-format";
 import { Button, Field, Select } from "@fluentui/react-components";
 import { ArrowUpload24Regular, Document24Regular, Folder24Regular } from "@fluentui/react-icons";
 import { Input } from "./WorkspaceInput";
@@ -17,7 +19,9 @@ const typeLabels: Readonly<Record<SurveyQuestionType, string>> = {
 };
 const filterLabels = { equals: "равно", contains: "содержит", range: "диапазон", empty: "пропуск", filled: "заполнено" } as const;
 const message = (error: unknown) => error instanceof Error ? error.message : "Не удалось выполнить действие.";
-const number = (value: number | undefined) => value === undefined || !Number.isFinite(value) ? "—" : value.toLocaleString("ru-RU", { maximumFractionDigits: 3 });
+const numberFormatter = new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 3 });
+const dateFormatter = russianDateTimeFormatter({ year: "numeric", month: "numeric", day: "numeric" });
+const number = (value: number | undefined) => value === undefined || !Number.isFinite(value) ? "—" : numberFormatter.format(value);
 const fileSize = (bytes: number) => bytes < 1024 ? `${number(bytes)} Б` : bytes < 1024 * 1024 ? `${number(bytes / 1024)} КиБ` : `${number(bytes / 1024 / 1024)} МиБ`;
 function download(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob);
@@ -71,7 +75,11 @@ export function SurveyAnalyticsView({ token, canCreate, canEdit }: { readonly to
   const [filterUpper, setFilterUpper] = useState("");
   const [viewName, setViewName] = useState("");
   const [missingText, setMissingText] = useState("");
-  const visibleAnalyses = analyses.filter((item) => item.archived === archive && item.title.toLocaleLowerCase().includes(listQuery.toLocaleLowerCase()));
+  const analysisIndex = useMemo(() => analyses.map(item => ({ item, title: item.title.toLocaleLowerCase() })), [analyses]);
+  const visibleAnalyses = useMemo(() => {
+    const query = listQuery.toLocaleLowerCase();
+    return analysisIndex.filter(({ item, title }) => item.archived === archive && title.includes(query)).map(({ item }) => item);
+  }, [analysisIndex, archive, listQuery]);
   const dirty = !!detail && !!configuration && (title !== detail.analysis.title || JSON.stringify(configuration) !== JSON.stringify(detail.analysis.configuration));
   const uploadDisabled = busy || !canCreate || dirty;
   const chooseFile = (next: File | undefined) => {
@@ -81,31 +89,37 @@ export function SurveyAnalyticsView({ token, canCreate, canEdit }: { readonly to
     if (next.size > 10 * 1024 * 1024) { setError("Размер файла не должен превышать 10 МиБ."); return; }
     setFile(next); setRequestId(crypto.randomUUID());
   };
+  const listRequest = useRef<AbortController | null>(null);
   const refresh = useCallback(async () => {
+    listRequest.current?.abort();
+    const controller = new AbortController(); listRequest.current = controller;
     setLoading(true); setError("");
-    try { setAnalyses(await listSurveyAnalyses(token)); setLoadedToken(token); }
-    catch (failure) { setError(message(failure)); }
-    finally { setLoading(false); }
+    try { const items = await listSurveyAnalyses(token, controller.signal); if (!controller.signal.aborted) { setAnalyses(items); setLoadedToken(token); } }
+    catch (failure) { if (!controller.signal.aborted) setError(message(failure)); }
+    finally { if (!controller.signal.aborted) setLoading(false); }
   }, [token]);
   useEffect(() => {
     let active = true;
-    void listSurveyAnalyses(token).then((items) => { if (active) { setAnalyses(items); setLoadedToken(token); } })
-      .catch((failure: unknown) => { if (active) setError(message(failure)); })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
-  }, [token]);
-  const dataset = useMemo(() => detail && configuration ? buildSurveyDataset(detail.workbook, configuration) : undefined, [detail, configuration]);
+    queueMicrotask(() => { if (active) void refresh(); });
+    return () => { active = false; listRequest.current?.abort(); };
+  }, [refresh]);
+  const workbook = detail?.workbook;
+  const { sheet, headerRow, types, missingValues } = configuration ?? {};
+  // Query/filter/view changes do not rebuild and re-detect the entire workbook.
+  const dataset = useMemo(() => workbook && sheet !== undefined && headerRow !== undefined && types && missingValues
+    ? buildSurveyDataset(workbook, { sheet, headerRow, types, missingValues }) : undefined, [workbook, sheet, headerRow, types, missingValues]);
   const rows = useMemo(() => dataset && configuration ? filterSurveyRows(dataset, configuration) : [], [dataset, configuration]);
   const questions = useMemo(() => dataset?.questions.filter((item) => item.type !== "excluded") ?? [], [dataset]);
   const question = questions.find((item) => item.column === column) ?? questions[0];
   const quality = useMemo(() => dataset && configuration ? surveyQuality(dataset, configuration, rows) : undefined, [dataset, configuration, rows]);
   const comparison = useMemo(() => {
+    if (tab !== "comparison") return undefined;
     const chosen = dataset?.questions.find((item) => item.column === column && item.type !== "excluded")
       ?? dataset?.questions.find((item) => item.type !== "excluded");
     const grouped = dataset?.questions.find((item) => item.column === groupColumn && item.type !== "excluded");
     return chosen && grouped && chosen.column !== grouped.column && configuration ? surveyComparison(rows, chosen, grouped, configuration) : undefined;
-  }, [rows, dataset, column, groupColumn, configuration]);
-  const numeric = question && configuration && question.type === "numeric" ? surveyNumericSummary(rows, question, configuration) : undefined;
+  }, [rows, dataset, column, groupColumn, configuration, tab]);
+  const numeric = useMemo(() => question && configuration && question.type === "numeric" ? surveyNumericSummary(rows, question, configuration) : undefined, [rows, question, configuration]);
   const patch = (changes: Partial<SurveyConfiguration>) => {
     if (configuration) setConfiguration({ ...configuration, ...changes });
     setPage(0); setNotice("");
@@ -169,10 +183,10 @@ export function SurveyAnalyticsView({ token, canCreate, canEdit }: { readonly to
     if (numeric) output.push(["Корректных чисел", String(numeric.count)], ["Нечисловых ответов", String(numeric.invalid)], ["Среднее", String(numeric.mean ?? "")], ["Медиана", String(numeric.median ?? "")]);
     download(new Blob([surveyCsv(output)], { type: "text/csv;charset=utf-8" }), "survey-summary.csv");
   };
-  return <section className="workspace-view survey-analytics" aria-busy={busy || loading}>
-    <header className="survey-heading"><div><span className="survey-eyebrow">ЛИЧНОЕ РАБОЧЕЕ ПРОСТРАНСТВО</span><h1>Аналитика опросов</h1>
-      <p>Исходные ответы и сохранённые анализы доступны только вам. Без отправки в ИИ.</p></div>
-      <Button disabled={busy} onClick={() => void refresh()}>Обновить список</Button></header>
+  return <section className="workspace-view workspace-queue survey-analytics" aria-busy={busy || loading}>
+    <WorkspaceSectionHeader motif="members" className="survey-heading"><div><h1>Аналитика опросов</h1>
+      <p>Личная библиотека ответов и анализов. Данные не отправляются в ИИ.</p></div>
+      <Button disabled={busy || loading} onClick={() => void refresh()}>Обновить список</Button></WorkspaceSectionHeader>
     {error && <WorkspaceNotice tone="error" className="survey-error" role="alert" actions={<><Button disabled={busy} onClick={() => void refresh()}>Повторить загрузку списка</Button></>}>{error} </WorkspaceNotice>}
     {notice && <p role="status" className="survey-note">{notice}</p>}
     <div className="survey-layout">
@@ -186,7 +200,7 @@ export function SurveyAnalyticsView({ token, canCreate, canEdit }: { readonly to
           {visibleAnalyses.map((item) => <Button key={item.id}
             className="survey-analysis-item" aria-pressed={detail?.analysis.id === item.id} disabled={busy || dirty}
             onClick={() => void perform(async () => accept(await loadSurveyAnalysis(token, item.id)))}>
-            <span>{item.title}<small>{new Date(item.updatedAt).toLocaleDateString("ru-RU")} · версия {item.revision}</small></span>
+            <span>{item.title}<small>{dateFormatter.format(new Date(item.updatedAt))} · версия {item.revision}</small></span>
           </Button>)}
           {!visibleAnalyses.length && <div className="survey-library-empty"><Document24Regular aria-hidden="true" /><h3>{listQuery ? "Ничего не найдено" : archive ? "Архив пуст" : "Пока нет анализов"}</h3><p>{listQuery ? "Попробуйте другое название." : archive ? "Здесь будут архивные анализы." : "Загрузите первый опрос. Сохранённые анализы появятся здесь."}</p></div>}
         </div>}

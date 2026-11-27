@@ -190,8 +190,8 @@ export { apiConnectionLabel, getApiBaseUrl, initializeApiOrigin, subscribeToApiO
 let pendingMutations = 0;
 export const hasPendingMutation = () => pendingMutations > 0;
 
-export function loadPersonalReactions(token: string): Promise<PersonalReactionSummary> {
-  return apiRequest("/home/reactions", {}, token);
+export function loadPersonalReactions(token: string, signal?: AbortSignal): Promise<PersonalReactionSummary> {
+  return apiRequest("/home/reactions", { signal }, token);
 }
 
 export class ApiHttpError extends Error {
@@ -257,12 +257,13 @@ export function saveEdoAccess(
 export function loadEdoIncomingLetters(
   token: string,
   options: { readonly page?: number; readonly q?: string; readonly status?: EdoIncomingFilter; readonly personal?: boolean } = {},
+  signal?: AbortSignal,
 ): Promise<EdoIncomingPage> {
   const query = new URLSearchParams({ page: String(options.page ?? 1), limit: "20" });
   if (options.q?.trim()) query.set("q", options.q.trim());
   if (options.status) query.set("status", options.status);
   if (options.personal) query.set("personal", "true");
-  return apiRequest<EdoIncomingPage>(`/incoming-letters?${query}`, {}, token);
+  return apiRequest<EdoIncomingPage>(`/incoming-letters?${query}`, { signal }, token);
 }
 
 export function loadEdoIncomingLetter(token: string, id: number): Promise<EdoIncomingDetail> {
@@ -352,10 +353,11 @@ export function previewAIReferentLocalFile(
 export function loadEmployeeRecognitionProfile(
   token: string,
   userId: string,
+  signal?: AbortSignal,
 ): Promise<EmployeeRecognitionProfile> {
   return apiRequest<EmployeeRecognitionProfile>(
     `/recognition/profiles/${encodeURIComponent(userId)}`,
-    {},
+    { signal },
     token,
   );
 }
@@ -482,6 +484,7 @@ export function saveAIReferentConfiguration(
 export function loadAIReferentIncomingRegistry(
   token: string,
   filters: { readonly query?: string; readonly status?: string; readonly offset?: number; readonly category?: string } = {},
+  signal?: AbortSignal,
 ): Promise<AIReferentIncomingRegistry> {
   const query = new URLSearchParams();
   if (filters.query?.trim()) query.set("query", filters.query.trim());
@@ -489,7 +492,7 @@ export function loadAIReferentIncomingRegistry(
   if (filters.offset) query.set("offset", String(filters.offset));
   if (filters.category) query.set("category", filters.category);
   const suffix = query.size > 0 ? `?${query.toString()}` : "";
-  return apiRequest<AIReferentIncomingRegistry>(`/ai-referent/incoming${suffix}`, {}, token);
+  return apiRequest<AIReferentIncomingRegistry>(`/ai-referent/incoming${suffix}`, { signal }, token);
 }
 
 export function downloadAIReferentJournal(token: string): Promise<Blob> {
@@ -603,8 +606,8 @@ export function loadAIReferentTelegramLink(token: string) {
   return apiRequest<{ readonly telegramId: string | null }>("/ai-referent/telegram-link", {}, token);
 }
 
-export function loadTelegramAccess(token: string): Promise<TelegramAccessRegistry> {
-  return apiRequest<TelegramAccessRegistry>("/telegram-access", {}, token);
+export function loadTelegramAccess(token: string, signal?: AbortSignal): Promise<TelegramAccessRegistry> {
+  return apiRequest<TelegramAccessRegistry>("/telegram-access", { signal }, token);
 }
 
 export function saveTelegramAccess(
@@ -616,8 +619,8 @@ export function saveTelegramAccess(
   );
 }
 
-export function loadHisobotProfile(token: string): Promise<HisobotProfile> {
-  return apiRequest<HisobotProfile>("/hisobot/me", {}, token);
+export function loadHisobotProfile(token: string, signal?: AbortSignal): Promise<HisobotProfile> {
+  return apiRequest<HisobotProfile>("/hisobot/me", { signal }, token);
 }
 
 export function loadHisobotActivityDraft(token: string): Promise<HisobotActivityDraft | null> {
@@ -642,28 +645,28 @@ export function saveHisobotUnitReport(token: string, content: string): Promise<H
   );
 }
 
-export function loadHisobotHistory(token: string, beforeDate?: string): Promise<readonly HisobotReport[]> {
+export function loadHisobotHistory(token: string, beforeDate?: string, signal?: AbortSignal): Promise<readonly HisobotReport[]> {
   const suffix = beforeDate ? `?before_date=${encodeURIComponent(beforeDate)}` : "";
-  return apiRequest<readonly HisobotReport[]>(`/hisobot/me/history${suffix}`, {}, token);
+  return apiRequest<readonly HisobotReport[]>(`/hisobot/me/history${suffix}`, { signal }, token);
 }
 
-export function loadHisobotUnitHistory(token: string, beforeDate?: string): Promise<readonly HisobotUnitReport[]> {
+export function loadHisobotUnitHistory(token: string, beforeDate?: string, signal?: AbortSignal): Promise<readonly HisobotUnitReport[]> {
   const suffix = beforeDate ? `?before_date=${encodeURIComponent(beforeDate)}` : "";
-  return apiRequest<readonly HisobotUnitReport[]>(`/hisobot/me/unit-history${suffix}`, {}, token);
+  return apiRequest<readonly HisobotUnitReport[]>(`/hisobot/me/unit-history${suffix}`, { signal }, token);
 }
 
-export function loadHisobotReports(token: string, startDate: string, endDate: string): Promise<readonly HisobotReport[]> {
+export function loadHisobotReports(token: string, startDate: string, endDate: string, signal?: AbortSignal): Promise<readonly HisobotReport[]> {
   const params = new URLSearchParams({ start_date: startDate, end_date: endDate });
-  return apiRequest<readonly HisobotReport[]>(`/hisobot/reports?${params}`, {}, token);
+  return apiRequest<readonly HisobotReport[]>(`/hisobot/reports?${params}`, { signal }, token);
 }
 
-export function loadHisobotUnitReports(token: string, startDate: string, endDate: string): Promise<readonly HisobotUnitReport[]> {
+export function loadHisobotUnitReports(token: string, startDate: string, endDate: string, signal?: AbortSignal): Promise<readonly HisobotUnitReport[]> {
   const params = new URLSearchParams({ start_date: startDate, end_date: endDate });
-  return apiRequest<readonly HisobotUnitReport[]>(`/hisobot/unit-reports?${params}`, {}, token);
+  return apiRequest<readonly HisobotUnitReport[]>(`/hisobot/unit-reports?${params}`, { signal }, token);
 }
 
-export function loadHrOverview(token: string): Promise<HrOverview> {
-  return apiRequest<HrOverview>("/hr", {}, token);
+export function loadHrOverview(token: string, signal?: AbortSignal): Promise<HrOverview> {
+  return apiRequest<HrOverview>("/hr", { signal }, token);
 }
 
 export const loadDossierContext = (token: string) => apiRequest<DossierContext>("/personnel-dossiers/context", {}, token);
@@ -794,8 +797,8 @@ export function loadZoomMeetings(token: string): Promise<ZoomMeetingsRegistry> {
 }
 
 /** `day` is a local calendar date (YYYY-MM-DD) in the organization timezone. */
-export function loadZoomAvailability(token: string, day: string): Promise<ZoomAvailability> {
-  return apiRequest<ZoomAvailability>(`/zoom-meetings/availability?day=${encodeURIComponent(day)}`, {}, token);
+export function loadZoomAvailability(token: string, day: string, signal?: AbortSignal): Promise<ZoomAvailability> {
+  return apiRequest<ZoomAvailability>(`/zoom-meetings/availability?day=${encodeURIComponent(day)}`, { signal }, token);
 }
 
 export function createZoomMeeting(token: string, payload: ZoomMeetingInput): Promise<ZoomMeeting> {
@@ -1932,9 +1935,9 @@ export function acceptWorkspaceTaskResult(
   );
 }
 
-export function loadPersonalEfficiency(token: string, period?: string): Promise<PersonalEfficiency> {
+export function loadPersonalEfficiency(token: string, period?: string, signal?: AbortSignal): Promise<PersonalEfficiency> {
   const suffix = period ? `?period=${encodeURIComponent(period)}` : "";
-  return apiRequest<PersonalEfficiency>(`/profile/me/efficiency${suffix}`, {}, token);
+  return apiRequest<PersonalEfficiency>(`/profile/me/efficiency${suffix}`, { signal }, token);
 }
 
 export function deleteWorkspaceTaskAttachment(token: string, taskId: string, attachmentId: string): Promise<void> {
@@ -2268,8 +2271,8 @@ export function changeWorkspaceProjectStage(
   );
 }
 
-export function loadProjectHub(token: string): Promise<ProjectHubOverview> {
-  return apiRequest<ProjectHubOverview>("/project-hub", {}, token);
+export function loadProjectHub(token: string, signal?: AbortSignal): Promise<ProjectHubOverview> {
+  return apiRequest<ProjectHubOverview>("/project-hub", { signal }, token);
 }
 
 export function loadMailConnection(token: string): Promise<MailConnection> {
@@ -2482,8 +2485,8 @@ export function downloadProjectImportDocument(token: string, id: string, documen
   }, (result) => result.blob(), 120_000);
 }
 
-export function listSurveyAnalyses(token: string): Promise<readonly SurveyAnalysis[]> {
-  return apiRequest("/survey-analyses", {}, token);
+export function listSurveyAnalyses(token: string, signal?: AbortSignal): Promise<readonly SurveyAnalysis[]> {
+  return apiRequest("/survey-analyses", { signal }, token);
 }
 export function loadSurveyAnalysis(token: string, id: string): Promise<SurveyAnalysisDetail> {
   return apiRequest(`/survey-analyses/${encodeURIComponent(id)}`, {}, token, 120_000);
@@ -2517,12 +2520,12 @@ export function loadCalendarProjectTargets(token: string): Promise<PaymentProjec
   return apiRequest<PaymentProjectTargets>("/project-hub/calendar-targets", {}, token);
 }
 
-export function loadProjectHubRequests(token: string): Promise<readonly ProjectHubRequest[]> {
-  return apiRequest<readonly ProjectHubRequest[]>("/project-hub/requests", {}, token);
+export function loadProjectHubRequests(token: string, signal?: AbortSignal): Promise<readonly ProjectHubRequest[]> {
+  return apiRequest<readonly ProjectHubRequest[]>("/project-hub/requests", { signal }, token);
 }
 
-export function loadProjectHubRequestTargets(token: string): Promise<ProjectHubOverview> {
-  return apiRequest<ProjectHubOverview>("/project-hub/request-targets", {}, token);
+export function loadProjectHubRequestTargets(token: string, signal?: AbortSignal): Promise<ProjectHubOverview> {
+  return apiRequest<ProjectHubOverview>("/project-hub/request-targets", { signal }, token);
 }
 
 export function saveProjectHubProject(
@@ -2967,8 +2970,8 @@ export const loadMonthlyReportFile = (token: string, reportId: string, fileId: s
   apiRequest<Blob>(`/monthly-reports/${encodeURIComponent(reportId)}/files/${encodeURIComponent(fileId)}`, {}, token, 60_000, response => response.blob());
 export const authorizeMonthlyPayroll = (token: string, month: string, comment: string) =>
   apiRequest<MonthlyCycle>(`/monthly-reports/${encodeURIComponent(month)}/authorize`, { method: "POST", body: JSON.stringify({ comment }) }, token);
-export const loadMonthlyCalendar = (token: string) =>
-  apiRequest<readonly MonthlyCalendarDay[]>("/monthly-reports/calendar/days", {}, token);
+export const loadMonthlyCalendar = (token: string, signal?: AbortSignal) =>
+  apiRequest<readonly MonthlyCalendarDay[]>("/monthly-reports/calendar/days", { signal }, token);
 export const saveMonthlyCalendar = (token: string, payload: MonthlyCalendarDay) =>
   apiRequest<void>("/monthly-reports/calendar/days", { method: "PUT", body: JSON.stringify(payload) }, token);
 export async function submitMonthlyReport(token: string, payload: { readonly id: string; readonly month: string; readonly comment: string }, files: readonly File[]) {

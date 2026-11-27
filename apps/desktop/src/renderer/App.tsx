@@ -1,5 +1,4 @@
 import { TeamDecisionFrame } from "./TeamDecisionFrame";
-import { AdminModeToggle } from "./AdminModeToggle";
 import { approvalRequestNeedsAction } from "./approval-board";
 import { MonthlyReportDashboard, MonthlyReportPrompts, MonthlyReportsView } from "./MonthlyReportsView";
 import { useMonthlyReports, useMonthlyReportWindow } from "./useMonthlyReports";
@@ -2312,7 +2311,7 @@ export function App() {
         </BrowserNavigation>
 
         <div className={`app-stage ${backgroundError ? "has-feedback" : ""}`}>
-          <header className="global-bar">
+          <header className="global-bar workspace-topbar">
             {browserCompact ? <button ref={browserMenuTrigger} type="button" className="browser-menu-trigger" aria-label="Открыть меню" aria-controls={browserMenuOpen ? "browser-navigation" : undefined} aria-haspopup="dialog" aria-expanded={browserMenuOpen} onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setBrowserMenuOpen(true); }}><Navigation24Regular /></button> : null}
             <SectionJump items={orderedNavItems} commands={[
               ...(canView("tasks") ? workspace.tasks.map(task => ({ id: `task:${task.id}`, label: task.title, context: `Задача · ${task.project}`, icon: <TaskListSquareLtr24Regular />, onSelect: () => { setPreparedAction(undefined); setFocusTarget(current => ({ section: "tasks", entityId: task.id, revision: (current?.revision ?? 0) + 1 })); setActiveSection("tasks"); } })) : []),
@@ -2332,23 +2331,22 @@ export function App() {
               <NotificationBell unreadCount={badgeBySection.notifications ?? 0} active={activeSection === "notifications"}
                 onOpen={() => { setPreparedAction(undefined); setFocusNotification(undefined); setFocusTarget(undefined); setActiveSection("notifications"); }} />
               <ColorThemeToggle userId={session.user.id} />
-              {workspace.currentUser.adminModeEnabled != null && <AdminModeToggle
-                token={session.accessToken} enabled={workspace.currentUser.adminModeEnabled} />}
               {canUseAssistant && <YuksalishAssistant key={session.user.id} token={session.accessToken}
                 onOpenReference={openAssistantReference} onPrepareAction={prepareAssistantAction} />}
               <div className="workspace-workday-person">
                 <WorkdayControl token={session.accessToken} />
-                <WorkspaceIdentity person={displayCurrentUser} token={session.accessToken} onProfile={() => setProfileUserId(workspace.currentUser.id)} onSupport={() => { setSupportFocusRequestId(undefined); setSupportOpen(true); }} supportMode={supportRegistry?.mode ?? (isAdmin ? "inbox" : "support")} supportIndicator={supportRegistry?.indicator} supportUnreadCount={supportRegistry?.unreadResponseCount} onSettings={() => setAccountOpen(true)} onLogout={() => void handleLogout()} />
+                <WorkspaceIdentity person={displayCurrentUser} token={session.accessToken} adminModeEnabled={workspace.currentUser.adminModeEnabled} onProfile={() => setProfileUserId(workspace.currentUser.id)} onSupport={() => { setSupportFocusRequestId(undefined); setSupportOpen(true); }} supportMode={supportRegistry?.mode ?? (isAdmin ? "inbox" : "support")} supportIndicator={supportRegistry?.indicator} supportUnreadCount={supportRegistry?.unreadResponseCount} onSettings={() => setAccountOpen(true)} onLogout={() => void handleLogout()} />
               </div></div>
           </header>
 
           <DossierReminderPrompt key={`${session.user.id}:${activeApiOrigin}`} token={session.accessToken}
             userId={session.user.id} people={displayPeople}
             paused={accountOpen || Boolean(profileUserId) || supportOpen || Boolean(previewAttachment) || Boolean(forwardPhoto) || switchingNetwork} />
-          <HisobotDraftPrompt key={workspace.currentUser.id} token={session.accessToken}
+          <HisobotDraftPrompt key={`${workspace.currentUser.id}:${activeApiOrigin}`} token={session.accessToken}
             userId={workspace.currentUser.id} notifications={workspace.notifications}
             enabled={modulePermissions.ai_hisobot?.view === true}
             editingReport={displayedSection === "ai_hisobot"}
+            paused={accountOpen || Boolean(profileUserId) || supportOpen || Boolean(previewAttachment) || Boolean(forwardPhoto) || monthlyWindow.open || Boolean(teamDecision) || switchingNetwork}
             onEdit={(draft) => {
               setHisobotIncoming({ userId: workspace.currentUser.id, draft });
               setFocusTarget(undefined); setFocusNotification(undefined); setActiveSection("ai_hisobot");

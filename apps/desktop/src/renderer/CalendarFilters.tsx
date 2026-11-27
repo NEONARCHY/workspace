@@ -1,5 +1,5 @@
 import { WorkspaceNotice } from "./WorkspaceNotice";
-import { useId, useState, type ReactNode } from "react";
+import { useId, useMemo, useState, type ReactNode } from "react";
 import { Button, Checkbox, Combobox, Option } from "@fluentui/react-components";
 import { Input } from "./WorkspaceInput";
 import type { WorkspacePerson } from "@yuksalish/contracts";
@@ -23,7 +23,8 @@ export function CalendarFilters({ value, onChange, onReset, people, token, curre
   const [search, setSearch] = useState<string>();
   const person = people.find(item => item.id === value.employeeId);
   const query = search?.trim().toLocaleLowerCase() ?? "";
-  const candidates = people.filter(item => `${item.name} ${item.username ?? ""} ${item.jobTitle ?? ""}`.toLocaleLowerCase().includes(query));
+  const peopleIndex = useMemo(() => people.map(person => ({ person, text: `${person.name} ${person.username ?? ""} ${person.jobTitle ?? ""}`.toLocaleLowerCase() })), [people]);
+  const candidates = useMemo(() => peopleIndex.filter(item => item.text.includes(query)).map(item => item.person), [peopleIndex, query]);
   const issue = calendarRangeError(value.from, value.to);
   const activeCount = [value.employeeId, value.query.trim(), value.from || value.to, !value.showCancelled].filter(Boolean).length;
   return <section className="calendar-filters" aria-label="Фильтры календаря">

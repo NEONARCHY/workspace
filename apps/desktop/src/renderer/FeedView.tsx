@@ -1,3 +1,4 @@
+import { russianDateTimeFormatter } from "./date-time-format";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
 import { WorkspaceSelect } from "./WorkspaceSelect";
@@ -46,7 +47,7 @@ interface FeedViewProps {
 }
 
 function dateLabel(value: string): string {
-  return new Intl.DateTimeFormat("ru-RU", {
+  return russianDateTimeFormatter({
     day: "numeric",
     month: "short",
     hour: "2-digit",
@@ -54,8 +55,7 @@ function dateLabel(value: string): string {
   }).format(new Date(value));
 }
 
-function commentThreadRootId(comment: FeedComment, comments: readonly FeedComment[]): string {
-  const commentsById = new Map(comments.map((item) => [item.id, item]));
+function commentThreadRootId(comment: FeedComment, commentsById: ReadonlyMap<string, FeedComment>): string {
   const visited = new Set<string>();
   let rootId = comment.id;
   let parentId = comment.parentCommentId;
@@ -91,12 +91,64 @@ export function FeedReactions({ reactions, disabled, currentUserId, onToggle, pe
   </div>;
 }
 
+function FeedCommentDraft({ title, busy, inputRef, onSubmit }: {
+  readonly title: string; readonly busy: boolean;
+  readonly inputRef: (node: HTMLInputElement | null) => void;
+  readonly onSubmit: (value: string) => Promise<boolean>;
+}) {
+  const [draft, setDraft] = useState("");
+  const sending = useRef(false);
+  const submit = async () => {
+    if (busy || sending.current || !draft.trim()) return;
+    sending.current = true;
+    const submitted = draft;
+    try {
+      if (await onSubmit(submitted.trim())) setDraft(current => current === submitted ? "" : current);
+    } finally { sending.current = false; }
+  };
+  return <><Input input={{ ref: inputRef }} aria-label={`Комментарий к публикации ${title}`} placeholder="Написать комментарий"
+    value={draft} onChange={(_, data) => setDraft(data.value)} onKeyDown={event => {
+      if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); void submit(); }
+    }} />
+    <Button appearance="subtle" icon={<Send24Regular />} aria-label="Отправить комментарий" disabled={busy || !draft.trim()} onClick={() => void submit()} /></>;
+}
+
+function FeedPublicationComposer({ open, busy, error, initialDraft, onOpenChange, onSubmit }: {
+  readonly open: boolean; readonly busy: boolean; readonly error: string;
+  readonly initialDraft?: AssistantActionDraft; readonly onOpenChange: (open: boolean) => void;
+  readonly onSubmit: (title: string, body: string) => Promise<boolean>;
+}) {
+  const [title, setTitle] = useState(initialDraft?.kind === "feed" ? initialDraft.fields.title ?? "" : "");
+  const [body, setBody] = useState(initialDraft?.kind === "feed" ? initialDraft.fields.body ?? "" : "");
+  const sending = useRef(false);
+  const submit = async () => {
+    if (busy || sending.current || !title.trim() || !body.trim()) return;
+    sending.current = true;
+    const submittedTitle = title, submittedBody = body;
+    try {
+      if (await onSubmit(title.trim(), body.trim())) {
+        setTitle(current => current === submittedTitle ? "" : current);
+        setBody(current => current === submittedBody ? "" : current);
+      }
+    } finally { sending.current = false; }
+  };
+  return <Dialog open={open} onOpenChange={(_, data) => { if (!busy) onOpenChange(data.open); }}>
+    <DialogSurface className="feed-composer-dialog" aria-label="Новое объявление"><DialogBody>
+      <DialogTitle>Новое объявление</DialogTitle>
+      <DialogContent className="feed-composer">
+        {error ? <WorkspaceNotice tone="error" className="feed-action-error" role="alert">{error}</WorkspaceNotice> : null}
+        <Input autoFocus aria-label="Заголовок публикации" placeholder="Заголовок" value={title} onChange={(_, data) => setTitle(data.value)} />
+        <Textarea aria-label="Текст публикации" placeholder="Поделитесь новостью с командой" resize="vertical" value={body} onChange={(_, data) => setBody(data.value)} />
+      </DialogContent>
+      <DialogActions><Button disabled={busy} onClick={() => onOpenChange(false)}>Отмена</Button>
+        <Button appearance="primary" icon={<Send24Regular />} disabled={busy || !title.trim() || !body.trim()} onClick={() => void submit()}>Опубликовать</Button></DialogActions>
+    </DialogBody></DialogSurface>
+  </Dialog>;
+}
+
 export function FeedView({ posts, people, token, currentUserId, onCreate, onComment, onReact, onDeleteComment, onPin, onDelete, assistantDraft, canUseAssistant = false, chats = [], onForwardContent, focusPostId }: FeedViewProps) {
   const deleteFocusTarget = useRestoreFocusTarget();
-  const [title, setTitle] = useState(assistantDraft?.kind === "feed" ? assistantDraft.fields.title ?? "" : "");
-  const [body, setBody] = useState(assistantDraft?.kind === "feed" ? assistantDraft.fields.body ?? "" : "");
   const [actionError, setActionError] = useState("");
-  const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [forwarding, setForwarding] = useState<FeedPost>();
   const focusedPost = useRef<HTMLElement>(null);
@@ -149,38 +201,39 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
     input?.setSelectionRange(input.value.length, input.value.length);
   };
 
-  const create = async () => {
-    if (busy || !title.trim() || !body.trim()) return;
+  const create = async (title: string, body: string) => {
+    if (busy || !title.trim() || !body.trim()) return false;
     setBusy(true);
     setActionError("");
     try {
       if (await onCreate(title.trim(), body.trim())) {
-        setTitle("");
-        setBody("");
         setComposerOpen(false);
+        return true;
       } else setActionError("Объявление не опубликовано. Проверьте подключение и повторите.");
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Не удалось опубликовать объявление.");
     } finally {
       setBusy(false);
     }
+    return false;
   };
 
-  const comment = async (post: FeedPost) => {
-    const value = commentDrafts[post.id]?.trim();
-    if (busy || !value) return;
+  const comment = async (post: FeedPost, value: string) => {
+    if (busy || !value) return false;
+    const submittedReply = replying[post.id];
     setBusy(true);
     setActionError("");
     try {
-      if (await onComment(post, value, replying[post.id]?.id)) {
-        setCommentDrafts((current) => ({ ...current, [post.id]: "" }));
-        setReplying((current) => ({ ...current, [post.id]: undefined }));
+      if (await onComment(post, value, submittedReply?.id)) {
+        setReplying(current => current[post.id] === submittedReply ? { ...current, [post.id]: undefined } : current);
+        return true;
       } else setActionError("Комментарий не отправлен. Черновик сохранён — попробуйте снова.");
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Не удалось отправить комментарий.");
     } finally {
       setBusy(false);
     }
+    return false;
   };
 
   const remove = async (post: FeedPost) => {
@@ -203,19 +256,22 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
   };
 
   return (
-    <section className="workspace-view feed-view" aria-label="Лента">
+    <section className="workspace-view workspace-queue feed-view" aria-label="Лента">
         <WorkspaceSectionHeader motif="feed" className="section-heading">
           <div>
             <h1>Лента</h1>
             <p>Новости, решения и обсуждения компании</p>
           </div>
+          <Button className="feed-create-button ws-section-header-primary" appearance="primary" icon={<Add24Regular />} onClick={() => setComposerOpen(true)}>Новое объявление</Button>
         </WorkspaceSectionHeader>
+      <div className="feed-layout">
       <div className="feed-main">
         {actionError ? <WorkspaceNotice tone="error" className="feed-action-error" role="alert">{actionError}</WorkspaceNotice> : null}
         <div className="feed-list">
           {focusPostId && !posts.some(post => post.id === focusPostId) && <p className="feed-focus-notice" role="status">Объявление удалено или недоступно</p>}
           {posts.map((post) => {
             const author = person(post.authorUserId);
+            const commentsById = new Map(post.comments.map(item => [item.id, item]));
             return (
               <article className={`feed-card ${post.isPinned ? "pinned" : ""} ${post.systemKind === "birthday" ? "is-birthday" : ""} ${focusPostId === post.id ? "is-focused" : ""}`} key={post.id}
                 ref={focusPostId === post.id ? focusedPost : undefined} tabIndex={focusPostId === post.id ? -1 : undefined} aria-label={post.title}>
@@ -285,9 +341,9 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
                     {post.comments.map((item, index) => {
                       const commentAuthor = person(item.authorUserId);
                       const depth = item.parentCommentId ? 1 : 0;
-                      const threadRootId = commentThreadRootId(item, post.comments);
+                      const threadRootId = commentThreadRootId(item, commentsById);
                       const nextComment = post.comments[index + 1];
-                      const nextThreadRootId = nextComment ? commentThreadRootId(nextComment, post.comments) : undefined;
+                      const nextThreadRootId = nextComment ? commentThreadRootId(nextComment, commentsById) : undefined;
                       const hasReplies = !depth && nextThreadRootId === item.id;
                       const isLastReply = Boolean(depth) && nextThreadRootId !== threadRootId;
                       return (
@@ -310,24 +366,7 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
                 ) : null}
                 <div className="feed-comment-composer">
                   {replying[post.id] ? <div className="feed-reply-context"><span>Ответ для <EmployeeProfileLink userId={replying[post.id]!.authorUserId} personName={person(replying[post.id]!.authorUserId)?.name ?? "сотрудника"}>{person(replying[post.id]!.authorUserId)?.name ?? "сотрудника"}</EmployeeProfileLink></span><Button size="small" appearance="subtle" aria-label="Отменить ответ" onClick={() => setReplying((current) => ({ ...current, [post.id]: undefined }))}>×</Button></div> : null}
-                  <Input
-                    input={{ ref: (node) => { commentInputs.current[post.id] = node; } }}
-                    aria-label={`Комментарий к публикации ${post.title}`}
-                    placeholder="Написать комментарий"
-                    value={commentDrafts[post.id] ?? ""}
-                    onChange={(_event, data) =>
-                      setCommentDrafts((current) => ({ ...current, [post.id]: data.value }))}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") void comment(post);
-                    }}
-                  />
-                  <Button
-                    appearance="subtle"
-                    icon={<Send24Regular />}
-                    aria-label="Отправить комментарий"
-                    disabled={busy || !commentDrafts[post.id]?.trim()}
-                    onClick={() => void comment(post)}
-                  />
+                  <FeedCommentDraft title={post.title} busy={busy} inputRef={node => { if (node) commentInputs.current[post.id] = node; else delete commentInputs.current[post.id]; }} onSubmit={value => comment(post, value)} />
                 </div>
               </article>
             );
@@ -336,31 +375,14 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
         </div>
       </div>
       <aside className="feed-side" aria-label="Действия ленты">
-        <Button className="feed-create-button" appearance="primary" icon={<Add24Regular />} onClick={() => setComposerOpen(true)}>
-          Новое объявление
-        </Button>
         <section className="feed-context-card">
           <strong>Корпоративная лента</strong>
           <p>Видна всем активным сотрудникам. Закреплять важные объявления могут руководители.</p>
           <span>{posts.length} публикаций</span>
         </section>
       </aside>
-      <Dialog open={composerOpen} onOpenChange={(_, data) => !busy && setComposerOpen(data.open)}>
-        <DialogSurface className="feed-composer-dialog" aria-label="Новое объявление">
-          <DialogBody>
-            <DialogTitle>Новое объявление</DialogTitle>
-            <DialogContent className="feed-composer">
-              {actionError ? <WorkspaceNotice tone="error" className="feed-action-error" role="alert">{actionError}</WorkspaceNotice> : null}
-              <Input autoFocus aria-label="Заголовок публикации" placeholder="Заголовок" value={title} onChange={(_event, data) => setTitle(data.value)} />
-              <Textarea aria-label="Текст публикации" placeholder="Поделитесь новостью с командой" resize="vertical" value={body} onChange={(_event, data) => setBody(data.value)} />
-            </DialogContent>
-            <DialogActions>
-              <Button disabled={busy} onClick={() => setComposerOpen(false)}>Отмена</Button>
-              <Button appearance="primary" icon={<Send24Regular />} disabled={busy || !title.trim() || !body.trim()} onClick={() => void create()}>Опубликовать</Button>
-            </DialogActions>
-          </DialogBody>
-        </DialogSurface>
-      </Dialog>
+      </div>
+      <FeedPublicationComposer open={composerOpen} busy={busy} error={actionError} initialDraft={assistantDraft} onOpenChange={setComposerOpen} onSubmit={create} />
       <ConfirmActionDialog
         open={Boolean(pendingDelete)}
         title={pendingDelete?.commentId ? "Удалить комментарий?" : "Удалить публикацию?"}

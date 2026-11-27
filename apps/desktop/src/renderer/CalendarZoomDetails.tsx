@@ -1,3 +1,4 @@
+import { formatRussianDate, formatRussianTime } from "./date-time-format";
 import { Button } from "@fluentui/react-components";
 import type { WorkspacePerson, ZoomMeeting } from "@yuksalish/contracts";
 import { CalendarIcon } from "./CalendarAppearance";
@@ -15,10 +16,10 @@ export function CalendarZoomDetails({ meeting, people, onOpen }: {
   return <div className="calendar-detail">
     <div className="calendar-detail-hero"><CalendarIcon zoom />
       <span className="calendar-type">Zoom-конференция</span>
-      <p className="calendar-detail-time">{start.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}–{end.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</p>
+      <p className="calendar-detail-time">{formatRussianTime(start, { hour: "2-digit", minute: "2-digit" })}–{formatRussianTime(end, { hour: "2-digit", minute: "2-digit" })}</p>
     </div>
     <dl className="calendar-detail-list">
-      <div><dt>Дата</dt><dd>{start.toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" })}{sameDay ? "" : ` — ${end.toLocaleDateString("ru-RU")}`}</dd></div>
+      <div><dt>Дата</dt><dd>{formatRussianDate(start, { day: "numeric", month: "long", year: "numeric" })}{sameDay ? "" : ` — ${formatRussianDate(end)}`}</dd></div>
       <div><dt>Организатор</dt><dd>{employeeDisplayName(meeting.organizerName)}</dd></div>
       <div className="calendar-detail-attendees"><dt>Участники</dt><dd className="calendar-attendee-list">
         {meeting.participantIds.map(id => <EmployeeProfileLink key={id} userId={id} personName={people.find(person => person.id === id)?.name ?? "Сотрудник"}>

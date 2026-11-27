@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { formatRussianDateTime } from "./date-time-format";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Button, DialogSurface } from "@fluentui/react-components";
 import { Add20Regular, ArrowClockwise20Regular, Calendar24Regular, Chat20Regular, Dismiss24Regular, Edit20Regular, Settings20Regular } from "@fluentui/react-icons";
 import type {
@@ -8,6 +9,8 @@ import type {
 import { WorkspaceDialog, focusWorkspaceDialog } from "./WorkspaceDialog";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
+import { Input } from "./WorkspaceInput";
+import { createRefreshQueue } from "./refresh-queue";
 import { GrantParticipant } from "./GrantParticipant";
 import { GrantComposer } from "./GrantComposer";
 import { GrantRecords } from "./GrantRecords";
@@ -66,7 +69,7 @@ function localDate(value: string) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}T${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 function readableDate(value: string) {
-  return new Date(value).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" });
+  return formatRussianDateTime(new Date(value), { dateStyle: "short", timeStyle: "short" });
 }
 
 export function GrantsView({ token, currentUser, people, departments, canCreate, canAdmin,
@@ -99,27 +102,31 @@ export function GrantsView({ token, currentUser, people, departments, canCreate,
   const [returnReason, setReturnReason] = useState("");
   const [launchDecision, setLaunchDecision] = useState<"return_launch" | "reject_launch">();
   const [success, setSuccess] = useState("");
-  const name = (id: string | null | undefined) => people.find((person) => person.id === id)?.name ?? "Сотрудник недоступен";
-  const activePeople = people.filter((person) => (person.status ?? "active") === "active");
+  const peopleById = useMemo(() => new Map(people.map(person => [person.id, person])), [people]);
+  const name = (id: string | null | undefined) => peopleById.get(id ?? "")?.name ?? "Сотрудник недоступен";
+  const activePeople = useMemo(() => people.filter(person => (person.status ?? "active") === "active"), [people]);
   const selectedRevision = grants.find((grant) => grant.id === selectedId)?.revision;
+  const activeToken = useRef<string | undefined>(token);
+  const readGrants = useRef<ReturnType<typeof createRefreshQueue<[readonly GrantSummary[], GrantSettings]>> | undefined>(undefined);
 
   const refresh = useCallback(async () => {
     try {
-      const [rows, route] = await Promise.all([loadGrants(token), loadGrantSettings(token)]);
-      setGrants(rows); setSettings(route); setLoadError("");
-      setNow(Date.now());
-    } catch (error) { setLoadError(errorText(error)); }
-    finally { setLoading(false); }
+      await readGrants.current?.(token, { trailing: false });
+    } catch (error) { if (activeToken.current === token) setLoadError(errorText(error)); }
+    finally { if (activeToken.current === token) setLoading(false); }
   }, [token]);
   useEffect(() => {
+    activeToken.current = token;
+    readGrants.current = createRefreshQueue(async readToken => Promise.all([loadGrants(readToken), loadGrantSettings(readToken)]),
+      ([rows, route]) => { setGrants(rows); setSettings(route); setLoadError(""); setNow(Date.now()); }, () => activeToken.current);
     const start = window.setTimeout(() => { void refresh(); }, 0);
     const interval = window.setInterval(() => {
       if (!document.hidden && !busyRef.current) void refresh();
     }, 30_000);
     const onFocus = () => { if (!busyRef.current) void refresh(); };
     window.addEventListener("focus", onFocus);
-    return () => { window.clearTimeout(start); window.clearInterval(interval); window.removeEventListener("focus", onFocus); };
-  }, [refresh]);
+    return () => { activeToken.current = undefined; readGrants.current = undefined; window.clearTimeout(start); window.clearInterval(interval); window.removeEventListener("focus", onFocus); };
+  }, [refresh, token]);
   useEffect(() => {
     if (!focusId) return;
     const timer = window.setTimeout(() => { setSelectedId(focusId); setDetail(undefined); }, 0);
@@ -135,6 +142,7 @@ export function GrantsView({ token, currentUser, people, departments, canCreate,
   }, [selectedId, token, selectedRevision]);
 
   const saveDetail = (saved: GrantDetail) => {
+    readGrants.current?.invalidate(token);
     setDetail(saved);
     setGrants((rows) => [saved, ...rows.filter((row) => row.id !== saved.id)]);
   };
@@ -186,25 +194,27 @@ export function GrantsView({ token, currentUser, people, departments, canCreate,
       saveDetail(saved); setEditor(undefined); setSelectedId(saved.id); setSuccess("Заявка сохранена");
     });
   };
-  const visible = grants.filter((row) => {
+  const searchIndex = useMemo(() => grants.map(row => ({ row, text: `${row.title} ${row.description} ${peopleById.get(row.assigneeId)?.name ?? "Сотрудник недоступен"} ${peopleById.get(row.authorUserId ?? "")?.name ?? "Сотрудник недоступен"} ${peopleById.get(row.initiatorUserId)?.name ?? "Сотрудник недоступен"}`.toLocaleLowerCase() })), [grants, peopleById]);
+  const search = query.trim().toLocaleLowerCase();
+  const visible = useMemo(() => searchIndex.filter(({ row, text }) => {
     const fits = filter === "all" || (filter === "mine" && [row.initiatorUserId, row.authorUserId, row.assigneeId, ...row.coAssigneeIds].includes(currentUser.id))
       || (filter === "launch" && ["launch_review", "launch_revision", "launch_rejected"].includes(row.status))
       || (filter === "working" && row.status === "in_progress")
       || (filter === "review" && row.allowedActions.some((action) => ["approve", "approve_launch", "approve_deadline"].includes(action)))
       || (filter === "revision" && ["needs_revision", "launch_revision"].includes(row.status))
       || (filter === "completed" && row.status === "completed");
-    return fits && `${row.title} ${row.description} ${name(row.assigneeId)} ${name(row.authorUserId)} ${name(row.initiatorUserId)}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase());
-  });
+    return fits && text.includes(search);
+  }).map(item => item.row), [searchIndex, filter, currentUser.id, search]);
   const can = (action: string) => detail?.allowedActions.includes(action) === true;
   const canOpenChat = detail && [detail.initiatorUserId, detail.authorUserId, detail.assigneeId, detail.leaderUserId,
     detail.chairUserId, ...detail.coAssigneeIds].includes(currentUser.id);
   const hasEmbeddedChat = Boolean(canOpenChat && renderGrantChat);
   const routeReady = Boolean(settings?.leaderUserId && settings.chairUserId);
 
-  return <section data-dialog-only={dialogOnly || undefined} className="workspace-view grants-view" aria-label="Гранты">
+  return <section data-dialog-only={dialogOnly || undefined} className="workspace-view workspace-queue grants-view" aria-label="Гранты">
 {!dialogOnly && <>
     <WorkspaceSectionHeader motif="tasks">
-      <div><p className="eyebrow">Подготовка · Проверка · Утверждение</p><h1>Гранты</h1>
+      <div><p className="view-kicker">Подготовка · Проверка · Утверждение</p><h1>Гранты</h1>
         <p>Инициатива сотрудника, разрешение председателя и проверка результата.</p></div>
       <div className="grants-actions">
         <Button icon={<ArrowClockwise20Regular />} onClick={() => void refresh()} disabled={busy}>Обновить</Button>
@@ -217,9 +227,11 @@ export function GrantsView({ token, currentUser, people, departments, canCreate,
     </WorkspaceSectionHeader>
     {loadError && <WorkspaceNotice tone="error" role="alert" actions={<Button onClick={() => void refresh()}>Повторить</Button>}>{loadError}</WorkspaceNotice>}
     {!loading && settings && !routeReady && <WorkspaceNotice tone="warning">Администратору нужно назначить руководителя и председателя в маршруте согласования.</WorkspaceNotice>}
-    <div className="grants-toolbar"><div className="grants-filters" role="group" aria-label="Фильтр грантов">
+    <div className="grants-toolbar workspace-queue-toolbar"><span className="grants-count">Найдено: {visible.length}</span>
+      <Input type="search" aria-label="Поиск заявок" value={query} onChange={event => setQuery(event.target.value)} placeholder="Название или сотрудник" />
+      <div className="grants-filters ws2-segmented workspace-queue-filters" role="group" aria-label="Фильтр грантов">
       {filters.map(([key, label]) => <Button key={key} aria-pressed={filter === key} appearance={filter === key ? "primary" : "subtle"} onClick={() => setFilter(key)}>{label}</Button>)}
-    </div><label className="grants-search"><span>Поиск заявок</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Название или сотрудник" /></label></div>
+    </div></div>
     {loading ? <p role="status">Загружаем заявки…</p> : <GrantRecords grants={visible} people={people} token={token} selectedId={selectedId} filterKey={`${filter}:${query}`} statusLabels={grantStatusLabels} now={now} onSelect={openDetail} />}
 
 
@@ -328,7 +340,8 @@ export function GrantsView({ token, currentUser, people, departments, canCreate,
           if (settingsTarget) {
             saveDetail(await changeGrantReviewers(token, settingsTarget.id, leaderId, chairId, settingsReason, settingsTarget.revision));
           } else {
-            setSettings(await saveGrantSettings(token, leaderId, chairId, settings?.revision ?? 0));
+            const saved = await saveGrantSettings(token, leaderId, chairId, settings?.revision ?? 0);
+            readGrants.current?.invalidate(token); setSettings(saved);
           }
           setSettingsOpen(false);
         });

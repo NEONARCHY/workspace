@@ -22,6 +22,29 @@ const employeeRecordProps = (onOpen = vi.fn(), onToggle = vi.fn()) => ({
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 describe("Corporate record tables", () => {
+  it("keeps compact sorting and page selection synchronized with employee records", () => {
+    const onTogglePage = vi.fn();
+    render(wrap(<EmployeeRecords employees={employees} filterKey="compact" {...employeeRecordProps()} onTogglePage={onTogglePage} />));
+    fireEvent.click(screen.getByRole("button", { name: "Сортировка: сотрудники" }));
+    expect(screen.getAllByRole("menuitem")).toHaveLength(6);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Логин" }));
+    expect(screen.getByRole("columnheader", { name: /Логин/ })).toHaveAttribute("aria-sort", "ascending");
+    fireEvent.click(screen.getByRole("button", { name: "Сортировка: сотрудники" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /Логин/ }));
+    expect(screen.getByRole("columnheader", { name: /Логин/ })).toHaveAttribute("aria-sort", "descending");
+    fireEvent.click(screen.getByRole("checkbox", { name: "Выбрать видимую страницу сотрудников" }));
+    expect(onTogglePage).toHaveBeenCalledWith(expect.arrayContaining(["e-30", "e-6"]), true);
+    expect(onTogglePage.mock.calls[0]![0]).toHaveLength(25);
+  });
+  it("offers every task column through compact sorting without opening a task", () => {
+    const onSelect = vi.fn();
+    render(wrap(<TaskRecords tasks={tasks} people={people} filterKey="compact" onSelect={onSelect} />));
+    fireEvent.click(screen.getByRole("button", { name: "Сортировка: задачи" }));
+    expect(screen.getAllByRole("menuitem")).toHaveLength(7);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Крайний срок" }));
+    expect(screen.getByRole("columnheader", { name: /Крайний срок/ })).toHaveAttribute("aria-sort", "ascending");
+    expect(onSelect).not.toHaveBeenCalled();
+  });
   it("shows saved employee photos without changing profile and management actions", async () => {
     const load = vi.spyOn(api, "loadProfileAvatar").mockResolvedValue(new Blob(["photo"], { type: "image/png" }));
     vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:employee-avatar");

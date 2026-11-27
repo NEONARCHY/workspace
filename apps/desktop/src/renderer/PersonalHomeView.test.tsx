@@ -46,6 +46,44 @@ function view(userId = "aziza", canView: (key: NavigationKey) => boolean = all, 
   </EmployeeProfileProvider></FluentProvider>;
 }
 describe("Personal Home", () => {
+  it("opens the priority action and corresponding modules from the day summary", async () => {
+    render(view());
+    await screen.findAllByText("80%");
+    const summary = within(document.querySelector(".home-overview")! as HTMLElement);
+    fireEvent.click(summary.getByRole("button", { name: /Важные действия/ }));
+    expect(onOpen).toHaveBeenLastCalledWith(expect.objectContaining({ section: "tasks", entityId: "home-late" }));
+    for (const [name, section] of [[/активных задач/, "tasks"], [/непрочитанных сообщений/, "messenger"], [/новых уведомлений/, "notifications"]]) {
+      fireEvent.click(summary.getByRole("button", { name: name as RegExp }));
+      expect(onOpen).toHaveBeenLastCalledWith({ section });
+    }
+  });
+  it("keeps unavailable summary actions disabled", async () => {
+    render(view("aziza", () => false));
+    for (const button of document.querySelectorAll(".home-overview > button")) expect(button).toBeDisabled();
+    await act(async () => {});
+  });
+  it("retries only the failed resource and cancels reads on exit", async () => {
+    const rendered = render(view());
+    const panel = within(screen.getByRole("region", { name: "Мои письма" }));
+    await panel.findByText("ЭДО временно недоступно");
+    await screen.findAllByText("80%");
+    vi.mocked(loadEdoIncomingLetters).mockResolvedValue(edoPage());
+    fireEvent.click(panel.getAllByRole("button", { name: "Повторить" }).at(-1)!);
+    await panel.findByRole("button", { name: /Личное письмо ЭДО/ });
+    expect(loadEdoIncomingLetters).toHaveBeenCalledTimes(2);
+    expect(loadPersonalEfficiency).toHaveBeenCalledTimes(1);
+    expect(loadEmployeeRecognitionProfile).toHaveBeenCalledTimes(1);
+    expect(loadAIReferentIncomingRegistry).toHaveBeenCalledTimes(1);
+    const signals = [
+      vi.mocked(loadPersonalEfficiency).mock.calls[0]![2]!,
+      vi.mocked(loadEmployeeRecognitionProfile).mock.calls[0]![2]!,
+      vi.mocked(loadEdoIncomingLetters).mock.calls[1]![2]!,
+      vi.mocked(loadProjectHub).mock.calls[0]![1]!,
+    ];
+    expect(signals.every(signal => !signal.aborted)).toBe(true);
+    rendered.unmount();
+    expect(signals.every(signal => signal.aborted)).toBe(true);
+  });
   it("uses the shared round navigation action for every panel header", async () => {
     render(view());
     const arrows = document.querySelectorAll(".home-panel-heading > button[aria-label]");
@@ -72,7 +110,7 @@ describe("Personal Home", () => {
     render(view("aziza", onlyEdo));
     const panel = within(await screen.findByRole("region", { name: "Мои письма" }));
     fireEvent.click(await panel.findByRole("button", { name: /Личное письмо ЭДО/ }));
-    expect(loadEdoIncomingLetters).toHaveBeenCalledWith("aziza", { personal: true });
+    expect(loadEdoIncomingLetters).toHaveBeenCalledWith("aziza", { personal: true }, expect.any(AbortSignal));
     expect(onOpen).toHaveBeenCalledWith({ section: "incoming_letters", entityId: "123" });
     expect(panel.getByText(/ЭДО · №123\/26 · Партнёр ЭДО · В работе/)).toBeInTheDocument();
     expect(panel.queryByText(/в разработке/i)).not.toBeInTheDocument();
@@ -192,7 +230,7 @@ describe("Personal Home", () => {
     expect(screen.getAllByText("80%").length).toBeGreaterThan(0);
     await screen.findByText("Временная ошибка обновления");
     expect(screen.getAllByText("80%").length).toBeGreaterThan(0);
-    expect(loadPersonalEfficiency).toHaveBeenLastCalledWith("renewed-token", expect.any(String));
+    expect(loadPersonalEfficiency).toHaveBeenLastCalledWith("renewed-token", expect.any(String), expect.any(AbortSignal));
   });
   it("keeps the existing layout during polling until the employee accepts the new priorities", async () => {
     const base = homeFixture(), calm = { ...base, tasks: [], notifications: [], chats: [], calendarEvents: [] };

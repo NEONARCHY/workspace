@@ -9,10 +9,13 @@ describe("compact browser density", () => {
     expect(css).toContain("(max-width: 1366px) and (any-pointer: coarse)");
     expect(css).not.toMatch(/!important|transition:\s*all|transform:\s*scale|touch-action:\s*none/);
   });
-  it("keeps the phone header in one horizontally scrollable row", () => {
+  it("keeps one scrollable row with workday visible and the orb and avatar in place", () => {
     expect(css).toContain("flex-wrap: nowrap");
     expect(css).toContain("overflow-x: auto");
-    expect(css).toContain(".color-theme-toggle-wrap { order: 4;");
+    expect(css).toContain(".workday-control { order: 4;");
+    expect(css).toContain(".color-theme-toggle-wrap { order: 10;");
+    expect(css).toContain(".assistant-launcher-space { order: 5;");
+    expect(css).toContain(".workspace-identity-menu { order: 6;");
     expect(css).toContain(".notification-bell-wrap { order: 3;");
     expect(css).toContain(".workspace-workday-person, .workspace-identity) { display: contents; }");
     expect(css).toContain(".connection-indicator { position: static; order: 7;");

@@ -1,13 +1,15 @@
 import { Button, Popover, PopoverSurface, PopoverTrigger } from "@fluentui/react-components";
-import { ChatHelp20Regular, ChevronDown16Regular, MailInbox20Regular, Person20Regular, Settings20Regular, SignOut20Regular } from "@fluentui/react-icons";
+import { ChatHelp20Regular, ChevronDown16Regular, MailInbox20Regular, Person20Regular, PlugConnected20Regular, Settings20Regular, SignOut20Regular } from "@fluentui/react-icons";
 import { useState } from "react";
 import type { WorkspacePerson } from "@yuksalish/contracts";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { ReleaseHistoryDialog } from "./ReleaseHistoryDialog";
+import { AdminModeControl, useAdministratorMode } from "./AdminModeToggle";
 
 interface WorkspaceIdentityProps {
   readonly person: WorkspacePerson;
   readonly token: string;
+  readonly adminModeEnabled?: boolean | null;
   readonly onProfile?: () => void;
   readonly onSupport: () => void;
   readonly supportMode: "support" | "inbox";
@@ -17,8 +19,10 @@ interface WorkspaceIdentityProps {
   readonly onLogout: () => void;
 }
 
-export function WorkspaceIdentity({ person, token, onProfile, onSupport, supportMode, supportIndicator, supportUnreadCount = 0, onSettings, onLogout }: WorkspaceIdentityProps) {
+export function WorkspaceIdentity({ person, token, adminModeEnabled, onProfile, onSupport, supportMode, supportIndicator, supportUnreadCount = 0, onSettings, onLogout }: WorkspaceIdentityProps) {
   const [open, setOpen] = useState(false);
+  // Keep pending/error state when the profile popover closes and reopens.
+  const adminMode = useAdministratorMode(token, adminModeEnabled === true);
   const close = (afterClose?: () => void) => {
     setOpen(false);
     afterClose?.();
@@ -28,7 +32,7 @@ export function WorkspaceIdentity({ person, token, onProfile, onSupport, support
       setOpen(data.open);
     }} positioning="below-end" withArrow>
       <PopoverTrigger disableButtonEnhancement>
-        <button className="workspace-identity-menu" type="button" aria-label={`Открыть меню профиля: ${person.name}${supportIndicator ? `. Есть ${supportUnreadCount || 1} ${supportIndicator === "negative" ? "отклонённых" : "новых"} ответов по обращениям` : ""}`}>
+        <button className="workspace-identity-menu" type="button" aria-expanded={open} aria-label={`Открыть меню профиля: ${person.name}${supportIndicator ? `. Есть ${supportUnreadCount || 1} ${supportIndicator === "negative" ? "отклонённых" : "новых"} ответов по обращениям` : ""}`}>
           <ProfileAvatar person={person} token={token} size={40} />
           <span className="workspace-identity-name">{person.name}</span>
           {supportIndicator ? <i className={`identity-support-indicator tone-${supportIndicator}`} title={supportIndicator === "negative" ? "Есть отклонённое обращение" : "Есть новый ответ по обращению"} /> : null}
@@ -44,6 +48,7 @@ export function WorkspaceIdentity({ person, token, onProfile, onSupport, support
             {supportMode === "inbox" ? "Обращения" : "Поддержка"}
           </Button>
           <Button appearance="subtle" icon={<Settings20Regular />} onClick={() => close(onSettings)}>Настройки</Button>
+          {adminModeEnabled != null ? <AdminModeControl enabled={adminModeEnabled} state={adminMode} /> : null}
           <Button className="identity-signout" appearance="subtle" icon={<SignOut20Regular />} onClick={() => close(onLogout)}>Выйти</Button>
         </div>
         </> : null}
@@ -63,7 +68,7 @@ export function ConnectionIndicator({ detail, error, updateAvailable = false, on
   const [historyOpen, setHistoryOpen] = useState(false);
   return <>
     <Popover open={popoverOpen} onOpenChange={(_event, data) => setPopoverOpen(data.open)} positioning="below-end">
-      <PopoverTrigger disableButtonEnhancement><button type="button" className={`connection-indicator ${error ? "has-error" : ""}`} aria-label={`Подключение: ${detail}`}><i /><span>{detail}</span></button></PopoverTrigger>
+      <PopoverTrigger disableButtonEnhancement><button type="button" className={`connection-indicator ${error ? "has-error" : ""}`} aria-label={`Подключение: ${detail}`} title={`Подключение: ${detail}`} aria-expanded={popoverOpen}><PlugConnected20Regular aria-hidden="true" /><i aria-hidden="true" /><span>{detail}</span></button></PopoverTrigger>
       <PopoverSurface className="connection-popover">
         <strong>Связь с рабочим сервером</strong><p>{detail}</p>
         <small>Изменения появляются в рабочем пространстве после подтверждения сервером.</small>

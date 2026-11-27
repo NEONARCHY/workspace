@@ -1,7 +1,29 @@
-import { describe, expect, it } from "vitest";
-import { calendarItemsOnDay, calendarRangeError, calendarScheduleGroups, emptyCalendarFilters, filterCalendarSchedule } from "./calendar-filters";
+import { describe, expect, it, vi } from "vitest";
+import { calendarDateKey, calendarItemsOnDay, calendarRangeError, calendarScheduleGroups, emptyCalendarFilters, filterCalendarSchedule, indexCalendarDays } from "./calendar-filters";
 import { sampleEvent, sampleZoom } from "./test-fixtures/calendar-filter-data";
 describe("authorised calendar filtering", () => {
+  it("indexes each visible day with the same inclusive dates and exclusive event ends", () => {
+    const days = [15, 12, 14, 13, 13].map(day => new Date(2026, 9, day, 12));
+    const filters = { ...emptyCalendarFilters, from: "2026-10-13", to: "2026-10-14" };
+    const items = filterCalendarSchedule([
+      sampleEvent("multi", { startsAt: "2026-10-12T10:00:00", endsAt: "2026-10-15T00:00:00" }),
+      sampleEvent("midnight", { startsAt: "2026-10-12T22:00:00", endsAt: "2026-10-13T00:00:00" }),
+      sampleEvent("overnight", { startsAt: "2026-10-13T22:00:00", endsAt: "2026-10-14T01:00:00" }),
+    ], [sampleZoom()], emptyCalendarFilters);
+    const indexed = indexCalendarDays(items, [...days, new Date("invalid")], filters);
+    expect(indexed.size).toBe(4);
+    for (const day of days) expect(indexed.get(calendarDateKey(day))).toEqual(calendarItemsOnDay(items, day, filters));
+  });
+  it("parses intervals once for the whole month rather than again for each day", () => {
+    const items = filterCalendarSchedule(Array.from({ length: 100 }, (_, id) => sampleEvent(String(id))), [], emptyCalendarFilters);
+    const days = Array.from({ length: 42 }, (_, index) => new Date(2026, 9, index + 1));
+    const parse = vi.spyOn(Date, "parse");
+    try {
+      const indexed = indexCalendarDays(items, days, emptyCalendarFilters);
+      expect(parse).toHaveBeenCalledTimes(items.length * 2);
+      expect(indexed.get("2026-10-13")).toHaveLength(100);
+    } finally { parse.mockRestore(); }
+  });
   it("matches an organiser as well as an attendee, including Zoom", () => {
     const event = sampleEvent("meeting");
     expect(filterCalendarSchedule([event], [sampleZoom()], { ...emptyCalendarFilters, employeeId: "organizer" })).toHaveLength(2);

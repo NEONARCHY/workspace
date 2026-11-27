@@ -1,3 +1,4 @@
+import { formatRussianDateTime } from "./date-time-format";
 import { TaskPersonAvatar as PersonAvatar } from "./TaskPersonAvatar";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { LoadingSkeleton } from "./LoadingSkeleton";
@@ -748,7 +749,7 @@ function formatMoney(amount: number, currency: string): string {
 }
 
 function formatDateTime(value: string | null | undefined): string {
-  return value ? new Date(value).toLocaleString("ru-RU") : "Не указано";
+  return value ? formatRussianDateTime(new Date(value)) : "Не указано";
 }
 
 interface PaymentFieldsProps {

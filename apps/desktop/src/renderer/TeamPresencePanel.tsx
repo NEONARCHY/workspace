@@ -1,3 +1,4 @@
+import { formatRussianTime } from "./date-time-format";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { LoadingSkeleton } from "./LoadingSkeleton";
 import { useEffect, useState } from "react";
@@ -35,7 +36,7 @@ function statusLabel(person: WorkdayTeamMember): string {
 }
 
 function clockLabel(value: string): string {
-  return new Date(value).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+  return formatRussianTime(new Date(value), { hour: "2-digit", minute: "2-digit" });
 }
 
 export function TeamPresencePanel({ token }: { readonly token: string }) {

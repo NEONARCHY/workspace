@@ -14,6 +14,23 @@ export function SortHeading({ column, children, sort, onSort }: {
   </th>;
 }
 
+/** Compact access to every sort column when table rows become cards. */
+export function RecordCompactTools({ columns, sort, onSort, label, children }: {
+  columns: readonly (readonly [string, string])[]; sort: TableSort; onSort: (key: string) => void; label: string; children?: ReactNode;
+}) {
+  const active = columns.find(([key]) => key === sort.key);
+  return <div className="record-compact-tools">
+    {children}
+    <Menu positioning="below-end"><MenuTrigger disableButtonEnhancement>
+      <button type="button" className="record-compact-sort" aria-label={`Сортировка: ${label}`}>
+        {active ? `${active[1]} ${sort.descending ? "↓" : "↑"}` : "Сортировка"}<ChevronDown16Regular aria-hidden="true" />
+      </button>
+    </MenuTrigger><MenuPopover><MenuList>{columns.map(([key, text]) =>
+      <MenuItem key={key} aria-current={sort.key === key ? "true" : undefined} onClick={() => onSort(key)}>{text}{sort.key === key ? sort.descending ? " ↓" : " ↑" : ""}</MenuItem>
+    )}</MenuList></MenuPopover></Menu>
+  </div>;
+}
+
 /** Clamp after removals and reset on changed filters without a state-setting effect. */
 export function useTablePage(total: number, resetKey: string) {
   const [size, setSize] = useState(25);
@@ -45,16 +62,16 @@ export function RecordTablePager({ total, paging, label }: {
           <MenuList>{[10, 25, 50].map(value => <MenuItem key={value} aria-current={paging.size === value ? "true" : undefined} onClick={() => paging.setSize(value)}>{value}</MenuItem>)}</MenuList>
         </MenuPopover>
       </Menu></span>
-      {paging.pages > 1 ? <>
+      {paging.pages > 1 ? <div className="record-page-controls">
         <button type="button" className="record-page-nav" aria-label={`Предыдущая страница: ${label}`} disabled={paging.page === 0} onClick={() => paging.setPage(paging.page - 1)}><ChevronLeft20Regular /></button>
         <span className="record-page-position" aria-label={`Страница ${paging.page + 1} из ${paging.pages}`}>Страница {paging.page + 1} из {paging.pages}</span>
         <button type="button" className="record-page-nav" aria-label={`Следующая страница: ${label}`} disabled={paging.page === paging.pages - 1} onClick={() => paging.setPage(paging.page + 1)}><ChevronRight20Regular /></button>
-      </> : null}
+      </div> : null}
     </div>
   </footer>;
 }
 
 /** Labels for the compact layout; native column headings remain available. */
 export function RecordMobileLabel({ children }: { children: ReactNode }) {
-  return <span className="record-mobile-label" aria-hidden="true">{children}</span>;
+  return <span className="record-mobile-label">{children}</span>;
 }

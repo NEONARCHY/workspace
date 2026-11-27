@@ -1,3 +1,4 @@
+import { russianDateTimeFormatter } from "./date-time-format";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import type { WorkspacePerson, ZoomInvitation } from "@yuksalish/contracts";
@@ -30,7 +31,7 @@ export function ZoomInvitationCard({ messageId, invitation, people, token }: {
   }, [saved, source, primaryId]);
   const card = saved?.source === source ? saved.value : invitation;
   const start = new Date(card.startsAt), end = new Date(card.endsAt);
-  const format = (options: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat("ru-RU", { ...options, timeZone: card.timezone });
+  const format = (options: Intl.DateTimeFormatOptions) => russianDateTimeFormatter({ ...options, timeZone: card.timezone });
   useEffect(() => {
     const remaining = new Date(card.endsAt).getTime() - Date.now();
     if (remaining <= 0 && now >= new Date(card.endsAt).getTime()) return;

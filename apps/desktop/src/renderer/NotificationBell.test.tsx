@@ -17,12 +17,11 @@ it("opens notifications without marking them read and decorates only unread stat
   expect(screen.getByRole("button", { name: "Уведомления" })).not.toHaveAttribute("data-unread");
   expect(document.querySelector(".notification-bell-dot")).toBeNull();
 });
-it("runs one second of transform-only movement every eight seconds and honours reduced motion", () => {
+it("keeps the unread indicator still and preserves navigation order", () => {
   const css = readFileSync("src/renderer/notification-bell.css", "utf8");
-  expect(css).toContain("8s ease-in-out infinite");
-  expect(css).toContain("0%, 12.5%, 100%");
-  expect(css).toContain("prefers-reduced-motion: reduce");
-  expect(css).toContain("animation: none;");
+  expect(css).not.toContain("infinite");
+  expect(css).not.toContain("@keyframes");
+  expect(css).toContain(".notification-bell-dot");
   const app = readFileSync("src/renderer/App.tsx", "utf8");
   expect(app).toContain('key !== "project_funding" && key !== "notifications"');
   expect(app.indexOf("<NotificationBell")).toBeLessThan(app.indexOf("<ColorThemeToggle"));

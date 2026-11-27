@@ -509,8 +509,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .eff-history-chart svg { display: block; width: 100%; height: 100%; overflow: visible; }
 .eff-chart-grid { stroke: #dfe7eb; stroke-width: 1; stroke-dasharray: 3 5; }
 .eff-chart-axis, .eff-chart-month { fill: var(--ws-theme-muted, #758997); font-family: var(--ws-font, Inter, sans-serif); font-size: 9px; text-transform: capitalize; }
-.eff-chart-line { fill: none; stroke: var(--ws-theme-ink-teal, #0b8fa2); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; filter: url(#eff-line-glow); }
-.eff-chart-dot-glow { fill: rgb(20 164 179 / 18%); }
+.eff-chart-line { fill: none; stroke: var(--ws-theme-ink-teal, #0b8fa2); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
 .eff-chart-dot { fill: #fff; stroke: var(--ws-theme-ink-teal, #0b8fa2); stroke-width: 3; }
 .eff-chart-value { fill: var(--ws-theme-muted, #24526a); font-family: var(--ws-font, Inter, sans-serif); font-size: 10px; font-weight: 700; }
 .eff-history-text { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 16px; margin: 13px 0 0; padding: 0; list-style: none; }

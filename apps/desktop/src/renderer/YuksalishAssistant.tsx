@@ -1,8 +1,8 @@
+import { formatRussianTime } from "./date-time-format";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { LoadingSkeleton } from "./LoadingSkeleton";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type DragEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type DragEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { createPortal } from "react-dom";
 import { Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Popover, PopoverSurface, PopoverTrigger } from "@fluentui/react-components";
 import { ArrowUp, ArrowUpRight, CalendarDays, ChevronDown, FileText, FolderKanban, ListChecks, ListTodo, Maximize2, MessageCircle, Mic, Minimize2, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Paperclip, PenLine, Pin, PinOff, Plane, Plus, Reply, Square, Trash2, Upload, UserRound, X, Zap } from "lucide-react";
 
@@ -14,10 +14,9 @@ import { createAssistantChat, deleteAssistantChat, pinAssistantChat, listAssista
 import { ConfirmActionDialog } from "./ConfirmActionDialog";
 import { AssistantModelControl } from "./AssistantModelControl";
 import { ComposerSendTransition, MessageTextAnimate } from "./MessageTextAnimate";
-import { orbPose, orbTransform, useAssistantOrbJourney } from "./assistant-orb-journey";
-import { useAssistantLauncherLayout } from "./useAssistantLauncherLayout";
 import { isDraftContinuation, isFormOpenSignal } from "./assistant-form-handoff";
 import { browserNavigationQuery } from "./browser-layout";
+import { assistantPanelLayout } from "./assistant-panel-layout";
 
 const MAX_COMPOSER_HEIGHT = 180;
 const VOICE_LIMIT_MS = 60_000;
@@ -40,6 +39,7 @@ function assistantViewport() {
   return { width: window.innerWidth / zoom,
     height: browser ? (Number.parseFloat(style.getPropertyValue("--ws-browser-height")) || window.innerHeight) / zoom : window.innerHeight / zoom,
     top: browser ? (Number.parseFloat(style.getPropertyValue("--ws-browser-top")) || 0) / zoom : 0,
+    headerBottom: (document.querySelector(".global-bar")?.getBoundingClientRect().bottom ?? 0) / zoom,
     browserCompact: browser && (window.matchMedia?.(browserNavigationQuery).matches ?? false), zoom };
 }
 
@@ -136,6 +136,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
   readonly onPrepareAction?: (draft: AssistantActionDraft) => void | Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
+  const panelId = useId();
   const blockingDialog = useBlockingDialog();
   const [expanded, setExpanded] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -180,9 +181,6 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
   const launcherRef = useRef<HTMLButtonElement>(null);
   const streamRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLElement>(null);
-  const headerOrbRef = useRef<HTMLSpanElement>(null);
-  const welcomeOrbRef = useRef<HTMLSpanElement>(null);
-  const travellingOrbRef = useRef<HTMLSpanElement>(null);
   const chatPickerRef = useRef<HTMLDivElement>(null);
   const presetsToggleRef = useRef<HTMLButtonElement>(null);
   const replyMenuButtonRef = useRef<HTMLButtonElement>(null);
@@ -192,17 +190,10 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
   const sendBusyRef = useRef(false);
   const dragDepthRef = useRef(0);
   const sizeFromRef = useRef<DOMRect | null>(null);
-  const sizeOrbFromRef = useRef<DOMRect | null>(null);
   const sizeSnapshotRef = useRef<HTMLElement | null>(null);
   const sizeAnimationRef = useRef<Animation | null>(null);
   const reducedMotion = useAssistantMotionDisabled();
   const welcomeVisible = loaded && messages.length === 0 && !busy;
-  const launcherVacated = open && (loaded || Boolean(error)) && !blockingDialog;
-  useAssistantLauncherLayout(launcherRef, launcherVacated, reducedMotion, viewport.zoom, `${viewport.width}:${viewport.height}`);
-  const orbPhase = useAssistantOrbJourney({ open, ready: loaded || Boolean(error), empty: welcomeVisible,
-    blocked: blockingDialog, returnWithoutFlight: expanded, welcomeWithoutFlight: expanded, reducedMotion, zoom: viewport.zoom,
-    geometryKey: `${viewport.width}:${viewport.height}:${viewport.zoom}:${expanded}`,
-    launcher: launcherRef, panel: panelRef, header: headerOrbRef, welcome: welcomeOrbRef, visual: travellingOrbRef });
   const close = useCallback(() => {
     voiceSessionRef.current += 1;
     if (voiceTimerRef.current !== null) window.clearTimeout(voiceTimerRef.current);
@@ -225,6 +216,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
     dragDepthRef.current = 0;
     sizeFromRef.current = null;
     sizeAnimationRef.current?.cancel();
+    if (!hasBlockingDialog()) launcherRef.current?.focus({ preventScroll: true });
   }, []);
   const resizeInput = useCallback(() => {
     const input = inputRef.current;
@@ -242,7 +234,8 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
       setChatPickerOpen(false);
       setPresetsOpen(false);
       setViewport((current) => current.width === next.width && current.height === next.height
-        && current.zoom === next.zoom && current.top === next.top && current.browserCompact === next.browserCompact ? current : next);
+        && current.zoom === next.zoom && current.top === next.top && current.headerBottom === next.headerBottom
+        && current.browserCompact === next.browserCompact ? current : next);
     };
     window.addEventListener("resize", updateViewport);
     const observer = new MutationObserver(updateViewport);
@@ -254,8 +247,6 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
 
   useLayoutEffect(() => {
     const from = sizeFromRef.current;
-    const orbFrom = sizeOrbFromRef.current;
-    sizeOrbFromRef.current = null;
     sizeFromRef.current = null;
     const panel = panelRef.current;
     sizeAnimationRef.current?.cancel();
@@ -268,11 +259,6 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
     // Lay out the destination once. The frame can resize without repeatedly
     // wrapping live text; a short inert crossfade bridges the two layouts.
     const contentBounds = content.getBoundingClientRect();
-    const orb = travellingOrbRef.current;
-    const orbSlot = welcomeVisible ? welcomeOrbRef.current : headerOrbRef.current;
-    // Read the committed destination before the frame's old geometry is applied.
-    // Both use the same clock/easing, keeping the orb inside the resizing window.
-    const orbTo = orbSlot?.getBoundingClientRect();
     content.style.width = `${contentBounds.width / viewport.zoom}px`;
     content.style.height = `${contentBounds.height / viewport.zoom}px`;
     if (snapshot) panel.append(snapshot);
@@ -284,19 +270,14 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
       { width: `${to.width / viewport.zoom}px`, height: `${to.height / viewport.zoom}px` },
     ], { duration: 220, easing: "cubic-bezier(.2, 0, 0, 1)" });
     sizeAnimationRef.current = animation;
-    const orbResize = orb && orbFrom?.width && orbTo?.width ? orb.animate([
-      { transform: orbTransform(orbPose(orbFrom, viewport.zoom)) },
-      { transform: orbTransform(orbPose(orbTo, viewport.zoom)) },
-    ], { duration: 220, easing: "cubic-bezier(.2, 0, 0, 1)" }) : undefined;
     let restored = false;
     const restore = () => {
       if (restored) return;
       restored = true; content.style.removeProperty("width"); content.style.removeProperty("height"); snapshot?.remove();
-      if (orb && orbSlot?.isConnected) orb.style.transform = orbTransform(orbPose(orbSlot.getBoundingClientRect(), viewport.zoom));
     };
     void animation.finished.then(restore).catch(() => {});
-    return () => { animation.cancel(); orbResize?.cancel(); fade.cancel(); oldFade?.cancel(); restore(); };
-  }, [expanded, viewport, reducedMotion, open, welcomeVisible]);
+    return () => { animation.cancel(); fade.cancel(); oldFade?.cancel(); restore(); };
+  }, [expanded, viewport, reducedMotion, open]);
 
   const acceptFiles = (files: readonly File[]) => {
     if (!files.length) return;
@@ -332,6 +313,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
     let active = true;
     void listAssistantChats(token)
       .then(async (available) => {
+        if (!active) return;
         const selected = available[0];
         if (!selected) throw new Error("Чат не найден");
         const history = await loadAssistantMessages(token, selected.id);
@@ -342,9 +324,9 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
   }, [open, loaded, token]);
 
   useEffect(() => {
-    if (open && !blockingDialog && !hasBlockingDialog() && orbPhase === "ready"
-      && document.visibilityState !== "hidden") inputRef.current?.focus();
-  }, [open, blockingDialog, orbPhase]);
+    if (open && !blockingDialog && !hasBlockingDialog()
+      && document.visibilityState !== "hidden") inputRef.current?.focus({ preventScroll: true });
+  }, [open, blockingDialog, loaded]);
 
   useLayoutEffect(() => {
     if (open && streamRef.current) streamRef.current.scrollTop = messages.length || busy || recording || preparingVoice
@@ -681,41 +663,31 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
   const thinkingState = /юксалиш|yuksalish|источ|найди|поиск/i.test(messages.at(-1)?.content ?? "")
     ? "searching" : /задач|проект|заявк|анализ/i.test(messages.at(-1)?.content ?? "")
       ? "solving" : "composing";
-  const compact = viewport.browserCompact || viewport.width <= 600;
+  const { compact, edge, panelTop, panelWidth, panelHeight } = assistantPanelLayout(viewport, expanded);
   const canShowChatSidebar = expanded && viewport.width > CHAT_SIDEBAR_MIN_WIDTH;
   const showChatSidebar = canShowChatSidebar && !sidebarCollapsed;
   const orderedChats = [...chats].sort((left, right) => Number(Boolean(right.isPinned)) - Number(Boolean(left.isPinned)));
   const currentChat = chats.find((chat) => chat.id === chatId);
-  const edge = compact ? 8 : expanded ? 12 : 18;
-  const panelWidth = expanded || compact ? viewport.width - edge * 2 : Math.min(460, viewport.width - 36);
-  const panelHeight = expanded || compact ? viewport.height - edge * 2 : Math.min(750, viewport.height - 36);
   const sidebarMaxWidth = Math.max(220, Math.min(380, panelWidth - 420));
   const visibleSidebarWidth = sidebarCollapsed ? 56 : Math.min(sidebarWidth, sidebarMaxWidth);
   const resizeSidebar = (width: number) => setSidebarWidth(Math.round(Math.max(220, Math.min(sidebarMaxWidth, width))));
   return <div className="yuksalish-assistant-root" data-blocking-dialog={blockingDialog || undefined}>
-    <span className="assistant-launcher-space" data-vacated={launcherVacated || undefined}>
-    <button type="button" className="assistant-launcher" ref={launcherRef} tabIndex={launcherVacated ? -1 : 0}
+    <span className="assistant-launcher-space">
+    <button type="button" className="assistant-launcher" ref={launcherRef}
       aria-label="Открыть ассистента Yuksalish" title="Ассистент Yuksalish"
-      aria-busy={open && ["waiting", "travelling", "revealing"].includes(orbPhase)}
-      aria-expanded={open} disabled={blockingDialog} onClick={() => open ? close() : setOpen(true)}>
-      <span className="assistant-launcher-slot" aria-hidden="true" />
+      aria-busy={open && !loaded && !error} aria-haspopup="dialog" aria-controls={open ? panelId : undefined}
+      aria-expanded={open} disabled={blockingDialog} onClick={() => { if (open) close(); else { setViewport(assistantViewport()); setOpen(true); } }}>
+      <GradientOrb paused={blockingDialog} />
     </button>
     </span>
-    {open && orbPhase === "waiting" && <span className="assistant-journey-status" role="status">Загружаю чат ассистента…</span>}
-    {createPortal(<span className="assistant-travelling-orb" ref={travellingOrbRef} aria-hidden="true"
-      data-orb-phase={orbPhase} data-blocking-dialog={blockingDialog || undefined}>
-      <GradientOrb paused={blockingDialog} interactive={!open && orbPhase === "closed"} interactionSurface={launcherRef} />
-    </span>, document.body)}
     <AnimatePresence>
       {open && <motion.section
         initial={false} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
         transition={{ duration: reducedMotion ? 0 : 0.16, ease: [0.2, 0, 0, 1] }}
-        data-orb-phase={orbPhase === "closed" ? "waiting" : orbPhase}
-        inert={!["ready", "docking"].includes(orbPhase)}
-        style={{ width: viewport.browserCompact ? `calc(${viewport.width}px - max(8px, env(safe-area-inset-left)) - max(8px, env(safe-area-inset-right)))` : panelWidth,
-          height: viewport.browserCompact ? `calc(${viewport.height}px - max(8px, env(safe-area-inset-top)) - max(8px, env(safe-area-inset-bottom)))` : panelHeight,
-          right: viewport.browserCompact ? "max(8px, env(safe-area-inset-right))" : edge, bottom: viewport.browserCompact ? "auto" : edge,
-          top: viewport.browserCompact ? `calc(${viewport.top}px + max(8px, env(safe-area-inset-top)))` : undefined,
+        style={{ width: viewport.browserCompact ? `calc(${viewport.width}px - max(12px, env(safe-area-inset-left)) - max(12px, env(safe-area-inset-right)))` : panelWidth,
+          height: viewport.browserCompact ? `calc(${panelHeight + edge}px - max(${edge}px, env(safe-area-inset-bottom)))` : panelHeight,
+          right: viewport.browserCompact ? "max(12px, env(safe-area-inset-right))" : edge, bottom: compact || expanded ? "auto" : edge,
+          top: compact || expanded ? panelTop : undefined,
           borderRadius: expanded ? 22 : 26 }}
         ref={panelRef}
         onDragEnter={(event) => {
@@ -737,10 +709,9 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
           acceptFiles(Array.from(event.dataTransfer.files));
         }}
         className={`assistant-panel ${expanded ? "is-expanded" : ""} ${canShowChatSidebar ? "has-sidebar" : ""} ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}
-        role="dialog" aria-modal="false" aria-label="Ассистент Yuksalish">
+        id={panelId} role="dialog" data-satin-excluded aria-modal="false" aria-label="Ассистент Yuksalish">
         <div className="assistant-panel-content" style={canShowChatSidebar ? { gridTemplateColumns: `${visibleSidebarWidth}px minmax(0, 1fr)` } : undefined}>
-        <header className={`assistant-header ${welcomeVisible ? "has-welcome-orb" : "has-docked-orb"}`}>
-          <span className="assistant-header-icon assistant-orb-slot" ref={headerOrbRef} aria-hidden="true" />
+        <header className="assistant-header">
           <span className="assistant-header-title">
             <strong>Ассистент Yuksalish</strong><small>Ваши дела и любые вопросы</small></span>
           <button type="button" aria-label={expanded ? "Свернуть окно" : "Развернуть окно"}
@@ -749,7 +720,6 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
               setChatPickerOpen(false); setPresetsOpen(false);
               const panel = panelRef.current;
               sizeFromRef.current = panel?.getBoundingClientRect() ?? null;
-              sizeOrbFromRef.current = travellingOrbRef.current?.getBoundingClientRect() ?? null;
               sizeSnapshotRef.current?.remove(); sizeSnapshotRef.current = null;
               const content = panel?.querySelector<HTMLElement>(".assistant-panel-content");
               if (!reducedMotion && content) {
@@ -881,7 +851,6 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
             <AnimatePresence>{welcomeVisible && <motion.div key="welcome" className="assistant-empty"
               initial={false} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               transition={{ duration: reducedMotion ? 0 : .18 }}>
-              <span className="assistant-empty-orb assistant-orb-slot" ref={welcomeOrbRef} aria-hidden="true" />
               <h2>С чего начнём?</h2>
               <p>Подготовим рабочие записи, разберём документ или просто обсудим ваш вопрос.</p>
               <div className="assistant-quick-prompts">{quickPrompts.map((prompt) =>
@@ -896,7 +865,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
               onContextMenu={(event) => onMessageContextMenu(event, item)}
               onKeyDown={(event) => onMessageKeyDown(event, item)}>
               <div className="assistant-message-meta"><span>{item.role === "user" ? "Вы" : "Yuksalish"}</span>
-                <time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</time></div>
+                <time dateTime={item.createdAt}>{formatRussianTime(new Date(item.createdAt), { hour: "2-digit", minute: "2-digit" })}</time></div>
               {item.role === "assistant" ? <>
                 <GeneratedReply content={item.content} animate={item.id === animatedReplyId} reducedMotion={reducedMotion} />
                 {item.references?.length ? <div className="assistant-references" aria-label="Открыть записи в Workspace">

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { FluentProvider } from "@fluentui/react-components";
 import type { HrOverview, WorkspacePerson } from "@yuksalish/contracts";
 import type * as WorkspaceApi from "./workspace-api";
@@ -6,6 +6,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { HrView } from "./HrView";
 import { workspaceTheme } from "./workspace-theme";
 import { createHrProfile, loadHrOverview, saveHrProfile } from "./workspace-api";
+import * as profileLinks from "./EmployeeProfileLink";
 
 vi.mock("./workspace-api", async (original) => ({ ...await original<typeof WorkspaceApi>(),
   createHrProfile: vi.fn(), loadHrOverview: vi.fn(), saveHrProfile: vi.fn(),
@@ -14,7 +15,43 @@ vi.mock("./workspace-api", async (original) => ({ ...await original<typeof Works
 const admin: WorkspacePerson = { id: "qa", name: "Тестовый администратор", initials: "ТА", role: "superadmin", color: "brand" };
 const data: HrOverview = { calculatedAt: "2026-10-13", settings: { hrUserId: "hr" }, profiles: [], registers: [] };
 beforeEach(() => { vi.mocked(loadHrOverview).mockResolvedValue(data); });
-afterEach(() => { cleanup(); vi.clearAllMocks(); });
+afterEach(() => { cleanup(); vi.clearAllMocks(); vi.restoreAllMocks(); });
+
+it("cancels an obsolete HR request and never lets its late result replace the new account data", async () => {
+  let finish!: (value: HrOverview) => void;
+  vi.mocked(loadHrOverview).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  const view = render(<FluentProvider theme={workspaceTheme}><HrView token="old-token" currentUser={admin} people={[]} /></FluentProvider>);
+  await waitFor(() => expect(loadHrOverview).toHaveBeenCalled());
+  const oldSignal = vi.mocked(loadHrOverview).mock.calls.at(-1)![1]!;
+  expect(oldSignal.aborted).toBe(false);
+  view.rerender(<FluentProvider theme={workspaceTheme}><HrView token="new-token" currentUser={admin} people={[]} /></FluentProvider>);
+  await waitFor(() => expect(screen.getByRole("region", { name: "Кадровые карточки" })).toHaveAttribute("aria-busy", "false"));
+  expect(oldSignal.aborted).toBe(true);
+  await act(async () => finish({ ...data, settings: {} }));
+  expect(screen.queryByText("Назначьте участников маршрута")).not.toBeInTheDocument();
+  const latestSignal = vi.mocked(loadHrOverview).mock.calls.at(-1)![1]!;
+  view.unmount(); expect(latestSignal.aborted).toBe(true);
+});
+
+it("pages every HR record and leaves the list untouched while an editor draft changes", async () => {
+  vi.mocked(loadHrOverview).mockResolvedValue({ ...data, profiles: Array.from({ length: 32 }, (_, i) => ({
+    id: `profile-${i}`, fullName: `Тестовый Сотрудник ${i + 1}`, employmentDate: "2020-01-01", serviceAnchorDate: data.calculatedAt,
+    serviceYears: 6, serviceMonths: 9, serviceDays: 12, allowancePercent: 10, employmentStatus: "active", hiddenAfterYear: false, updatedAt: "2026-10-13T00:00:00Z",
+  })) });
+  const profiles = vi.spyOn(profileLinks, "EmployeeProfileLink");
+  render(<FluentProvider theme={workspaceTheme}><HrView token="qa-token" currentUser={admin} people={[]} /></FluentProvider>);
+  await waitFor(() => expect(document.querySelectorAll(".hr-row")).toHaveLength(25));
+  fireEvent.click(screen.getByRole("button", { name: "Следующая страница: кадровые карточки" }));
+  expect(document.querySelectorAll(".hr-row")).toHaveLength(7);
+  fireEvent.change(screen.getByRole("textbox", { name: "Поиск кадровой карточки" }), { target: { value: "нет-совпадений" } });
+  expect(document.querySelectorAll(".hr-row")).toHaveLength(0);
+  fireEvent.change(screen.getByRole("textbox", { name: "Поиск кадровой карточки" }), { target: { value: "" } });
+  expect(document.querySelectorAll(".hr-row")).toHaveLength(25);
+  fireEvent.click(screen.getByRole("button", { name: "Кадровая карточка" }));
+  profiles.mockClear();
+  fireEvent.change(screen.getByPlaceholderText("Фамилия Имя Отчество"), { target: { value: "Сохранить черновик" } });
+  expect(profiles).not.toHaveBeenCalled();
+});
 
 it("keeps an HR draft after failed save, retries, and restores focus on Escape", async () => {
   vi.mocked(createHrProfile).mockRejectedValue(new Error("Временная ошибка"));

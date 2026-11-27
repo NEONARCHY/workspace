@@ -1,3 +1,4 @@
+import { formatRussianDate, formatRussianDateTime } from "./date-time-format";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { LoadingSkeleton } from "./LoadingSkeleton";
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
@@ -462,7 +463,7 @@ export function TripApprovalsView({ token, focusRequestId, requests, people, dep
             {selected.documentVersions?.length ? <details className="trip-document-panel"><summary>История документов ({selected.documentVersions?.length})</summary>
               <div className="trip-document-files">{selected.documentVersions?.map(version => <Button type="button" key={version.id} disabled={busy}
                 onClick={() => void downloadDocument(selected, "archived", version.id)}>
-                {version.kind === "order" ? `Приказ № ${version.number} ${version.series}${version.issued ? ` от ${new Date(`${version.issued}T00:00:00`).toLocaleDateString("ru-RU")}` : ""}` : version.kind === "resolution" ? "Резолюция председателя" : "Билдирги"} · сохранено {new Date(version.createdAt).toLocaleString("ru-RU")}
+                {version.kind === "order" ? `Приказ № ${version.number} ${version.series}${version.issued ? ` от ${formatRussianDate(new Date(`${version.issued}T00:00:00`))}` : ""}` : version.kind === "resolution" ? "Резолюция председателя" : "Билдирги"} · сохранено {formatRussianDateTime(new Date(version.createdAt))}
               </Button>)}</div>
             </details> : null}
             {selected.allowedActions.includes("complete") ? <TripHrOrderForm key={selected.id} request={selected} busy={busy}
@@ -474,7 +475,7 @@ export function TripApprovalsView({ token, focusRequestId, requests, people, dep
               {isAdministrator && !selected.hrProcessingRequired && (selected.workflowVersion ?? 1) === 1 ? displayTripColumns.filter((column) => column.key !== selected.stage).map((column) => <Button data-stage={column.key} disabled={busy || Boolean(pendingDecision)} key={`move:${column.key}`} onClick={() => void commitAction(selected, "move", `Перенос на этап «${column.label}»`, column.key)}>{column.label}</Button>) : null}
             </div>
             {confirmDeleteId === selected.id ? <div className="trip-delete-confirm" role="group" aria-label="Подтверждение удаления заявки"><p>Удалить заявку из рабочего списка? История и документы останутся в архиве системы.</p><Button appearance="primary" disabled={busy} onClick={() => void deleteRequest(selected)}>Да, удалить</Button><Button disabled={busy} onClick={() => setConfirmDeleteId("")}>Отмена</Button></div> : null}
-            <div className="bp7-history"><h3>История решений</h3>{[...selected.actions].reverse().map((entry) => <div key={entry.id}><i /><p><strong>{entry.action === "created" ? "Заявка создана" : entry.action === "deleted" ? "Заявка удалена" : actionLabels[entry.action]}</strong><span>{personLink(entry.actorUserId, personName(entry.actorUserId))} · {new Date(entry.createdAt).toLocaleString("ru-RU")}</span>{entry.comment ? <small>{entry.comment}</small> : null}</p></div>)}</div>
+            <div className="bp7-history"><h3>История решений</h3>{[...selected.actions].reverse().map((entry) => <div key={entry.id}><i /><p><strong>{entry.action === "created" ? "Заявка создана" : entry.action === "deleted" ? "Заявка удалена" : actionLabels[entry.action]}</strong><span>{personLink(entry.actorUserId, personName(entry.actorUserId))} · {formatRussianDateTime(new Date(entry.createdAt))}</span>{entry.comment ? <small>{entry.comment}</small> : null}</p></div>)}</div>
           </article>{renderTripChat ? renderTripChat(selected) : <div className="embedded-chat-unavailable">Чат поездки недоступен.</div>}</div> : formMode !== null ? (
           <form className="bp7-modal trip-form record-composer" noValidate aria-busy={busy} onSubmit={(event) => { event.preventDefault(); void save(); }}>
             <RecordComposer title={formMode === "create" ? "Создать заявку на поездку" : "Изменить заявку на поездку"} titleId="trip-composer-title" eyebrow="Согласование поездок" busy={busy} error={error} submitLabel="Сохранить" onClose={closeForm}

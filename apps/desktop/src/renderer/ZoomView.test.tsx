@@ -83,6 +83,15 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("Zoom conference booking", () => {
+  it("cancels the availability request when the booking form is closed", async () => {
+    vi.mocked(loadZoomAvailability).mockImplementationOnce(() => new Promise(() => {}));
+    mount(); fireEvent.click(screen.getByRole("button", { name: "Новая конференция" }));
+    await waitFor(() => expect(loadZoomAvailability).toHaveBeenCalled());
+    const signal = vi.mocked(loadZoomAvailability).mock.calls.at(-1)![2]!;
+    expect(signal.aborted).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Закрыть форму" }));
+    expect(signal.aborted).toBe(true);
+  });
   it("joins a conference from desktop through the restricted Zoom capability", async () => {
     const previous = window.yuksalish;
     const openZoomMeeting = vi.fn().mockResolvedValue(true);

@@ -1,3 +1,4 @@
+import { formatRussianDateTime } from "./date-time-format";
 import { useId, useLayoutEffect, useRef, useState } from "react";
 import { Button } from "@fluentui/react-components";
 import type { GrantAction, GrantDeadlineRequest, GrantDetail, WorkspacePerson } from "@yuksalish/contracts";
@@ -8,7 +9,7 @@ const labels: Readonly<Record<GrantDeadlineRequest["status"], string>> = {
   pending: "Ожидает решения", approved: "Одобрено", rejected: "Отклонено", superseded: "Больше не актуален",
 };
 function date(value: string) {
-  return new Date(value).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" });
+  return formatRussianDateTime(new Date(value), { dateStyle: "short", timeStyle: "short" });
 }
 function minimumDate(value: string, now: number) {
   const minimum = new Date(Math.max(now, Date.parse(value)));

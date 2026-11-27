@@ -94,7 +94,7 @@ it("shows actual data, task explanations and navigation without a nested dialog"
   fireEvent.click(screen.getByRole("button", { name: "К профилю" }));
   expect(back).toHaveBeenCalledOnce();
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-  expect(loadPersonalEfficiency).toHaveBeenCalledWith("self-token", expect.stringMatching(/^\d{4}-\d{2}$/));
+  expect(loadPersonalEfficiency).toHaveBeenCalledWith("self-token", expect.stringMatching(/^\d{4}-\d{2}$/), expect.any(AbortSignal));
 });
 
 it("keeps personal aggregates accessible without task module permission", async () => {

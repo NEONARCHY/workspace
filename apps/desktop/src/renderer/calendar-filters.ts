@@ -27,16 +27,13 @@ export function calendarRangeError(from: string, to: string): string {
 export function calendarDayInRange(key: string, filters: Pick<CalendarFilters, "from" | "to">): boolean {
   return (!filters.from || key >= filters.from) && (!filters.to || key <= filters.to);
 }
-function overlapsDates(start: number, end: number, from: string, to: string): boolean {
-  if (calendarRangeError(from, to)) return false;
-  const first = dateStart(from);
-  const last = dateStart(to);
-  if (last) last.setDate(last.getDate() + 1);
-  return Number.isFinite(start) && Number.isFinite(end) && end > start
-    && (!first || end > first.getTime()) && (!last || start < last.getTime());
-}
 /** Filter only the records already authorised by the server; never fetch another person's calendar. */
 export function filterCalendarSchedule(events: readonly CalendarEvent[], zoom: readonly ZoomMeeting[], filters: CalendarFilters): CalendarScheduleItem[] {
+  if (calendarRangeError(filters.from, filters.to)) return [];
+  const first = dateStart(filters.from)?.getTime() ?? -Infinity;
+  const last = dateStart(filters.to);
+  if (last) last.setDate(last.getDate() + 1);
+  const upper = last?.getTime() ?? Infinity;
   const items: CalendarScheduleItem[] = [
     ...events.filter(event => ["meeting", "general", "trip"].includes(event.eventType))
       .map(record => ({ kind: "event" as const, key: `event:${record.id}`, title: record.title, record })),
@@ -44,14 +41,40 @@ export function filterCalendarSchedule(events: readonly CalendarEvent[], zoom: r
       .map(record => ({ kind: "zoom" as const, key: `zoom:${record.id}`, title: record.topic, record })),
   ];
   const query = filters.query.trim().toLocaleLowerCase();
-  return items.filter(item => {
+  return items.map(item => ({ item, start: Date.parse(item.record.startsAt), end: Date.parse(item.record.endsAt) })).filter(({ item, start, end }) => {
     const record = item.record;
     const attendees = item.kind === "event" ? item.record.attendeeIds : item.record.participantIds;
     if (filters.employeeId && record.organizerUserId !== filters.employeeId && !attendees.includes(filters.employeeId)) return false;
     if (!filters.showCancelled && record.status === "cancelled") return false;
     const text = `${item.title} ${record.description} ${item.kind === "event" ? item.record.location : "Zoom"}`.toLocaleLowerCase();
-    return (!query || text.includes(query)) && overlapsDates(Date.parse(record.startsAt), Date.parse(record.endsAt), filters.from, filters.to);
-  }).sort((left, right) => Date.parse(left.record.startsAt) - Date.parse(right.record.startsAt) || left.key.localeCompare(right.key));
+    return (!query || text.includes(query)) && Number.isFinite(start) && Number.isFinite(end) && end > start && end > first && start < upper;
+  }).sort((left, right) => left.start - right.start || left.item.key.localeCompare(right.item.key)).map(({ item }) => item);
+}
+
+/** Parse each interval once, then visit only the displayed days it overlaps.
+ * Local midnight boundaries preserve DST and the exclusive event end. */
+export function indexCalendarDays(items: readonly CalendarScheduleItem[], dates: readonly Date[], filters: Pick<CalendarFilters, "from" | "to">): ReadonlyMap<string, readonly CalendarScheduleItem[]> {
+  const result = new Map<string, CalendarScheduleItem[]>();
+  const bounds = dates.flatMap(date => {
+    if (!Number.isFinite(date.getTime())) return [];
+    const key = calendarDateKey(date);
+    if (result.has(key)) return [];
+    result.set(key, []);
+    const start = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const end = new Date(start); end.setDate(end.getDate() + 1);
+    return calendarDayInRange(key, filters) ? [{ key, start: start.getTime(), end: end.getTime() }] : [];
+  }).sort((left, right) => left.start - right.start);
+  for (const item of items) {
+    const start = Date.parse(item.record.startsAt), end = Date.parse(item.record.endsAt);
+    if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
+    let low = 0, high = bounds.length;
+    while (low < high) {
+      const middle = (low + high) >>> 1;
+      if (bounds[middle]!.end <= start) low = middle + 1; else high = middle;
+    }
+    for (let index = low; index < bounds.length && bounds[index]!.start < end; index++) result.get(bounds[index]!.key)!.push(item);
+  }
+  return result;
 }
 export function calendarItemsOnDay(items: readonly CalendarScheduleItem[], date: Date, filters: Pick<CalendarFilters, "from" | "to">): CalendarScheduleItem[] {
   const key = calendarDateKey(date);

@@ -1,3 +1,4 @@
+import { russianDateTimeFormatter } from "./date-time-format";
 import { WorkspaceNotice } from "./WorkspaceNotice";
 import { LoadingSkeleton } from "./LoadingSkeleton";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -25,7 +26,7 @@ const kindLabels: Record<string, string> = {
   approval: "Согласование",
 };
 
-const formatDateTime = (value: string) => new Intl.DateTimeFormat("ru-RU", {
+const formatDateTime = (value: string) => russianDateTimeFormatter({
   day: "2-digit",
   month: "2-digit",
   year: "numeric",

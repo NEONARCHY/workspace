@@ -6,6 +6,9 @@
 .tasks-view .task-filters { flex: none; align-items: center; padding: 12px var(--ws-view-edge) 16px; }
 .tasks-view .task-search { flex: 1 1 260px; min-width: 160px; max-width: none; margin-left: auto; }
 .task-role-filter { min-height: 36px; padding: 7px 10px; color: var(--ws-text); border: 1px solid var(--ws-control-line); border-radius: 10px; background: var(--ws-theme-surface, white); font-size: 13px; }
+.record-compact-tools { display: none; }
+/* Keep page actions outside the default floating messenger launcher's hit area. */
+body .app-provider .record-table-frame .record-table-footer { padding-inline-end: 76px; }
 .record-list-controls { display: flex; flex: none; flex-wrap: wrap; align-items: end; gap: 12px; padding: 4px var(--ws-view-edge) 18px; }
 .employees-view > .record-list-controls { padding-inline: var(--employee-view-inset); }
 .record-list-controls .employee-search { flex: 1 1 280px; width: auto; margin: 0; }
@@ -200,4 +203,14 @@
   .employee-selection-bar { animation: none; }
   .employee-record-table .employee-row { transition: none; }
   .employee-record-table .employee-row:hover, .employee-record-table .employee-row:focus-within { transform: none; }
+}
+
+.record-page-controls { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+@media (max-width: 700px) {
+  .web-platform body .app-provider .record-table-frame .record-table-footer { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; padding-inline: 12px; }
+  .web-platform .record-table-paging { display: contents; }
+  .web-platform .record-table-footer > span { grid-column: 1; grid-row: 1; white-space: nowrap; }
+  .web-platform .record-page-size { grid-column: 2; grid-row: 1; margin-inline-end: 64px; }
+  .web-platform .record-page-size-label { display: none; }
+  .web-platform .record-page-controls { grid-column: 1 / -1; grid-row: 2; justify-self: start; }
 }

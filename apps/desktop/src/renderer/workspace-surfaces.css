@@ -1,0 +1,65 @@
+/* Owner rule, 2026-11-26: separate working surfaces by nearby tones and space.
+   Keep each component's established fill, including semantic status gradients.
+   Disable both physical borders and gradient/inset frames in the final layer. */
+html:root body .app-provider :is(
+  .app-content :is(section, aside, article),
+  .app-content :is([class$="-panel"], [class*="-panel "], [class$="-card"], [class*="-card "], [class$="-placeholder"], [class*="-placeholder "]),
+  .app-content :is([class$="-summary"], [class*="-summary "]) > :is(button, div),
+  .ws-section-header, .project-hub-header, .home-panel, .home-overview article,
+  .record-table-frame, .record-table-shell, .task-proposals, .task-focus-object,
+  .record-table .record-row,
+  .team-dash-metric, .team-dash-panel, .team-dash-grant-metric, .team-presence-panel, .team-dash-workload,
+  .team-dash-task, .team-dash-person,
+  .notification-metrics > button, .notification-progress-card, .notification-stream-shell,
+  .notification-settings, .notification-context, .notification-row,
+  .feed-card, .feed-context-card,
+  .employees-header-tools, .employees-management, .employee-selection-bar,
+  .leave-list-area, .leave-detail, .leave-list-item, .leave-card,
+  .absence-summary > button, .absence-column, .absence-card,
+  .hr-summary > div, .hr-table-wrap, .hr-register-card,
+  .members-summary > div, .members-regional-ranking, .member-inspector,
+  .zoom-split, .zoom-side, .zoom-row, .zoom-confirm, .zoom-placeholder,
+  .calendar-board, .calendar-side, .calendar-filters,
+  .messenger-view > .list-pane, .messenger-view > .conversation-pane,
+  .kanban-column, .approval-column, .spatial-lane, .kanban-card, .approval-board-card, .project-card,
+  .project-hub-index, .project-hub-canvas, .project-hub-funding-list, .project-hub-funding-detail,
+  .telegram-access-overview, .telegram-access-guide, .telegram-access-row, .telegram-access-bot,
+  .edo-incoming-list, .edo-incoming-detail, .edo-incoming-summary > span, .edo-access-card,
+  .incoming-document-row, .incoming-status, .incoming-result, .incoming-responsibility > div,
+  .incoming-assignment-team, .edo-incoming-row,
+  .ai-incoming-register .ai-referent-summary > button, .survey-panel, .survey-settings, .survey-group-grid article,
+  .survey-file-drop, .survey-analysis-item,
+  .home-overview > button, .home-row, .home-priority-update, .home-reactions li,
+  .calendar-day, .calendar-view-bar, .calendar-event-pill, .calendar-agenda-card,
+  .project-hub-project, .project-hub-metrics > div, .project-hub-workstream-card, .project-hub-funding-card,
+  .hisobot-tabs, .hisobot-window, .hisobot-activity-draft > button,
+  .monthly-reports-attachments, .eff-commandbar, .eff-deadline-explanation
+):not(.is-lifted):not(.is-target) {
+  --ws-satin-sheen: none;
+  --ws-satin-edge: none;
+  border: 0 solid transparent;
+  box-shadow: none;
+}
+@media (forced-colors: none) {
+  html:root body .app-provider .fui-Badge { border-color: transparent; }
+}
+@media (max-width: 700px) {
+  html.web-platform:root body .app-provider .record-table .record-row { background: var(--ws-muted-surface); }
+  html.web-platform:root body .app-provider .record-table .record-row[aria-selected="true"] { background: var(--ws-selected); }
+}
+html:root body .app-provider :is(.fui-DialogSurface, .fui-PopoverSurface, .fui-MenuPopover, .fui-Listbox, [role="dialog"], [role="alertdialog"]) {
+  --ws-satin-sheen: none;
+  --ws-satin-edge: none;
+  border: 0 solid transparent;
+}
+/* Selection and keyboard focus still communicate actions; no decorative ring. */
+html:root body .app-provider .calendar-day.selected { background: var(--ws-selected); }
+html:root body .app-provider :is(.absence-summary > button, .leave-list-item, .zoom-row):focus-visible {
+  outline: 2px solid var(--ws-link);
+  outline-offset: 2px;
+}
+@media (forced-colors: active) {
+  html:root body .app-provider :is(.incoming-document-row, .leave-list-item, .zoom-row)[aria-pressed="true"],
+  html:root body .app-provider .edo-incoming-row.is-selected,
+  html:root body .app-provider .survey-analysis-item[aria-pressed="true"] { outline: 2px solid Highlight; outline-offset: -2px; }
+}

@@ -6,6 +6,7 @@ import type { IncomingDocumentDetail, WorkspaceDepartment, WorkspacePerson } fro
 import { workspaceTheme } from "./workspace-theme";
 import { IncomingLettersView } from "./IncomingLettersView";
 import { mockVisibleWindowLayout } from "./test-fixtures/visible-window";
+import * as dates from "./date-time-format";
 import { acceptWorkspaceTaskResult, assignIncomingDocument, downloadIncomingDocumentFile, loadEdoIncomingLetters, loadIncomingDocument, loadIncomingDocuments, loadProfileAvatar, loadTaskHistory, submitWorkspaceTaskResult, uploadWorkspaceAttachment } from "./workspace-api";
 
 vi.mock("./workspace-api", () => ({
@@ -91,6 +92,15 @@ describe("Workspace incoming document workflow", () => {
     expect(loadEdoIncomingLetters).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("tab", { name: "Письма из ЭДО" }));
     await waitFor(() => expect(loadEdoIncomingLetters).toHaveBeenCalled());
+  });
+
+  it("does not redraw the registry rows while a search query is being typed", async () => {
+    const formatter = vi.spyOn(dates, "russianDateTimeFormatter");
+    vi.mocked(loadIncomingDocuments).mockResolvedValue({ documents: [{ ...detail.document, addedAt: "2026-11-23T05:00:00Z" }], total: 1, offset: 0, limit: 30 });
+    show(); await screen.findByRole("button", { name: /№ QA-1/ }); formatter.mockClear();
+    fireEvent.change(screen.getByPlaceholderText("Номер, тема или отправитель"), { target: { value: "ответ" } });
+    expect(screen.getByRole("button", { name: /№ QA-1/ })).toBeVisible();
+    expect(formatter).not.toHaveBeenCalled();
   });
 
   it("shows the first Workspace import in the list separately from source registration", async () => {

@@ -1,3 +1,4 @@
+import { formatRussianDateTime } from "./date-time-format";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
 import type {
@@ -85,7 +86,7 @@ function dateTimeLabel(value: string): string {
   if (!value) return "Без срока";
   const date = new Date(value);
   return Number.isFinite(date.getTime())
-    ? date.toLocaleString("ru-RU", { dateStyle: "medium", timeStyle: "short" })
+    ? formatRussianDateTime(date, { dateStyle: "medium", timeStyle: "short" })
     : "Проверьте дату";
 }
 

@@ -3,6 +3,21 @@ import { buildPersonalHome, homePeriod, rankHomePanels } from "./personal-home";
 import { homeFixture } from "./test-fixtures/personal-home-fixture";
 const now = Date.parse("2026-10-08T09:00:00+05:00");
 describe("Personal Home model", () => {
+  it("counts a task and its action notification once, while retaining separate actions", () => {
+    const base = homeFixture("aziza", now);
+    const notice = base.notifications[0]!;
+    const data = buildPersonalHome({ ...base, notifications: [
+      { ...notice, entityId: "home-review", section: "tasks", requiresAction: true },
+      { ...notice, id: "independent-1", entityId: undefined, requiresAction: true },
+      { ...notice, id: "independent-2", entityId: undefined, requiresAction: true },
+      { ...notice, id: "resolved", entityId: "resolved", requiresAction: true, resolvedAt: new Date(now).toISOString() },
+    ] }, () => true, now);
+    expect(data.attentionCount).toBe(data.signals.length + 2);
+    expect(data.taskCounts).toEqual({ new: 0, in_progress: 2, awaiting_review: 0 });
+    const denied = buildPersonalHome(base, () => false, now);
+    expect(denied.attentionCount).toBe(0);
+    expect(denied.taskCounts).toEqual({ new: 0, in_progress: 0, awaiting_review: 0 });
+  });
   it("uses the employee, not the team, and does not blame an executor awaiting review", () => {
     const base = homeFixture("aziza", now);
     const t = base.tasks[0]!;

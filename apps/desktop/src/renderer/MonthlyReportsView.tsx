@@ -1,4 +1,5 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { formatRussianDate, formatRussianDateTime } from "./date-time-format";
+import { memo, useEffect, useId, useRef, useState } from "react";
 import type { MonthlyCalendarDay, MonthlyReport, MonthlyReportFile } from "@yuksalish/contracts";
 import { Button, Checkbox, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input, Spinner, Textarea } from "@fluentui/react-components";
 import {
@@ -23,7 +24,7 @@ import { EmployeeAvatar } from "./EmployeeAvatar";
 import "./monthly-reports.css";
 
 export function monthlyLabel(month: string) {
-  return new Date(`${month}T12:00:00Z`).toLocaleDateString("ru-RU", { month: "long", year: "numeric", timeZone: "Asia/Tashkent" });
+  return formatRussianDate(new Date(`${month}T12:00:00Z`), { month: "long", year: "numeric", timeZone: "Asia/Tashkent" });
 }
 function saveBlob(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob);
@@ -48,10 +49,16 @@ export function MonthlyReportsView({ token, resource, open, onClose, onAfterClos
   const month = data?.cycles.find(item => item.month === selected)?.month
     || data?.activeMonth || data?.cycles[0]?.month || "";
   const cycle = data?.cycles.find(item => item.month === month);
-  const [files, setFiles] = useState<readonly File[]>([]);
-  const [comment, setComment] = useState("");
+  const [drafts, setDrafts] = useState<ReadonlyMap<string, { files: readonly File[]; comment: string; submissionId: string }>>(() => new Map());
+  const draft = drafts.get(month);
+  const files = draft?.files ?? [];
+  const comment = draft?.comment ?? "";
   const [authorizationComment, setAuthorizationComment] = useState("");
-  const [submissionId, setSubmissionId] = useState(() => crypto.randomUUID());
+  const [emptySubmissionId] = useState(() => crypto.randomUUID());
+  const submissionId = draft?.submissionId ?? emptySubmissionId;
+  const updateDraft = (value: { files?: readonly File[]; comment?: string }) => setDrafts(current => new Map(current).set(month,
+    { files: [], comment: "", ...current.get(month), ...value, submissionId: crypto.randomUUID() }));
+  const running = useRef(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [actionError, setActionError] = useState("");
@@ -59,17 +66,18 @@ export function MonthlyReportsView({ token, resource, open, onClose, onAfterClos
   const surface = useRef<HTMLDivElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const run = async (action: () => Promise<void>) => {
-    if (busy) return;
+    if (running.current) return;
+    running.current = true;
     setBusy(true); setActionError(""); setNotice("");
     try { await action(); } catch (cause) { setActionError(cause instanceof Error ? cause.message : "Не удалось выполнить действие"); }
-    finally { setBusy(false); }
+    finally { running.current = false; setBusy(false); }
   };
   const upload = () => run(async () => {
     if (!month || !files.length) throw new Error("Выберите отчётный месяц и хотя бы один файл");
     if (files.length > 5 || files.some(file => !file.size || file.size > 25 * 1024 * 1024)
       || files.reduce((sum, file) => sum + file.size, 0) > 50 * 1024 * 1024) throw new Error("До 5 непустых файлов, каждый до 25 МБ, вместе до 50 МБ");
     await submitMonthlyReport(token, { id: submissionId, month, comment }, files);
-    setFiles([]); setComment(""); setSubmissionId(crypto.randomUUID());
+    updateDraft({ files: [], comment: "" });
     if (fileInput.current) fileInput.current.value = "";
     setNotice("Отчёт отправлен. Предыдущие версии сохранены в истории.");
     await refresh();
@@ -79,8 +87,9 @@ export function MonthlyReportsView({ token, resource, open, onClose, onAfterClos
   });
   const history = data?.reports.filter(report => report.month === month) ?? [];
   const changeMonth = (value: string) => {
+    if (fileInput.current) fileInput.current.value = "";
     setSelected(value); setConfirmPayroll(false); setAuthorizationComment("");
-    setSubmissionId(crypto.randomUUID()); setActionError(""); setNotice("");
+    setActionError(""); setNotice("");
   };
   const payrollNotice = data?.payrollNotice;
   const toolbar = <div className="toolbar-actions monthly-reports-toolbar">
@@ -99,7 +108,7 @@ export function MonthlyReportsView({ token, resource, open, onClose, onAfterClos
     {payrollNotice && <section className="monthly-reports-panel monthly-reports-payroll" aria-label="Разрешение на начисление зарплаты">
       <div>
         <h2>Разрешено начисление ЗП · {monthlyLabel(payrollNotice.month)}</h2>
-        <p>{payrollNotice.authorizedByName}{payrollNotice.authorizedAt ? " · " + new Date(payrollNotice.authorizedAt).toLocaleString("ru-RU") : ""}</p>
+        <p>{payrollNotice.authorizedByName}{payrollNotice.authorizedAt ? " · " + formatRussianDateTime(new Date(payrollNotice.authorizedAt)) : ""}</p>
         {payrollNotice.comment && <p>{payrollNotice.comment}</p>}
       </div>
       <Button disabled={busy} onClick={() => void run(async () => {
@@ -124,7 +133,7 @@ export function MonthlyReportsView({ token, resource, open, onClose, onAfterClos
           </Field>
           <div className="monthly-reports-deadline">
             <span className="monthly-reports-icon" aria-hidden="true"><CalendarLtr20Regular /></span>
-            <div><strong>Напоминание · {new Date(cycle.reminderOn + "T12:00:00Z").toLocaleDateString("ru-RU", { day: "numeric", month: "long", timeZone: "Asia/Tashkent" })}</strong>
+            <div><strong>Напоминание · {formatRussianDate(new Date(cycle.reminderOn + "T12:00:00Z"), { day: "numeric", month: "long", timeZone: "Asia/Tashkent" })}</strong>
               <p>За три рабочих дня до конца месяца</p></div>
           </div>
         </section>
@@ -136,12 +145,12 @@ export function MonthlyReportsView({ token, resource, open, onClose, onAfterClos
               <h2>{history.length ? "Новая версия отчёта" : "Отправка отчёта"}</h2>
             </header>
             <div className="monthly-reports-attachments">
-              <input id={id + "-files"} aria-label="Файлы отчёта" className="monthly-reports-file-input" ref={fileInput} type="file" multiple tabIndex={-1} disabled={busy} onChange={event => { setFiles(Array.from(event.target.files ?? [])); setSubmissionId(crypto.randomUUID()); }} />
+              <input id={id + "-files"} aria-label="Файлы отчёта" className="monthly-reports-file-input" ref={fileInput} type="file" multiple tabIndex={-1} disabled={busy} onChange={event => updateDraft({ files: Array.from(event.target.files ?? []) })} />
               <Button icon={<Attach20Regular />} disabled={busy} onClick={() => fileInput.current?.click()}>Прикрепить файлы отчёта</Button>
               <p>До 5 файлов. Каждый до 25 МБ, вместе до 50 МБ.</p>
               {files.length > 0 && <ul>{files.map((file, index) => <li key={index + ":" + file.name}>{file.name} · {Math.ceil(file.size / 1024)} КБ</li>)}</ul>}
             </div>
-            <Field label="Комментарий к отчёту (необязательно)"><Textarea value={comment} maxLength={4000} disabled={busy} onChange={(_, value) => { setComment(value.value); setSubmissionId(crypto.randomUUID()); }} /></Field>
+            <Field label="Комментарий к отчёту (необязательно)"><Textarea data-satin-excluded value={comment} maxLength={4000} disabled={busy} onChange={(_, value) => updateDraft({ comment: value.value })} /></Field>
             <Button className="monthly-reports-submit" appearance="primary" disabled={busy || !files.length} onClick={() => void upload()}>{busy ? "Отправляем…" : "Отправить отчёт"}</Button>
           </section>}
           <section className="monthly-reports-panel monthly-reports-own" aria-label="История моих отчётов">
@@ -152,7 +161,7 @@ export function MonthlyReportsView({ token, resource, open, onClose, onAfterClos
             {!history.length && <p>Вы ещё не отправили отчёт за этот месяц.</p>}
             {!cycle.authorizedAt && !cycle.canSubmit && <p>Отправка отчёта за этот месяц недоступна для вашей учётной записи.</p>}
             {history.map(report => <article className="monthly-reports-history" key={report.id}>
-              <strong>Версия {report.revision}</strong><time dateTime={report.submittedAt}>{new Date(report.submittedAt).toLocaleString("ru-RU")}</time>
+              <strong>Версия {report.revision}</strong><time dateTime={report.submittedAt}>{formatRussianDateTime(new Date(report.submittedAt))}</time>
               {report.comment && <p>{report.comment}</p>}
               <div className="monthly-reports-files">{report.files.map(file => <Button size="small" icon={<ArrowDownload20Regular />} disabled={busy} key={file.id} onClick={() => void download(report, file)}>{file.name}</Button>)}</div>
             </article>)}
@@ -171,7 +180,7 @@ export function MonthlyReportsView({ token, resource, open, onClose, onAfterClos
               <div className="monthly-reports-person-identity"><EmployeeAvatar name={member.name} size={32} aria-hidden /><div><strong>{member.name}</strong><small>{member.department}</small></div></div>
               <div className="monthly-reports-person-report">
                 <div><span className="monthly-reports-person-status" data-submitted={Boolean(member.report)}>{member.report ? "Сдан" : "Не сдан"}</span>
-                  {member.report && <small>{new Date(member.report.submittedAt).toLocaleString("ru-RU")} · версия {member.report.revision}</small>}</div>
+                  {member.report && <small>{formatRussianDateTime(new Date(member.report.submittedAt))} · версия {member.report.revision}</small>}</div>
                 {member.report?.files.length ? <div className="monthly-reports-files">{member.report.files.map(file => <Button key={file.id} size="small" icon={<ArrowDownload20Regular />} disabled={busy} onClick={() => member.report && void download(member.report, file)}>{file.name}</Button>)}</div> : null}
                 {member.report?.comment && <p>{member.report.comment}</p>}
               </div>
@@ -179,7 +188,7 @@ export function MonthlyReportsView({ token, resource, open, onClose, onAfterClos
           </ul> : <p>Сотрудников ЦА в этом отчётном месяце нет.</p>}
           {data.canAuthorize && !cycle.authorizedAt && <div className="monthly-reports-authorization">
             <h3>Разрешение на начисление заработной платы</h3>
-            <Field label="Комментарий к разрешению (необязательно)"><Textarea maxLength={4000} value={authorizationComment} disabled={busy} onChange={(_, value) => setAuthorizationComment(value.value)} /></Field>
+            <Field label="Комментарий к разрешению (необязательно)"><Textarea data-satin-excluded maxLength={4000} value={authorizationComment} disabled={busy} onChange={(_, value) => setAuthorizationComment(value.value)} /></Field>
             {!confirmPayroll ? <Button disabled={busy} onClick={() => setConfirmPayroll(true)}>Разрешить начисление заработной платы</Button> : <WorkspaceNotice tone="warning" actions={<><Button appearance="primary" disabled={busy} onClick={() => void run(async () => {
               await authorizeMonthlyPayroll(token, month, authorizationComment);
               setConfirmPayroll(false); await refresh(); setNotice("Разрешение сохранено. Главному бухгалтеру отправлено уведомление.");
@@ -199,7 +208,7 @@ export function MonthlyReportsView({ token, resource, open, onClose, onAfterClos
       <DialogActions><Button disabled={busy} onClick={onClose}>Вернуться в рабочее пространство</Button></DialogActions>
     </DialogBody></DialogSurface>
   </WorkspaceDialog>;
-  return <section className="workspace-view monthly-reports-page" aria-labelledby={id + "-title"}>
+  return <section className="workspace-view workspace-queue monthly-reports-page" aria-labelledby={id + "-title"}>
     <WorkspaceSectionHeader motif="calendar">
       <div>
         <span className="view-kicker">Центральный аппарат</span>
@@ -212,12 +221,21 @@ export function MonthlyReportsView({ token, resource, open, onClose, onAfterClos
   </section>;
 }
 
-function MonthlyCalendar({ token, onSaved }: { readonly token: string; readonly onSaved: () => Promise<void> }) {
+const MonthlyCalendar = memo(function MonthlyCalendar({ token, onSaved }: { readonly token: string; readonly onSaved: () => Promise<void> }) {
+  const [open, setOpen] = useState(false);
   const [days, setDays] = useState<readonly MonthlyCalendarDay[]>();
   const [day, setDay] = useState(""); const [note, setNote] = useState(""); const [working, setWorking] = useState(false);
   const [busy, setBusy] = useState(false); const [error, setError] = useState("");
-  useEffect(() => { let active = true; void loadMonthlyCalendar(token).then(value => { if (active) setDays(value); }).catch(() => { if (active) setError("Не удалось загрузить рабочий календарь"); }); return () => { active = false; }; }, [token]);
-  return <details className="monthly-reports-panel monthly-reports-calendar">
+  useEffect(() => {
+    if (!open || days) return;
+    const controller = new AbortController();
+    void loadMonthlyCalendar(token, controller.signal).then(value => { if (!controller.signal.aborted) setDays(value); })
+      .catch(() => { if (!controller.signal.aborted) setError("Не удалось загрузить рабочий календарь"); });
+    return () => controller.abort();
+  }, [token, open, days]);
+  return <details className="monthly-reports-panel monthly-reports-calendar" onToggle={event => {
+    const next = event.currentTarget.open; if (next && !open) setError(""); setOpen(next);
+  }}>
     <summary>
       <span className="monthly-reports-icon" aria-hidden="true"><CalendarLtr20Regular /></span>
       <span className="monthly-reports-calendar-title"><strong>Рабочий календарь</strong><small>Праздники и переносы</small></span>
@@ -232,12 +250,12 @@ function MonthlyCalendar({ token, onSaved }: { readonly token: string; readonly 
       </div>
       <Checkbox label="Рабочий день" checked={working} disabled={busy} onChange={(_, v) => setWorking(v.checked === true)} />
       <Button disabled={busy || !day || !note.trim()} onClick={() => { setBusy(true); setError(""); void saveMonthlyCalendar(token, { day, note, working }).then(async () => { setDays(await loadMonthlyCalendar(token)); await onSaved(); setNote(""); }).catch(cause => setError(cause instanceof Error ? cause.message : "Не удалось сохранить дату")).finally(() => setBusy(false)); }}>Сохранить дату</Button>
-      {days?.length ? <ul className="monthly-reports-calendar-days">{days.map(item => <li key={item.day}><time dateTime={item.day}>{new Date(item.day + "T12:00:00Z").toLocaleDateString("ru-RU", { timeZone: "Asia/Tashkent" })}</time><strong>{item.working ? "Рабочий" : "Выходной"}</strong><span>{item.note}</span></li>)}</ul>
+      {days?.length ? <ul className="monthly-reports-calendar-days">{days.map(item => <li key={item.day}><time dateTime={item.day}>{formatRussianDate(new Date(item.day + "T12:00:00Z"), { timeZone: "Asia/Tashkent" })}</time><strong>{item.working ? "Рабочий" : "Выходной"}</strong><span>{item.note}</span></li>)}</ul>
         : days && <p>Исключений пока нет.</p>}
       {!days && !error && <Spinner size="tiny" label="Загрузка календаря" />}
     </div>
   </details>;
-}
+});
 
 export function MonthlyReportDashboard({ resource, onOpen }: { readonly resource: MonthlyReportsResource; readonly onOpen: (launcher?: HTMLElement) => void }) {
   const { data, error } = resource;

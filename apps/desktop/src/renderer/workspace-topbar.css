@@ -1,0 +1,101 @@
+/* Quiet icon toolbar: 44px hit targets, 28px hover circles and visible portraits. */
+html:root body .app-provider .app-stage > .global-bar.workspace-topbar {
+  --ws-topbar-size: 44px;
+  --ws-topbar-radius: 50%;
+  --ws-topbar-fill: var(--ws-button-surface, var(--ws-muted-surface));
+  display: flex; flex-wrap: nowrap; align-items: center; gap: 12px;
+  min-height: var(--ws-topbar-size); padding: 0 var(--ws-page-trailing-gutter, 20px) 12px 0;
+}
+html:root body .app-provider .app-stage > .global-bar.workspace-topbar :is(.workspace-top-context, .workspace-workday-status, .topbar-insights, .workspace-workday-person) {
+  align-items: center; flex-wrap: nowrap; gap: 8px;
+}
+html:root body .app-provider .app-stage > .global-bar.workspace-topbar .workspace-top-context { margin-inline-start: auto; }
+html:root body .app-provider .app-stage > .global-bar.workspace-topbar :is(.browser-menu-trigger, .section-jump-trigger, .notification-bell, .color-theme-toggle, .assistant-launcher, .workspace-identity-menu, .connection-indicator, .context-trigger, .workday-control-mobile-trigger) {
+  position: relative; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0; height: var(--ws-topbar-size); min-height: var(--ws-topbar-size);
+  border: 0; border-radius: var(--ws-topbar-radius); box-shadow: none;
+  isolation: isolate; background: transparent; color: var(--ws-text); cursor: pointer;
+  transition: color 140ms ease;
+}
+html:root body .app-provider .app-stage > .global-bar.workspace-topbar :is(.browser-menu-trigger, .section-jump-trigger, .notification-bell, .color-theme-toggle, .connection-indicator, .context-trigger, .workday-control-mobile-trigger)::before {
+  content: ""; position: absolute; z-index: -1; pointer-events: none; inset: 8px;
+  width: 28px; height: 28px; border: 0; border-radius: 50%; background: transparent;
+  box-shadow: none; transition: background-color 140ms ease;
+}
+@media (hover: hover) {
+  html:root body .app-provider .app-stage > .global-bar.workspace-topbar :is(.browser-menu-trigger, .section-jump-trigger, .notification-bell, .color-theme-toggle, .connection-indicator, .context-trigger, .workday-control-mobile-trigger):hover:not(:disabled)::before { background: var(--ws-topbar-fill); }
+}
+html:root body .app-provider .app-stage > .global-bar.workspace-topbar :is(.browser-menu-trigger, .section-jump-trigger, .notification-bell, .color-theme-toggle, .assistant-launcher, .workspace-identity-menu, .connection-indicator, .context-trigger, .workday-control-mobile-trigger):focus-visible { outline: 2px solid var(--ws-link); outline-offset: -2px; }
+html:root body .app-provider .app-stage > .global-bar.workspace-topbar :is(.browser-menu-trigger, .section-jump-trigger, .notification-bell, .color-theme-toggle, .assistant-launcher, .workspace-identity-menu, .connection-indicator, .context-trigger, .workday-control-mobile-trigger):disabled { cursor: default; opacity: .5; }
+html:root body .app-provider .app-stage > .global-bar.workspace-topbar :is(.browser-menu-trigger, .section-jump-trigger, .notification-bell, .color-theme-toggle, .assistant-launcher, .workspace-identity-menu, .connection-indicator, .context-trigger, .workday-control-mobile-trigger) {
+  width: var(--ws-topbar-size); min-width: var(--ws-topbar-size); max-width: var(--ws-topbar-size); padding: 0;
+}
+html:root body .app-provider .app-stage > .global-bar.workspace-topbar :is(.notification-bell-wrap, .color-theme-toggle-wrap, .assistant-launcher-space) {
+  flex: 0 0 var(--ws-topbar-size); width: var(--ws-topbar-size); height: var(--ws-topbar-size);
+}
+html:root body .app-provider .app-stage > .global-bar.workspace-topbar :is(.browser-menu-trigger, .notification-bell-icon, .color-theme-toggle, .connection-indicator, .context-trigger, .workday-control-mobile-trigger) > svg {
+  flex: none; width: 20px; height: 20px;
+}
+html:root body .app-provider .app-stage > .global-bar.workspace-topbar .color-theme-toggle .fui-Button__icon { width: 20px; height: 20px; font-size: 20px; }
+html:root body .app-provider .app-stage > .global-bar.workspace-topbar .section-jump-trigger {
+  flex: 0 0 44px; gap: 0; padding: 0; justify-content: center; margin: 0;
+}
+html:root body .app-provider .app-stage > .global-bar.workspace-topbar .section-jump-trigger > :is(span, kbd) { display: none; }
+html:root body .app-provider .app-stage > .global-bar.workspace-topbar .section-jump-trigger > svg { width: 20px; height: 20px; flex: none; }
+html:root body .app-provider .app-stage > .global-bar.workspace-topbar .context-trigger { position: relative; gap: 0; padding: 0; }
+html:root body .app-provider .app-stage > .global-bar.workspace-topbar .context-trigger > :is(span, svg:last-child) { display: none; }
+html:root body .app-provider .app-stage > .global-bar.workspace-topbar .context-trigger > svg:first-child { display: block; width: 20px; height: 20px; }
+html:root body .app-provider .app-stage > .global-bar.workspace-topbar .context-trigger[data-stale]::after { content: ""; position: absolute; top: 6px; right: 6px; width: 6px; height: 6px; border-radius: 50%; background: var(--ws-theme-ink-warning, #a37628); }
+html:root body .app-provider .app-stage > .global-bar.workspace-topbar .context-trigger > svg:last-child { width: 12px; height: 12px; }
+html:root body .app-provider .app-stage > .global-bar.workspace-topbar .context-trigger > svg { color: inherit; }
+html:root body .app-provider .app-stage > .global-bar.workspace-topbar .context-trigger > svg { stroke-width: 1.5; }
+html:root body .app-provider .app-stage > .global-bar.workspace-topbar .workspace-identity-menu { gap: 0; padding: 0; }
+html:root body .app-provider .app-stage > .global-bar.workspace-topbar .workspace-identity-menu > :is(.workspace-identity-name, svg) { display: none; }
+html:root body .app-provider .app-stage > .global-bar.workspace-topbar .workspace-identity-menu .fui-Avatar {
+  width: 28px; height: 28px; min-width: 28px; min-height: 28px; font-size: 12px;
+}
+html:root body .app-provider .app-stage > .global-bar.workspace-topbar .workspace-identity-menu .workspace-identity-name { max-width: 148px; }
+html:root body .app-provider .app-stage > .global-bar.workspace-topbar .connection-indicator { position: relative; }
+html:root body .app-provider .app-stage > .global-bar.workspace-topbar .connection-indicator > i {
+  position: absolute; top: 6px; right: 6px; width: 6px; height: 6px; box-shadow: none;
+  background: var(--ws-theme-ink-success, #28886a);
+}
+html:root body .app-provider .app-stage > .global-bar.workspace-topbar .connection-indicator.has-error > i { background: var(--ws-theme-ink-danger, #b54453); }
+html:root body .app-provider .app-stage > .global-bar.workspace-topbar :is(.notification-bell-dot, .identity-support-indicator, .workday-control-mobile-trigger > i) { position: absolute; top: 6px; right: 6px; width: 6px; height: 6px; min-width: 0; min-height: 0; margin: 0; border-radius: 50%; }
+html:root body .app-provider .app-stage > .global-bar.workspace-topbar .assistant-launcher { display: grid; place-items: center; }
+html:root body .app-provider .app-stage > .global-bar.workspace-topbar .assistant-launcher > :is(.gradient-orb, .gradient-orb-fallback) { width: 28px; height: 28px; margin: 0; filter: none; }
+html:root body .app-provider .app-stage > .global-bar.workspace-topbar .workday-control-direct > :is(.fui-Button, .workday-control-away) { min-height: 44px; border-radius: 12px; border: 0; }
+html:root body .app-provider .app-stage > .global-bar.workspace-topbar .workday-control-direct { display: none; }
+html:root body .app-provider .app-stage > .global-bar.workspace-topbar .workday-control { flex: 0 0 44px; width: 44px; min-width: 44px; height: 44px; margin: 0; }
+html:root body .app-provider .app-stage > .global-bar.workspace-topbar .workday-control-mobile-trigger { display: inline-flex; }
+@media (max-width: 1366px) {
+  html:root body .app-provider .app-stage > .global-bar.workspace-topbar .context-trigger { width: 44px; min-width: 44px; max-width: 44px; padding: 0; }
+  html:root body .app-provider .app-stage > .global-bar.workspace-topbar .context-trigger > :is(span, svg:last-child) { display: none; }
+  html:root body .app-provider .app-stage > .global-bar.workspace-topbar .context-trigger > svg:first-child { display: block; width: 20px; height: 20px; }
+  html:root body .app-provider .app-stage > .global-bar.workspace-topbar .workspace-identity-menu { width: 44px; min-width: 44px; padding: 0; }
+  html:root body .app-provider .app-stage > .global-bar.workspace-topbar .workspace-identity-menu > :is(.workspace-identity-name, svg) { display: none; }
+}
+@media (max-width: 1250px) {
+  html:root body .app-provider .app-stage > .global-bar.workspace-topbar .section-jump-trigger { flex: 0 0 44px; width: 44px; max-width: 44px; padding: 0; justify-content: center; }
+}
+@media (max-width: 1023px), (max-width: 1366px) and (any-pointer: coarse) {
+  html:root body .app-provider .app-stage > .global-bar.workspace-topbar { justify-content: space-between; gap: 8px; padding: 0 0 8px; scroll-padding-inline: 0; }
+  html:root body .app-provider .app-stage > .global-bar.workspace-topbar .workspace-top-context { margin: 0; }
+  html:root body .app-provider .app-stage > .global-bar.workspace-topbar .workday-control { flex: 0 0 44px; width: 44px; min-width: 44px; height: 44px; margin: 0; }
+  html:root body .app-provider .app-stage > .global-bar.workspace-topbar .workday-control-mobile-trigger { display: inline-flex; }
+  html:root body .app-provider .app-stage > .global-bar.workspace-topbar .context-trigger { justify-content: center; }
+  html:root body .app-provider .app-stage > .global-bar.workspace-topbar .workspace-identity-menu { max-width: 44px; }
+}
+@media (max-width: 700px) {
+  html.web-platform:root body .app-provider .app-stage > .global-bar.workspace-topbar .section-jump-trigger { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html:root body .app-provider .app-stage > .global-bar.workspace-topbar button::before { transition: none; }
+  html:root body .app-provider .app-stage > .global-bar.workspace-topbar :is(.browser-menu-trigger, .section-jump-trigger, .notification-bell, .color-theme-toggle, .assistant-launcher, .workspace-identity-menu, .connection-indicator, .context-trigger, .workday-control-mobile-trigger) { transition: none; }
+}
+@media (forced-colors: active) {
+  html:root body .app-provider .app-stage > .global-bar.workspace-topbar .assistant-launcher > .gradient-orb-fallback { width: 28px; height: 28px; box-sizing: border-box; mask-image: none; background: transparent; border: 2px solid ButtonText; border-radius: 50%; }
+  html:root body .app-provider .app-stage > .global-bar.workspace-topbar :is(.browser-menu-trigger, .section-jump-trigger, .notification-bell, .color-theme-toggle, .assistant-launcher, .workspace-identity-menu, .connection-indicator, .context-trigger, .workday-control-mobile-trigger) { background: transparent; color: ButtonText; outline: 1px solid ButtonText; outline-offset: -1px; }
+  html:root body .app-provider .app-stage > .global-bar.workspace-topbar :is(.browser-menu-trigger, .section-jump-trigger, .notification-bell, .color-theme-toggle, .assistant-launcher, .workspace-identity-menu, .connection-indicator, .context-trigger, .workday-control-mobile-trigger):is(:focus-visible, [aria-expanded="true"], [aria-pressed="true"]) { outline: 2px solid Highlight; outline-offset: -2px; }
+  html:root body .app-provider .app-stage > .global-bar.workspace-topbar :is(.connection-indicator > i, .notification-bell-dot) { background: Highlight; }
+}

@@ -1,3 +1,4 @@
+import { formatRussianDateTime } from "./date-time-format";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { LoadingSkeleton } from "./LoadingSkeleton";
 import type { TaskHistoryEvent, TaskHistoryPage } from "@yuksalish/contracts";
@@ -32,7 +33,7 @@ const reasons: Readonly<Record<string, string>> = {
   author_review_required: "Отменено утверждение без постановщика",
 };
 function date(value?: string | null) {
-  return value ? new Date(value).toLocaleString("ru-RU") : "Без срока";
+  return value ? formatRussianDateTime(new Date(value)) : "Без срока";
 }
 function HistoryEntry({ event, letter }: { readonly event: TaskHistoryEvent; readonly letter: boolean }) {
   return <li><span className="task-history-dot" aria-hidden /><div>

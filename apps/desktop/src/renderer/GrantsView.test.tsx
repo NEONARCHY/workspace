@@ -1,8 +1,10 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { FluentProvider, webLightTheme } from "@fluentui/react-components";
 import type { GrantDetail, WorkspacePerson } from "@yuksalish/contracts";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { GrantsView } from "./GrantsView";
+import { disposeTabster, getTabster } from "tabster";
+import { mockVisibleWindowLayout } from "./test-fixtures/visible-window";
 
 const api = vi.hoisted(() => ({
   list: vi.fn(), detail: vi.fn(), settings: vi.fn(), saveSettings: vi.fn(),
@@ -40,11 +42,33 @@ async function open() {
   return await screen.findByRole("dialog", { name: request.title });
 }
 beforeEach(() => {
+  mockVisibleWindowLayout();
   vi.clearAllMocks();
   api.list.mockResolvedValue([request]); api.detail.mockResolvedValue(request);
   api.settings.mockResolvedValue({ leaderUserId: people[3].id, chairUserId: people[4].id, revision: 2 });
 });
-afterEach(cleanup);
+afterEach(() => { cleanup(); const tabster = getTabster(window); if (tabster) disposeTabster(tabster, true); vi.restoreAllMocks(); });
+
+it("coalesces focus reads and never lets an older list undo a saved decision", async () => {
+  show(); const dialog = await open();
+  let complete!: (rows: readonly GrantDetail[]) => void;
+  api.list.mockImplementationOnce(() => new Promise(resolve => { complete = resolve; }));
+  fireEvent(window, new Event("focus")); fireEvent(window, new Event("focus"));
+  await waitFor(() => expect(api.list).toHaveBeenCalledTimes(2));
+  const saved = { ...request, status: "leader_review", revision: 5, allowedActions: ["comment"] };
+  api.act.mockResolvedValue(saved); api.detail.mockResolvedValue(saved); api.list.mockResolvedValue([saved]);
+  fireEvent.change(within(dialog).getByRole("textbox", { name: "Результат работы для постановщика" }), { target: { value: "Заявка и бюджет готовы" } });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Отправить на проверку" }));
+  await waitFor(() => expect(api.act).toHaveBeenCalledOnce());
+  await within(dialog).findByText("Изменения сохранены");
+  await act(async () => complete([request]));
+  await waitFor(() => expect(api.list).toHaveBeenCalledTimes(3));
+  fireEvent.click(within(dialog).getByRole("button", { name: "Закрыть" }));
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: request.title })).not.toBeInTheDocument());
+  const table = await screen.findByRole("table", { name: "Заявки на гранты" });
+  expect(table).toHaveTextContent("Проверка руководителя");
+  expect(table).not.toHaveTextContent("В работе");
+});
 
 it("opens the complete card and its managed chat without offering executor approval", async () => {
   show(); const dialog = await open();

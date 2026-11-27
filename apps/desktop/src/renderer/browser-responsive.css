@@ -216,6 +216,10 @@
 }
 
 @media (max-width: 700px) {
+  .web-platform .record-compact-tools { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--ws-line); }
+  .web-platform .record-compact-sort { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; margin-left: auto; padding: 8px 12px; border: 1px solid var(--ws-line); border-radius: 10px; background: var(--ws-surface); color: var(--ws-text); cursor: pointer; }
+  .web-platform .record-compact-sort:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 2px; }
+  .web-platform .record-table-frame:has(> .record-compact-tools) .record-table thead { display: none; }
   /* All fields stay in one semantic table. Only its layout changes, not its state. */
   .web-platform .record-table { display: block; min-width: 0; width: 100%; }
   .web-platform .record-table thead { display: block; max-width: 100%; overflow-x: auto; overscroll-behavior-inline: contain; }
@@ -270,7 +274,6 @@
 .browser-compact .global-bar .workspace-identity-menu { position: relative; padding: 0; border-radius: 14px; background: transparent; }
 .browser-compact .global-bar .workspace-identity-menu .fui-Avatar { width: 48px; height: 48px; min-width: 48px; }
 .browser-compact .global-bar .assistant-launcher-space { width: 48px; height: 48px; }
-.browser-compact .global-bar .assistant-launcher-space[data-vacated] { width: 0; }
 .browser-compact .global-bar .color-theme-toggle { border-radius: 14px; background: var(--ws-surface); }
 .browser-compact .workspace-identity-menu > span:not(.fui-Avatar),
 .browser-compact .workspace-identity-menu > svg { display: none; }
@@ -281,13 +284,11 @@
 @media (max-width: 600px) {
 .browser-compact .app-stage .global-bar { grid-template-columns: repeat(5, minmax(0, 1fr)); justify-items: center; gap: 8px 4px; }
 .browser-compact .app-stage .global-bar:not(:has(.assistant-launcher)) { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-.browser-compact .app-stage .global-bar:has(.assistant-launcher-space[data-vacated]) { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .browser-compact .section-jump-trigger { grid-column: 2; grid-row: 1; }
 .browser-compact .browser-menu-trigger { grid-column: 1; grid-row: 1; }
 .browser-compact .workspace-top-context { display: contents; }
 .browser-compact .global-bar .color-theme-toggle-wrap { grid-column: 3; grid-row: 1; }
 .browser-compact .global-bar .assistant-launcher-space { grid-column: 4; grid-row: 1; }
-.browser-compact .global-bar .assistant-launcher-space[data-vacated] { position: absolute; margin: 0; }
 .browser-compact .global-bar .assistant-launcher { width: 48px; height: 48px; }
 .browser-compact .global-bar .workspace-identity { grid-column: -2 / -1; grid-row: 1; }
 .browser-compact .workspace-workday-status { position: relative; grid-column: 1 / -1; grid-row: 2; width: 100%; gap: 0; }

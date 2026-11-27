@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import type { MonthlyCycle, MonthlyOverview } from "@yuksalish/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MonthlyReportDashboard, MonthlyReportPrompts, MonthlyReportsView } from "./MonthlyReportsView";
-import { authorizeMonthlyPayroll, loadMonthlyReportTemplate, submitMonthlyReport } from "./workspace-api";
+import { authorizeMonthlyPayroll, loadMonthlyCalendar, loadMonthlyReportTemplate, submitMonthlyReport } from "./workspace-api";
 
 vi.mock("./workspace-api", () => ({
   authorizeMonthlyPayroll: vi.fn(), loadMonthlyCalendar: vi.fn().mockResolvedValue([]),
@@ -23,6 +23,51 @@ const resource = (data: MonthlyOverview = base) => ({ data, error: undefined, lo
 beforeEach(() => { vi.clearAllMocks(); localStorage.clear(); });
 afterEach(cleanup);
 describe("monthly reporting", () => {
+  it("keeps files, text and retry identity with their month when switching periods", async () => {
+    render(<MonthlyReportsView token="token" resource={resource({ ...base, cycles: [cycle, { ...cycle, month: "2026-10-01" }] })} />);
+    fireEvent.change(screen.getByLabelText("Файлы отчёта"), { target: { files: [new File(["work"], "november.docx")] } });
+    fireEvent.change(screen.getByLabelText("Комментарий к отчёту (необязательно)"), { target: { value: "Работа за ноябрь" } });
+    vi.mocked(submitMonthlyReport).mockRejectedValue(new Error("Повторите отправку"));
+    fireEvent.click(screen.getByRole("button", { name: "Отправить отчёт" }));
+    await screen.findByRole("alert");
+    const identity = vi.mocked(submitMonthlyReport).mock.calls[0]![1];
+    fireEvent.change(screen.getByLabelText("Отчётный месяц"), { target: { value: "2026-10-01" } });
+    expect(screen.getByLabelText("Комментарий к отчёту (необязательно)")).toHaveValue("");
+    expect(screen.queryByText("november.docx · 1 КБ")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Отправить отчёт" })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Отчётный месяц"), { target: { value: cycle.month } });
+    expect(screen.getByLabelText("Комментарий к отчёту (необязательно)")).toHaveValue("Работа за ноябрь");
+    expect(screen.getByText("november.docx · 1 КБ")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Отправить отчёт" }));
+    await screen.findByRole("alert");
+    expect(vi.mocked(submitMonthlyReport).mock.calls[1]![1]).toEqual(identity);
+  });
+
+  it("loads the configuration calendar only when expanded and cancels it on exit", async () => {
+    vi.mocked(loadMonthlyCalendar).mockReturnValueOnce(new Promise(() => undefined));
+    const view = render(<MonthlyReportsView token="token" resource={resource({ ...base, canConfigure: true })} />);
+    expect(loadMonthlyCalendar).not.toHaveBeenCalled();
+    const calendar = view.container.querySelector<HTMLDetailsElement>(".monthly-reports-calendar")!;
+    calendar.open = true; fireEvent(calendar, new Event("toggle"));
+    await waitFor(() => expect(loadMonthlyCalendar).toHaveBeenCalledOnce());
+    const signal = vi.mocked(loadMonthlyCalendar).mock.calls[0]![1]!;
+    view.unmount();
+    expect(signal.aborted).toBe(true);
+  });
+
+  it("retries calendar loading on reopening and clears the previous error", async () => {
+    vi.mocked(loadMonthlyCalendar).mockRejectedValueOnce(new Error("Нет связи")).mockResolvedValueOnce([]);
+    const view = render(<MonthlyReportsView token="token" resource={resource({ ...base, canConfigure: true })} />);
+    const calendar = view.container.querySelector<HTMLDetailsElement>(".monthly-reports-calendar")!;
+    calendar.open = true; fireEvent(calendar, new Event("toggle"));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Не удалось загрузить рабочий календарь");
+    calendar.open = false; fireEvent(calendar, new Event("toggle"));
+    calendar.open = true; fireEvent(calendar, new Event("toggle"));
+    expect(await screen.findByText("Исключений пока нет.")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(loadMonthlyCalendar).toHaveBeenCalledTimes(2);
+  });
+
   it("retains files and the idempotency key after an uncertain upload; clears only on success", async () => {
     vi.mocked(submitMonthlyReport).mockRejectedValueOnce(new Error("Сеть недоступна")).mockResolvedValueOnce({
       id: "saved", month: base.activeMonth!, userId: "owner", revision: 1, comment: "Результаты",

@@ -1,3 +1,4 @@
+import { formatRussianDate } from "./date-time-format";
 import { compareReleaseVersions } from "./release-versions.mts";
 
 export interface ReleaseTimelineEntry {
@@ -42,7 +43,7 @@ export function latestReadReleaseVersion(entries: readonly ReleaseTimelineEntry[
 export function formatReleaseDate(value?: string): string {
   if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return "Дата не указана";
   const date = new Date(`${value}T12:00:00`);
-  return Number.isFinite(date.getTime()) ? date.toLocaleDateString("ru-RU", {
+  return Number.isFinite(date.getTime()) ? formatRussianDate(date, {
     day: "numeric", month: "long", year: "numeric",
   }) : "Дата не указана";
 }

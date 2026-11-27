@@ -1,3 +1,4 @@
+import { formatRussianDateTime } from "./date-time-format";
 import { useEffect, useId, useRef, useState } from "react";
 import type { DossierDetail, DossierFields, DossierHistory, WorkspacePerson } from "@yuksalish/contracts";
 import { Badge, Button, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Textarea } from "@fluentui/react-components";
@@ -126,7 +127,7 @@ export function DossierDialog({ token, userId, people, onClose, onSaved }: {
             </fieldset>
           </form>
           <details className="dossier-section"><summary>История изменений · {history.length}</summary>
-            {historyError ? <WorkspaceNotice tone="warning">Не удалось загрузить историю. Закройте и откройте анкету для повтора.</WorkspaceNotice> : history.length ? <ol className="dossier-history">{history.map((entry) => <li key={entry.revision}><strong>Версия {entry.revision} · {entry.actorName}</strong><span>{new Date(entry.createdAt).toLocaleString("ru-RU")}</span><small>{entry.changedFields.map((name) => fieldLabels[name] ?? name).join(", ")}</small></li>)}</ol> : <p>Сохранённых изменений пока нет.</p>}
+            {historyError ? <WorkspaceNotice tone="warning">Не удалось загрузить историю. Закройте и откройте анкету для повтора.</WorkspaceNotice> : history.length ? <ol className="dossier-history">{history.map((entry) => <li key={entry.revision}><strong>Версия {entry.revision} · {entry.actorName}</strong><span>{formatRussianDateTime(new Date(entry.createdAt))}</span><small>{entry.changedFields.map((name) => fieldLabels[name] ?? name).join(", ")}</small></li>)}</ol> : <p>Сохранённых изменений пока нет.</p>}
           </details>
           <p className="dossier-next-stage">Word и PDF формируются из одного макета: основная справка с фото и таблица родственников на отдельной странице. Скачивается сохранённая версия. {dirty ? "Сначала сохраните изменения." : !record.revision ? "Сначала сохраните анкету или черновик." : "При большом объёме данных документ продолжится на следующих страницах."}</p>
         </> : null}

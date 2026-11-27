@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { HisobotActivityDraft, WorkspaceNotification } from "@yuksalish/contracts";
-import { Button, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle } from "@fluentui/react-components";
-import { Copy24Regular, Dismiss24Regular, DocumentBulletList24Regular } from "@fluentui/react-icons";
-import { WorkspaceDialog } from "./WorkspaceDialog";
-import { WorkspaceNotice } from "./WorkspaceNotice";
+import { Button, Portal } from "@fluentui/react-components";
+import { Dismiss24Regular, DocumentBulletList24Regular } from "@fluentui/react-icons";
+import { getApiBaseUrl } from "./api-origin";
 import { acknowledgeHisobotActivityDraft, loadHisobotActivityDraft } from "./workspace-api";
 
 export interface HisobotDraftHandoff {
@@ -24,97 +23,76 @@ export function currentHisobotReminderDay(notifications: readonly WorkspaceNotif
     ? day : undefined;
 }
 
-export function HisobotDraftPrompt({ token, userId, notifications, enabled, editingReport, onEdit }: {
+export function HisobotDraftPrompt({ token, userId, notifications, enabled, editingReport, paused = false, onEdit }: {
   readonly token: string;
   readonly userId: string;
   readonly notifications: readonly WorkspaceNotification[];
   readonly enabled: boolean;
   readonly editingReport: boolean;
+  readonly paused?: boolean;
   readonly onEdit: (draft: HisobotDraftHandoff) => void;
 }) {
   const reminderDay = enabled ? currentHisobotReminderDay(notifications) : undefined;
   const [draft, setDraft] = useState<HisobotActivityDraft>();
-  const [text, setText] = useState("");
   const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
   const [attempt, setAttempt] = useState(0);
-  const loadedKey = useRef("");
   const dismissedKey = useRef("");
+  const storageKey = `hisobot-draft-prompt:${getApiBaseUrl()}:${userId}`;
 
   useEffect(() => {
-    if (!reminderDay) return undefined;
+    if (!reminderDay || editingReport || dismissedKey.current === reminderDay) return undefined;
+    try { if (localStorage.getItem(storageKey) === reminderDay) return undefined; }
+    catch { /* In-memory dismissal still works when storage is unavailable. */ }
     let active = true;
-    const key = `${userId}:${reminderDay}`;
+    let loading = false;
     const refresh = () => {
-      if (document.visibilityState === "hidden") return;
+      if (document.visibilityState === "hidden" || loading || dismissedKey.current === reminderDay) return;
+      loading = true;
       void loadHisobotActivityDraft(token).then(result => {
         if (!active || !result || result.reportDate !== reminderDay) return;
         setDraft(result);
-        if (loadedKey.current !== key) {
-          loadedKey.current = key;
-          setText(result.content);
-        }
-        if (!editingReport && !result.seenAt && dismissedKey.current !== key) setOpen(true);
+        setOpen(!result.seenAt && dismissedKey.current !== reminderDay);
         setError("");
       }).catch(() => {
-        if (active) setError("Не удалось загрузить черновик отчёта. Можно повторить загрузку или написать отчёт вручную.");
-      });
+        if (active && dismissedKey.current !== reminderDay) {
+          setError("Не удалось загрузить черновик. Повторите загрузку, когда будет удобно.");
+          setOpen(true);
+        }
+      }).finally(() => { loading = false; });
     };
     refresh();
     document.addEventListener("visibilitychange", refresh);
     return () => { active = false; document.removeEventListener("visibilitychange", refresh); };
-  }, [token, userId, reminderDay, editingReport, attempt]);
+  }, [token, storageKey, reminderDay, editingReport, attempt]);
 
-  const acknowledge = () => {
-    if (!draft) return;
-    dismissedKey.current = `${userId}:${draft.reportDate}`;
-    void acknowledgeHisobotActivityDraft(token, draft.reportDate).catch(() => {
-      setError("Не удалось сохранить отметку о просмотре. При следующем входе предложение может появиться снова.");
+  const close = () => {
+    if (!reminderDay) return;
+    dismissedKey.current = reminderDay;
+    try { localStorage.setItem(storageKey, reminderDay); }
+    catch { /* Keep the in-memory mark; closing never depends on a server request. */ }
+    setOpen(false);
+    if (draft?.reportDate === reminderDay) void acknowledgeHisobotActivityDraft(token, reminderDay).catch(() => {
+      // Local dismissal is durable even if the cross-device acknowledgement fails.
+      console.warn("AI Hisobot: не удалось синхронизировать отметку о просмотре черновика.");
     });
   };
-  const close = () => { acknowledge(); setOpen(false); };
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setNotice("Текст скопирован. Отчёт ещё не отправлен.");
-      setError("");
-      acknowledge();
-    } catch {
-      setError("Не удалось скопировать. Выделите текст и скопируйте его вручную.");
-    }
-  };
-  if (!reminderDay) return null;
+  if (!reminderDay || !open || editingReport || paused) return null;
   const readyDraft = draft?.reportDate === reminderDay ? draft : undefined;
-  return <>
-    {!editingReport && <aside className="hisobot-draft-nudge" aria-label="Черновик ежедневного отчёта">
-      <DocumentBulletList24Regular aria-hidden="true" /><span><strong>AI Hisobot · {readyDraft ? "черновик отчёта готов" : "время подготовить отчёт"}</strong><small>По вашим действиям в Workspace. Отправка — только после проверки.</small></span>
-      <Button onClick={() => readyDraft ? setOpen(true) : setAttempt(value => value + 1)}>{readyDraft ? "Посмотреть" : "Загрузить черновик"}</Button>
-      {error && !open && <WorkspaceNotice tone="error" role="alert" actions={<Button onClick={() => setAttempt(value => value + 1)}>Повторить</Button>}>{error}</WorkspaceNotice>}
-    </aside>}
-    <WorkspaceDialog open={Boolean(open && readyDraft)} onOpenChange={(_, data) => { if (!data.open) close(); }}>
-      <DialogSurface className="hisobot-draft-dialog"><DialogBody>
-        <DialogTitle action={<Button appearance="subtle" icon={<Dismiss24Regular />} aria-label="Закрыть черновик отчёта" onClick={close} />}>Ваш отчёт уже собран в черновик</DialogTitle>
-        <DialogContent>
-          <p>Собрали подтверждённые действия за {draft?.reportDate.split("-").reverse().join(".")}. Проверьте текст и дополните работу вне Workspace. Ничего не отправлено.</p>
-          <p className="hisobot-draft-meta">Действий: {draft?.activityCount ?? 0} · Снимок на {draft && new Date(draft.generatedAt).toLocaleTimeString("ru-RU", { timeZone: "Asia/Tashkent", hour: "2-digit", minute: "2-digit" })}</p>
-          {draft?.activityCount === 0 && <WorkspaceNotice tone="info">За сегодня нет зафиксированных действий в доступных разделах. Это не означает, что вы не работали — добавьте выполненное вручную.</WorkspaceNotice>}
-          {Boolean(draft?.omittedCount) && <WorkspaceNotice tone="warning">Не поместилось действий: {draft?.omittedCount}. Дополните текст перед отправкой.</WorkspaceNotice>}
-          <label htmlFor="hisobot-ready-draft">Готовый текст — можно редактировать сразу</label>
-          <textarea id="hisobot-ready-draft" value={text} onChange={event => { setText(event.target.value); setNotice(""); }} />
-          {error && <WorkspaceNotice tone="error" role="alert">{error}</WorkspaceNotice>}
-          {notice && <p role="status">{notice}</p>}
-        </DialogContent>
-        <DialogActions>
-          <Button icon={<Copy24Regular />} onClick={() => void copy()} disabled={!text.trim()}>Скопировать</Button>
-          <Button appearance="primary" onClick={() => {
-            if (!draft) return;
-            onEdit({ content: text, reportDate: draft.reportDate, revision: Date.now() });
-            close();
-          }}>Открыть в AI Hisobot</Button>
-          <Button appearance="subtle" onClick={close}>Позже</Button>
-        </DialogActions>
-      </DialogBody></DialogSurface>
-    </WorkspaceDialog>
-  </>;
+  if (!readyDraft && !error) return null;
+  return <Portal><aside className="hisobot-draft-notice" role="region" aria-label="Черновик ежедневного отчёта" data-satin-excluded>
+    <DocumentBulletList24Regular className="hisobot-draft-notice-icon" aria-hidden="true" />
+    <div className="hisobot-draft-notice-copy">
+      <span>AI Hisobot</span>
+      <strong role="status">{error ? "Черновик пока недоступен" : readyDraft?.activityCount === 0 ? "Время подготовить отчёт" : "Черновик отчёта готов"}</strong>
+      <p>{error || (readyDraft?.activityCount === 0 ? "За сегодня нет зафиксированных действий. Добавьте выполненную работу вручную." : "По вашим действиям за сегодня. Проверьте и дополните перед отправкой.")}</p>
+      {error ? <Button onClick={() => setAttempt(value => value + 1)}>Повторить загрузку</Button>
+        : <Button appearance="primary" onClick={() => {
+          if (!readyDraft) return;
+          onEdit({ content: readyDraft.content, reportDate: readyDraft.reportDate, revision: Date.now() });
+          close();
+        }}>Открыть AI Hisobot</Button>}
+    </div>
+    <Button className="hisobot-draft-notice-close" appearance="subtle" shape="circular" icon={<Dismiss24Regular />} aria-label="Закрыть уведомление AI Hisobot" onClick={close} />
+  </aside></Portal>;
 }
