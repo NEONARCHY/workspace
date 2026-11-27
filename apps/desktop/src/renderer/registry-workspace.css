@@ -1,7 +1,7 @@
 /* Same queue tokens as tasks, payments and the other workspace pages. */
 body .app-provider .workspace-queue:is(.grants-view, .reference-view, .mail-view) { gap: 0; }
 body .app-provider .grants-view.workspace-queue:not([data-dialog-only]) { overflow: hidden; }
-.workspace-queue .grants-count { color: var(--ws-muted); font-size: 13px; }
+.workspace-queue .grants-count { color: var(--ws-muted); font-size: 13px; white-space: nowrap; }
 body .app-provider .grants-view.workspace-queue .grants-filters { flex-wrap: nowrap; }
 body .app-provider .grants-view.workspace-queue .grant-records { flex: 1; min-height: 0; }
 body .app-provider .grants-view.workspace-queue .grant-record-owners { gap: 8px; }

@@ -9,19 +9,20 @@ const chatPaginationSuite = process.argv.includes('--chat-pagination');
 const sidebarSuite = process.argv.includes('--sidebar');
 const referentSurfacesSuite = process.argv.includes('--referent-surfaces');
 const calendarSurfacesSuite = process.argv.includes('--calendar-surfaces');
+const surfaceFollowupSuite = process.argv.includes('--surface-followup');
 const toolbarSuite = process.argv.includes('--toolbar-layout');
 const shellReviewSuite = process.argv.includes("--shell-review");
-const attentionSuite = process.argv.includes("--attention") || shellReviewSuite;
+const attentionSuite = process.argv.includes("--attention") || shellReviewSuite || surfaceFollowupSuite;
 const peopleSuite = process.argv.includes("--people");
 const operationsSuite = process.argv.includes("--operations");
 const documentsSuite = process.argv.includes("--documents");
 const communicationsSuite = process.argv.includes("--communications") || shellReviewSuite || toolbarSuite || chatPaginationSuite || sidebarSuite || referentSurfacesSuite;
-const registrySuite = process.argv.includes("--registry") || toolbarSuite;
+const registrySuite = process.argv.includes("--registry") || toolbarSuite || surfaceFollowupSuite;
 const workdaySuite = process.argv.includes("--workday");
 const promptSuite = process.argv.includes("--hisobot-prompt");
 const topbarSuite = process.argv.includes("--topbar") || workdaySuite;
 const reportingSuite = process.argv.includes("--reporting");
-const planningSuite = process.argv.includes("--planning") || topbarSuite || promptSuite || calendarSurfacesSuite;
+const planningSuite = process.argv.includes("--planning") || topbarSuite || promptSuite || calendarSurfacesSuite || surfaceFollowupSuite;
 const onlyWidth = Number(process.env.UI_QA_WIDTH || 0);
 assert([0, 320, 390, 720, 1024, 1440].includes(onlyWidth));
 const origin = process.env.UI_QA_ORIGIN || "http://127.0.0.1:5186";
@@ -47,6 +48,7 @@ if (chatPaginationSuite) sections.splice(0, sections.length, { id: 'messenger', 
 if (sidebarSuite) sections.splice(0, sections.length, { id: 'messenger', label: 'Мессенджер', root: '.messenger-view' });
 if (referentSurfacesSuite) sections.splice(0, sections.length, { id: 'referent', label: 'AI Referent · исходящие письма', root: '.ai-referent-view', navLabel: 'AI Referent' });
 if (calendarSurfacesSuite) sections.splice(0, sections.length, { id: 'tasks', label: 'Задачи', root: '.tasks-view' }, { id: 'calendar', label: 'Календарь', root: '.calendar-view' });
+if (surfaceFollowupSuite) sections.splice(0, sections.length, { id: 'overview', label: 'Обзор команды', root: '.team-dashboard' }, { id: 'calendar', label: 'Календарь', root: '.calendar-view' }, { id: 'grants', label: 'Гранты', root: '.grants-view' });
 const settle = async page => page.evaluate(async () => {
   await document.fonts.ready;
   await Promise.race([Promise.all(document.getAnimations().filter(a => Number(a.effect?.getComputedTiming().endTime) < 2000).map(a => a.finished.catch(() => undefined))), new Promise(r => setTimeout(r, 900))]);
@@ -319,6 +321,7 @@ async function measure(page, selector) {
         if (topbarSuite && section.id === "home" || phase === "after" && reportingSuite && section.id === "hisobot") await capture(page.locator(".global-bar"), path.join(output, phase, `topbar-${theme}-${width}.png`));
         const geometry = await measure(page, section.root);
         results.push({ section: section.id, width, height, theme, ...geometry });
+        if (surfaceFollowupSuite) { await require('./ui-surface-followup-checks.cjs')(page, section, { output, phase, width, theme, geometry }); console.log('PASS ' + file); continue; }
         if (calendarSurfacesSuite) { if (phase === 'after') await require('./ui-calendar-surface-checks.cjs')(page, section, { width, geometry }); console.log('PASS ' + file); continue; }
         if (referentSurfacesSuite) { results.at(-1).letters = await require('./ui-referent-surface-checks.cjs')(page, { output, phase, width, theme, geometry }); console.log('PASS ' + file); continue; }
         if (sidebarSuite) { results.at(-1).sidebar = await require('./ui-sidebar-checks.cjs').check(page, { output, phase, width, height, theme }); console.log('PASS sidebar-' + theme + '-' + width); continue; }
@@ -962,7 +965,7 @@ async function measure(page, selector) {
       <style>*{box-sizing:border-box}body{margin:0;padding:24px;background:#111318;color:#eceef4;font:15px/1.5 system-ui}main{max-width:1600px;margin:auto}h1{font-size:28px}p,figcaption{color:#bfc6d3}select{margin:0 0 24px;padding:12px;border-radius:8px;background:#252a33;color:inherit}section{margin:0 0 32px}h2{font-size:20px}article{display:grid;grid-template-columns:1fr 1fr;gap:16px}figure{margin:0;min-width:0}img{display:block;width:100%;height:auto;border-radius:12px}figcaption{margin-bottom:8px}@media(max-width:700px){article{grid-template-columns:1fr}body{padding:12px}}</style>
       <main><h1>${calendarSurfacesSuite ? 'Календарь и элементы управления' : `Итерация ${iteration} · Общая сетка рабочих разделов`}</h1><p>Реальные компоненты приложения, одинаковые синтетические данные до и после. Нажмите на снимок для исходного размера.</p><select id="size" aria-label="Размер и тема"><option value="dark-1440">1440 × 960 · тёмная</option><option value="light-1440">1440 × 960 · светлая</option><option value="dark-1024">1024 × 768 · тёмная</option><option value="dark-390">390 × 844 · тёмная</option>${topbarSuite || reportingSuite || registrySuite || communicationsSuite || calendarSurfacesSuite ? '<option value="dark-320">320 × 800 · тёмная</option><option value="dark-720">720 × 480 · тёмная</option>' : ''}</select>
       ${workdaySuite ? '<select id="interaction" aria-label="Состояние кнопки"><option value="">Обычное состояние</option><option value="hover">Наведение</option><option value="pressed">Нажатие</option></select>' : ''}
-      ${(sidebarSuite ? [{ id: 'sidebar-expanded', label: 'Навигация' }, { id: 'sidebar-ai', label: 'ИИ-модули' }, { id: 'sidebar-collapsed', label: 'Свёрнутое меню' }] : workdaySuite ? [{ id: "workday-start", label: "Начать работу" }, { id: "workday-finish", label: "Завершить работу" }, { id: "topbar", label: "Заметная иконка рабочего дня" }] : topbarSuite ? [{ id: "topbar", label: "Общая верхняя панель" }, ...sections] : sections).map(section => `<section data-section="${section.id}"><h2>${section.label}</h2><article>${["before", "after"].map((state, i) => `<figure><figcaption>${i ? "После" : "До"}</figcaption><a data-state="${state}" href="${state}/${section.id}-dark-1440.png"><img loading="lazy" ${workdaySuite && section.id !== "topbar" ? 'style="max-width:360px"' : ''} src="${state}/${section.id}-dark-1440.png" alt="${section.label} — ${i ? "после" : "до"}"></a></figure>`).join("")}</article></section>`).join("")}
+      ${(sidebarSuite ? [{ id: 'sidebar-expanded', label: 'Навигация' }, { id: 'sidebar-ai', label: 'ИИ-модули' }, { id: 'sidebar-collapsed', label: 'Свёрнутое меню' }] : workdaySuite ? [{ id: "workday-start", label: "Начать работу" }, { id: "workday-finish", label: "Завершить работу" }, { id: "topbar", label: "Заметная иконка рабочего дня" }] : topbarSuite ? [{ id: "topbar", label: "Общая верхняя панель" }, ...sections] : surfaceFollowupSuite ? [...sections, { id: 'filters-expanded', label: 'Календарь — раскрытые фильтры' }] : sections).map(section => `<section data-section="${section.id}"><h2>${section.label}</h2><article>${["before", "after"].map((state, i) => `<figure><figcaption>${i ? "После" : "До"}</figcaption><a data-state="${state}" href="${state}/${section.id}-dark-1440.png"><img loading="lazy" ${workdaySuite && section.id !== "topbar" ? 'style="max-width:360px"' : ''} src="${state}/${section.id}-dark-1440.png" alt="${section.label} — ${i ? "после" : "до"}"></a></figure>`).join("")}</article></section>`).join("")}
       ${topbarSuite && !workdaySuite ? [1440, 720].map(width => `<section><h2>Открытый ассистент · ${width} px</h2><article>${["before", "after"].map((state, i) => `<figure><figcaption>${i ? "После: орба остаётся в кнопке" : "До: орба переносится в окно"}</figcaption><a href="${state}/assistant-open-dark-${width}.png"><img loading="lazy" src="${state}/assistant-open-dark-${width}.png" alt="Ассистент — ${i ? "после" : "до"}"></a></figure>`).join("")}</article></section>`).join("") : ''}
       ${documentsSuite ? '<section data-section="admin-menu"><h2>Режим администратора в меню аватара</h2><figure><figcaption>После · переключение прав и возврат к правам своей должности</figcaption><a data-state="after" href="after/admin-menu-dark-1440.png"><img loading="lazy" src="after/admin-menu-dark-1440.png" alt="Переключатель прав в меню профиля"></a></figure></section>' : ''}
       ${calendarSurfacesSuite ? `<section><h2>Фильтры и страницы · desktop</h2><article>${['before', 'after'].map(state => `<figure><figcaption>${state === 'after' ? 'После' : 'До'}</figcaption><a href="${state}/task-controls-dark-1440.png"><img src="${state}/task-controls-dark-1440.png" alt="Фильтры и страницы — ${state}"></a></figure>`).join('')}</article></section>` : ''}

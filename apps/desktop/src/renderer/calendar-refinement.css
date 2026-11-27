@@ -1,4 +1,19 @@
 /* Days remain separate surfaces in both calendars, without decorative frames. */
+html:root body .app-provider .calendar-view .calendar-filters { --ws-satin-fill: none; padding: 0; background: transparent; }
+body .app-provider .calendar-view.workspace-queue .calendar-filter-heading { justify-content: space-between; }
+body .app-provider .calendar-view.workspace-queue .calendar-filter-toggle { flex: none; width: auto; min-width: 140px; min-height: var(--ws-queue-control); padding: 8px 12px; gap: 12px; }
+body .app-provider .calendar-view.workspace-queue .calendar-new-event { min-height: var(--ws-queue-control); }
+body .app-provider .calendar-view.workspace-queue .calendar-filter-body:not([hidden]) { padding: 12px 0 0; }
+html:root body .app-provider .calendar-view .calendar-filter-fields { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 2fr); }
+html:root body .app-provider .calendar-view .calendar-filter-period { min-width: 0; gap: 12px; }
+html:root body .app-provider .calendar-view .calendar-filter-field > .workspace-search { --search-height: var(--ws-queue-control); width: 100%; max-width: none; }
+html:root body .app-provider .calendar-view .calendar-filter-fields :is(.fui-Combobox, .workspace-search):has(:focus-visible) { outline: 2px solid var(--ws-link); outline-offset: 2px; }
+@media (forced-colors: none) {
+  html:root body .app-provider .calendar-view .calendar-filter-fields :is(.fui-Combobox, .workspace-search-field, .ws-date-time-trigger) {
+    min-height: var(--ws-queue-control); height: var(--ws-queue-control); border: 0; border-radius: 12px; background: var(--ws-surface); box-shadow: none;
+  }
+  html:root body .app-provider .calendar-view .calendar-filter-fields :is(.fui-Combobox, .ws-date-time-trigger):not(:has(:disabled)):hover { background: var(--ws-selected); }
+}
 html:root body .app-provider .calendar-view .calendar-grid { gap: 8px; }
 html:root body .app-provider .calendar-view .calendar-day {
   border: 0; border-radius: 12px; background: var(--ws-muted-surface); box-shadow: none;
@@ -18,6 +33,18 @@ html:root body .app-provider .calendar-view .calendar-side:has(.calendar-agenda-
 .calendar-agenda-load-more { display: grid; justify-items: center; gap: 8px; padding: 16px 0 4px; color: var(--ws-muted); font-size: 12px; }
 .calendar-agenda-load-more .fui-Button { min-height: 44px; border: 0; }
 .calendar-agenda-stream:focus-visible, .calendar-agenda-stream button:focus-visible { outline: 2px solid var(--ws-link); outline-offset: -2px; }
+@container workspace (max-width: 850px) {
+  html:root body .app-provider .calendar-view .calendar-filter-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 680px) {
+  html:root body .app-provider .calendar-view .calendar-filter-fields { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 480px) {
+  body .app-provider .calendar-view.workspace-queue .calendar-filter-heading > .fui-Button {
+    flex: 1 1 0; min-width: 0; width: auto; min-height: var(--ws-queue-control); height: var(--ws-queue-control);
+    padding: 8px; border: 0; white-space: normal; font-size: 12px; line-height: 16px;
+  }
+}
 @media (max-width: 720px) {
   html:root body .app-provider .calendar-view .calendar-grid { gap: 4px; }
   html:root body .app-provider .calendar-view .calendar-day { border-radius: 8px; }

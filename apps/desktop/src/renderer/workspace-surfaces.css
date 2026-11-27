@@ -9,7 +9,8 @@ html:root body .app-provider :is(
   .record-table-frame, .record-table-shell, .task-proposals, .task-focus-object,
   .record-table .record-row,
   .team-dash-metric, .team-dash-panel, .team-dash-grant-metric, .team-presence-panel, .team-dash-workload,
-  .team-dash-task, .team-dash-person,
+  .team-dash-task, .team-dash-person, .team-dash-flow-overview, .team-dash-flow-total,
+  .team-dash-week, .team-dash-flow-legend > button,
   .notification-metrics > button, .notification-progress-card, .notification-stream-shell,
   .notification-settings, .notification-context, .notification-row,
   .feed-card, .feed-context-card,
@@ -42,6 +43,15 @@ html:root body .app-provider :is(
   box-shadow: none;
 }
 @media (forced-colors: none) {
+  html:root body .app-provider .team-dash-metric {
+    --ws-metric-gradient: linear-gradient(90deg, color-mix(in srgb, var(--metric-color) 18%, transparent), color-mix(in srgb, var(--metric-color) 7%, transparent) 48%, transparent);
+    --ws-satin-fill: var(--ws-metric-gradient);
+    background: var(--ws-metric-gradient), var(--ws-surface);
+    background-repeat: no-repeat;
+  }
+  html:root body .app-provider .team-dash-flow-legend > button[aria-pressed="true"] {
+    background: linear-gradient(90deg, color-mix(in srgb, var(--flow-color) 36%, transparent), color-mix(in srgb, var(--flow-color) 12%, transparent) 48%, transparent), var(--ws-surface);
+  }
   html:root body .app-provider .app-content .fui-TabList { border: 0; box-shadow: none; }
   html:root body .app-provider :is(.workspace-select, .record-page-nav, .record-page-size-trigger):not([aria-invalid="true"]):not(:has([aria-invalid="true"])) {
     --ws-satin-sheen: none; --ws-satin-edge: none; border: 0; box-shadow: none;
