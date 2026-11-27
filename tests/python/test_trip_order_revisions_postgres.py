@@ -128,6 +128,112 @@ async def prepare(fixture):
     await act(fixture, "chair", "approve_revision")
 
 
+@pytest.mark.parametrize("pending", [False, True])
+async def test_hr_registers_approved_order_without_new_signature_or_trip_transition(
+    revision_trip, pending,
+):
+    connection, actors, storage, request_id, original, finished = revision_trip
+    if pending:
+        await act(revision_trip, "owner", "revise_order", comment="Исправить номер")
+    before = dict(await current(connection, request_id))
+    event = dict((await connection.execute(select(calendar_events).where(
+        calendar_events.c.trip_request_id == request_id,
+    ))).mappings().one())
+    # A fresh chairman signature is neither required nor read for registration.
+    await connection.execute(hiring_signatures.delete().where(
+        hiring_signatures.c.user_id == actors["chair"].id,
+    ))
+    for actor in ["owner", "chair", "outsider", "admin"]:
+        with pytest.raises(WorkspaceRepositoryError) as denied:
+            await act(revision_trip, actor, "update_order_details",
+                      order_number="77", order_series="\u0430/ф")
+        assert denied.value.status_code == 403
+    allowed = await get_trip_request(connection, actors["hr"], request_id)
+    assert "update_order_details" in allowed.allowed_actions
+    fields = dict(order_number="77", order_series="\u0430/ф", order_date=date(2020, 11, 8))
+    await act(revision_trip, "hr", "update_order_details", **fields)
+    row = await current(connection, request_id)
+    assert row["status"] == "approved" and row["finished_at"] == finished
+    assert row["stage"] == before["stage"] and row["order_revision_stage"] is None
+    for key in ["workflow_version", "hr_processing_required", "purpose", "order_purpose",
+                "start_date", "end_date", "order_signer_user_id", "resolution_snapshot",
+                "resolution_at", "resolved_brief_key"]:
+        assert row[key] == before[key]
+    assert row["order_number"] == "77" and row["order_manually_registered"]
+    assert (await connection.execute(select(calendar_events).where(
+        calendar_events.c.id == event["id"],
+    ))).mappings().one() == event
+    content, _, _ = await read_document(connection, actors["hr"], storage, request_id, "order")
+    assert "77-son \u0430/ф" in PdfReader(BytesIO(content)).pages[0].extract_text()
+    assert await storage.get("qa-old-order") == original
+    audit_count = await connection.scalar(select(func.count()).select_from(
+        trip_request_actions,
+    ).where(trip_request_actions.c.request_id == request_id))
+    await act(revision_trip, "hr", "update_order_details", **fields)
+    assert await connection.scalar(select(func.count()).select_from(
+        trip_request_actions,
+    ).where(trip_request_actions.c.request_id == request_id)) == audit_count
+    after = await get_trip_request(connection, actors["hr"], request_id)
+    assert after.order_number == "77" and after.has_order_pdf
+    assert any(version.number == before["order_number"] for version in after.document_versions)
+
+
+async def test_hr_registration_keeps_previous_date_if_omitted(revision_trip):
+    connection, _, _, request_id, _, finished = revision_trip
+    await act(revision_trip, "hr", "update_order_details",
+              order_number="77", order_series="\u0430/ф")
+    row = await current(connection, request_id)
+    assert row["order_issued_at"].date() == finished.date()
+
+
+async def test_registration_keeps_assigned_hr_during_full_reissue(revision_trip):
+    connection, actors, _, request_id, *_ = revision_trip
+    await prepare(revision_trip)
+    await connection.execute(update(hr_settings).where(hr_settings.c.id == 1).values(
+        hr_user_id=actors["replacement"].id,
+    ))
+    with pytest.raises(WorkspaceRepositoryError) as denied:
+        await act(revision_trip, "replacement", "update_order_details",
+                  order_number="77", order_series="\u0430/ф")
+    assert denied.value.status_code == 403
+    await act(revision_trip, "hr", "update_order_details",
+              order_number="77", order_series="\u0430/ф")
+    assert (await get_trip_request(connection, actors["hr"], request_id)).order_number == "77"
+
+
+async def test_hr_registration_storage_failure_preserves_pending_revision(
+    revision_trip, monkeypatch,
+):
+    connection, _, storage, request_id, original, _ = revision_trip
+    await act(revision_trip, "owner", "revise_order", comment="Исправить номер")
+    before = dict(await current(connection, request_id))
+    monkeypatch.setattr(storage, "put", AsyncMock(side_effect=ObjectStorageError("unavailable")))
+    with pytest.raises(ObjectStorageError):
+        async with connection.begin_nested():
+            await act(revision_trip, "hr", "update_order_details",
+                      order_number="77", order_series="a/f")
+    assert dict(await current(connection, request_id)) == before
+    assert await storage.get("qa-old-order") == original
+    assert await connection.scalar(select(func.count()).select_from(trip_order_registrations).where(
+        trip_order_registrations.c.request_id == request_id,
+    )) == 0
+
+
+async def test_hr_registration_retains_each_previous_number(revision_trip):
+    connection, _, _, request_id, *_ = revision_trip
+    for number in ["77", "78"]:
+        await act(revision_trip, "hr", "update_order_details", order_number=number,
+                  order_series="A/F", order_date=date(2020, 11, 8))
+    other_id = uuid4()
+    other_row = dict(await current(connection, request_id))
+    other_row.update(id=other_id, order_pdf_key=None, order_pdf_sha256=None,
+                     order_number=None, order_year=None)
+    await connection.execute(insert(trip_requests).values(**other_row))
+    for number in ["77", "78"]:
+        with pytest.raises(WorkspaceRepositoryError, match="уже зарегистрированы"):
+            await reserve_order_number(connection, other_id, year=2020, number=number, series="a/f")
+
+
 async def test_legacy_order_gets_real_resolution_then_hr_and_preserves_original(revision_trip):
     connection, actors, storage, request_id, original, finished = revision_trip
     event = dict((await connection.execute(select(calendar_events).where(

@@ -41,6 +41,7 @@ const actionLabels: Readonly<Record<TripAction, string>> = {
   return: "Вернуть на доработку", reject: "Отклонить", move: "Перемещено администратором",
   withdraw: "Отозвать заявку", annul: "Аннулировать приказ",
   complete: "Оформлено",
+  update_order_details: "Изменены кадровые реквизиты приказа",
   revise_order: "Запросить переоформление приказа", approve_revision: "Поставить новую резолюцию и передать кадровику",
   complete_revision: "Приказ переоформлен", cancel_revision: "Отменить переоформление",
 };
@@ -49,6 +50,7 @@ const moveLabels: Readonly<Record<TripAction, string>> = {
   return: "На доработку", reject: "Отклонить", move: "Переместить",
   withdraw: "Отозвать", annul: "Аннулировать",
   complete: "Оформить приказ",
+  update_order_details: "Номер, серия и дата приказа",
   revise_order: "Переоформить приказ", approve_revision: "Передать кадровику",
   complete_revision: "Оформить новую версию", cancel_revision: "Отменить переоформление",
 };
@@ -207,7 +209,7 @@ export function TripApprovalsView({ token, focusRequestId, requests, people, dep
   const runningCount = requests.filter((request) => !isFinished(request)).length;
   const finishedCount = requests.length - runningCount;
   const actionableCount = requests.filter((request) => request.allowedActions.some(
-    (action) => !["withdraw", "annul", "revise_order", "cancel_revision"].includes(action),
+    (action) => !["withdraw", "annul", "revise_order", "cancel_revision", "update_order_details"].includes(action),
   )).length;
   const revisionCount = requests.filter((request) => request.status === "needs_revision").length;
   const filterCounts = {
@@ -219,7 +221,7 @@ export function TripApprovalsView({ token, focusRequestId, requests, people, dep
     finished: finishedCount,
   };
   const visibleRequests = requests.filter((request) => {
-    if (filter === "actionable" && !request.allowedActions.some((action) => !["withdraw", "annul", "revise_order", "cancel_revision"].includes(action))) return false;
+    if (filter === "actionable" && !request.allowedActions.some((action) => !["withdraw", "annul", "revise_order", "cancel_revision", "update_order_details"].includes(action))) return false;
     if (filter === "running" && isFinished(request)) return false;
     if (filter === "revision" && request.status !== "needs_revision") return false;
     if (filter === "approved" && request.status !== "approved") return false;
@@ -312,9 +314,9 @@ export function TripApprovalsView({ token, focusRequestId, requests, people, dep
   const commitAction = async (request: TripRequest, action: TripAction, comment?: string, targetStage?: TripStage, order?: TripOrderInput) => {
     if (busyRef.current || (action === "move" ? !isAdministrator || !targetStage : !request.allowedActions.includes(action))) return false;
     busyRef.current = true; setBusy(true); setError("");
-    const documentAction = ["revise_order", "approve_revision", "complete_revision", "cancel_revision"].includes(action);
+    const documentAction = ["revise_order", "approve_revision", "complete_revision", "cancel_revision", "update_order_details"].includes(action);
     try {
-      const updated = (action === "complete" || action === "complete_revision") ? await onAction(request, action, comment, targetStage, order) : action === "move"
+      const updated = (action === "complete" || action === "complete_revision" || action === "update_order_details") ? await onAction(request, action, comment, targetStage, order) : action === "move"
         ? await onAction(request, action, comment, targetStage)
         : await onAction(request, action, comment);
       if (!updated) { setError(documentAction ? "Не удалось сохранить изменения приказа. Проверьте подключение и права." : "Не удалось изменить стадию. Проверьте подключение и актуальные права на заявку."); return false; }
@@ -326,7 +328,7 @@ export function TripApprovalsView({ token, focusRequestId, requests, people, dep
   };
   const act = async (request: TripRequest, action: TripAction) => {
     if (busyRef.current || !request.allowedActions.includes(action)) return;
-    if (action === "complete" || action === "complete_revision") { openRequest(request.id); return; }
+    if (action === "complete" || action === "complete_revision" || action === "update_order_details") { openRequest(request.id); return; }
     if (action === "return" || action === "reject" || action === "withdraw" || action === "annul" || action === "revise_order" || action === "cancel_revision") {
       openRequest(request.id); setPendingDecision({ id: request.id, action }); return;
     }
@@ -440,7 +442,7 @@ export function TripApprovalsView({ token, focusRequestId, requests, people, dep
             <dl className="bp7-facts"><div><dt>Инициатор</dt><dd>{personLink(selected.requesterUserId, <><PersonAvatar person={people.find((person) => person.id === selected.requesterUserId)} token={token} size={28} /><span>{personName(selected.requesterUserId)}</span></>, "trip-person")}</dd></div><div><dt>Период</dt><dd>{selected.startDate} — {selected.endDate}</dd></div></dl>
             <div className="trip-employees"><h3>Сотрудники</h3>{selected.employeeIds.map((id) => <span key={id}>{personLink(id, <><PersonAvatar person={people.find((person) => person.id === id)} token={token} size={28} /><span>{personName(id)}</span></>, "trip-employee-link trip-person")}</span>)}</div>
             {((selected.workflowVersion ?? 1) >= 2 || selected.hrProcessingRequired || selected.status === "approved") ? <section className="trip-document-panel" aria-label="Документы поездки">
-              <div className="trip-document-heading"><div><h3>Билдирги и приказ</h3><p>{selected.status === "approved" ? "Действующие документы поездки. Для изменений используйте переоформление приказа ниже." : "Проверьте текст и PDF билдирги до отправки первому заместителю."}</p></div>{selected.orderNumber ? <Badge appearance="tint" color="success">Приказ № {selected.orderNumber} {selected.orderSeries}</Badge> : null}</div>
+              <div className="trip-document-heading"><div><h3>Билдирги и приказ</h3><p>{selected.status === "approved" ? "Действующие документы поездки. Номер, серию и дату приказа меняет кадровик. Для остальных изменений используйте переоформление ниже." : "Проверьте текст и PDF билдирги до отправки первому заместителю."}</p></div>{selected.orderNumber ? <Badge appearance="tint" color="success">Приказ № {selected.orderNumber} {selected.orderSeries}</Badge> : null}</div>
               <dl className="trip-document-facts">{selected.expenseSource ? <div><dt>Источник расходов</dt><dd>{selected.expenseSource}</dd></div> : null}<div><dt>Текст билдирги</dt><dd>{selected.briefText || (selected.briefAttachmentName ? "См. приложенный оригинал" : "Не добавлен")}</dd></div></dl>
               <div className="trip-document-files">
                 {selected.briefAttachmentName ? <Button type="button" disabled={busy} onClick={() => openDocument(selected, "attachment")}>Открыть прежний оригинал · {selected.briefAttachmentName}</Button> : null}
@@ -454,6 +456,11 @@ export function TripApprovalsView({ token, focusRequestId, requests, people, dep
               {selected.status === "annulled" ? <WorkspaceNotice tone="warning" role="status" className="trip-document-reminder">Приказ аннулирован. Исходный подписанный документ и история решений сохранены.</WorkspaceNotice> : null}
             </section> : selected.stage === "hr" ? <WorkspaceNotice tone="warning" className="trip-document-reminder">Эта поездка проходит прежний маршрут через кадровую службу.</WorkspaceNotice> : null}
             {selected.hrProcessingRequired && selected.stage === "hr" && !selected.hasResolution ? <WorkspaceNotice tone="warning">Для оформления этой прежней заявки председателю нужно добавить резолюцию.</WorkspaceNotice> : null}
+            {selected.allowedActions.includes("update_order_details") ? <details className="trip-document-panel">
+              <summary>Номер, серия и дата приказа</summary>
+              <TripHrOrderForm key={`${selected.id}:registration:${selected.orderNumber}:${selected.orderSeries}:${selected.orderIssuedAt}`} request={selected} busy={busy} registrationOnly
+                onComplete={fields => commitAction(selected, "update_order_details", undefined, undefined, fields)} />
+            </details> : null}
             {selected.status === "approved" ? <section className="trip-document-panel" aria-label="Переоформление приказа">
               <h3>Переоформление приказа</h3>
               <p>Статус поездки и календарь сохраняются. Новую резолюцию ставит председатель, затем кадровик указывает реквизиты новой версии приказа.</p>
@@ -473,7 +480,7 @@ export function TripApprovalsView({ token, focusRequestId, requests, people, dep
             <div className="bp7-actions">
               {selected.canEdit ? <Button disabled={busy || Boolean(pendingDecision)} icon={<Edit24Regular />} onClick={() => { setDocumentPreview(undefined); setForm({ purpose: selected.purpose, destination: selected.destination, startDate: selected.startDate, endDate: selected.endDate, employeeIds: selected.employeeIds, briefText: selected.briefText ?? "", expenseSource: selected.expenseSource ?? "", briefFormat: selected.briefFormat ?? "manual", briefFontSize: selected.briefFontSize ?? 11, briefFontWeight: selected.briefFontWeight ?? "regular" }); setEmployeeQuery(""); setError(""); setFormMode("edit"); }}>Изменить</Button> : null}
               {selected.canDelete && onDelete ? <Button disabled={busy || Boolean(pendingDecision)} onClick={() => setConfirmDeleteId(selected.id)}>Удалить заявку</Button> : null}
-              {selected.allowedActions.filter(action => action !== "complete" && action !== "complete_revision").map((action) => <Button className={`trip-decision-action action-${action}`} disabled={busy || Boolean(pendingDecision) || ((action === "submit" || action === "resubmit") && needsBriefForSubmission(selected))} appearance={action === "approve" || action === "approve_revision" || action === "submit" || action === "resubmit" ? "primary" : "secondary"} key={action} onClick={() => void act(selected, action)}>{action === "approve" && selected.hrProcessingRequired && selected.stage !== "deputy_approval" ? "Поставить резолюцию и передать кадровику" : action === "approve" && (selected.workflowVersion ?? 1) >= 2 && selected.stage === "manager_approval" ? "Утвердить и выпустить приказ" : action === "approve" && selected.stage === "deputy_approval" ? "Согласовать и передать председателю" : action === "submit" && selected.workflowVersion === 3 ? "Отправить первому заместителю" : action === "submit" && selected.workflowVersion === 2 ? "Отправить председателю" : actionLabels[action]}</Button>)}
+              {selected.allowedActions.filter(action => action !== "complete" && action !== "complete_revision" && action !== "update_order_details").map((action) => <Button className={`trip-decision-action action-${action}`} disabled={busy || Boolean(pendingDecision) || ((action === "submit" || action === "resubmit") && needsBriefForSubmission(selected))} appearance={action === "approve" || action === "approve_revision" || action === "submit" || action === "resubmit" ? "primary" : "secondary"} key={action} onClick={() => void act(selected, action)}>{action === "approve" && selected.hrProcessingRequired && selected.stage !== "deputy_approval" ? "Поставить резолюцию и передать кадровику" : action === "approve" && (selected.workflowVersion ?? 1) >= 2 && selected.stage === "manager_approval" ? "Утвердить и выпустить приказ" : action === "approve" && selected.stage === "deputy_approval" ? "Согласовать и передать председателю" : action === "submit" && selected.workflowVersion === 3 ? "Отправить первому заместителю" : action === "submit" && selected.workflowVersion === 2 ? "Отправить председателю" : actionLabels[action]}</Button>)}
               {isAdministrator && !selected.hrProcessingRequired && (selected.workflowVersion ?? 1) === 1 ? displayTripColumns.filter((column) => column.key !== selected.stage).map((column) => <Button data-stage={column.key} disabled={busy || Boolean(pendingDecision)} key={`move:${column.key}`} onClick={() => void commitAction(selected, "move", `Перенос на этап «${column.label}»`, column.key)}>{column.label}</Button>) : null}
             </div>
             {confirmDeleteId === selected.id ? <div className="trip-delete-confirm" role="group" aria-label="Подтверждение удаления заявки"><p>Удалить заявку из рабочего списка? История и документы останутся в архиве системы.</p><Button appearance="primary" disabled={busy} onClick={() => void deleteRequest(selected)}>Да, удалить</Button><Button disabled={busy} onClick={() => setConfirmDeleteId("")}>Отмена</Button></div> : null}

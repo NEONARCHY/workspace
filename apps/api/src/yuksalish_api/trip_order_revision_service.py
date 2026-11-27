@@ -138,6 +138,16 @@ async def act_on_order_revision(
         return
     if action not in order_revision_actions(row, user, chair_id, hr_id):
         raise Error(403, "Действие переоформления недоступно этому сотруднику или этапу")
+    if action == "update_order_details":
+        from .trip_order_details_service import update_order_details
+
+        comment = await update_order_details(connection, user, storage, row, payload)
+        if comment is not None:
+            await connection.execute(insert(trip_request_actions).values(
+                id=uuid4(), request_id=request_id, actor_user_id=user.id, from_stage="approved",
+                to_stage="approved", action=action, comment=comment, created_at=datetime.now(UTC),
+            ))
+        return
     values: dict[str, object] = {"updated_at": datetime.now(UTC)}
     if action == "revise_order":
         await _preserve_current_documents(connection, storage, row, user.id)

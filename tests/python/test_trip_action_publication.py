@@ -15,6 +15,7 @@ from yuksalish_api.workspace_schemas import TripActionRequest
 @pytest.mark.anyio
 @pytest.mark.parametrize("action", [
     "revise_order", "approve_revision", "complete_revision", "cancel_revision",
+    "update_order_details",
 ])
 @pytest.mark.parametrize("fails", [False, True])
 async def test_document_revision_does_not_replay_trip_approval(monkeypatch, action, fails):
@@ -33,7 +34,8 @@ async def test_document_revision_does_not_replay_trip_approval(monkeypatch, acti
     monkeypatch.setattr(workspace, "_object_storage", lambda _: object())
     monkeypatch.setattr(workspace, "_event_bus", lambda _: bus)
     payload = TripActionRequest(action=action, comment="Причина", **(
-        {"order_number": "29", "order_series": "a/f"} if action == "complete_revision" else {}
+        {"order_number": "29", "order_series": "a/f"}
+        if action in {"complete_revision", "update_order_details"} else {}
     ))
     if fails:
         with pytest.raises(HTTPException):
